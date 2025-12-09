@@ -42,3 +42,9 @@ std::string build_signed_heartbeat_json(const std::string& device_id,
 
 std::string build_signed_telemetry_json(const std::string& device_id,
                                         const std::string& session_id);
+
+std::string build_command_ack_json(const std::string& device_id,
+                                   const std::string& session_id,
+                                   const std::string& command_message_id,
+                                   const std::string& status = "received",
+                                   const std::string& reason = "");

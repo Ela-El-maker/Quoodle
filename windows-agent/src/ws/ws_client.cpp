@@ -45,6 +45,15 @@ void WsClient::connect_and_run() {
                             telemetry_sent_ = true;
                         }
                     }
+                } else if (mtype == "COMMAND_DELIVERY") {
+                    std::string session_id = parsed.value("session_id", "");
+                    auto body = parsed["body"];
+                    auto envelope = body["command_envelope"];
+                    std::string command_message_id = envelope.value("message_id", "");
+                    if (!session_id.empty() && !command_message_id.empty()) {
+                        auto ack = build_command_ack_json(device_id_, session_id, command_message_id, "received", "");
+                        socket.sendText(ack);
+                    }
                 }
             } catch (const std::exception& e) {
                 std::cerr << "[ws] parse error: " << e.what() << std::endl;

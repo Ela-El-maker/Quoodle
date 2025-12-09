@@ -4,6 +4,7 @@ import uuid
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
+from app.api import create_router
 from app.config import settings
 from app.ws.auth import validate_auth_jwt
 from app.ws.connection_manager import ConnectionManager
@@ -17,6 +18,7 @@ from app.ws.protocol import (
 
 app = FastAPI(title="Secure Device Control - FastAPI Controller")
 manager = ConnectionManager()
+app.include_router(create_router(manager))
 
 
 @app.get("/health")
@@ -57,7 +59,7 @@ async def agent_ws(websocket: WebSocket):
 
         session_id = str(uuid.uuid4())
         session_id_assigned = session_id
-        await manager.register(device_id, websocket)
+        await manager.register(device_id, websocket, session_id)
 
         auth_ack = build_auth_ack(device_id, session_id)
         await websocket.send_json(auth_ack)
@@ -85,6 +87,9 @@ async def agent_ws(websocket: WebSocket):
                     except ValueError:
                         await websocket.close(code=4400)
                         break
+                    continue
+                if mtype == "COMMAND_ACK":
+                    # Placeholder: In a later phase, forward to Laravel webhook.
                     continue
             except WebSocketDisconnect:
                 break

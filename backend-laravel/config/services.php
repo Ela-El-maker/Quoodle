@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'fastapi' => [
+        'base_url' => env('FASTAPI_BASE_URL', 'http://localhost:8001/api/v1'),
+    ],
+
 ];

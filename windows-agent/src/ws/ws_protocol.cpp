@@ -245,3 +245,49 @@ std::string build_signed_telemetry_json(const std::string& device_id,
         {"type", "\"" + escape_json(env.type) + "\""},
     });
 }
+
+std::string build_command_ack_json(const std::string& device_id,
+                                   const std::string& session_id,
+                                   const std::string& command_message_id,
+                                   const std::string& status,
+                                   const std::string& reason) {
+    using utils::canonical_object;
+    using utils::escape_json;
+
+    AuthEnvelope env;
+    env.type = "COMMAND_ACK";
+    env.device_id = device_id;
+    env.session_id = session_id;
+    env.message_id = generate_uuid();
+    env.timestamp = iso_timestamp();
+    env.sig = "";
+
+    std::string body = canonical_object({
+        {"command_message_id", "\"" + escape_json(command_message_id) + "\""},
+        {"reason", reason.empty() ? "null" : "\"" + escape_json(reason) + "\""},
+        {"status", "\"" + escape_json(status) + "\""},
+    });
+
+    std::string canonical = canonical_object({
+        {"body", body},
+        {"device_id", "\"" + escape_json(env.device_id) + "\""},
+        {"from", "\"" + escape_json(env.from) + "\""},
+        {"message_id", "\"" + escape_json(env.message_id) + "\""},
+        {"session_id", "\"" + escape_json(env.session_id) + "\""},
+        {"timestamp", "\"" + escape_json(env.timestamp) + "\""},
+        {"type", "\"" + escape_json(env.type) + "\""},
+    });
+
+    env.sig = sign_placeholder(canonical);
+
+    return canonical_object({
+        {"body", body},
+        {"device_id", "\"" + escape_json(env.device_id) + "\""},
+        {"from", "\"" + escape_json(env.from) + "\""},
+        {"message_id", "\"" + escape_json(env.message_id) + "\""},
+        {"session_id", "\"" + escape_json(env.session_id) + "\""},
+        {"sig", "\"" + escape_json(env.sig) + "\""},
+        {"timestamp", "\"" + escape_json(env.timestamp) + "\""},
+        {"type", "\"" + escape_json(env.type) + "\""},
+    });
+}
