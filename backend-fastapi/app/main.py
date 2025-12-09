@@ -7,7 +7,13 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from app.config import settings
 from app.ws.auth import validate_auth_jwt
 from app.ws.connection_manager import ConnectionManager
-from app.ws.protocol import build_auth_ack, build_auth_error, validate_auth_envelope
+from app.ws.protocol import (
+    build_auth_ack,
+    build_auth_error,
+    validate_auth_envelope,
+    validate_heartbeat,
+    validate_telemetry,
+)
 
 app = FastAPI(title="Secure Device Control - FastAPI Controller")
 manager = ConnectionManager()
@@ -22,6 +28,7 @@ async def health():
 async def agent_ws(websocket: WebSocket):
     await websocket.accept()
     device_id = "unknown"
+    session_id_assigned = None
     try:
         raw = await websocket.receive_text()
         try:
@@ -49,19 +56,39 @@ async def agent_ws(websocket: WebSocket):
             return
 
         session_id = str(uuid.uuid4())
+        session_id_assigned = session_id
         await manager.register(device_id, websocket)
 
         auth_ack = build_auth_ack(device_id, session_id)
         await websocket.send_json(auth_ack)
 
-        # Phase 2 ends after basic auth; keep the connection alive.
+        # Handle post-auth messages (Phase 4: heartbeat + telemetry)
         while True:
             try:
-                await websocket.receive_text()
+                incoming = await websocket.receive_text()
+                try:
+                    message = json.loads(incoming)
+                except json.JSONDecodeError:
+                    continue
+
+                mtype = message.get("type")
+                if mtype == "HEARTBEAT":
+                    try:
+                        validate_heartbeat(message, session_id_assigned)
+                    except ValueError:
+                        await websocket.close(code=4400)
+                        break
+                    continue
+                if mtype == "TELEMETRY":
+                    try:
+                        validate_telemetry(message, session_id_assigned)
+                    except ValueError:
+                        await websocket.close(code=4400)
+                        break
+                    continue
             except WebSocketDisconnect:
                 break
             except Exception:
-                # Ignore non-AUTH messages in this phase.
                 continue
     finally:
         await manager.unregister(device_id)

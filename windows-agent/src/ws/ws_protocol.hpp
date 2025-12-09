@@ -33,3 +33,12 @@ std::string canonical_auth_without_sig(const AuthEnvelope& envelope);
 std::string sign_placeholder(const std::string& canonical_json);
 
 std::string build_signed_auth_json(AuthEnvelope envelope);
+
+std::string build_signed_heartbeat_json(const std::string& device_id,
+                                        const std::string& session_id,
+                                        const std::string& status = "alive",
+                                        int uptime_seconds = 0,
+                                        const std::string& error_state = "ok");
+
+std::string build_signed_telemetry_json(const std::string& device_id,
+                                        const std::string& session_id);

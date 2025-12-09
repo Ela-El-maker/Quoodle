@@ -12,7 +12,14 @@ FetchContent_Declare(
   GIT_TAG v11.1.8
 )
 
+FetchContent_Declare(
+  nlohmann_json
+  GIT_REPOSITORY https://github.com/nlohmann/json.git
+  GIT_TAG v3.11.3
+)
+
 FetchContent_MakeAvailable(ixwebsocket)
+FetchContent_MakeAvailable(nlohmann_json)
 
 add_executable(agent
   src/main.cpp
@@ -22,4 +29,4 @@ add_executable(agent
 )
 
 target_include_directories(agent PRIVATE src)
-target_link_libraries(agent PRIVATE ixwebsocket::ixwebsocket)
+target_link_libraries(agent PRIVATE ixwebsocket::ixwebsocket nlohmann_json::nlohmann_json)

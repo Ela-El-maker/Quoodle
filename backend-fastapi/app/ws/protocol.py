@@ -63,3 +63,41 @@ def build_auth_error(device_id: str, error_code: str, error_message: str) -> Dic
             "error_message": error_message,
         },
     }
+
+
+def validate_heartbeat(payload: Dict[str, Any], expected_session: str) -> None:
+    required_fields = ["type", "from", "device_id", "message_id", "body", "sig", "session_id", "timestamp"]
+    for field in required_fields:
+        if field not in payload:
+            raise ValueError(f"Missing required field: {field}")
+    if payload["type"] != "HEARTBEAT":
+        raise ValueError("Invalid type for heartbeat")
+    if payload["from"] != "agent":
+        raise ValueError("Heartbeat must originate from agent")
+    if not payload.get("session_id"):
+        raise ValueError("Heartbeat requires session_id")
+    if expected_session and payload.get("session_id") != expected_session:
+        raise ValueError("Heartbeat session_id mismatch")
+
+    body = payload.get("body") or {}
+    if "status" not in body:
+        raise ValueError("Heartbeat body.status required")
+
+
+def validate_telemetry(payload: Dict[str, Any], expected_session: str) -> None:
+    required_fields = ["type", "from", "device_id", "message_id", "body", "sig", "session_id", "timestamp"]
+    for field in required_fields:
+        if field not in payload:
+            raise ValueError(f"Missing required field: {field}")
+    if payload["type"] != "TELEMETRY":
+        raise ValueError("Invalid type for telemetry")
+    if payload["from"] != "agent":
+        raise ValueError("Telemetry must originate from agent")
+    if not payload.get("session_id"):
+        raise ValueError("Telemetry requires session_id")
+    if expected_session and payload.get("session_id") != expected_session:
+        raise ValueError("Telemetry session_id mismatch")
+
+    body = payload.get("body") or {}
+    if "metrics" not in body or "telemetry_scope" not in body or "timestamp" not in body:
+        raise ValueError("Telemetry body missing required fields")

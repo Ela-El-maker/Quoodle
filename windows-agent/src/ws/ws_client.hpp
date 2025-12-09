@@ -4,7 +4,7 @@
 
 class WsClient {
 public:
-    explicit WsClient(std::string endpoint);
+    WsClient(std::string endpoint, std::string device_id);
 
     void set_initial_message(const std::string& message);
 
@@ -12,5 +12,8 @@ public:
 
 private:
     std::string endpoint_;
+    std::string device_id_;
     std::string initial_message_;
+    bool heartbeat_sent_{false};
+    bool telemetry_sent_{false};
 };

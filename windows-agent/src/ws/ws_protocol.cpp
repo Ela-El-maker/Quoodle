@@ -148,3 +148,100 @@ std::string build_signed_auth_json(AuthEnvelope envelope) {
         {"type", "\"" + escape_json(envelope.type) + "\""},
     });
 }
+
+std::string build_signed_heartbeat_json(const std::string& device_id,
+                                        const std::string& session_id,
+                                        const std::string& status,
+                                        int uptime_seconds,
+                                        const std::string& error_state) {
+    using utils::canonical_object;
+    using utils::escape_json;
+
+    AuthEnvelope env;
+    env.type = "HEARTBEAT";
+    env.device_id = device_id;
+    env.session_id = session_id;
+    env.message_id = generate_uuid();
+    env.timestamp = iso_timestamp();
+    env.sig = "";
+
+    std::string body = canonical_object({
+        {"error_state", "\"" + escape_json(error_state) + "\""},
+        {"status", "\"" + escape_json(status) + "\""},
+        {"uptime_seconds", std::to_string(uptime_seconds)},
+    });
+
+    std::string canonical = canonical_object({
+        {"body", body},
+        {"device_id", "\"" + escape_json(env.device_id) + "\""},
+        {"from", "\"" + escape_json(env.from) + "\""},
+        {"message_id", "\"" + escape_json(env.message_id) + "\""},
+        {"session_id", "\"" + escape_json(env.session_id) + "\""},
+        {"timestamp", "\"" + escape_json(env.timestamp) + "\""},
+        {"type", "\"" + escape_json(env.type) + "\""},
+    });
+
+    env.sig = sign_placeholder(canonical);
+
+    return canonical_object({
+        {"body", body},
+        {"device_id", "\"" + escape_json(env.device_id) + "\""},
+        {"from", "\"" + escape_json(env.from) + "\""},
+        {"message_id", "\"" + escape_json(env.message_id) + "\""},
+        {"session_id", "\"" + escape_json(env.session_id) + "\""},
+        {"sig", "\"" + escape_json(env.sig) + "\""},
+        {"timestamp", "\"" + escape_json(env.timestamp) + "\""},
+        {"type", "\"" + escape_json(env.type) + "\""},
+    });
+}
+
+std::string build_signed_telemetry_json(const std::string& device_id,
+                                        const std::string& session_id) {
+    using utils::canonical_object;
+    using utils::escape_json;
+
+    AuthEnvelope env;
+    env.type = "TELEMETRY";
+    env.device_id = device_id;
+    env.session_id = session_id;
+    env.message_id = generate_uuid();
+    env.timestamp = iso_timestamp();
+    env.sig = "";
+
+    std::string metrics = canonical_object({
+        {"cpu", "\"12%\""},
+        {"disk_usage", "\"60%\""},
+        {"network_rx", "\"1.8Mbps\""},
+        {"network_tx", "\"2.3Mbps\""},
+        {"ram", "\"45%\""},
+    });
+
+    std::string body = canonical_object({
+        {"metrics", metrics},
+        {"telemetry_scope", "\"telemetry_basic\""},
+        {"timestamp", "\"" + escape_json(env.timestamp) + "\""},
+    });
+
+    std::string canonical = canonical_object({
+        {"body", body},
+        {"device_id", "\"" + escape_json(env.device_id) + "\""},
+        {"from", "\"" + escape_json(env.from) + "\""},
+        {"message_id", "\"" + escape_json(env.message_id) + "\""},
+        {"session_id", "\"" + escape_json(env.session_id) + "\""},
+        {"timestamp", "\"" + escape_json(env.timestamp) + "\""},
+        {"type", "\"" + escape_json(env.type) + "\""},
+    });
+
+    env.sig = sign_placeholder(canonical);
+
+    return canonical_object({
+        {"body", body},
+        {"device_id", "\"" + escape_json(env.device_id) + "\""},
+        {"from", "\"" + escape_json(env.from) + "\""},
+        {"message_id", "\"" + escape_json(env.message_id) + "\""},
+        {"session_id", "\"" + escape_json(env.session_id) + "\""},
+        {"sig", "\"" + escape_json(env.sig) + "\""},
+        {"timestamp", "\"" + escape_json(env.timestamp) + "\""},
+        {"type", "\"" + escape_json(env.type) + "\""},
+    });
+}

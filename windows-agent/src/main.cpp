@@ -30,7 +30,7 @@ int main() {
     auto envelope = build_auth_envelope(cfg.device_id, cfg.jwt);
     std::string auth_json = build_signed_auth_json(envelope);
 
-    WsClient client(cfg.endpoint);
+    WsClient client(cfg.endpoint, cfg.device_id);
     client.set_initial_message(auth_json);
     client.connect_and_run();
 
