@@ -1,0 +1,15 @@
+name: secure_device_control
+description: Minimal Phase 8 skeleton for Secure Device Control mobile app.
+version: 0.1.0
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
