@@ -8,6 +8,7 @@
 #include <ixwebsocket/IXWebSocket.h>
 #include <nlohmann/json.hpp>
 
+#include "../kernel/ioctl_client.hpp"
 #include "ws_protocol.hpp"
 
 WsClient::WsClient(std::string endpoint, std::string device_id)
@@ -50,9 +51,20 @@ void WsClient::connect_and_run() {
                     auto body = parsed["body"];
                     auto envelope = body["command_envelope"];
                     std::string command_message_id = envelope.value("message_id", "");
+                    std::string method = envelope["body"].value("method", "");
+
                     if (!session_id.empty() && !command_message_id.empty()) {
+                        // Immediately ACK receipt
                         auto ack = build_command_ack_json(device_id_, session_id, command_message_id, "received", "");
                         socket.sendText(ack);
+
+                        // Execute minimal opcodes (lock_screen, ping)
+                        IoctlClient ioctl;
+                        if (method == "lock_screen") {
+                            ioctl.lock_screen(command_message_id);
+                        } else if (method == "ping") {
+                            ioctl.ping(command_message_id);
+                        }
                     }
                 }
             } catch (const std::exception& e) {
