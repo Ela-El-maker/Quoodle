@@ -1,433 +1,388 @@
-# 📘 **Secure Device Control System**
+# 📘 **Secure Device Control System — README.md**
 
-*(Academic Simulation — Full Architecture & Protocol Specification)*
-
----
-
-# **1. Overview**
-
-The **Secure Device Control System** is a fully auditable, cryptographically enforced platform enabling a user’s **mobile app** to securely control and monitor their **Windows device** through a layered backend architecture consisting of:
-
-* **Laravel** — Identity, policy engine, CA, command orchestration, and APIs
-* **FastAPI** — Real-time WSS controller, device router, telemetry gateway
-* **WindowsAgent** — System-level device agent with kernel operations
-* **KernelService** — Privileged executor of sensitive/critical system commands
-* **Mobile App (Flutter)** — User interface for device control, pairing, alerts, logs
-
-This project provides an academically complete simulation of an enterprise-grade device management system, implementing strong cryptographic identity, multi-layer verification, real-time telemetry, secure command execution, and full auditability.
-
-**Scope:**
-All operations simulated; secure for academic demonstration environments.
-*(Spec reference: Full System Json.json, MasterBlueprint-v3.json)*
+### *Full Architecture • Trust Model • Repository Structure • Runtime Flows • Development Roadmap*
 
 ---
 
-# **2. High-Level Architecture**
+## 🧭 **1. Overview**
+
+The **Secure Device Control System** is a multi-service, cryptographically secure platform that enables a mobile user to remotely monitor, manage, and control a Windows device.
+The system is built for **research, academic simulation, and security demonstrations**, reflecting real-world enterprise architectures (MDM/EDR-like).
+
+**Core Components**
+
+| Component                  | Role                                                                           |
+| -------------------------- | ------------------------------------------------------------------------------ |
+| **Mobile App (Flutter)**   | User interaction, pairing, telemetry view, commands, alerts                    |
+| **Laravel Backend**        | Identity, CA, JWT auth, policy engine, command ingestion, audit                |
+| **FastAPI Controller**     | Real-time WSS gateway, telemetry pipeline, command dispatch, OTA orchestration |
+| **Windows Agent (C++)**    | Device connector, telemetry producer, command executor (user-mode)             |
+| **Kernel Service (C/C++)** | Privileged operations (IOCTL), updates, attestation, tamper checks             |
+| **Infrastructure**         | Docker, Kubernetes, CI/CD, Terraform                                           |
+| **Specs & Docs**           | JSON architecture definitions, protocols, flows                                |
+
+The system enforces **strong cryptographic identity**, **strict command validation**, **auditable actions**, **OTA update reliability**, and **multi-layer policy enforcement**.
+
+---
+
+## 🔐 **2. Security Principles**
+
+The architecture is designed around:
+
+* **Strict trust boundaries**
+* **End-to-end canonical JSON + Ed25519 signatures**
+* **JWT-based identity with KID rotation**
+* **Device certificates issued by intermediate CA**
+* **Secure IOCTL requests to KernelService**
+* **Short-lived, tamper-evident audit logs**
+* **Policy evaluation at 3 layers**: Laravel → FastAPI → Agent
+
+Security is treated as **a first-class subsystem**, not an afterthought.
+
+---
+
+## 🏗️ **3. System Architecture Overview**
 
 ```
-+--------------+       +------------------+       +--------------------+
-|  Mobile App  | <---> |      Laravel      | <---> |      FastAPI       |
-+--------------+       |  Auth, Policy,    |       |   Device Router    |
-                       |  CA, Commands     |       |   WSS Controller   |
-                       +------------------+       +--------------------+
-                                                          |
-                                                          |
-                                              +-----------------------+
-                                              |    Windows Agent      |
-                                              |    (User Mode)        |
-                                              +-----------------------+
-                                                          |
-                                                          |
-                                              +-----------------------+
-                                              |    KernelService      |
-                                              |   (Privileged Ops)    |
-                                              +-----------------------+
++-------------------+        +--------------------+        +------------------------+
+|    Mobile App     | <----> |      Laravel       | <----> |        FastAPI         |
+|   (Flutter UI)    |        |  Auth, CA, Policy  |        |   WSS Real-time Hub    |
++-------------------+        +--------------------+        +------------------------+
+                                                              |
+                                                              |
+                                                  +-----------------------+
+                                                  |    Windows Agent      |
+                                                  |      (C++ User Mode)  |
+                                                  +-----------------------+
+                                                              |
+                                                              |
+                                                  +-----------------------+
+                                                  |    Kernel Service     |
+                                                  |      (C / C++ )       |
+                                                  +-----------------------+
 ```
 
-*(Spec reference: System flow.json, MasterBlueprint-v3.json)*
+---
+
+## 📂 **4. Monorepo Structure**
+
+```
+secure-device-control/
+│
+├── backend-laravel/
+├── backend-fastapi/
+├── windows-agent/
+├── kernel-service/
+├── mobile-app/
+├── infrastructure/
+├── docs/
+│
+├── .github/
+├── .editorconfig
+├── .gitignore
+└── README.md   ← (this file)
+```
+
+Each repository is fully described in `docs/architecture/` and has its own README.
 
 ---
 
-# **3. Core System Components**
+## 📚 **5. Documentation Index**
 
-## **3.1 Windows Agent**
+All JSON specs that define the system live in:
 
-A user-mode service responsible for:
+```
+docs/specs/
+│
+├── FastAPI ↔ Laravel (REST + Webhook Control Channel).json
+├── Full System Json.json
+├── Laravel ↔ Mobile App (REST + notifications).json
+├── MasterBlueprint-v3.json
+├── Missing System Components.json
+├── System flow.json
+├── WindowsAgent ↔ FastAPI (WSS control channel).json
+└── WindowsAgent ↔ KernelService Interface.json
+```
 
-* Opening WSS connections to FastAPI
-* Receiving, validating, and acknowledging commands
-* Executing safe commands locally
-* Passing privileged ops to KernelService via IOCTL
-* Streaming telemetry and heartbeat signals
+Documentation areas:
 
-*(Spec reference: WindowsAgent ↔ FastAPI (WSS control channel).json)*
-*(Spec reference: AgentKernelInterface.json)*
-
----
-
-## **3.2 KernelService (Privileged Executor)**
-
-A controlled, minimal interface exposing a narrow set of safe enumerated system operations, such as:
-
-* Lock screen
-* Reboot / Shutdown
-* Attestation & tamper checks
-* Update staging and commit
-
-All requests must:
-
-* Use canonical JSON
-* Include an Ed25519 signature
-* Use a strictly increasing sequence counter
-* Match one of the **AllowedOpcodes**
-
-*(Spec reference: WindowsAgent ↔ KernelService Interface.json; AgentKernelInterface.json)*
+```
+docs/
+│
+├── specs/              # Canonical JSON specifications
+├── architecture/       # Big-picture and sequence diagrams
+├── protocols/          # WSS, IOCTL, REST API documentation
+├── onboarding/         # Developer setup & contributions
+├── security/           # Threat model, audit chain, compliance
+└── report/             # Academic write-up (optional)
+```
 
 ---
 
-## **3.3 FastAPI Controller**
+## 🔄 **6. Full System Runtime Flow**
 
-Acts as the real-time gateway for:
+Below is the authoritative high-level summary across all JSON specs.
 
-* Routing commands to online devices
-* Receiving execution results
-* Telemetry ingestion
-* Presence tracking (agent online/offline)
-* Alert broadcasting
+### **6.1 Discovery (Unauthenticated)**
 
-FastAPI's WSS protocol includes:
-
-* AUTH / AUTH_ACK
-* TELEMETRY
-* COMMAND_DELIVERY
-* COMMAND_ACK
-* COMMAND_RESULT
-* UPDATE_ANNOUNCE
-* POLICY_UPDATE
-
-*(Spec reference: FastAPI ↔ Laravel (REST + Webhook Control Channel).json)*
-*(Spec reference: AgentFastAPIInterface.json)*
+1. Windows Agent boots → opens WSS with minimal hashed identifiers
+2. FastAPI verifies structure → issues `challenge_token`
+3. Agent proves possession of keys → FastAPI notifies Laravel
+4. Laravel displays device as **Pending Pairing**
 
 ---
 
-## **3.4 Laravel Backend**
+### **6.2 Pairing (Mobile ↔ Laravel ↔ Agent)**
+
+1. Mobile user registers (public key uploaded)
+2. Agent requests pairing → shows QR containing `pair_token`
+3. Mobile scans QR → Laravel validates token
+4. Laravel issues device certificate from Intermediate CA
+5. Agent reconnects to FastAPI using certificate → becomes **trusted device**
+
+---
+
+### **6.3 Authentication & Presence**
+
+* Agent sends `AUTH` message signed with device cert
+* FastAPI validates → assigns `session_id`
+* Agent starts:
+
+  * Heartbeat
+  * Telemetry streaming
+  * Policy synchronization
+
+Presence is tracked via Redis TTL.
+
+---
+
+### **6.4 Command Lifecycle (Full Round Trip)**
+
+```
+Mobile → Laravel → Redis → FastAPI → Agent → KernelService → Agent → FastAPI → Laravel → Mobile
+```
+
+Sequence:
+
+1. Mobile sends command
+2. Laravel:
+
+   * Validates user
+   * Evaluates policy
+   * Signs command
+   * Enqueues to Redis
+3. FastAPI:
+
+   * Verifies signature
+   * Checks device presence
+   * Sends COMMAND_DELIVERY via WSS
+4. Agent:
+
+   * Validates signature, policy, TTL
+   * ACKs command
+   * Calls KernelService via IOCTL
+5. KernelService executes opcode and returns signed result
+6. Agent returns `COMMAND_RESULT` to FastAPI
+7. FastAPI → Laravel → Mobile notifications
+8. Audit logs written end-to-end
+
+---
+
+### **6.5 Telemetry Flow**
+
+* Agent sends periodic metrics: CPU, RAM, DISK, NET, risk indicators
+* FastAPI ingests → Redis streams → Analytics workers → MySQL
+* Alerts forwarded to:
+
+  * Mobile
+  * Agent
+  * Admin dashboard
+
+---
+
+### **6.6 OTA Update Flow**
+
+1. Admin creates release in Laravel
+2. FastAPI announces update
+3. Agent performs:
+
+   * Precheck
+   * Download
+   * Verify manifest signature
+   * `STAGE_UPDATE` → KernelService
+   * `COMMIT_UPDATE` + optional reboot
+4. Post-install report flows upward to dashboard
+
+---
+
+### **6.7 Policy & Compliance**
+
+Policies enforced at 3 layers:
+
+* **Laravel (primary, authoritative)**
+* **FastAPI (secondary routing checks)**
+* **Agent (local last-line enforcement)**
+
+Compliance engine periodically verifies:
+
+* Agent version
+* OS build
+* Certificate validity
+* Policy hash correctness
+* Tamper checks
+
+Alerts generated if any violation occurs.
+
+---
+
+## 🧱 **7. Repository Summaries**
+
+### **7.1 backend-laravel**
+
+Handles:
+
+* JWT & JWKS
+* User auth
+* Certificate Authority operations
+* Device pairing APIs
+* Policy engine
+* Command ingestion (signed envelopes)
+* OTA release management
+* Audit chain
+* Dashboard logic
+
+### **7.2 backend-fastapi**
 
 Provides:
 
-* User & device identity
-* JWT issuance
-* CA certificate authority for device certs
-* Command ingest & validation
-* Policy enforcement
-* OTA update distribution
-* Mobile APIs (REST + WSS notifications)
+* WebSocket controller
+* Device real-time routing
+* Telemetry ingestion
+* Command dispatcher
+* OTA distribution backend
+* Presence tracker
+* Queue workers (DLQ, analytics, alerts)
 
-*(Spec reference: Laravel ↔ Mobile App (REST + notifications).json)*
+### **7.3 windows-agent (C++)**
 
----
+Implements:
 
----
-
-# **4. End-to-End Runtime Flows**
-
-Below is a compact summary of all flows defined across your JSON specification files.
-
----
-
-# **4.1 Discovery Flow (Unauthenticated)**
-
-Unpaired Windows Agents broadcast their existence securely without leaking identifiers.
-
-**Key points**
-
-* Sends only **hwid_hash**, **nonce**, **agent manifest hash**
-* FastAPI sends back short-lived **challenge_token**
-* Agent completes challenge → Laravel notified
-* Device enters **Pending Pairing** list
-
-*(Spec reference: System flow.json — DiscoveryFlow)*
-
----
-
-# **4.2 Pairing Flow (Mobile ↔ Laravel ↔ Agent)**
-
-Secure association of a device with a user.
-
-**Stages**
-
-1. User registers on Mobile App → Laravel
-2. Agent requests pairing token from Laravel
-3. Agent displays QR code containing `pair_token`
-4. Mobile scans → Laravel links user ↔ device
-5. Laravel issues **device certificate**
-6. Agent authenticates with FastAPI over WSS using cert
-
-Security:
-
-* All JWTs signed by Laravel
-* Device certs signed by CA intermediary
-* HWID collisions cause explicit 409 conflict
-
-*(Spec reference: System flow.json — PairingFlow)*
-
----
-
-# **4.3 Secure Command Execution Flow**
-
-The heart of the system — command lifecycle with full audit, reliability, and cryptographic enforcement.
-
-**Pipeline**
-
-Mobile → Laravel → Redis → FastAPI → WindowsAgent → KernelService → WindowsAgent → FastAPI → Laravel → Mobile
-
-**Lifecycle states**
-
-```
-queued → sent → ack_received → executing → result_posted → completed / failed
-```
-
-**Highlights**
-
-* Canonical JSON envelopes with Ed25519 signatures
-* TTL enforcement (no stale commands)
-* Sequence validation (anti-replay)
-* On-device queueing for reliability
-* Large artifacts uploaded via presigned URLs
-* Automatic retries + DLQ support
-
-*(Spec reference: Full System Json.json — CommandExecutionFlow)*
-
----
-
-# **4.4 Telemetry Flow**
-
-Real-time telemetry streaming from WindowsAgent → FastAPI → Redis → Analytics → Dashboard.
-
-Metrics include:
-
-* CPU / RAM / Disk
-* Network usage
-* Risk score analysis
-* Heartbeat for presence tracking
-
-Alerts automatically propagated when anomalies detected.
-
-*(Spec reference: Full System Json.json — TelemetryFlow)*
-
----
-
-# **4.5 OTA Update Flow**
-
-OTA updates are announced by Laravel and delivered via FastAPI.
-
-Includes:
-
-* Manifest validation
+* WSS client (TLS 1.3)
+* Command queue
 * Signature verification
-* Staging → Commit / Rollback
-* Progress reporting
+* Policy caching
+* Telemetry collector
+* IOCTL interface to KernelService
 
-*(Spec reference: FastAPI_Laravel_Interface.json — Update Deploy + Update Status)*
-*(Spec reference: AgentKernelInterface.json — Update opcodes)*
+### **7.4 kernel-service (C/C++)**
 
----
+Privileged executor for:
 
-# **4.6 Key Management Flow (Cryptographic Trust Lifecycle)**
+* System control (lock, reboot, shutdown)
+* Process enumeration
+* Attestation & tamper checks
+* Update staging and commit
+* Strict signature/param validation
 
-Enterprise-grade identity lifecycle:
+### **7.5 mobile-app (Flutter)**
 
-* Root & Intermediate CA (HSM-backed)
-* Device cert issuance
-* JWT signing key rotation
-* Revocation (CRL/OCSP + push)
-* Emergency mass-revoke scenarios
-* TPM-bound private keys on device
+User UI for:
 
-*(Spec reference: Full System Json.json — KeyManagementFlow)*
+* Registration
+* Device pairing
+* Command interface
+* Live telemetry
+* Alerts/logs
+* Updates & compliance status
 
----
+### **7.6 infrastructure**
 
-# **5. Protocol Specifications**
+Contains:
 
-The following summaries reference the detailed JSON schemas found in your uploaded files.
+* Docker images
+* Kubernetes manifests
+* Terraform modules
+* GitHub Actions CI/CD
+* Monitoring stack (Prometheus + Grafana)
 
----
+### **7.7 docs**
 
-## **5.1 KernelService IOCTL Protocol**
+Single source of truth for:
 
-### **Request Schema**
-
-* `request_id`
-* `opcode` (must match enumerated set)
-* `params`
-* `agent_sequence`
-* `policy_hash`
-* `signature`
-
-### **Response Schema**
-
-* `request_id`
-* `status` (`ok`, `failed`, `denied`, etc.)
-* `error_code`
-* `result`
-* `signature`
-
-**Allowed Opcodes:**
-Lock screen, reboot, shutdown, logout, process list, attestation, update commands.
-
-*(Spec reference: AgentKernelInterface.json)*
+* Specs
+* Sequence diagrams
+* Protocol definitions
+* Threat modeling
+* Onboarding & training materials
 
 ---
 
-## **5.2 Agent ↔ FastAPI WebSocket Protocol**
+## 🧪 **8. Testing Strategy**
 
-**Message Types**:
+### **Unit tests**
 
-| Direction          | Type                                                                   |
-| ------------------ | ---------------------------------------------------------------------- |
-| Agent → Controller | AUTH, HEARTBEAT, TELEMETRY, COMMAND_ACK, COMMAND_RESULT, UPDATE_STATUS |
-| Controller → Agent | AUTH_ACK, COMMAND_DELIVERY, UPDATE_ANNOUNCE, POLICY_UPDATE, ALERT      |
+* Laravel: Services, Auth, PolicyEvaluator, CA
+* FastAPI: WSS handlers, signature validation, queue workers
+* Agent: signature logic, queue logic, IOCTL parser
+* KernelService: opcode validation, attestation logic
 
-**All messages share a common envelope:**
+### **Integration tests**
 
-* `message_id`
-* `timestamp`
-* `type`
-* `device_id`
-* `session_id`
-* `sig`
+* Full command round trip
+* OTA update simulation
+* Pairing sequence
+* Policy update + enforcement
+* Failure cases (device offline, invalid signature, expired TTL)
 
-*(Spec reference: AgentFastAPIInterface.json)*
+### **End-to-End tests**
 
----
-
-## **5.3 FastAPI ↔ Laravel REST/Webhook Interface**
-
-### **Laravel → FastAPI**
-
-* `/command/dispatch`
-* `/policy/push`
-* `/update/deploy`
-
-### **FastAPI → Laravel**
-
-* `/device/online`
-* `/device/offline`
-* `/command/result`
-* `/telemetry/summary`
-* `/security/attestation`
-
-All requests cryptographically signed (Ed25519).
-
-*(Spec reference: FastAPI ↔ Laravel (REST + Webhook Control Channel).json)*
+* Local environment via Docker Compose
+* Synthetic devices + mock KernelService
+* Chaos testing (network dropout, backpressure, failures)
 
 ---
 
-## **5.4 Mobile App ↔ Laravel REST + Notifications**
+## 🧭 **9. Development Roadmap Overview**
 
-Features:
+Your development flow is broken into phases:
 
-* Registration, login, JWT refresh
-* Device list & detail view
-* Telemetry history
-* Command execution
-* Alerts and audit logs
-* Pairing via QR tokens
+1. **Phase 0** – Repo setup, skeleton generation, CI
+2. **Phase 1** – Laravel auth + CA
+3. **Phase 2** – FastAPI WSS AUTH
+4. **Phase 3** – Agent WSS client + AUTH protocol
+5. **Phase 4** – Telemetry + heartbeat
+6. **Phase 5** – Command lifecycle
+7. **Phase 6** – KernelService IOCTL basics
+8. **Phase 7** – Full round-trip command execution
+9. **Phase 8** – Mobile app skeleton
+10. **Phase 9** – OTA update pipeline
+11. **Phase 10** – Policy, compliance, audit hardening
+12. **Phase 11** – Deployment, monitoring, TLS/mTLS
+13. **Phase 12** – Nonfunctional: scaling, resilience, test harnesses
 
-*(Spec reference: Laravel ↔ Mobile App (REST + notifications).json)*
-
----
-
-# **6. Security Architecture**
-
-Security model spans five layers:
-
-### **1. Authentication**
-
-* Mobile user → JWT + optional 2FA
-* WindowsAgent → mTLS device certificate + JWT
-  *(Spec references: Laravel auth routes; AgentFastAPI AUTH handshake)*
-
-### **2. Authorization**
-
-* Policy Engine uses:
-
-  * user role
-  * device state
-  * risk level
-  * command risk class
-
-*(Spec reference: Missing System Components.json — PolicyEngine_API)*
-
-### **3. Integrity**
-
-* Every command, every WSS message, and every IOCTL request is **signed**
-* Canonical JSON removes whitespace + alphabetically sorted keys
-* Hardware-backed key storage recommended
-
-### **4. Confidentiality**
-
-* WSS (TLS 1.3)
-* Optional AES-GCM encryption of command payloads
-* Encrypted artifact uploads
-
-### **5. Auditability**
-
-* Immutable hash-linked audit trail
-* Evidence stored in S3 with replication
-* Each command and result mapped by trace_id
-
-*(Spec references: AuditTrail_API, CommandExecutionFlow)*
+A detailed version exists in `Development Flow.md`.
 
 ---
 
-# **7. Reliability & Observability**
+## 🎓 **10. Project Status**
 
-### **Reliability**
+This repository contains:
 
-* Dead-letter queues (DLQ)
-* Retry policies (send + execution)
-* On-device queue prevents loss during restart
-* Backpressure detection for overload
+* Complete architecture documentation
+* Complete JSON specifications
+* Complete development plan
+* Production-grade folder skeleton for every repo
 
-### **Observability**
-
-* Structured JSON logs
-* Metrics for ingestion, dispatch latency, execution time
-* Tracing via `trace_id` propagation
-
-*(Spec references: Full System Json.json — Observability)*
+**Next step:** begin Phase 0 — scaffold the monorepo, create folders, and initialize each repo.
 
 ---
 
-# **8. Developer Notes**
+## ❤️ **11. Contribution**
 
-### **Project Goals**
+This is an academic simulation and open for improvement.
+Please follow:
 
-* Demonstrate secure multi-layer communication
-* Show end-to-end attestation and command execution
-* Provide auditable flows for research
-* Blueprint for enterprise security architectures
+* `docs/onboarding/contribution_guide.md`
+* Format all code with Prettier, PHP-CS-Fixer, Black, or clang-format depending on repo
+* Sign-off commits if contributing to core protocols
 
-### **What is NOT included**
-
-* Production cryptographic key storage
-* Real kernel-mode drivers (KernelService is simulated)
-* Real hardware telemetry or tamper protection
-
----
-
-# **9. File Specification References (Full List)**
-
-The following files were used to generate this README:
-
-* **MasterBlueprint-v3.json** 
-* **Missing System Components.json** 
-* **Laravel ↔ Mobile App (REST + notifications).json** 
-* **FastAPI ↔ Laravel (REST + Webhook Control Channel).json** 
-* **WindowsAgent ↔ FastAPI (WSS control channel).json** 
-* **WindowsAgent ↔ KernelService Interface.json** 
-* **System flow.json** 
-* **Full System Json.json** 
-
----

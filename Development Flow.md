@@ -1,477 +1,623 @@
-Below is **your full development roadmap** — a complete, start-to-finish, real-world engineering flow to build the **entire Secure Device Control System**.
-This document is the **"Development Flow README"**, separate from the architecture README you already have.
+# 🚀 **Development Flow.md**
 
-This roadmap:
-
-* Tells you **where to start**
-* Defines **the exact sequence of development**
-* Prevents dead ends and rewrites
-* Ensures backend, agent, mobile apps, and kernel components evolve **in sync**
-* Includes **what you MUST NOT skip**
-* Ensures your project is built efficiently and successfully
+### *Full Engineering Roadmap for the Secure Device Control System (Aligned With README v2)*
 
 ---
 
-# 🚀 **Development Flow README**
+# 🧭 **0. Purpose of This Document**
 
-### *Full Start-to-End Engineering Roadmap for Building the Secure Device Control System*
+This document defines **exactly how to build the system from scratch**, one phase at a time, in the correct order, with the correct boundaries, ensuring:
+
+* No subsystem is built prematurely
+* All cryptographic trust flows are enforced
+* Cross-service interfaces remain consistent
+* Minimal working skeletons are validated before adding complexity
+* Every subsystem can be tested independently and end-to-end
+
+This roadmap is the **master engineering plan** for the Secure Device Control System.
 
 ---
 
-# **1. Phase 0 — Foundations (Before Writing Any Code)**
+# 🏗️ **1. Project Setup (Phase 0)**
 
-## **0.1 Set up your monorepo / multi-repo structure**
+### *Goal: Initialize repositories, skeletons, CI, and documentation.*
 
-Recommended layout:
+---
+
+## **1.1 Create the monorepo**
 
 ```
-/backend-laravel
-/backend-fastapi
-/windows-agent
-/kernel-service
-/mobile-app
-/infrastructure
-/docs
+secure-device-control/
+│
+├── backend-laravel/
+├── backend-fastapi/
+├── windows-agent/
+├── kernel-service/
+├── mobile-app/
+├── infrastructure/
+└── docs/
 ```
 
-## **0.2 Define cross-service contracts early**
-
-You ALREADY HAVE these from your specs.
-Your next task:
-
-✔ Freeze message schemas
-✔ Freeze protocol envelope structure
-✔ Freeze command registry & opcode list
-
-*(All referenced in: MasterBlueprint-v3.json, AgentKernelInterface.json, AgentFastAPIInterface.json)*
+Use the skeleton structure from `skeleton for all repositories.md`.
 
 ---
 
-# **2. Phase 1 — Identity & Trust Layer (Root of Everything)**
+## **1.2 Initialize each repository**
 
-**DO NOT start with commands or telemetry until trust is working.**
+* Laravel: `laravel new backend-laravel`
+* FastAPI: create `pyproject.toml`, `app/main.py`, dependencies etc.
+* WindowsAgent: initialize CMake project
+* KernelService: C/C++ project with CMake
+* Mobile app: `flutter create mobile-app`
+* Infrastructure: create Dockerfiles + k8s templates
 
-## **1.1 Implement Laravel CA & JWT Authority**
+---
 
-You must build:
+## **1.3 Set up global GitHub Actions (CI)**
 
-* JWT generation (short lived, with kid rotation)
-* JWKS endpoint for FastAPI consumption
-* CA subsystem issuing device certificates
-* CRUD for revocation, key rotation
+Enable CI workflows for:
 
-This is your **global trust root**.
+* Laravel tests
+* FastAPI tests
+* Agent build (CMake)
+* KernelService build
+* Flutter build
+* Linting
+* Security scans (optional)
 
-⚠ Without this, Agent cannot authenticate with FastAPI.
+---
 
-## **1.2 Implement Key Management Lifecycle**
+## **1.4 Populate docs folder**
 
-Based on your KeyManagementFlow:
+Copy all JSON specs into:
+
+```
+docs/specs/
+```
+
+Create placeholders:
+
+* `docs/architecture/overview.md`
+* `docs/protocols/ws_protocol.md`
+* `docs/security/threat_model.md`
+* etc.
+
+---
+
+# 🔐 **2. Identity & Trust Layer (Phase 1)**
+
+### *Goal: Establish cryptographic foundation before any real communication.*
+
+---
+
+## **2.1 Laravel – CA system**
+
+Implement:
 
 * Root CA (offline)
-* Intermediate CA (in Vault/KMS)
-* Device certificate issuance
-* JWT signing key rotation
-* Device cert revocation + broadcast
-
-*(Spec reference: Full System Json.json — KeyManagementFlow)*
-
-**Milestone 1:**
-✔ Laravel issues JWTs & device certificates
-✔ FastAPI fetches JWKS and validates tokens
-✔ Basic PKI trust chain complete
+* Intermediate CA (online)
+* Device certificate issuer
+* Certificate storage (DB + Redis cache)
+* CRL/OCSP endpoints (optional academic simulation)
 
 ---
 
-# **3. Phase 2 — Build the FastAPI Real-Time Controller**
+## **2.2 Laravel – JWT authority**
 
-The FastAPI controller is the **central router** of the system.
-
-## **2.1 Implement WSS server with AUTH / AUTH_ACK**
-
-WindowsAgent should be able to:
-
-* Connect to FastAPI
-* Authenticate using device certificate or JWT
-* Receive `session_id`
-
-*(Spec reference: AgentFastAPIInterface.json — AUTH handshake)*
-
-## **2.2 Implement presence system**
-
-Use Redis:
-
-* `agent:online:{device_id}` with TTL from heartbeat
-* On disconnect, trigger Laravel webhook `/device/offline`
-
-## **2.3 Implement the full WebSocket protocol**
-
-Message types:
-
-* AUTH / AUTH_ACK / AUTH_ERROR
-* HEARTBEAT
-* TELEMETRY
-* COMMAND_DELIVERY
-* COMMAND_ACK
-* COMMAND_RESULT
-* UPDATE_ANNOUNCE
-* POLICY_UPDATE
-* ALERT
-
-If **this protocol works**, 60% of your project is already functional.
-
-**Milestone 2:**
-✔ WindowsAgent can authenticate
-✔ FastAPI maintains presence
-✔ Telemetry + Heartbeat works (even dummy data)
+* JWT signing keys
+* JWKS endpoint (`/.well-known/jwks.json`)
+* Key rotation service (7-day rotation)
+* KID-based verification
 
 ---
 
-# **4. Phase 3 — Build the Windows Agent (User Mode)**
+## **2.3 FastAPI – trust bootstrap**
 
-This is your second-most complex component (after Laravel).
+* JWKS fetch + caching
+* Token verification utilities
+* Device certificate verification
+* Request signing verification (Ed25519 / RSA-PSS)
 
-## **3.1 Build Agent bootstrap**
+---
+
+## **2.4 Test milestone**
+
+You must reach:
+
+✔ Laravel can create & rotate JWT signing keys
+✔ FastAPI can validate JWTs
+✔ Laravel can issue a mock device certificate
+✔ FastAPI can verify that certificate
+
+Only move forward after this passes.
+
+---
+
+# 🌐 **3. FastAPI Real-Time Layer (Phase 2)**
+
+### *Goal: Build minimal WSS controller for agent login.*
+
+---
+
+## **3.1 Basic WSS endpoint**
+
+Implement WSS server with:
+
+* `AUTH` message
+* `AUTH_ACK` response
+* Session allocation
+* Basic Redis integration
+
+---
+
+## **3.2 Presence subsystem**
+
+Implement:
+
+* Redis TTL-based online tracking
+* `/webhook/device/online` → Laravel
+* `/webhook/device/offline` → Laravel
+
+---
+
+## **3.3 Minimal protocol skeleton**
+
+Add empty handlers:
+
+* `telemetry_handler.py`
+* `command_delivery_handler.py`
+* `update_handler.py`
+* `alert_handler.py`
+
+---
+
+## **3.4 Test milestone**
+
+✔ Agent can connect with dummy message
+✔ FastAPI responds with `AUTH_ACK`
+✔ Redis presence keys update correctly
+
+Do **NOT** implement command routing yet.
+
+---
+
+# 🪟 **4. Windows Agent Minimal Build (Phase 3)**
+
+### *Goal: Basic WSS client that authenticates.*
+
+---
+
+## **4.1 Implement Agent skeleton**
+
+* Windows service or console app
+* CMake structure
+* Updater stub
+* Logging
+
+---
+
+## **4.2 Implement WSS client**
+
+Use:
+
+* WinHTTP or Boost.Beast
+* TLS 1.3
+* Certificate loading (local device cert)
+
+---
+
+## **4.3 AUTH handshake**
+
+Implement:
 
 * Load device certificate
-* Establish WSS connection
-* AUTH message
-* Receive AUTH_ACK
-* Start heartbeat timer
-* Start telemetry timer
+* Build canonical AUTH JSON
+* Sign AUTH message
+* Validate `AUTH_ACK` fields
+* Store session_id
 
-## **3.2 Implement command pipeline up to local queue**
+---
 
-Agent must:
+## **4.4 Test milestone**
 
-* Validate command signature
-* Validate TTL
-* Validate sequence
-* Queue command reliably to local encrypted storage (SQLite)
-* Send COMMAND_ACK
-
-## **3.3 Implement IOCTL bridge to KernelService**
-
-Before building KernelService, mock the IOCTL calls so you can test agent routing logic.
-
-**Milestone 3:**
 ✔ Agent connects
-✔ Sends heartbeat + telemetry
-✔ Receives commands
-✔ ACKs commands
-✔ Enqueues commands locally
+✔ FastAPI authenticates
+✔ Ready for telemetry & command pipeline
+
+This is the first major milestone.
 
 ---
 
-# **5. Phase 4 — Build the KernelService (Privileged Executor)**
+# 📡 **5. Telemetry & Heartbeat (Phase 4)**
 
-Build KernelService **only after Agent IOCTL pipeline exists**.
-
-## **4.1 Implement minimal kernel opcode handlers**
-
-Start simple:
-
-1. EXEC_LOCK_SCREEN
-2. EXEC_PING_KERNEL
-3. EXEC_GET_PROCESS_LIST
-
-Then expand:
-
-* Reboot
-* Shutdown
-* Attestation
-* Update staging & commit
-
-## **4.2 Enforce strict validation + signature checks**
-
-KernelService must verify:
-
-* Request signature (Ed25519)
-* AllowedOpcode
-* Params schema
-
-*(Spec ref: AgentKernelInterface.json)*
-
-## **4.3 Return signed responses**
-
-* executing → ok → result
-* Or failed + error_code
-
-**Milestone 4:**
-✔ Agent → KernelService → Agent → FastAPI → Laravel → Mobile round-trip works
+### *Goal: Continuous link between Agent and FastAPI.*
 
 ---
 
-# **6. Phase 5 — Laravel Backend (High Complexity)**
-
-Laravel is the *source of truth* for:
-
-* Users
-* Devices
-* Policies
-* Commands
-* OTA Updates
-* Audit logs
-
-Essential subsystems:
-
-## **5.1 User authentication + 2FA**
-
-Use full flow:
-
-* Register
-* Login
-* 2FA (optional but supported in specs)
-* JWT refresh
-
-*(Spec ref: Laravel ↔ Mobile App.json — Auth)*
-
-## **5.2 Device pairing flow**
+## **5.1 Agent sends telemetry**
 
 Implement:
 
-* `/api/pair/request`
-* QR generation containing `pair_token`
-* `/api/pair/confirm`
-* Device certificate issuance
-* Webhook → FastAPI device paired
+* CPU, RAM, disk, network
+* Signed telemetry envelope
+* Configurable interval
 
-*(Spec ref: System flow.json — PairingFlow)*
+---
 
-## **5.3 Command ingestion pipeline**
+## **5.2 FastAPI telemetry ingestion**
 
-Laravel must:
+* Validate signature
+* Store into Redis streams
+* Write to MySQL via worker
+* Implement `risk_score` calculation
 
-* Validate user permissions
-* Validate command against PolicyEngine
-* Sign the command envelope
-* Insert into MySQL
-* Publish to Redis stream `stream:device:{deviceId}`
-* Respond to mobile
+---
 
-*(Spec reference: Missing System Components.json — CommandRegistry_API + PolicyEngine_API)*
+## **5.3 Heartbeat**
 
-## **5.4 Webhooks from FastAPI**
+* Agent sends `heartbeat`
+* FastAPI updates presence
+* Detect offline events
+
+---
+
+## **5.4 Test milestone**
+
+✔ Telemetry visible in Laravel dashboard
+✔ FastAPI maintains presence
+✔ Alerts fire for anomalies (optional)
+
+---
+
+# ⚡ **6. Command Lifecycle (Phase 5)**
+
+### *Goal: End-to-end command dispatch (delivery only).*
+
+---
+
+## **6.1 Laravel command ingest**
 
 Implement:
 
-* `/webhook/device/online`
-* `/webhook/device/offline`
-* `/webhook/command/result`
-* `/webhook/telemetry/summary`
-* `/webhook/security/attestation`
-
-*(Spec reference: FastAPI ↔ Laravel Interface.json)*
-
-**Milestone 5:**
-✔ Laravel can ingest commands
-✔ FastAPI dispatches commands
-✔ Results return back to Laravel
-✔ Mobile App receives command result notifications
+* `/api/command` POST
+* Policy engine integration (basic)
+* Command signing
+* Save to DB
+* Publish to Redis stream
 
 ---
 
-# **7. Phase 6 — Mobile Application**
+## **6.2 FastAPI command router**
 
-The mobile app is the user-facing part.
+Implement:
 
-## **6.1 Implement authentication**
-
-* Register
-* Login
-* Token refresh
-* Logout + revoke
-
-## **6.2 Device management dashboard**
-
-* List devices
-* Device details
-* Telemetry (live + history)
-* Compliance & alerts
-
-## **6.3 Command interface**
-
-* Send commands
-* Poll or subscribe for updates
-* View command history
-
-## **6.4 Pairing (QR code)**
-
-* Scan agent QR
-* Send `pair_token` to Laravel
-* Receive device_id, device_name
-
-**Milestone 6:**
-✔ Mobile fully controls device
-✔ User gets alerts & telemetry
-✔ All flows user-visible end-to-end
+* Read from Redis
+* Signature verification
+* TTL / sequence checks
+* COMMAND_DELIVERY via WSS
 
 ---
 
-# **8. Phase 7 — OTA Update Implementation**
+## **6.3 Agent command receiver**
 
-Do this after all core flows are done.
+Implement:
 
-## **7.1 Implement update manifest structure**
+* Validate FastAPI signature
+* Validate TTL & sequence
+* ACK commands
+* Insert into local queue
 
-Includes:
+---
 
-* sha256
-* signature
-* min_os_build
-* files list
+## **6.4 Test milestone**
 
-## **7.2 Laravel → FastAPI deployment API**
+✔ Command appears on Agent
+✔ Agent ACKs
+✔ State updates in Laravel (`queued → sent → ack_received`)
 
-`POST /update/deploy`
+NOT executing commands yet.
 
-## **7.3 FastAPI → Agent UPDATE_ANNOUNCE**
+---
 
-## **7.4 Agent update flow**
+# 🔧 **7. KernelService Integration (Phase 6)**
 
-Agent does:
+### *Goal: Implement IOCTL-based privileged operations.*
+
+---
+
+## **7.1 KernelService skeleton**
+
+* C/C++ service with CMake
+* IOCTL interface defined using JSON spec
+* AllowedOpcodes enum
+* RequestSchema / ResponseSchema implemented
+
+---
+
+## **7.2 Basic opcodes**
+
+Implement:
+
+* `EXEC_PING_KERNEL`
+* `EXEC_LOCK_SCREEN`
+* `EXEC_GET_PROCESS_LIST`
+
+---
+
+## **7.3 Agent → KernelService bridge**
+
+* IOCTL client
+* Canonical request builder
+* Signature generation
+* Response signature validation
+
+---
+
+## **7.4 Test milestone**
+
+✔ Agent can send opcodes
+✔ KernelService executes
+✔ Agent receives correct responses
+
+---
+
+# 🔁 **8. Full Command Round Trip (Phase 7)**
+
+### *Goal: Entire pipeline works: Mobile → Device → Mobile.*
+
+---
+
+## **8.1 Implement COMMAND_RESULT**
+
+FastAPI:
+
+* Validate agent signature
+* Call Laravel `/command/result` webhook
+
+Laravel:
+
+* Update DB state
+* Push notification to Mobile
+* Append audit entry
+
+Mobile:
+
+* Display command result
+
+---
+
+## **8.2 Large artifacts**
+
+Implement:
+
+* Screenshot/log upload
+* Laravel presigned URL issuing
+* FastAPI artifact forwarding
+* Agent encryption & upload
+
+---
+
+## **8.3 Test milestone**
+
+✔ Full round-trip command works
+✔ Artifacts upload correctly
+✔ Audit chain logs all operations
+
+This unlocks OTA.
+
+---
+
+# 📦 **9. OTA Update System (Phase 8)**
+
+### *Goal: Reliable update staging & commit.*
+
+---
+
+## **9.1 Laravel release management**
+
+* Create release
+* Upload artifacts
+* Sign manifest
+
+---
+
+## **9.2 FastAPI OTA coordinator**
+
+* Broadcast `update_available`
+* Track device rollout states
+
+---
+
+## **9.3 Agent OTA handler**
 
 * Precheck
 * Download
-* Verify
-* Stage
-* Commit
-* Reboot
-* Report progress
-
-*(Spec ref: AgentKernelInterface.json — Update opcodes)*
-
-**Milestone 7:**
-✔ End-to-end OTA working from backend to agent
+* Verify signature
+* Call KernelService: `STAGE_UPDATE`
+* Call KernelService: `COMMIT_UPDATE`
+* Optional reboot
 
 ---
 
-# **9. Phase 8 — Policy Engine & Compliance Engine**
+## **9.4 KernelService update ops**
 
-This enforces fine-grained command control.
+Implement:
 
-## **8.1 Implement backend policy service**
-
-* Validate command
-* Check device lifecycle state
-* Check user role
-* Apply 2FA rules
-* Evaluate risk
-
-*(Spec ref: Missing System Components.json — PolicyEngine_API)*
-
-## **8.2 Compliance Engine**
-
-Periodic:
-
-* attestation
-* OS version
-* agent version
-* policy hash
-
-Result stored per device.
-
-*(Spec ref: Missing System Components.json — ComplianceEngine_API)*
+* Sandbox staging
+* Atomic commit
+* Rollback
+* Post-install metrics
 
 ---
 
-# **10. Phase 9 — Audit Trail + Analytics**
+## **9.5 Test milestone**
 
-## **9.1 Immutable audit chain**
-
-Every event is appended with:
-
-* actor
-* timestamp
-* payload hash
-* signature
-* prev_hash pointer
-
-*(Spec ref: Missing System Components.json — AuditTrail_API)*
-
-## **9.2 Telemetry analytics worker**
-
-* Compute risk
-* Detect anomalies
-* Publish alerts
-
-*(Spec ref: Missing System Components.json — TelemetryAnalytics_API)*
-
-**Milestone 8:**
-✔ Full observability & audit working
-✔ Alerts automatically generated
+✔ Update deploys to sample device
+✔ Rolls back on failure
+✔ Dashboard shows update status
 
 ---
 
-# **11. Phase 10 — Hardening, Testing, Deployment**
+# 🛡️ **10. Policy, Compliance & Security Hardening (Phase 9)**
 
-## **10.1 Automated tests**
+---
 
-* Unit tests
-* Integration tests
-* WSS protocol tests
-* Fault injection (as described in specs)
+## **10.1 Expand PolicyEngine**
 
-## **10.2 Security hardening**
+Add rules:
 
-* Rate limits
-* mTLS everywhere agent ↔ backend
-* Key rotation
-* OCSP/CRL checking
+* Time windows
+* Command rate limiting
+* Device posture
+* Ethical restrictions
+* Multi-approval flows
 
-## **10.3 Deployment**
+---
 
-Use containers:
+## **10.2 Agent local policy bundle**
 
-* Laravel API
-* FastAPI Controller
+* Policy signature validation
+* Local enforcement if backend unavailable
+
+---
+
+## **10.3 Compliance Engine**
+
+* Check agent version, OS version
+* Certificate expiry
+* Tamper check
+* Report compliance summary
+
+---
+
+## **10.4 Security Hardening Checklist**
+
+* TLS strictly 1.3
+* mTLS agent ↔ FastAPI
+* Rotate JWT signing keys
+* Implement CRL or OCSP simulation
+* Harden Redis + MySQL credentials
+* Enable audit hashing
+
+---
+
+# 📊 **11. Observability & Resilience (Phase 10)**
+
+---
+
+## **11.1 Metrics**
+
+* Command latency
+* Queue depth
+* Agent uptime
+* OTA success rate
+
+---
+
+## **11.2 Logging**
+
+* Structured logs
+* Trace IDs across all services
+
+---
+
+## **11.3 Alerts**
+
+* Device offline
+* Risk score above threshold
+* Update failures
+* Tamper detection
+* Backpressure conditions
+
+---
+
+## **11.4 DLQ & retries**
+
+* Per-device DLQ streams
+* Exponential backoff
+* Operator facing remediation UI
+
+---
+
+# 🚀 **12. Deployment (Phase 11)**
+
+---
+
+## **12.1 Local dev environment**
+
+Using Docker Compose:
+
+* Laravel
+* FastAPI
 * Redis
 * MySQL
-* Object store (MinIO S3)
+* MinIO
+* Agent simulator
 
 ---
 
-# 🎯 **Final Phase — System Go-Live Checklist**
+## **12.2 Production**
 
-### **Must Have**
+Use Kubernetes:
 
-* ✓ WSS stable under load
-* ✓ Commands validated at every layer
-* ✓ End-to-end signatures verified
-* ✓ DLQ and retries working
-* ✓ Telemetry ingestion stable
-* ✓ Attestation functional
-* ✓ Audit logs immutable
-* ✓ Mobile app fully operational
-
-### **Nice to Have**
-
-* Dark mode UI
-* Multi-user RBAC dashboards
-* Web-based admin panel
-* Automatic device quarantine
-* Full Grafana dashboards
+* Horizontal scaling of FastAPI
+* Laravel in HA mode
+* Redis cluster or Sentinel
+* MinIO / S3 backend
+* Secrets via Vault or KMS
 
 ---
 
-# ⭐ **What You Should Build First**
+## **12.3 CI/CD**
 
-If you want to maximize development velocity:
+Deploy pipelines:
 
-### **Start with this order:**
-
-1. **Laravel CA + Auth + JWKS**
-2. **FastAPI WSS AUTH**
-3. **Agent connecting + AUTH**
-4. **Telemetry + Heartbeat**
-5. **Command ingestion + dispatch**
-6. **Kernel execution**
-7. **Mobile UI**
-8. **OTA updates**
-9. **Policy & compliance engine**
-10. **Audit & analytics**
-
-This order ensures everything can be tested incrementally and avoids rewriting major components later.
+* Push to main → test → build → deploy
+* Secure build for C/C++ components
+* Scan Docker images
 
 ---
+
+# 🧪 **13. Final Integration & Verification (Phase 12)**
+
+---
+
+## **13.1 Full E2E test suite**
+
+Covers:
+
+* Pairing
+* Command lifecycle
+* OTA update
+* Telemetry pipeline
+* Policy updates
+* Error cases
+
+---
+
+## **13.2 Chaos & fault testing**
+
+Simulate:
+
+* Network drops
+* Redis failures
+* Agent crashes
+* KernelService errors
+* Expired JWTs
+* Revoked device cert
+* OTA mid-download failures
+
+---
+
+## **13.3 Academic Report Deliverables (optional)**
+
+* Architecture diagrams
+* Flow charts
+* Security analysis
+* Performance metrics
+* Observability dashboards
+
+---
+
+# 🎉 **Development Flow Complete**
 

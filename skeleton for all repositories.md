@@ -1,4 +1,40 @@
-# 🚀 **FULL PROJECT STRUCTURE — ALL REPOS (Complete Skeleton)**
+# 🚀 FULL PROJECT STRUCTURE — ALL REPOS (Complete Skeleton v2)
+
+This is the canonical folder layout for the **Secure Device Control System (Academic Simulation)** monorepo + all component repos.
+
+---
+
+============================================================
+
+# 🏠 0. monorepo root
+
+============================================================
+
+```text
+secure-device-control/
+│
+├── backend-laravel/        # Laravel API, CA, policy engine, dashboards
+├── backend-fastapi/        # FastAPI WSS controller, router, telemetry gateway
+├── windows-agent/          # User-mode Windows agent (C++23)
+├── kernel-service/         # Privileged service / driver (C / C++)
+├── mobile-app/             # Flutter mobile client
+├── infrastructure/         # Docker, k8s, Terraform, CI/CD, monitoring
+├── docs/                   # Architecture, specs, threat model, report
+│
+├── .github/                # Global GitHub Actions (monorepo-level)
+│   ├── workflows/
+│   │   ├── ci_backend.yml
+│   │   ├── ci_agent.yml
+│   │   └── ci_mobile.yml
+│   └── CODEOWNERS
+│
+├── .vscode/                # Recommended editor settings
+│   └── settings.json
+│
+├── .editorconfig
+├── .gitignore
+├── LICENSE
+└── README.md               # High-level overview + links into docs & repos
 
 
 ============================================================
@@ -27,8 +63,10 @@ backend-laravel/
 │   │   │   │   └── ArtifactController.php
 │   │   │   ├── OTA/
 │   │   │   │   └── UpdateController.php
-│   │   │   ├── Alerts/AlertsController.php
-│   │   │   └── Compliance/ComplianceController.php
+│   │   │   ├── Alerts/
+│   │   │   │   └── AlertsController.php
+│   │   │   └── Compliance/
+│   │   │       └── ComplianceController.php
 │   │   ├── Middleware/
 │   │   └── Requests/
 │   ├── Models/
@@ -50,12 +88,21 @@ backend-laravel/
 │   │   ├── PolicyEngine/
 │   │   │   ├── PolicyEvaluator.php
 │   │   │   └── Rules/
+│   │   │       ├── CommandRules.php
+│   │   │       ├── DeviceRules.php
+│   │   │       ├── TimeRules.php
+│   │   │       ├── RateRules.php
+│   │   │       └── EthicalRules.php
 │   │   ├── CommandRegistry/
 │   │   │   ├── CommandDefinition.php
 │   │   │   └── Registry.php
 │   │   ├── OTA/
+│   │   │   ├── ReleaseManager.php
+│   │   │   └── ManifestValidator.php
 │   │   ├── Telemetry/
+│   │   │   └── TelemetryIngestService.php
 │   │   ├── Compliance/
+│   │   │   └── ComplianceChecker.php
 │   │   └── AuditTrail/
 │   │       ├── AuditWriter.php
 │   │       └── AuditHasher.php
@@ -64,11 +111,14 @@ backend-laravel/
 │
 ├── bootstrap/
 ├── config/
+│   ├── app.php
 │   ├── jwt.php
 │   ├── ca.php
 │   ├── policy.php
 │   ├── telemetry.php
 │   ├── audit.php
+│   ├── queue.php
+│   ├── logging.php
 │   └── services.php
 │
 ├── database/
@@ -76,19 +126,28 @@ backend-laravel/
 │   ├── seeders/
 │   └── factories/
 │
+├── resources/
+│   ├── views/              # Admin dashboard / research UI (Blade or Inertia/Vue)
+│   └── js/                 # If you use Vue/React for web dashboard
+│
 ├── routes/
-│   ├── api.php
-│   ├── web.php
-│   └── websockets.php
+│   ├── api.php             # Auth, pairing, commands, artifacts, mobile API
+│   ├── web.php             # Dashboard, admin UI
+│   └── websockets.php      # Optional WSS routes if using websockets in Laravel
 │
 ├── storage/
 ├── tests/
 │   ├── Feature/
 │   └── Unit/
 │
-└── docker/
-    ├── Dockerfile
-    └── nginx.conf
+├── docker/
+│   ├── Dockerfile
+│   └── nginx.conf
+│
+├── .env.example
+├── composer.json
+└── README.md
+
 ```
 
 ---
@@ -104,7 +163,7 @@ backend-fastapi/
 │
 ├── app/
 │   ├── main.py
-│   ├── config.py
+│   ├── config.py           # Settings (Redis, JWKS, TLS, rate limits)
 │   ├── ws/
 │   │   ├── connection_manager.py
 │   │   ├── auth.py
@@ -126,10 +185,11 @@ backend-fastapi/
 │   │       └── updates.py
 │   ├── api/
 │   │   ├── routes/
-│   │   │   ├── device.py
+│   │   │   ├── device.py       # /webhook/device online/offline, etc.
 │   │   │   ├── admin.py
 │   │   │   ├── ota.py
-│   │   │   ├── webhooks.py
+│   │   │   ├── webhooks.py     # From Laravel
+│   │   │   └── test.py         # Fault injection endpoints
 │   │   └── schemas/
 │   ├── services/
 │   │   ├── redis_service.py
@@ -144,18 +204,26 @@ backend-fastapi/
 │   │   ├── dlq_worker.py
 │   │   └── alert_worker.py
 │   └── utils/
+│       ├── logging.py
+│       └── backoff.py
 │
 ├── tests/
 │   ├── test_auth.py
 │   ├── test_command_dispatch.py
-│   └── test_telemetry.py
+│   ├── test_telemetry.py
+│   └── test_update_flow.py
 │
 ├── scripts/
 │   ├── run_workers.sh
 │   └── sync_jwks.sh
 │
-└── docker/
-    └── Dockerfile
+├── docker/
+│   └── Dockerfile
+│
+├── pyproject.toml
+├── .env.example
+└── README.md
+
 ```
 
 ---
@@ -201,6 +269,8 @@ windows-agent/
 │   │   └── logger.cpp
 │   ├── config/
 │   │   └── config.hpp
+│   └── policy/
+│       └── policy_bundle_cache.cpp
 │
 ├── include/
 │
@@ -219,6 +289,7 @@ windows-agent/
 │
 ├── CMakeLists.txt
 └── README.md
+
 ```
 
 ---
@@ -256,7 +327,7 @@ kernel-service/
 │   └── utils/
 │       └── logger.cpp
 │
-├── driver/       # Optional kernel driver
+├── driver/                 # Optional kernel driver, if you go that route
 │   └── ...
 │
 ├── tests/
@@ -269,6 +340,7 @@ kernel-service/
 │
 ├── CMakeLists.txt
 └── README.md
+
 ```
 
 ---
@@ -320,13 +392,13 @@ mobile-app/
 │   └── widgets/
 │
 ├── test/
-│
 ├── assets/
 │   ├── icons/
 │   └── images/
 │
 ├── pubspec.yaml
 └── README.md
+
 ```
 
 ---
@@ -382,6 +454,7 @@ infrastructure/
     ├── prometheus/
     ├── grafana/
     └── alertmanager/
+
 ```
 
 ---
@@ -395,40 +468,47 @@ infrastructure/
 ```
 docs/
 |
-|── specs/                       
-|   //<-- All canonical JSONspecifications go here
-│   ├── FastAPI_Laravel_Interface.json
-│   ├── Full_System.json
-│   ├── Laravel_Mobile_Interface.json
+├── specs/                       # All canonical JSON specifications
+│   ├── FastAPI ↔ Laravel (REST + Webhook Control Channel).json
+│   ├── Full System Json.json
+│   ├── Laravel ↔ Mobile App (REST + notifications).json
 │   ├── MasterBlueprint-v3.json
-│   ├── Missing_System_Components.json
-│   ├── System_Flow.json
-│   ├── WindowsAgent_FastAPI_WSS.json
-│   └── WindowsAgent_KernelService_Interface.json
-|
+│   ├── Missing System Components.json
+│   ├── System flow.json
+│   ├── WindowsAgent ↔ FastAPI (WSS control channel).json
+│   └── WindowsAgent ↔ KernelService Interface.json
+│
 ├── architecture/
-│   ├── overview.md
-│   ├── system_diagrams.md
-│   ├── sequence_flows.md
+│   ├── overview.md              # High-level picture (actors, components)
+│   ├── system_diagrams.md       # ASCII/PlantUML diagrams
+│   ├── sequence_flows.md        # Narrative of flows (based on System flow + Full System Json)
 │   ├── threat_model.md
 │   ├── trust_model.md
 │   └── key_management.md
 │
 ├── protocols/
-│   ├── ws_protocol.md
-│   ├── ioctl_protocol.md
-│   ├── api_endpoints.md
-│   └── command_envelope_spec.md
+│   ├── ws_protocol.md           # Agent ↔ FastAPI (from WSS JSON spec)
+│   ├── ioctl_protocol.md        # Agent ↔ KernelService IOCTL schema
+│   ├── api_endpoints.md         # Laravel + FastAPI REST endpoints
+│   └── command_envelope_spec.md # Universal message/envelope fields
 │
 ├── onboarding/
-│   ├── setup_env.md
+│   ├── setup_env.md             # How to run the whole stack locally
 │   ├── contribution_guide.md
 │   └── coding_standards.md
 │
-└── security/
-    ├── audit_chain.md
-    ├── compliance_rules.md
-    └── revocation_flow.md
+├── security/
+│   ├── audit_chain.md           # Hash-chained audit logs design
+│   ├── compliance_rules.md      # Device posture & periodic checks
+│   └── revocation_flow.md       # Key/cert revocation & emergency flows
+│
+└── report/                      # (Optional) Academic report structure
+    ├── 01-introduction.md
+    ├── 02-architecture.md
+    ├── 03-security_model.md
+    ├── 04-implementation.md
+    └── 05-results_and_future_work.md
+
 ```
 
 ---
