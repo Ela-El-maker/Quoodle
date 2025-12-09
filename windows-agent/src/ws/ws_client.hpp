@@ -16,4 +16,5 @@ private:
     std::string initial_message_;
     bool heartbeat_sent_{false};
     bool telemetry_sent_{false};
+    std::string last_session_id_;
 };

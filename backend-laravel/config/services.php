@@ -39,4 +39,8 @@ return [
         'base_url' => env('FASTAPI_BASE_URL', 'http://localhost:8001/api/v1'),
     ],
 
+    'laravel_webhook' => [
+        'base_url' => env('LARAVEL_WEBHOOK_BASE', 'http://localhost/api/v1/webhook'),
+    ],
+
 ];

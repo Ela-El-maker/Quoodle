@@ -31,15 +31,16 @@ void WsClient::connect_and_run() {
             std::cout << "[ws] received: " << msg->str << std::endl;
             try {
                 auto parsed = nlohmann::json::parse(msg->str);
-                std::string mtype = parsed.value("type", "");
-                if (mtype == "AUTH_ACK") {
-                    std::string session_id = parsed["body"].value("session_id", "");
-                    if (!session_id.empty()) {
-                        if (!heartbeat_sent_) {
-                            auto hb = build_signed_heartbeat_json(device_id_, session_id, "alive", 120, "ok");
-                            socket.sendText(hb);
-                            heartbeat_sent_ = true;
-                        }
+                    std::string mtype = parsed.value("type", "");
+                    if (mtype == "AUTH_ACK") {
+                        std::string session_id = parsed["body"].value("session_id", "");
+                        if (!session_id.empty()) {
+                            last_session_id_ = session_id;
+                            if (!heartbeat_sent_) {
+                                auto hb = build_signed_heartbeat_json(device_id_, session_id, "alive", 120, "ok");
+                                socket.sendText(hb);
+                                heartbeat_sent_ = true;
+                            }
                         if (!telemetry_sent_) {
                             auto tel = build_signed_telemetry_json(device_id_, session_id);
                             socket.sendText(tel);
@@ -61,9 +62,21 @@ void WsClient::connect_and_run() {
                         // Execute minimal opcodes (lock_screen, ping)
                         IoctlClient ioctl;
                         if (method == "lock_screen") {
-                            ioctl.lock_screen(command_message_id);
+                            auto res = ioctl.lock_screen(command_message_id);
+                            if (!session_id.empty()) {
+                                auto result_msg = build_command_result_json(device_id_, session_id, command_message_id,
+                                                                            "completed", "ok", "lock_screen done",
+                                                                            "", "", 0, "");
+                                socket.sendText(result_msg);
+                            }
                         } else if (method == "ping") {
-                            ioctl.ping(command_message_id);
+                            auto res = ioctl.ping(command_message_id);
+                            if (!session_id.empty()) {
+                                auto result_msg = build_command_result_json(device_id_, session_id, command_message_id,
+                                                                            "completed", "ok", res.result,
+                                                                            "", "", 0, "");
+                                socket.sendText(result_msg);
+                            }
                         }
                     }
                 }

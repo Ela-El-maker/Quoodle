@@ -291,3 +291,66 @@ std::string build_command_ack_json(const std::string& device_id,
         {"type", "\"" + escape_json(env.type) + "\""},
     });
 }
+
+std::string build_command_result_json(const std::string& device_id,
+                                      const std::string& session_id,
+                                      const std::string& command_message_id,
+                                      const std::string& execution_state,
+                                      const std::string& result_status,
+                                      const std::string& notes,
+                                      const std::string& artifact_url,
+                                      const std::string& artifact_checksum,
+                                      int error_code,
+                                      const std::string& error_message) {
+    using utils::canonical_object;
+    using utils::escape_json;
+
+    AuthEnvelope env;
+    env.type = "COMMAND_RESULT";
+    env.device_id = device_id;
+    env.session_id = session_id;
+    env.message_id = generate_uuid();
+    env.timestamp = iso_timestamp();
+    env.sig = "";
+
+    std::string result_obj = canonical_object({
+        {"artifact_checksum", artifact_checksum.empty() ? "null" : "\"" + escape_json(artifact_checksum) + "\""},
+        {"artifact_url", artifact_url.empty() ? "null" : "\"" + escape_json(artifact_url) + "\""},
+        {"notes", "\"" + escape_json(notes) + "\""},
+        {"status", "\"" + escape_json(result_status) + "\""},
+    });
+
+    std::string error_code_val = error_code == 0 ? "null" : std::to_string(error_code);
+    std::string error_message_val = error_message.empty() ? "null" : "\"" + escape_json(error_message) + "\"";
+
+    std::string body = canonical_object({
+        {"command_message_id", "\"" + escape_json(command_message_id) + "\""},
+        {"error_code", error_code_val},
+        {"error_message", error_message_val},
+        {"execution_state", "\"" + escape_json(execution_state) + "\""},
+        {"result", result_obj},
+    });
+
+    std::string canonical = canonical_object({
+        {"body", body},
+        {"device_id", "\"" + escape_json(env.device_id) + "\""},
+        {"from", "\"" + escape_json(env.from) + "\""},
+        {"message_id", "\"" + escape_json(env.message_id) + "\""},
+        {"session_id", "\"" + escape_json(env.session_id) + "\""},
+        {"timestamp", "\"" + escape_json(env.timestamp) + "\""},
+        {"type", "\"" + escape_json(env.type) + "\""},
+    });
+
+    env.sig = sign_placeholder(canonical);
+
+    return canonical_object({
+        {"body", body},
+        {"device_id", "\"" + escape_json(env.device_id) + "\""},
+        {"from", "\"" + escape_json(env.from) + "\""},
+        {"message_id", "\"" + escape_json(env.message_id) + "\""},
+        {"session_id", "\"" + escape_json(env.session_id) + "\""},
+        {"sig", "\"" + escape_json(env.sig) + "\""},
+        {"timestamp", "\"" + escape_json(env.timestamp) + "\""},
+        {"type", "\"" + escape_json(env.type) + "\""},
+    });
+}

@@ -48,3 +48,14 @@ std::string build_command_ack_json(const std::string& device_id,
                                    const std::string& command_message_id,
                                    const std::string& status = "received",
                                    const std::string& reason = "");
+
+std::string build_command_result_json(const std::string& device_id,
+                                      const std::string& session_id,
+                                      const std::string& command_message_id,
+                                      const std::string& execution_state,
+                                      const std::string& result_status,
+                                      const std::string& notes = "",
+                                      const std::string& artifact_url = "",
+                                      const std::string& artifact_checksum = "",
+                                      int error_code = 0,
+                                      const std::string& error_message = "");

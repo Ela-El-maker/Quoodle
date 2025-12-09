@@ -12,9 +12,11 @@ from app.ws.protocol import (
     build_auth_ack,
     build_auth_error,
     validate_auth_envelope,
+    validate_command_result,
     validate_heartbeat,
     validate_telemetry,
 )
+from app.ws.results import forward_command_result
 
 app = FastAPI(title="Secure Device Control - FastAPI Controller")
 manager = ConnectionManager()
@@ -87,6 +89,14 @@ async def agent_ws(websocket: WebSocket):
                     except ValueError:
                         await websocket.close(code=4400)
                         break
+                    continue
+                if mtype == "COMMAND_RESULT":
+                    try:
+                        validate_command_result(message, session_id_assigned)
+                    except ValueError:
+                        await websocket.close(code=4400)
+                        break
+                    await forward_command_result(message)
                     continue
                 if mtype == "COMMAND_ACK":
                     # Placeholder: In a later phase, forward to Laravel webhook.

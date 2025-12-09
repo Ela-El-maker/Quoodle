@@ -101,3 +101,22 @@ def validate_telemetry(payload: Dict[str, Any], expected_session: str) -> None:
     body = payload.get("body") or {}
     if "metrics" not in body or "telemetry_scope" not in body or "timestamp" not in body:
         raise ValueError("Telemetry body missing required fields")
+
+
+def validate_command_result(payload: Dict[str, Any], expected_session: str) -> None:
+    required_fields = ["type", "from", "device_id", "message_id", "body", "sig", "session_id", "timestamp"]
+    for field in required_fields:
+        if field not in payload:
+            raise ValueError(f"Missing required field: {field}")
+    if payload["type"] != "COMMAND_RESULT":
+        raise ValueError("Invalid type for command result")
+    if payload["from"] != "agent":
+        raise ValueError("Command result must originate from agent")
+    if not payload.get("session_id"):
+        raise ValueError("Command result requires session_id")
+    if expected_session and payload.get("session_id") != expected_session:
+        raise ValueError("Command result session_id mismatch")
+
+    body = payload.get("body") or {}
+    if "command_message_id" not in body or "execution_state" not in body or "result" not in body:
+        raise ValueError("Command result body missing required fields")

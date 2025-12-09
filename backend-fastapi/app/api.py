@@ -11,6 +11,7 @@ from app.ws.protocol import iso_timestamp
 def build_command_delivery(payload: Dict[str, Any], session_id: str) -> Dict[str, Any]:
     envelope = payload.get("envelope", {})
     device_id = payload["device_id"]
+    controller_sig = "controller-sig-placeholder"
     return {
         "type": "COMMAND_DELIVERY",
         "from": settings.controller_id,
@@ -18,7 +19,7 @@ def build_command_delivery(payload: Dict[str, Any], session_id: str) -> Dict[str
         "message_id": f"m-cmd-delivery-{uuid.uuid4()}",
         "session_id": session_id,
         "timestamp": iso_timestamp(),
-        "sig": "controller-sig-placeholder",
+        "sig": controller_sig,
         "body": {
             "command_envelope": {
                 "header": envelope.get(
