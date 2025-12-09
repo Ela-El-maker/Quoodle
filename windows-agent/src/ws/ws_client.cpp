@@ -79,6 +79,15 @@ void WsClient::connect_and_run() {
                             }
                         }
                     }
+                } else if (mtype == "UPDATE_ANNOUNCE") {
+                    std::string session_id = parsed.value("session_id", "");
+                    auto body = parsed["body"];
+                    std::string release_id = body.value("release_id", "");
+                    std::string version = body.value("version", "");
+                    if (!session_id.empty() && !release_id.empty()) {
+                        auto status_msg = build_update_status_json(device_id_, session_id, release_id, "acknowledged", version);
+                        socket.sendText(status_msg);
+                    }
                 }
             } catch (const std::exception& e) {
                 std::cerr << "[ws] parse error: " << e.what() << std::endl;

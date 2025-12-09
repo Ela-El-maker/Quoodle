@@ -59,3 +59,9 @@ std::string build_command_result_json(const std::string& device_id,
                                       const std::string& artifact_checksum = "",
                                       int error_code = 0,
                                       const std::string& error_message = "");
+
+std::string build_update_status_json(const std::string& device_id,
+                                     const std::string& session_id,
+                                     const std::string& release_id,
+                                     const std::string& status,
+                                     const std::string& version);

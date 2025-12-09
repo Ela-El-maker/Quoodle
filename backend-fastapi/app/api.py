@@ -88,4 +88,36 @@ def create_router(manager: ConnectionManager) -> APIRouter:
         await entry.websocket.send_json(message)
         return build_dispatch_response("dispatched", device_id, payload["command_id"], None)
 
+    @router.post("/update/deploy")
+    async def deploy_update(payload: Dict[str, Any]):
+        required = ["release_id", "version", "manifest_url", "signature_url", "sha256", "device_id"]
+        for field in required:
+            if field not in payload:
+                raise HTTPException(status_code=400, detail=f"Missing field {field}")
+
+        device_id = payload["device_id"]
+        entry = await manager.get(device_id)
+        if not entry:
+            return {"status": "device_offline", "reason": "device not connected"}
+
+        update_msg = {
+            "type": "UPDATE_ANNOUNCE",
+            "from": settings.controller_id,
+            "device_id": device_id,
+            "message_id": f"m-update-{uuid.uuid4()}",
+            "session_id": entry.session_id,
+            "timestamp": iso_timestamp(),
+            "sig": "controller-sig-placeholder",
+            "body": {
+                "release_id": payload["release_id"],
+                "version": payload["version"],
+                "manifest_url": payload["manifest_url"],
+                "signature_url": payload["signature_url"],
+                "sha256": payload["sha256"],
+            },
+        }
+
+        await entry.websocket.send_json(update_msg)
+        return {"status": "broadcasted", "device_id": device_id, "release_id": payload["release_id"]}
+
     return router

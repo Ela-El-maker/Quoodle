@@ -195,6 +195,52 @@ std::string build_signed_heartbeat_json(const std::string& device_id,
     });
 }
 
+std::string build_update_status_json(const std::string& device_id,
+                                     const std::string& session_id,
+                                     const std::string& release_id,
+                                     const std::string& status,
+                                     const std::string& version) {
+    using utils::canonical_object;
+    using utils::escape_json;
+
+    AuthEnvelope env;
+    env.type = "UPDATE_STATUS";
+    env.device_id = device_id;
+    env.session_id = session_id;
+    env.message_id = generate_uuid();
+    env.timestamp = iso_timestamp();
+    env.sig = "";
+
+    std::string body = canonical_object({
+        {"release_id", "\"" + escape_json(release_id) + "\""},
+        {"status", "\"" + escape_json(status) + "\""},
+        {"version", "\"" + escape_json(version) + "\""},
+    });
+
+    std::string canonical = canonical_object({
+        {"body", body},
+        {"device_id", "\"" + escape_json(env.device_id) + "\""},
+        {"from", "\"" + escape_json(env.from) + "\""},
+        {"message_id", "\"" + escape_json(env.message_id) + "\""},
+        {"session_id", "\"" + escape_json(env.session_id) + "\""},
+        {"timestamp", "\"" + escape_json(env.timestamp) + "\""},
+        {"type", "\"" + escape_json(env.type) + "\""},
+    });
+
+    env.sig = sign_placeholder(canonical);
+
+    return canonical_object({
+        {"body", body},
+        {"device_id", "\"" + escape_json(env.device_id) + "\""},
+        {"from", "\"" + escape_json(env.from) + "\""},
+        {"message_id", "\"" + escape_json(env.message_id) + "\""},
+        {"session_id", "\"" + escape_json(env.session_id) + "\""},
+        {"sig", "\"" + escape_json(env.sig) + "\""},
+        {"timestamp", "\"" + escape_json(env.timestamp) + "\""},
+        {"type", "\"" + escape_json(env.type) + "\""},
+    });
+}
+
 std::string build_signed_telemetry_json(const std::string& device_id,
                                         const std::string& session_id) {
     using utils::canonical_object;
