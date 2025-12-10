@@ -40,7 +40,12 @@ class CommandResultWebhookController extends Controller
         $state = $data['execution_state'] === 'completed' ? 'completed' : 'failed';
         $command->update([
             'state' => $state,
+            'execution_state' => $data['execution_state'],
             'reason' => $data['error_message'] ?? null,
+            'result' => $data['result'],
+            'error_code' => $data['error_code'],
+            'error_message' => $data['error_message'],
+            'completed_at' => $data['timestamp'],
         ]);
 
         return response()->json([

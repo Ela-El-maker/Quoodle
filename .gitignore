@@ -1,0 +1,10 @@
+/vendor/
+/node_modules/
+/.idea/
+/.vscode/
+**/__pycache__/
+*.log
+/build/
+/dist/
+.DS_Store
+.dart_tool/

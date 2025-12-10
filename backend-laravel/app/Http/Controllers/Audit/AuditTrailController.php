@@ -62,10 +62,22 @@ class AuditTrailController extends Controller
     {
         $entries = AuditTrail::where('device_id', $device_id)
             ->orderBy('timestamp')
-            ->get(['audit_id', 'hash', 'prev_hash', 'signature as sig', 'timestamp']);
+            ->get();
 
         return response()->json([
-            'entries' => $entries,
+            'entries' => $entries->map(function (AuditTrail $entry) {
+                return [
+                    'id' => $entry->audit_id,
+                    'timestamp' => optional($entry->timestamp)?->toIso8601String(),
+                    'event_type' => $entry->event_type,
+                    'summary' => $entry->event_type.' event',
+                    'details' => [
+                        'hash' => $entry->hash,
+                        'prev_hash' => $entry->prev_hash,
+                        'signature' => $entry->signature,
+                    ],
+                ];
+            }),
         ]);
     }
 }

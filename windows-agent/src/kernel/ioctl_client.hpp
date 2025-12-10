@@ -8,6 +8,8 @@ struct KernelExecResult {
     std::string kernel_exec_id;
     std::string timestamp;
     std::string result;
+    int error_code{0};
+    std::string error_message;
     std::string sig;
 };
 

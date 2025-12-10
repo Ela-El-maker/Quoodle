@@ -106,8 +106,11 @@ std::string canonical_auth_without_sig(const AuthEnvelope& env) {
 }
 
 std::string sign_placeholder(const std::string& canonical_json) {
-    (void)canonical_json;
-    return "sig-placeholder";
+    std::hash<std::string> hasher;
+    size_t value = hasher(canonical_json);
+    std::ostringstream oss;
+    oss << std::hex << value;
+    return oss.str();
 }
 
 std::string build_signed_auth_json(AuthEnvelope envelope) {
@@ -198,8 +201,13 @@ std::string build_signed_heartbeat_json(const std::string& device_id,
 std::string build_update_status_json(const std::string& device_id,
                                      const std::string& session_id,
                                      const std::string& release_id,
-                                     const std::string& status,
-                                     const std::string& version) {
+                                     const std::string& phase,
+                                     const std::string& version,
+                                     int progress_percent,
+                                     const std::string& progress_detail,
+                                     int error_code,
+                                     const std::string& error_message,
+                                     const std::string& rollback_snapshot_id) {
     using utils::canonical_object;
     using utils::escape_json;
 
@@ -213,8 +221,15 @@ std::string build_update_status_json(const std::string& device_id,
 
     std::string body = canonical_object({
         {"release_id", "\"" + escape_json(release_id) + "\""},
-        {"status", "\"" + escape_json(status) + "\""},
+        {"phase", "\"" + escape_json(phase) + "\""},
+        {"progress", canonical_object({
+            {"detail", "\"" + escape_json(progress_detail) + "\""},
+            {"percent", std::to_string(progress_percent)},
+        })},
         {"version", "\"" + escape_json(version) + "\""},
+        {"error_code", error_code == 0 ? "null" : std::to_string(error_code)},
+        {"error_message", error_message.empty() ? "null" : "\"" + escape_json(error_message) + "\""},
+        {"rollback_snapshot_id", rollback_snapshot_id.empty() ? "null" : "\"" + escape_json(rollback_snapshot_id) + "\""},
     });
 
     std::string canonical = canonical_object({
@@ -341,6 +356,7 @@ std::string build_command_ack_json(const std::string& device_id,
 std::string build_command_result_json(const std::string& device_id,
                                       const std::string& session_id,
                                       const std::string& command_message_id,
+                                      const std::string& trace_id,
                                       const std::string& execution_state,
                                       const std::string& result_status,
                                       const std::string& notes,
@@ -371,6 +387,7 @@ std::string build_command_result_json(const std::string& device_id,
 
     std::string body = canonical_object({
         {"command_message_id", "\"" + escape_json(command_message_id) + "\""},
+        {"trace_id", trace_id.empty() ? "null" : "\"" + escape_json(trace_id) + "\""},
         {"error_code", error_code_val},
         {"error_message", error_message_val},
         {"execution_state", "\"" + escape_json(execution_state) + "\""},

@@ -1,0 +1,5 @@
+# Prometheus placeholder config
+scrape_configs:
+  - job_name: fastapi
+    static_configs:
+      - targets: ['fastapi:8000']

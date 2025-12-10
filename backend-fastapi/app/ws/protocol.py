@@ -3,14 +3,21 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 
 from app.config import settings
+import hashlib
+import json
 
 
 def iso_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def compute_sig(payload: Dict[str, Any]) -> str:
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
 def validate_auth_envelope(payload: Dict[str, Any]) -> Dict[str, Any]:
-    required_fields = ["type", "from", "device_id", "message_id", "body", "sig"]
+    required_fields = ["type", "from", "device_id", "message_id", "body", "sig", "timestamp", "session_id"]
     for field in required_fields:
         if field not in payload:
             raise ValueError(f"Missing required field: {field}")
@@ -30,14 +37,13 @@ def validate_auth_envelope(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def build_auth_ack(device_id: str, session_id: str) -> Dict[str, Any]:
-    return {
+    payload = {
         "type": "AUTH_ACK",
         "from": settings.controller_id,
         "device_id": device_id,
         "message_id": f"m-auth-ack-{uuid.uuid4()}",
         "session_id": session_id,
         "timestamp": iso_timestamp(),
-        "sig": "controller-sig-placeholder",
         "body": {
             "status": "ok",
             "session_id": session_id,
@@ -46,23 +52,26 @@ def build_auth_ack(device_id: str, session_id: str) -> Dict[str, Any]:
             "policy_hash": settings.policy_hash,
         },
     }
+    payload["sig"] = compute_sig(payload)
+    return payload
 
 
 def build_auth_error(device_id: str, error_code: str, error_message: str) -> Dict[str, Any]:
-    return {
+    payload = {
         "type": "AUTH_ERROR",
         "from": settings.controller_id,
         "device_id": device_id,
         "message_id": f"m-auth-err-{uuid.uuid4()}",
         "session_id": None,
         "timestamp": iso_timestamp(),
-        "sig": "controller-sig-placeholder",
         "body": {
             "status": "error",
             "error_code": error_code,
             "error_message": error_message,
         },
     }
+    payload["sig"] = compute_sig(payload)
+    return payload
 
 
 def validate_heartbeat(payload: Dict[str, Any], expected_session: str) -> None:
@@ -101,6 +110,10 @@ def validate_telemetry(payload: Dict[str, Any], expected_session: str) -> None:
     body = payload.get("body") or {}
     if "metrics" not in body or "telemetry_scope" not in body or "timestamp" not in body:
         raise ValueError("Telemetry body missing required fields")
+    metrics = body.get("metrics") or {}
+    for field in ["cpu", "ram", "disk_usage", "network_tx", "network_rx"]:
+        if field not in metrics:
+            raise ValueError(f"Telemetry metrics missing {field}")
 
 
 def validate_command_result(payload: Dict[str, Any], expected_session: str) -> None:
@@ -120,3 +133,25 @@ def validate_command_result(payload: Dict[str, Any], expected_session: str) -> N
     body = payload.get("body") or {}
     if "command_message_id" not in body or "execution_state" not in body or "result" not in body:
         raise ValueError("Command result body missing required fields")
+    result = body.get("result") or {}
+    if "status" not in result:
+        raise ValueError("Command result missing status")
+
+
+def validate_command_ack(payload: Dict[str, Any], expected_session: str) -> None:
+    required_fields = ["type", "from", "device_id", "message_id", "body", "sig", "session_id", "timestamp"]
+    for field in required_fields:
+        if field not in payload:
+            raise ValueError(f"Missing required field: {field}")
+    if payload["type"] != "COMMAND_ACK":
+        raise ValueError("Invalid type for command ack")
+    if payload["from"] != "agent":
+        raise ValueError("Command ack must originate from agent")
+    if not payload.get("session_id"):
+        raise ValueError("Command ack requires session_id")
+    if expected_session and payload.get("session_id") != expected_session:
+        raise ValueError("Command ack session_id mismatch")
+
+    body = payload.get("body") or {}
+    if "command_message_id" not in body or "status" not in body:
+        raise ValueError("Command ack body missing required fields")

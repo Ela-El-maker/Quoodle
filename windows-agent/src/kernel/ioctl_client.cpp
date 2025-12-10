@@ -32,14 +32,16 @@ std::string random_exec_id() {
     return oss.str();
 }
 
-KernelExecResult wrap_result(const std::string& request_id, const std::string& status, const std::string& result) {
+KernelExecResult wrap_result(const std::string& request_id, const std::string& status, const std::string& result, int error_code = 0, const std::string& error_message = "") {
     KernelExecResult r;
     r.request_id = request_id;
     r.status = status;
     r.kernel_exec_id = random_exec_id();
     r.timestamp = iso_timestamp();
     r.result = result;
-    r.sig = "kernel-sig-placeholder";
+    r.error_code = error_code;
+    r.error_message = error_message;
+    r.sig = std::to_string(std::hash<std::string>{}(request_id + status + result + std::to_string(error_code) + error_message));
     return r;
 }
 

@@ -36,14 +36,16 @@ std::string iso_timestamp() {
     return std::string(buffer);
 }
 
-KernelResponse wrap_response(const std::string& request_id, const std::string& status, const std::string& result) {
+KernelResponse wrap_response(const std::string& request_id, const std::string& status, const std::string& result, int error_code = 0, const std::string& error_message = "") {
     KernelResponse resp;
     resp.request_id = request_id;
     resp.status = status;
     resp.kernel_exec_id = generate_exec_id();
     resp.timestamp = iso_timestamp();
     resp.result = result;
-    resp.sig = "kernel-sig-placeholder";
+    resp.error_code = error_code;
+    resp.error_message = error_message;
+    resp.sig = std::to_string(std::hash<std::string>{}(request_id + status + result + std::to_string(error_code) + error_message));
     return resp;
 }
 
@@ -58,4 +60,9 @@ KernelResponse Dispatcher::handle_lock_screen(const std::string& request_id) {
 KernelResponse Dispatcher::handle_ping(const std::string& request_id) {
     utils::log_info("ping invoked");
     return wrap_response(request_id, "ok", "pong");
+}
+
+KernelResponse Dispatcher::handle_unknown(const std::string& request_id, const std::string& opcode) {
+    utils::log_error("invalid opcode: " + opcode);
+    return wrap_response(request_id, "invalid_opcode", "{}", 4002, "INVALID_OPCODE");
 }

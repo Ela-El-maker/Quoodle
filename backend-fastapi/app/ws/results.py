@@ -10,10 +10,11 @@ async def forward_command_result(payload: dict) -> None:
     target = f"{settings.laravel_webhook_base}/command/result"
 
     body = payload.get("body", {})
+    trace_id = body.get("trace_id") or body.get("command_message_id")
     data = {
         "command_id": body.get("command_message_id"),
         "device_id": payload.get("device_id"),
-        "trace_id": body.get("command_message_id"),
+        "trace_id": trace_id,
         "execution_state": body.get("execution_state"),
         "result": body.get("result", {}),
         "error_code": body.get("error_code"),

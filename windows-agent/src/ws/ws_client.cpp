@@ -52,6 +52,7 @@ void WsClient::connect_and_run() {
                     auto body = parsed["body"];
                     auto envelope = body["command_envelope"];
                     std::string command_message_id = envelope.value("message_id", "");
+                    std::string trace_id = envelope.value("trace_id", "");
                     std::string method = envelope["body"].value("method", "");
 
                     if (!session_id.empty() && !command_message_id.empty()) {
@@ -65,7 +66,7 @@ void WsClient::connect_and_run() {
                             auto res = ioctl.lock_screen(command_message_id);
                             if (!session_id.empty()) {
                                 auto result_msg = build_command_result_json(device_id_, session_id, command_message_id,
-                                                                            "completed", "ok", "lock_screen done",
+                                                                            trace_id, "completed", "ok", "lock_screen done",
                                                                             "", "", 0, "");
                                 socket.sendText(result_msg);
                             }
@@ -73,7 +74,7 @@ void WsClient::connect_and_run() {
                             auto res = ioctl.ping(command_message_id);
                             if (!session_id.empty()) {
                                 auto result_msg = build_command_result_json(device_id_, session_id, command_message_id,
-                                                                            "completed", "ok", res.result,
+                                                                            trace_id, "completed", "ok", res.result,
                                                                             "", "", 0, "");
                                 socket.sendText(result_msg);
                             }
@@ -85,7 +86,8 @@ void WsClient::connect_and_run() {
                     std::string release_id = body.value("release_id", "");
                     std::string version = body.value("version", "");
                     if (!session_id.empty() && !release_id.empty()) {
-                        auto status_msg = build_update_status_json(device_id_, session_id, release_id, "acknowledged", version);
+                        auto status_msg = build_update_status_json(
+                            device_id_, session_id, release_id, "precheck", version, 0, "acknowledged", 0, "", "");
                         socket.sendText(status_msg);
                     }
                 }

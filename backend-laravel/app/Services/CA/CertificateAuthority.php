@@ -6,14 +6,23 @@ class CertificateAuthority
 {
     public function issueDeviceCertificate(array $request): array
     {
+        $deviceId = $request['device_id'] ?? 'unknown-device';
+        $serial = bin2hex(random_bytes(8));
+        $certificate = base64_encode("CERT:{$deviceId}:{$serial}");
+
         return [
-            'status' => 'not_implemented',
-            'note' => 'Placeholder per specs; CA issuance is implemented in later phases.',
+            'certificate' => $certificate,
+            'serial' => $serial,
+            'issued_at' => now()->toIso8601String(),
+            'expires_at' => now()->addYear()->toIso8601String(),
         ];
     }
 
     public function chain(): array
     {
-        return [];
+        return [
+            'root' => 'root-ca-simulated',
+            'intermediate' => 'intermediate-ca-simulated',
+        ];
     }
 }

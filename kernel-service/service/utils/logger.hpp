@@ -5,5 +5,6 @@
 namespace utils {
 
 void log_info(const std::string& msg);
+void log_error(const std::string& msg);
 
 }  // namespace utils

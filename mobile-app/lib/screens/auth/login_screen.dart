@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../services/api_service.dart';
 import '../devices/device_list_screen.dart';
+import 'register_screen.dart';
+import 'twofa_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -31,14 +33,17 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
-    await _api.login(
+    final response = await _api.login(
       email: _emailController.text,
       password: _passwordController.text,
       twoFactorCode: _twoFactorController.text.isEmpty ? null : _twoFactorController.text,
       deviceFingerprint: 'mobile-fingerprint-placeholder',
       pushToken: null,
     );
-    if (mounted) {
+    if (mounted && response['two_factor_required'] == true) {
+      Navigator.pushReplacementNamed(context, TwoFAScreen.route,
+          arguments: {'user_id': response['user_id'], 'session_id': response['session_id']});
+    } else if (mounted) {
       Navigator.pushReplacementNamed(context, DeviceListScreen.route);
     }
     setState(() => _isLoading = false);
@@ -77,6 +82,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   onPressed: _isLoading ? null : _submit,
                   child: Text(_isLoading ? 'Signing in...' : 'Login'),
                 ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pushNamed(context, RegisterScreen.route),
+                child: const Text('Create account'),
               ),
             ],
           ),

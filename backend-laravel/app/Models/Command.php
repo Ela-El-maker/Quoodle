@@ -26,6 +26,11 @@ class Command extends Model
         'trace_id',
         'queued_at',
         'dispatched_at',
+        'execution_state',
+        'result',
+        'error_code',
+        'error_message',
+        'completed_at',
     ];
 
     protected $casts = [
@@ -33,5 +38,8 @@ class Command extends Model
         'sensitive' => 'boolean',
         'queued_at' => 'datetime',
         'dispatched_at' => 'datetime',
+        'completed_at' => 'datetime',
+        'result' => 'array',
+        'error_code' => 'integer',
     ];
 }
