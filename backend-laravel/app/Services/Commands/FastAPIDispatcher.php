@@ -8,7 +8,7 @@ use Illuminate\Support\Str;
 
 class FastAPIDispatcher
 {
-    public function dispatch(Command $command): array
+    public function dispatch(Command $command, array $policyDecision, array $compliance): array
     {
         $base = rtrim(config('services.fastapi.base_url'), '/');
         $url = $base.'/command/dispatch';
@@ -17,10 +17,12 @@ class FastAPIDispatcher
             'command_id' => $command->id,
             'device_id' => $command->device_id,
             'trace_id' => $command->trace_id,
-            'seq' => 1,
+            'seq' => random_int(1, 100000),
             'method' => $command->method,
             'params' => $command->params ?? [],
             'sensitive' => $command->sensitive,
+            'policy' => $policyDecision,
+            'compliance' => $compliance,
             'envelope' => [
                 'header' => [
                     'version' => '1.1',
@@ -46,7 +48,10 @@ class FastAPIDispatcher
             ],
         ];
 
-        $response = Http::acceptJson()->post($url, $payload);
+        $response = Http::acceptJson()
+            ->timeout(5)
+            ->retry(1, 200)
+            ->post($url, $payload);
 
         if (! $response->ok()) {
             return [

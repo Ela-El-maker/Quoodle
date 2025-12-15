@@ -3,16 +3,14 @@
 namespace App\Http\Controllers\Commands;
 
 use App\Http\Controllers\Controller;
-use App\Models\Command;
-use App\Services\Commands\FastAPIDispatcher;
+use App\Services\Commands\CommandService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
 
 class CommandController extends Controller
 {
-    public function __construct(private readonly FastAPIDispatcher $dispatcher)
+    public function __construct(private readonly CommandService $commandService)
     {
     }
 
@@ -25,6 +23,12 @@ class CommandController extends Controller
             'params' => ['required', 'array'],
             'sensitive' => ['required', 'boolean'],
             'two_factor_code' => ['nullable', 'string', 'max:190'],
+            'policy_hash' => ['nullable', 'string'],
+            'user_id' => ['nullable', 'string'],
+            'user_role' => ['nullable', 'string'],
+            'attestation_status' => ['nullable', 'string'],
+            'last_update_state' => ['nullable', 'string'],
+            'clock_skew_seconds' => ['nullable', 'integer'],
         ]);
 
         if ($validator->fails()) {
@@ -35,40 +39,28 @@ class CommandController extends Controller
             ], 422);
         }
 
-        $data = $validator->validated();
+        $result = $this->commandService->enqueue($validator->validated());
 
-        $command = Command::create([
-            'client_message_id' => $data['client_message_id'],
-            'device_id' => $data['device_id'],
-            'method' => $data['method'],
-            'params' => $data['params'],
-            'sensitive' => $data['sensitive'],
-            'trace_id' => (string) Str::uuid(),
-            'queued_at' => now(),
-            'state' => 'queued',
-            'status' => 'accepted',
-        ]);
+        if ($result['status'] !== 'accepted') {
+            return response()->json([
+                'status' => $result['status'],
+                'reason' => $result['reason'] ?? null,
+                'policy' => $result['policy'] ?? null,
+                'compliance' => $result['compliance'] ?? null,
+                'errors' => $result['errors'] ?? null,
+            ], $result['status'] === 'require_2fa' ? 403 : 422);
+        }
 
-        $dispatchResult = $this->dispatcher->dispatch($command);
-
-        $state = match ($dispatchResult['status'] ?? 'queued') {
-            'dispatched' => 'sent',
-            'device_offline' => 'queued',
-            default => 'queued',
-        };
-
-        $command->update([
-            'state' => $state,
-            'dispatched_at' => $state === 'sent' ? now() : null,
-            'reason' => $dispatchResult['reason'] ?? null,
-        ]);
+        $command = $result['command'];
 
         return response()->json([
             'command_id' => $command->id,
             'queued_at' => $command->queued_at?->toIso8601String(),
-            'reason' => $dispatchResult['reason'] ?? null,
-            'state' => $state,
+            'reason' => $command->reason,
+            'state' => $command->state,
             'status' => 'accepted',
+            'policy' => $result['policy'],
+            'compliance' => $result['compliance'],
         ], 201);
     }
 }

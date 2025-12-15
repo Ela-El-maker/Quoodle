@@ -3,13 +3,19 @@
 namespace App\Http\Controllers\Compliance;
 
 use App\Http\Controllers\Controller;
+use App\Models\Device;
 use App\Models\PolicyProfile;
+use App\Services\Compliance\ComplianceChecker;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 class ComplianceController extends Controller
 {
+    public function __construct(private readonly ComplianceChecker $complianceChecker)
+    {
+    }
+
     public function profiles(): JsonResponse
     {
         $profiles = PolicyProfile::all(['profile_id', 'description', 'rules'])->map(function ($p) {
@@ -35,6 +41,8 @@ class ComplianceController extends Controller
             'os_build' => ['required', 'string'],
             'policy_hash' => ['required', 'string'],
             'profile_id' => ['required', 'string'],
+            'revocation_status' => ['nullable', 'string'],
+            'clock_skew_seconds' => ['nullable', 'integer'],
         ]);
 
         if ($validator->fails()) {
@@ -45,21 +53,25 @@ class ComplianceController extends Controller
         }
 
         $data = $validator->validated();
-
-        $reasons = [];
-        $status = 'compliant';
-        if ($data['attestation_status'] !== 'pass') {
-            $status = 'non_compliant';
-            $reasons[] = 'attestation_failed';
-        }
-        if ($data['last_update_state'] === 'failed') {
-            $status = 'non_compliant';
-            $reasons[] = 'update_failed';
+        $device = Device::find($data['device_id']);
+        if (! $device) {
+            return response()->json(['status' => 'unknown_device'], 404);
         }
 
-        return response()->json([
-            'status' => $status,
-            'reasons' => $reasons,
+        $result = $this->complianceChecker->evaluateDevice($device, [
+            'attestation_status' => $data['attestation_status'],
+            'last_update_state' => $data['last_update_state'],
+            'policy_hash' => $data['policy_hash'],
+            'expected_policy_hash' => $device->policy_hash,
+            'revocation_status' => $data['revocation_status'] ?? 'ok',
+            'clock_skew_seconds' => $data['clock_skew_seconds'] ?? 0,
         ]);
+
+        $device->update([
+            'compliance_status' => $result['status'],
+            'risk_score' => $device->risk_score,
+        ]);
+
+        return response()->json($result);
     }
 }

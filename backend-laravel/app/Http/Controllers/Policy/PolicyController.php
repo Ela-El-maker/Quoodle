@@ -3,16 +3,24 @@
 namespace App\Http\Controllers\Policy;
 
 use App\Http\Controllers\Controller;
+use App\Models\Device;
+use App\Services\CommandRegistry\Registry;
+use App\Services\PolicyEngine\PolicyEvaluator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 class PolicyController extends Controller
 {
+    public function __construct(
+        private readonly PolicyEvaluator $policyEvaluator,
+        private readonly Registry $registry
+    ) {
+    }
+
     public function evaluate(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'command_risk_level' => ['required', 'string'],
             'device_id' => ['required', 'string'],
             'device_lifecycle_state' => ['required', 'string'],
             'method' => ['required', 'string'],
@@ -21,6 +29,8 @@ class PolicyController extends Controller
             'timestamp' => ['required', 'string'],
             'user_id' => ['required', 'string'],
             'user_role' => ['required', 'string'],
+            'expected_policy_hash' => ['nullable', 'string'],
+            'two_factor_verified' => ['nullable', 'boolean'],
         ]);
 
         if ($validator->fails()) {
@@ -32,22 +42,26 @@ class PolicyController extends Controller
         }
 
         $data = $validator->validated();
-        $risk = strtolower($data['command_risk_level']);
 
-        $decision = 'allow';
-        $reason = 'ok';
-        if ($risk === 'high') {
-            $decision = 'require_2fa';
-            $reason = 'high_risk_command';
-        } elseif ($data['device_lifecycle_state'] === 'quarantine') {
-            $decision = 'deny';
-            $reason = 'device_quarantined';
+        $definition = $this->registry->get($data['method']);
+        if (! $definition) {
+            return response()->json([
+                'decision' => 'deny',
+                'reason' => 'unknown_command',
+            ], 422);
         }
 
-        return response()->json([
-            'decision' => $decision,
-            'reason' => $reason,
-        ]);
+        $device = Device::find($data['device_id']);
+        $policy = $this->policyEvaluator->evaluate([
+            'user_id' => $data['user_id'],
+            'user_role' => $data['user_role'],
+            'device_lifecycle_state' => $data['device_lifecycle_state'],
+            'policy_hash' => $data['policy_hash'],
+            'expected_policy_hash' => $data['expected_policy_hash'] ?? $device?->policy_hash,
+            'two_factor_verified' => $data['two_factor_verified'] ?? false,
+        ], $definition, $device);
+
+        return response()->json($policy);
     }
 
     public function validateBundle(Request $request): JsonResponse
@@ -62,6 +76,19 @@ class PolicyController extends Controller
             return response()->json([
                 'status' => 'invalid',
                 'errors' => $validator->errors()->all(),
+            ], 422);
+        }
+
+        $rules = $validator->validated()['rules'];
+        $unknownCommands = collect($rules['commands'] ?? [])
+            ->reject(fn (array $rule) => $this->registry->get($rule['command'] ?? '') !== null)
+            ->values()
+            ->all();
+
+        if (! empty($unknownCommands)) {
+            return response()->json([
+                'status' => 'invalid',
+                'errors' => ['unknown_commands' => $unknownCommands],
             ], 422);
         }
 

@@ -4,10 +4,10 @@ import uuid
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
-from app.api import create_router
+from app.api import create_router, build_command_delivery
 from app.config import settings
+from app.state import manager, offline_queue, ota_manager, policy_resolver, risk_scorer
 from app.ws.auth import validate_auth_jwt
-from app.ws.connection_manager import ConnectionManager
 from app.ws.protocol import (
     build_auth_ack,
     build_auth_error,
@@ -29,7 +29,6 @@ from app.ws.webhooks import (
 )
 
 app = FastAPI(title="Secure Device Control - FastAPI Controller")
-manager = ConnectionManager()
 app.include_router(create_router(manager))
 
 
@@ -90,6 +89,13 @@ async def agent_ws(websocket: WebSocket):
         auth_ack = build_auth_ack(device_id, session_id)
         await websocket.send_json(auth_ack)
 
+        # Send latest policy/OTA and any queued commands
+        await policy_resolver.send_current(websocket, device_id, session_id)
+        await ota_manager.send_latest(websocket, device_id, session_id)
+        for queued in offline_queue.drain(device_id):
+            message = build_command_delivery(queued, session_id)
+            await websocket.send_json(message)
+
         # Handle post-auth messages (Phase 4: heartbeat + telemetry)
         while True:
             try:
@@ -113,11 +119,14 @@ async def agent_ws(websocket: WebSocket):
                     except ValueError:
                         await websocket.close(code=4400)
                         break
+                    metrics = message.get("body", {}).get("metrics", {})
+                    risk = risk_scorer.score(metrics)
                     fire_and_forget(
                         forward_telemetry_summary(
                             device_id,
-                            message.get("body", {}).get("metrics", {}),
+                            metrics,
                             message.get("timestamp", iso_timestamp()),
+                            risk_score=risk,
                         )
                     )
                     continue

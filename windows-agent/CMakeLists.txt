@@ -23,6 +23,11 @@ FetchContent_MakeAvailable(nlohmann_json)
 
 add_executable(agent
   src/main.cpp
+  src/agent_state.hpp
+  src/logging/logger.hpp
+  src/ota/ota_manager.hpp
+  src/quarantine/quarantine_manager.hpp
+  src/recovery/recovery_manager.hpp
   src/ws/ws_client.cpp
   src/ws/ws_protocol.cpp
   src/utils/json_canonicalizer.cpp
