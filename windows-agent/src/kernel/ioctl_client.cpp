@@ -1,5 +1,4 @@
 #include "ioctl_client.hpp"
-#include "dispatcher.hpp" // for KernelResponse
 #include <random>
 #include <sstream>
 #include <string>
@@ -86,14 +85,14 @@ static int extract_json_int(const std::string &json, const std::string &key)
 KernelExecResult IoctlClient::parse_result_from_json(const std::string &json)
 {
   KernelExecResult resp;
-  resp.request_id = extract_json_string(json, "requestid");
+  resp.request_id = extract_json_string(json, "request_id");
   resp.status = extract_json_string(json, "status");
-  resp.kernel_exec_id = extract_json_string(json, "kernelexecid");
+  resp.kernel_exec_id = extract_json_string(json, "kernel_exec_id");
   resp.timestamp = extract_json_string(json, "timestamp");
   resp.result = extract_json_string(json, "result");
-  resp.error_message = extract_json_string(json, "errormessage");
-  resp.error_code = extract_json_int(json, "errorcode");
-  resp.sig = extract_json_string(json, "signature");
+  resp.error_message = extract_json_string(json, "error_message");
+  resp.error_code = extract_json_int(json, "error_code");
+  resp.sig = extract_json_string(json, "sig");
   return resp;
 }
 

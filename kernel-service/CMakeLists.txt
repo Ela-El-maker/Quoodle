@@ -9,6 +9,13 @@ add_library(kernel_service STATIC
     service/dispatcher.cpp
     service/opcodes/lock_screen.cpp
     service/opcodes/ping.cpp
+    service/opcodes/stage_update.cpp
+    service/opcodes/commit_update.cpp
+    service/opcodes/tamper_check.cpp
+    service/opcodes/process_list.cpp
+    service/opcodes/logout.cpp
+    service/opcodes/reboot.cpp
+    service/opcodes/shutdown.cpp
     service/utils/logger.cpp
 )
 
