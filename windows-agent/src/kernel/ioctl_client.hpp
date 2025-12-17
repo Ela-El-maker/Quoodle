@@ -17,4 +17,7 @@ class IoctlClient {
 public:
     KernelExecResult lock_screen(const std::string& request_id);
     KernelExecResult ping(const std::string& request_id);
+
+private:
+    KernelExecResult parse_result_from_json(const std::string& json);
 };

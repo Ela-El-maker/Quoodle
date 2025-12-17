@@ -1,57 +1,114 @@
 #include "ioctl_client.hpp"
-
+#include "dispatcher.hpp" // for KernelResponse
 #include <random>
 #include <sstream>
 #include <string>
+#include <array>
+#include <memory>
+#include <cstdio>
+#include <cstdlib>
 
-namespace {
-
-std::string iso_timestamp() {
-    using namespace std::chrono;
-    auto now = system_clock::now();
-    std::time_t t = system_clock::to_time_t(now);
-    std::tm tm{};
+// Small helper: run the kernel-service binary in one-shot mode and capture stdout.
+static std::string run_kernel_service_once(const std::string &opcode, const std::string &request_id)
+{
+  const char *env_path = std::getenv("KERNEL_SERVICE_PATH");
+  std::string bin = env_path ? env_path : "../../kernel-service/service/kernel_service";
 #ifdef _WIN32
-    gmtime_s(&tm, &t);
+  std::string cmd = '"' + bin + '"';
 #else
-    gmtime_r(&t, &tm);
+  std::string cmd = bin;
 #endif
-    char buffer[64];
-    std::snprintf(buffer, sizeof(buffer), "%04d-%02d-%02dT%02d:%02d:%02dZ",
-                  tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
-                  tm.tm_hour, tm.tm_min, tm.tm_sec);
-    return std::string(buffer);
+  cmd += " --once ";
+  cmd += opcode;
+  cmd += " ";
+  cmd += request_id;
+
+  std::array<char, 4096> buffer{};
+  std::string result;
+#ifdef _WIN32
+  FILE *pipe = _popen(cmd.c_str(), "r");
+#else
+  FILE *pipe = popen(cmd.c_str(), "r");
+#endif
+  if (!pipe)
+    return {};
+  while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr)
+  {
+    result += buffer.data();
+  }
+#ifdef _WIN32
+  _pclose(pipe);
+#else
+  pclose(pipe);
+#endif
+  return result;
 }
 
-std::string random_exec_id() {
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<uint32_t> dis;
-    std::ostringstream oss;
-    oss << "kexec-" << std::hex << dis(gen);
-    return oss.str();
+// Very small / forgiving JSON extractor: find a string value for a top-level key.
+static std::string extract_json_string(const std::string &json, const std::string &key)
+{
+  std::string needle = '"' + key + '"';
+  auto pos = json.find(needle);
+  if (pos == std::string::npos)
+    return {};
+  auto colon = json.find(':', pos + needle.size());
+  if (colon == std::string::npos)
+    return {};
+  auto first_quote = json.find('"', colon);
+  if (first_quote == std::string::npos)
+    return {};
+  auto second_quote = json.find('"', first_quote + 1);
+  if (second_quote == std::string::npos)
+    return {};
+  return json.substr(first_quote + 1, second_quote - first_quote - 1);
 }
 
-KernelExecResult wrap_result(const std::string& request_id, const std::string& status, const std::string& result, int error_code = 0, const std::string& error_message = "") {
-    KernelExecResult r;
-    r.request_id = request_id;
-    r.status = status;
-    r.kernel_exec_id = random_exec_id();
-    r.timestamp = iso_timestamp();
-    r.result = result;
-    r.error_code = error_code;
-    r.error_message = error_message;
-    r.sig = std::to_string(std::hash<std::string>{}(request_id + status + result + std::to_string(error_code) + error_message));
-    return r;
+static int extract_json_int(const std::string &json, const std::string &key)
+{
+  std::string needle = '"' + key + '"';
+  auto pos = json.find(needle);
+  if (pos == std::string::npos)
+    return 0;
+  auto colon = json.find(':', pos + needle.size());
+  if (colon == std::string::npos)
+    return 0;
+  auto start = colon + 1;
+  while (start < json.size() && (json[start] == ' ' || json[start] == '\n' || json[start] == '\r'))
+    ++start;
+  auto end = start;
+  while (end < json.size() && (isdigit((unsigned char)json[end]) || json[end] == '-'))
+    ++end;
+  if (end == start)
+    return 0;
+  return std::stoi(json.substr(start, end - start));
 }
 
-}  // namespace
-
-KernelExecResult IoctlClient::lock_screen(const std::string& request_id) {
-    // TODO: real IOCTL to kernel-service driver
-    return wrap_result(request_id, "ok", "lock_screen_executed");
+KernelExecResult IoctlClient::parse_result_from_json(const std::string &json)
+{
+  KernelExecResult resp;
+  resp.request_id = extract_json_string(json, "requestid");
+  resp.status = extract_json_string(json, "status");
+  resp.kernel_exec_id = extract_json_string(json, "kernelexecid");
+  resp.timestamp = extract_json_string(json, "timestamp");
+  resp.result = extract_json_string(json, "result");
+  resp.error_message = extract_json_string(json, "errormessage");
+  resp.error_code = extract_json_int(json, "errorcode");
+  resp.sig = extract_json_string(json, "signature");
+  return resp;
 }
 
-KernelExecResult IoctlClient::ping(const std::string& request_id) {
-    return wrap_result(request_id, "ok", "pong");
+KernelExecResult IoctlClient::lock_screen(const std::string &request_id)
+{
+  std::string out = run_kernel_service_once("lock_screen", request_id);
+  if (out.empty())
+    return KernelExecResult{request_id, "error", "", "", "", -1, "failed_to_start_service", ""};
+  return parse_result_from_json(out);
+}
+
+KernelExecResult IoctlClient::ping(const std::string &request_id)
+{
+  std::string out = run_kernel_service_once("ping", request_id);
+  if (out.empty())
+    return KernelExecResult{request_id, "error", "", "", "", -1, "failed_to_start_service", ""};
+  return this->parse_result_from_json(out);
 }

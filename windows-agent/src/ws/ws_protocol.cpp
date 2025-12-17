@@ -6,60 +6,72 @@
 
 #include "../utils/json_canonicalizer.hpp"
 
-namespace {
+namespace
+{
 
-std::string generate_uuid() {
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<uint32_t> dis(0, 0xFFFFFFFF);
-    uint32_t data[4] = {dis(gen), dis(gen), dis(gen), dis(gen())};
+    std::string generate_uuid()
+    {
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<uint32_t> dis(0, 0xFFFFFFFF);
+        uint32_t data[4] = {dis(gen), dis(gen), dis(gen), dis(gen())};
 
-    data[1] = (data[1] & 0xFFFF0FFF) | 0x00004000;  // version 4
-    data[2] = (data[2] & 0x3FFFFFFF) | 0x80000000;  // variant
+        data[1] = (data[1] & 0xFFFF0FFF) | 0x00004000; // version 4
+        data[2] = (data[2] & 0x3FFFFFFF) | 0x80000000; // variant
 
-    std::ostringstream oss;
-    oss << std::hex;
-    oss.width(8); oss.fill('0'); oss << data[0] << "-";
-    oss.width(4); oss << (data[1] >> 16) << "-";
-    oss.width(4); oss << (data[1] & 0xFFFF) << "-";
-    oss.width(4); oss << (data[2] >> 16) << "-";
-    oss.width(4); oss << (data[2] & 0xFFFF);
-    oss.width(8); oss << data[3];
-    return oss.str();
-}
+        std::ostringstream oss;
+        oss << std::hex;
+        oss.width(8);
+        oss.fill('0');
+        oss << data[0] << "-";
+        oss.width(4);
+        oss << (data[1] >> 16) << "-";
+        oss.width(4);
+        oss << (data[1] & 0xFFFF) << "-";
+        oss.width(4);
+        oss << (data[2] >> 16) << "-";
+        oss.width(4);
+        oss << (data[2] & 0xFFFF);
+        oss.width(8);
+        oss << data[3];
+        return oss.str();
+    }
 
-std::string iso_timestamp() {
-    using namespace std::chrono;
-    auto now = system_clock::now();
-    auto seconds = time_point_cast<std::chrono::seconds>(now);
-    auto subseconds = duration_cast<std::chrono::nanoseconds>(now - seconds).count();
-    std::time_t t = system_clock::to_time_t(now);
-    std::tm tm{};
+    std::string iso_timestamp()
+    {
+        using namespace std::chrono;
+        auto now = system_clock::now();
+        auto seconds = time_point_cast<std::chrono::seconds>(now);
+        auto subseconds = duration_cast<std::chrono::nanoseconds>(now - seconds).count();
+        std::time_t t = system_clock::to_time_t(now);
+        std::tm tm{};
 #ifdef _WIN32
-    gmtime_s(&tm, &t);
+        gmtime_s(&tm, &t);
 #else
-    gmtime_r(&t, &tm);
+        gmtime_r(&t, &tm);
 #endif
-    char buffer[64];
-    std::snprintf(buffer, sizeof(buffer), "%04d-%02d-%02dT%02d:%02d:%02dZ",
-                  tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
-                  tm.tm_hour, tm.tm_min, tm.tm_sec);
-    (void)subseconds;
-    return std::string(buffer);
-}
+        char buffer[64];
+        std::snprintf(buffer, sizeof(buffer), "%04d-%02d-%02dT%02d:%02d:%02dZ",
+                      tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+                      tm.tm_hour, tm.tm_min, tm.tm_sec);
+        (void)subseconds;
+        return std::string(buffer);
+    }
 
-std::string random_nonce() {
-    std::random_device rd;
-    std::mt19937_64 gen(rd());
-    std::uniform_int_distribution<uint64_t> dis;
-    std::ostringstream oss;
-    oss << dis(gen);
-    return oss.str();
-}
+    std::string random_nonce()
+    {
+        std::random_device rd;
+        std::mt19937_64 gen(rd());
+        std::uniform_int_distribution<uint64_t> dis;
+        std::ostringstream oss;
+        oss << dis(gen);
+        return oss.str();
+    }
 
-}  // namespace
+} // namespace
 
-AuthEnvelope build_auth_envelope(const std::string& device_id, const std::string& jwt_token) {
+AuthEnvelope build_auth_envelope(const std::string &device_id, const std::string &jwt_token)
+{
     AuthEnvelope env;
     env.device_id = device_id;
     env.message_id = generate_uuid();
@@ -70,7 +82,8 @@ AuthEnvelope build_auth_envelope(const std::string& device_id, const std::string
     return env;
 }
 
-std::string canonical_auth_without_sig(const AuthEnvelope& env) {
+std::string canonical_auth_without_sig(const AuthEnvelope &env)
+{
     using utils::canonical_object;
     using utils::escape_json;
 
@@ -105,15 +118,16 @@ std::string canonical_auth_without_sig(const AuthEnvelope& env) {
     });
 }
 
-std::string sign_placeholder(const std::string& canonical_json) {
-    std::hash<std::string> hasher;
-    size_t value = hasher(canonical_json);
-    std::ostringstream oss;
-    oss << std::hex << value;
-    return oss.str();
+// Deterministic SHA-256 based signature for dev/test use.
+#include "../utils/sha256.hpp"
+
+std::string sign_placeholder(const std::string &canonical_json)
+{
+    return sha256_hex(canonical_json);
 }
 
-std::string build_signed_auth_json(AuthEnvelope envelope) {
+std::string build_signed_auth_json(AuthEnvelope envelope)
+{
     auto canonical = canonical_auth_without_sig(envelope);
     envelope.sig = sign_placeholder(canonical);
 
@@ -152,11 +166,12 @@ std::string build_signed_auth_json(AuthEnvelope envelope) {
     });
 }
 
-std::string build_signed_heartbeat_json(const std::string& device_id,
-                                        const std::string& session_id,
-                                        const std::string& status,
+std::string build_signed_heartbeat_json(const std::string &device_id,
+                                        const std::string &session_id,
+                                        const std::string &status,
                                         int uptime_seconds,
-                                        const std::string& error_state) {
+                                        const std::string &error_state)
+{
     using utils::canonical_object;
     using utils::escape_json;
 
@@ -198,16 +213,17 @@ std::string build_signed_heartbeat_json(const std::string& device_id,
     });
 }
 
-std::string build_update_status_json(const std::string& device_id,
-                                     const std::string& session_id,
-                                     const std::string& release_id,
-                                     const std::string& phase,
-                                     const std::string& version,
+std::string build_update_status_json(const std::string &device_id,
+                                     const std::string &session_id,
+                                     const std::string &release_id,
+                                     const std::string &phase,
+                                     const std::string &version,
                                      int progress_percent,
-                                     const std::string& progress_detail,
+                                     const std::string &progress_detail,
                                      int error_code,
-                                     const std::string& error_message,
-                                     const std::string& rollback_snapshot_id) {
+                                     const std::string &error_message,
+                                     const std::string &rollback_snapshot_id)
+{
     using utils::canonical_object;
     using utils::escape_json;
 
@@ -223,9 +239,9 @@ std::string build_update_status_json(const std::string& device_id,
         {"release_id", "\"" + escape_json(release_id) + "\""},
         {"phase", "\"" + escape_json(phase) + "\""},
         {"progress", canonical_object({
-            {"detail", "\"" + escape_json(progress_detail) + "\""},
-            {"percent", std::to_string(progress_percent)},
-        })},
+                         {"detail", "\"" + escape_json(progress_detail) + "\""},
+                         {"percent", std::to_string(progress_percent)},
+                     })},
         {"version", "\"" + escape_json(version) + "\""},
         {"error_code", error_code == 0 ? "null" : std::to_string(error_code)},
         {"error_message", error_message.empty() ? "null" : "\"" + escape_json(error_message) + "\""},
@@ -256,8 +272,9 @@ std::string build_update_status_json(const std::string& device_id,
     });
 }
 
-std::string build_signed_telemetry_json(const std::string& device_id,
-                                        const std::string& session_id) {
+std::string build_signed_telemetry_json(const std::string &device_id,
+                                        const std::string &session_id)
+{
     using utils::canonical_object;
     using utils::escape_json;
 
@@ -307,11 +324,12 @@ std::string build_signed_telemetry_json(const std::string& device_id,
     });
 }
 
-std::string build_command_ack_json(const std::string& device_id,
-                                   const std::string& session_id,
-                                   const std::string& command_message_id,
-                                   const std::string& status,
-                                   const std::string& reason) {
+std::string build_command_ack_json(const std::string &device_id,
+                                   const std::string &session_id,
+                                   const std::string &command_message_id,
+                                   const std::string &status,
+                                   const std::string &reason)
+{
     using utils::canonical_object;
     using utils::escape_json;
 
@@ -353,17 +371,18 @@ std::string build_command_ack_json(const std::string& device_id,
     });
 }
 
-std::string build_command_result_json(const std::string& device_id,
-                                      const std::string& session_id,
-                                      const std::string& command_message_id,
-                                      const std::string& trace_id,
-                                      const std::string& execution_state,
-                                      const std::string& result_status,
-                                      const std::string& notes,
-                                      const std::string& artifact_url,
-                                      const std::string& artifact_checksum,
+std::string build_command_result_json(const std::string &device_id,
+                                      const std::string &session_id,
+                                      const std::string &command_message_id,
+                                      const std::string &trace_id,
+                                      const std::string &execution_state,
+                                      const std::string &result_status,
+                                      const std::string &notes,
+                                      const std::string &artifact_url,
+                                      const std::string &artifact_checksum,
                                       int error_code,
-                                      const std::string& error_message) {
+                                      const std::string &error_message)
+{
     using utils::canonical_object;
     using utils::escape_json;
 

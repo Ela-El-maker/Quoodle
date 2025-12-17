@@ -31,6 +31,7 @@ add_executable(agent
   src/ws/ws_client.cpp
   src/ws/ws_protocol.cpp
   src/utils/json_canonicalizer.cpp
+  src/utils/sha256.cpp
   src/kernel/ioctl_client.cpp
 )
 

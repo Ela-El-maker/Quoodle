@@ -4,25 +4,16 @@
 
 #include "ws/ws_client.hpp"
 #include "ws/ws_protocol.hpp"
+#include "config/config_manager.hpp"
+#include "comm/communicator.hpp"
+#include "command/dispatcher.hpp"
 
-struct AgentConfig {
-    std::string endpoint{"ws://localhost:8001/agent"};
-    std::string device_id{"PC001"};
-    std::string jwt;
+int main()
+{
+    AgentConfig cfg = ConfigManager::load_from_env();
 
-    static AgentConfig from_env() {
-        AgentConfig cfg;
-        if (const char* val = std::getenv("AGENT_ENDPOINT")) cfg.endpoint = val;
-        if (const char* val = std::getenv("AGENT_DEVICE_ID")) cfg.device_id = val;
-        if (const char* val = std::getenv("AGENT_JWT")) cfg.jwt = val;
-        return cfg;
-    }
-};
-
-int main() {
-    AgentConfig cfg = AgentConfig::from_env();
-
-    if (cfg.jwt.empty()) {
+    if (cfg.jwt.empty())
+    {
         std::cerr << "Missing AGENT_JWT environment variable; cannot build AUTH message." << std::endl;
         return 1;
     }
@@ -30,9 +21,14 @@ int main() {
     auto envelope = build_auth_envelope(cfg.device_id, cfg.jwt);
     std::string auth_json = build_signed_auth_json(envelope);
 
-    WsClient client(cfg.endpoint, cfg.device_id);
-    client.set_initial_message(auth_json);
-    client.connect_and_run();
+    Communicator comm(cfg.endpoint, cfg.device_id);
+    comm.set_initial_message(auth_json);
+
+    // CommandDispatcher is instantiated here so other modules can use it when integrating.
+    CommandDispatcher dispatcher;
+
+    // Blocking run; WsClient currently implements its own loop.
+    comm.start();
 
     return 0;
 }
