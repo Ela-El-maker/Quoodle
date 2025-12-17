@@ -2,6 +2,11 @@
 
 #include <string>
 
+/**
+ * KernelExecResult
+ * Represents the structured response from the privileged kernel service.
+ * Aligned with the project's JSON communication spec.
+ */
 struct KernelExecResult {
     std::string request_id;
     std::string status;
@@ -13,11 +18,24 @@ struct KernelExecResult {
     std::string sig;
 };
 
+/**
+ * IoctlClient
+ * The gateway for the User-Mode Agent to request privileged operations.
+ * It abstracts the IPC (Inter-Process Communication) layer.
+ */
 class IoctlClient {
 public:
+    IoctlClient() = default;
+    ~IoctlClient() = default;
+
+    // Public API for supported Kernel operations
     KernelExecResult lock_screen(const std::string& request_id);
     KernelExecResult ping(const std::string& request_id);
 
 private:
+    // Core communication handler (Pipe + Fallback)
+    std::string execute_request(const std::string& opcode, const std::string& request_id);
+
+    // Internal JSON parsing
     KernelExecResult parse_result_from_json(const std::string& json);
 };

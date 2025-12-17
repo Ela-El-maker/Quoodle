@@ -9,13 +9,13 @@ include(FetchContent)
 FetchContent_Declare(
   ixwebsocket
   GIT_REPOSITORY https://github.com/machinezone/IXWebSocket.git
-  GIT_TAG v11.1.8
+  GIT_TAG v11.4.6
 )
 
 FetchContent_Declare(
   nlohmann_json
   GIT_REPOSITORY https://github.com/nlohmann/json.git
-  GIT_TAG v3.11.3
+  GIT_TAG v3.12.0
 )
 
 FetchContent_MakeAvailable(ixwebsocket)
@@ -37,3 +37,13 @@ add_executable(agent
 
 target_include_directories(agent PRIVATE src)
 target_link_libraries(agent PRIVATE ixwebsocket::ixwebsocket nlohmann_json::nlohmann_json)
+
+# Integration tests
+add_executable(ioctl_integration_test
+  tests/integration/ioctl_pipe_test.cpp
+  src/kernel/ioctl_client.cpp
+  src/utils/sha256.cpp
+)
+
+target_include_directories(ioctl_integration_test PRIVATE src)
+

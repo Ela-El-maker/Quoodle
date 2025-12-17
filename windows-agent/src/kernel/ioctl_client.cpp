@@ -6,8 +6,17 @@
 #include <memory>
 #include <cstdio>
 #include <cstdlib>
+#include <iostream>
+#ifdef _WIN32
+#include <windows.h>
+#endif
+#include <thread>
+#include <chrono>
 
-// Small helper: run the kernel-service binary in one-shot mode and capture stdout.
+/**
+ * PRIVATE HELPER: run_kernel_service_once
+ * Fallback method that launches the kernel service process directly.
+ */
 static std::string run_kernel_service_once(const std::string &opcode, const std::string &request_id)
 {
   const char *env_path = std::getenv("KERNEL_SERVICE_PATH");
@@ -17,10 +26,7 @@ static std::string run_kernel_service_once(const std::string &opcode, const std:
 #else
   std::string cmd = bin;
 #endif
-  cmd += " --once ";
-  cmd += opcode;
-  cmd += " ";
-  cmd += request_id;
+  cmd += " --once " + opcode + " " + request_id;
 
   std::array<char, 4096> buffer{};
   std::string result;
@@ -43,7 +49,10 @@ static std::string run_kernel_service_once(const std::string &opcode, const std:
   return result;
 }
 
-// Very small / forgiving JSON extractor: find a string value for a top-level key.
+/**
+ * PRIVATE HELPER: JSON Extractors
+ * Manual parsing to avoid heavy library dependencies in the low-level client.
+ */
 static std::string extract_json_string(const std::string &json, const std::string &key)
 {
   std::string needle = '"' + key + '"';
@@ -96,18 +105,67 @@ KernelExecResult IoctlClient::parse_result_from_json(const std::string &json)
   return resp;
 }
 
-KernelExecResult IoctlClient::lock_screen(const std::string &request_id)
+
+/**
+ * PRIVATE CORE: execute_request
+ * Logic for "Pipe First, Process Fallback"
+ */
+std::string IoctlClient::execute_request(const std::string &opcode, const std::string &request_id)
 {
-  std::string out = run_kernel_service_once("lock_screen", request_id);
-  if (out.empty())
-    return KernelExecResult{request_id, "error", "", "", "", -1, "failed_to_start_service", ""};
-  return parse_result_from_json(out);
+#ifdef _WIN32
+    const char *pipeName = "\\\\.\\pipe\\KernelService";
+    const int max_attempts = 3;
+    HANDLE hPipe = INVALID_HANDLE_VALUE;
+
+    // Try to connect to the persistent background service
+    for (int attempt = 0; attempt < max_attempts; ++attempt) {
+        if (WaitNamedPipeA(pipeName, 500)) {
+            hPipe = CreateFileA(pipeName, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+            if (hPipe != INVALID_HANDLE_VALUE) break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    if (hPipe != INVALID_HANDLE_VALUE) {
+        std::string req = "{\"opcode\":\"" + opcode + "\",\"request_id\":\"" + request_id + "\"}";
+        DWORD written = 0;
+        if (WriteFile(hPipe, req.c_str(), (DWORD)req.size(), &written, NULL)) {
+            std::string out;
+            char buf[8192];
+            DWORD read = 0;
+            auto start = GetTickCount64();
+
+            while (GetTickCount64() - start < 3000) { // 3-second safety timeout
+                if (ReadFile(hPipe, buf, sizeof(buf), &read, NULL) && read > 0) {
+                    out.append(buf, read);
+                    if (out.find('}') != std::string::npos) break; // Finished JSON
+                } else break;
+            }
+            CloseHandle(hPipe);
+            if (!out.empty()) return out;
+        } else {
+            CloseHandle(hPipe);
+        }
+    }
+#endif
+
+    // Fallback if the pipe doesn't exist or service is down
+    return run_kernel_service_once(opcode, request_id);
+}
+/**
+ * PUBLIC API: lock_screen
+ */
+KernelExecResult IoctlClient::lock_screen(const std::string &request_id) {
+    std::string json = execute_request("lock_screen", request_id);
+    if (json.empty()) return {request_id, "error", "", "", "", -1, "ipc_failure", ""};
+    return parse_result_from_json(json);
 }
 
-KernelExecResult IoctlClient::ping(const std::string &request_id)
-{
-  std::string out = run_kernel_service_once("ping", request_id);
-  if (out.empty())
-    return KernelExecResult{request_id, "error", "", "", "", -1, "failed_to_start_service", ""};
-  return this->parse_result_from_json(out);
+/**
+ * PUBLIC API: ping
+ */
+KernelExecResult IoctlClient::ping(const std::string &request_id) {
+    std::string json = execute_request("ping", request_id);
+    if (json.empty()) return {request_id, "error", "", "", "", -1, "ipc_failure", ""};
+    return parse_result_from_json(json);
 }

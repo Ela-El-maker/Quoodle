@@ -8,3 +8,31 @@
 /dist/
 .DS_Store
 .dart_tool/
+
+# Build directories
+build/
+*/build/
+quick_build/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+CTestTestfile.cmake
+Testing/
+
+# Binaries
+*.exe
+*.dll
+*.lib
+*.pdb
+*.obj
+
+# FetchContent / deps
+_deps/
+
+# Ninja
+*.ninja
+*.ninja_deps
+*.ninja_log

@@ -3,6 +3,8 @@
 #include <cstring>
 #include <iomanip>
 #include <sstream>
+#include <cstdint>
+#include <vector>
 
 // Minimal public-domain SHA-256 implementation adapted for brevity.
 // Not optimized — suitable for deterministic dev/test signing.
