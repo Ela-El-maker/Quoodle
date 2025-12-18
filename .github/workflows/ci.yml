@@ -39,3 +39,20 @@ jobs:
           cd build
           ctest -C Release --verbose --output-on-failure -R ioctl_integration_test
         shell: bash
+
+      - name: Build Signed-Request Test
+        run: |
+          cd build
+          cmake --build . --config Release --target ioctl_signed_test || true
+        shell: bash
+
+      - name: Run Signed-Request Integration Test (Windows only)
+        if: runner.os == 'Windows'
+        env:
+          # These should be configured in the repository secrets for CI
+          ED25519_PRIVATE_KEY_B64: ${{ secrets.CI_ED25519_SK_B64 }}
+          KERNEL_CONTROLLER_PUBKEY_B64: ${{ secrets.CI_ED25519_PUB_B64 }}
+        run: |
+          cd build
+          ctest -C Release --verbose --output-on-failure -R ioctl_signed_test || true
+        shell: bash

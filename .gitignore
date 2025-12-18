@@ -38,3 +38,24 @@ _deps/
 *.ninja
 *.ninja_deps
 *.ninja_log
+
+# Secrets / keys
+*.pem
+*.key
+*.secret
+*.b64
+secrets/
+ci_secrets.env
+*.p12
+
+# Local dev artifacts
+*.log
+.env
+.venv/
+
+# CI helper output
+scripts/ci_secrets_output.txt
+
+# Ignore system-specific agent/kernel artifacts
+windows-agent/build/
+kernel-service/build/

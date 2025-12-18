@@ -7,6 +7,9 @@
 #include <vector>
 #include <cstring>
 #endif
+#ifdef _WIN32
+#include "../utils/dpapi_loader.hpp"
+#endif
 
 std::string ed25519_sign_payload(const std::string &payload)
 {
@@ -18,6 +21,18 @@ std::string ed25519_sign_payload(const std::string &payload)
     }
 
     const char *b64 = std::getenv("ED25519_PRIVATE_KEY_B64");
+    std::string skfile;
+#ifdef _WIN32
+    if (!b64)
+    {
+        std::string dpapi_b64;
+        if (dpapi_load_blob_to_b64("ED25519_PRIVATE_KEY_DPAPI_B64", "ED25519_PRIVATE_KEY_DPAPI_PATH", dpapi_b64))
+        {
+            skfile = dpapi_b64;
+            b64 = skfile.c_str();
+        }
+    }
+#endif
     if (!b64)
     {
         std::cerr << "ed25519_sign: ED25519_PRIVATE_KEY_B64 not set\n";

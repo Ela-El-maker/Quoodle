@@ -154,22 +154,11 @@ int main(int argc, char **argv)
           std::string signed_payload = extract_json_string(req, "signed_payload");
           if (!sig.empty() && !signed_payload.empty())
           {
-            const char *pub_b64 = std::getenv("KERNEL_CONTROLLER_PUBKEY_B64");
-            if (!pub_b64)
+            // ed25519_verify_message will attempt to load the controller public key
+            // from the provided string or from environment/file (KERNEL_CONTROLLER_PUBKEY_B64 or KERNEL_CONTROLLER_PUBKEY_PATH).
+            if (!ed25519_verify_message(signed_payload, sig, std::string()))
             {
-              utils::log_error("pipe_server: signature provided but KERNEL_CONTROLLER_PUBKEY_B64 not set");
-              KernelResponse resp_err = disp.handle_unknown(request_id, "signature_missing_pubkey");
-              std::string out_err = to_json(resp_err);
-              DWORD written_err = 0;
-              WriteFile(hPipe, out_err.c_str(), static_cast<DWORD>(out_err.size()), &written_err, NULL);
-              FlushFileBuffers(hPipe);
-              DisconnectNamedPipe(hPipe);
-              CloseHandle(hPipe);
-              continue;
-            }
-            if (!ed25519_verify_message(signed_payload, sig, std::string(pub_b64)))
-            {
-              utils::log_error("pipe_server: signature verification failed");
+              utils::log_error("pipe_server: signature verification failed or pubkey missing");
               KernelResponse resp_err = disp.handle_unknown(request_id, "signature_invalid");
               std::string out_err = to_json(resp_err);
               DWORD written_err = 0;

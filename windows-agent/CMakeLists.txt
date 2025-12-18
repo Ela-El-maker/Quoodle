@@ -70,6 +70,7 @@ add_executable(agent
   src/utils/json_canonicalizer.cpp
   src/utils/sha256.cpp
   src/kernel/ioctl_client.cpp
+  src/utils/dpapi_loader.cpp
 )
 
 target_include_directories(agent PRIVATE src)
@@ -91,6 +92,12 @@ add_executable(ioctl_integration_test
   src/utils/sha256.cpp
 )
 
+add_executable(ioctl_signed_test
+  tests/integration/ioctl_signed_test.cpp
+  src/kernel/ioctl_client.cpp
+  src/utils/sha256.cpp
+)
+
 target_include_directories(ioctl_integration_test PRIVATE src)
 if(HAVE_SODIUM)
   target_include_directories(ioctl_integration_test PRIVATE ${SODIUM_INCLUDE_DIR})
@@ -98,7 +105,14 @@ if(HAVE_SODIUM)
   target_compile_definitions(ioctl_integration_test PRIVATE HAVE_SODIUM=1)
 endif()
 
+if(HAVE_SODIUM)
+  target_include_directories(ioctl_signed_test PRIVATE ${SODIUM_INCLUDE_DIR})
+  target_link_libraries(ioctl_signed_test PRIVATE ${SODIUM_LIB})
+  target_compile_definitions(ioctl_signed_test PRIVATE HAVE_SODIUM=1)
+endif()
+
 include(CTest)
 enable_testing()
 add_test(NAME ioctl_integration_test COMMAND ioctl_integration_test)
+add_test(NAME ioctl_signed_test COMMAND ioctl_signed_test)
 

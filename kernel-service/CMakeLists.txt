@@ -31,6 +31,7 @@ add_library(kernel_service STATIC
     service/dispatcher.cpp
     service/crypto/ed25519_verify_wrapper.cpp
     service/crypto/ed25519_wrapper.cpp
+    service/utils/dpapi_loader.cpp
     service/opcodes/lock_screen.cpp
     service/opcodes/ping.cpp
     service/opcodes/stage_update.cpp
@@ -49,4 +50,7 @@ if(HAVE_SODIUM)
     target_include_directories(kernel_service PUBLIC ${SODIUM_INCLUDE_DIR})
     target_link_libraries(kernel_service PUBLIC ${SODIUM_LIB})
     target_compile_definitions(kernel_service PUBLIC HAVE_SODIUM=1)
+endif()
+if(WIN32)
+    target_link_libraries(kernel_service PUBLIC crypt32)
 endif()
