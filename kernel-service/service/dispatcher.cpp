@@ -7,6 +7,8 @@
 #include "opcodes/lock_screen.hpp"
 #include "opcodes/ping.hpp"
 #include "utils/logger.hpp"
+#include "utils/json_canonicalizer.hpp"
+#include "crypto/ed25519_wrapper.hpp"
 
 namespace
 {
@@ -36,7 +38,7 @@ namespace
     std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &tm);
     return std::string(buffer);
   }
-  // Helper to package the response consistently
+    // Helper to package the response consistently
   KernelResponse wrap_response(const std::string &request_id, const std::string &status, const std::string &result, int error_code = 0, const std::string &error_message = "")
   {
     KernelResponse resp;
@@ -47,20 +49,29 @@ namespace
     resp.result = result;
     resp.error_code = error_code;
     resp.error_message = error_message;
-    // Sign response: prefer Ed25519 when available; otherwise fall back to hash-based signature
-    std::string payload = request_id + status + result + std::to_string(error_code);
-    std::string sig;
-#ifdef HAVE_SODIUM
-    sig = ed25519_sign_message(payload);
-    if (sig.empty())
-    {
-      // fallback to hash if signing failed
-      sig = std::to_string(std::hash<std::string>{}(payload));
+
+    // Build a deterministic canonical payload for signing/verifying
+    std::vector<std::pair<std::string, std::string>> fields = {
+      {"error_code", std::to_string(error_code)},
+      {"request_id", "\"" + utils::escape_json(request_id) + "\""},
+      {"kernel_exec_id", "\"" + utils::escape_json(resp.kernel_exec_id) + "\""},
+      {"result", "\"" + utils::escape_json(result) + "\""},
+      {"status", "\"" + utils::escape_json(status) + "\""},
+      {"timestamp", "\"" + utils::escape_json(resp.timestamp) + "\""},
+      {"error_message", error_message.empty() ? "null" : "\"" + utils::escape_json(error_message) + "\""}
+    };
+
+    std::string payload = utils::canonical_object(fields);
+
+  #ifdef HAVE_SODIUM
+    resp.sig = ed25519_sign_message(payload);
+    if (resp.sig.empty()) {
+      resp.sig = std::to_string(std::hash<std::string>{}(payload));
     }
-#else
-    sig = std::to_string(std::hash<std::string>{}(payload));
-#endif
-    resp.sig = sig;
+  #else
+    resp.sig = std::to_string(std::hash<std::string>{}(payload));
+  #endif
+
     return resp;
   }
 

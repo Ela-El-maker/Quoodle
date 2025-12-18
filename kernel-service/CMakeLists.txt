@@ -30,6 +30,7 @@ add_library(kernel_service STATIC
     service/main.cpp
     service/dispatcher.cpp
     service/crypto/ed25519_verify_wrapper.cpp
+    service/crypto/ed25519_wrapper.cpp
     service/opcodes/lock_screen.cpp
     service/opcodes/ping.cpp
     service/opcodes/stage_update.cpp
@@ -40,6 +41,7 @@ add_library(kernel_service STATIC
     service/opcodes/reboot.cpp
     service/opcodes/shutdown.cpp
     service/utils/logger.cpp
+    service/utils/json_canonicalizer.cpp
 )
 
 target_include_directories(kernel_service PUBLIC service)

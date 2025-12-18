@@ -10,26 +10,32 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        # We test both to ensure cross-platform code compiles, 
+        # but the pipe test only truly executes on Windows.
         os: [ubuntu-latest, windows-latest]
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure CMake
-        run: |
-          mkdir -p build
-          cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release
-        shell: bash
+      - name: Configure CMake (no exec fallback)
+        # We explicitly disable the dangerous exec fallback for security
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DENABLE_EXEC_FALLBACK=OFF
 
       - name: Build
+        run: cmake --build build --config Release --target ioctl_integration_test
+
+      - name: Verify exec fallback disabled
+        # Grep ensures the security gate is active in the build config
         run: |
           cd build
-          cmake --build . --config Release --target ioctl_integration_test
+          grep -E "ENABLE_EXEC_FALLBACK:BOOL=OFF|ENABLE_EXEC_FALLBACK=OFF" CMakeCache.txt || (echo "Security Breach: ENABLE_EXEC_FALLBACK is not OFF" && exit 1)
         shell: bash
 
-      - name: Run tests
+      - name: Run Integration Tests
+        # On Windows, this runs the pipe mock and client handshake
+        # On Ubuntu, the test code prints "SKIPPED" and exits with 0
         run: |
           cd build
-          ctest --verbose --output-on-failure -R ioctl_integration_test || ./ioctl_integration_test${{ runner.os == 'Windows' && '.exe' || '' }}
+          ctest -C Release --verbose --output-on-failure -R ioctl_integration_test
         shell: bash

@@ -2,12 +2,25 @@
 #include "../../kernel/ioctl_client.hpp"
 #include <string>
 
-std::string handle_command_delivery(const std::string& device_id, const std::string& session_id, const std::string& command_id, const std::string& trace_id, const std::string& method) {
-    IoctlClient ioctl;
-    if (method == "lock_screen") {
-        (void)ioctl.lock_screen(command_id);
-    } else if (method == "ping") {
-        (void)ioctl.ping(command_id);
-    }
-    return build_command_result_json(device_id, session_id, command_id, trace_id, "completed", "ok", "done", "", "", 0, "");
+static IoctlClient g_ioctl;
+std::string handle_command_delivery(const std::string& device_id, 
+                                    const std::string& session_id, 
+                                    const std::string& command_id, 
+                                    const std::string& trace_id, 
+                                    const std::string& method) {
+  auto res = g_ioctl.lock_screen(command_id);
+    
+    // Now you have a rich KernelExecResult to return to the server!
+    return build_command_result_json(
+        device_id, 
+        session_id, 
+        command_id, 
+        trace_id, 
+        res.status,     // "completed", "failed", etc
+        res.result,     // "ok", "error"
+        res.error_message, 
+        "", "", 
+        res.error_code, 
+        res.error_message
+    );
 }

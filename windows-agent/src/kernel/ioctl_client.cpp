@@ -13,10 +13,12 @@
 #include <thread>
 #include <chrono>
 
-/**
+/*
  * PRIVATE HELPER: run_kernel_service_once
  * Fallback method that launches the kernel service process directly.
+ * This helper is compiled only when ENABLE_EXEC_FALLBACK is enabled at build time.
  */
+#ifdef ENABLE_EXEC_FALLBACK
 static std::string run_kernel_service_once(const std::string &opcode, const std::string &request_id)
 {
   const char *env_path = std::getenv("KERNEL_SERVICE_PATH");
@@ -48,6 +50,7 @@ static std::string run_kernel_service_once(const std::string &opcode, const std:
 #endif
   return result;
 }
+#endif
 
 /**
  * PRIVATE HELPER: JSON Extractors
@@ -91,6 +94,54 @@ static int extract_json_int(const std::string &json, const std::string &key)
   return std::stoi(json.substr(start, end - start));
 }
 
+IoctlClient::IoctlClient() {}
+
+IoctlClient::~IoctlClient()
+{
+  disconnect();
+}
+
+
+void IoctlClient::disconnect()
+{
+  #ifdef _WIN32
+  if (hPipe != INVALID_HANDLE_VALUE)
+  {
+    CloseHandle(hPipe);
+    hPipe = INVALID_HANDLE_VALUE;
+  }
+  #endif
+}
+bool IoctlClient::ensure_connection() {
+#ifdef _WIN32
+    // 1. Check if already connected
+    if (hPipe != INVALID_HANDLE_VALUE) {
+        // Peek at the pipe to see if it's still alive
+        DWORD bytesAvail = 0;
+        if (PeekNamedPipe(hPipe, NULL, 0, NULL, &bytesAvail, NULL) || GetLastError() == ERROR_MORE_DATA) {
+            return true; 
+        }
+        disconnect(); // Connection lost, clean up and retry
+    }
+
+    const char* pipeName = "\\\\.\\pipe\\KernelService";
+    
+    // 2. Try to connect
+    if (WaitNamedPipeA(pipeName, 500)) {
+        hPipe = CreateFileA(pipeName, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+        if (hPipe != INVALID_HANDLE_VALUE) {
+            // Set pipe to message mode if your service supports it
+            DWORD mode = PIPE_READMODE_BYTE; 
+            SetNamedPipeHandleState(hPipe, &mode, NULL, NULL);
+            return true;
+        }
+    }
+#endif
+    return false;
+}
+
+
+
 KernelExecResult IoctlClient::parse_result_from_json(const std::string &json)
 {
   KernelExecResult resp;
@@ -109,67 +160,54 @@ KernelExecResult IoctlClient::parse_result_from_json(const std::string &json)
  * PRIVATE CORE: execute_request
  * Logic for "Pipe First, Process Fallback"
  */
-std::string IoctlClient::execute_request(const std::string &opcode, const std::string &request_id)
-{
-#ifdef _WIN32
-  const char *pipeName = "\\\\.\\pipe\\KernelService";
-  const int max_attempts = 3;
-  HANDLE hPipe = INVALID_HANDLE_VALUE;
-
-  // Try to connect to the persistent background service
-  for (int attempt = 0; attempt < max_attempts; ++attempt)
-  {
-    if (WaitNamedPipeA(pipeName, 500))
-    {
-      hPipe = CreateFileA(pipeName, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
-      if (hPipe != INVALID_HANDLE_VALUE)
-        break;
+std::string IoctlClient::execute_request(const std::string &opcode, const std::string &request_id) {
+    if (!ensure_connection()) {
+        // Fallback logic remains the same...
+#ifdef ENABLE_EXEC_FALLBACK
+        return run_kernel_service_once(opcode, request_id);
+#endif
+        return "";
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-  }
 
-  if (hPipe != INVALID_HANDLE_VALUE)
-  {
     std::string req = "{\"opcode\":\"" + opcode + "\",\"request_id\":\"" + request_id + "\"}";
     DWORD written = 0;
-    if (WriteFile(hPipe, req.c_str(), (DWORD)req.size(), &written, NULL))
-    {
-      std::string out;
-      char buf[8192];
-      DWORD read = 0;
-      auto start = GetTickCount64();
 
-      while (GetTickCount64() - start < 3000)
-      { // 3-second safety timeout
-        if (ReadFile(hPipe, buf, sizeof(buf), &read, NULL) && read > 0)
-        {
-          out.append(buf, read);
-          if (out.find('}') != std::string::npos)
-            break; // Finished JSON
+#ifdef _WIN32
+    if (WriteFile(hPipe, req.c_str(), (DWORD)req.size(), &written, NULL)) {
+        std::string out;
+        char buf[4096];
+        DWORD bytesRead = 0;
+        
+        // Read until we find the closing brace of the JSON
+        auto startTime = GetTickCount64();
+        while (GetTickCount64() - startTime < 2000) {
+            if (ReadFile(hPipe, buf, sizeof(buf) - 1, &bytesRead, NULL) && bytesRead > 0) {
+                buf[bytesRead] = '\0';
+                out.append(buf);
+                if (out.find('}') != std::string::npos) return out;
+            } else {
+                if (GetLastError() != ERROR_IO_PENDING) break;
+            }
         }
-        else
-          break;
-      }
-      CloseHandle(hPipe);
-      if (!out.empty())
-        return out;
     }
-    else
-    {
-      CloseHandle(hPipe);
-    }
-  }
+    // If we reach here, the communication failed or timed out
+    disconnect(); 
 #endif
+    return "";
+}
 
-  // If pipe doesn't exist or service is down, only allow exec fallback when explicitly enabled.
+  // If pipe doesn't exist or service is down, allow exec fallback only when explicitly
+  // enabled at build time *and* via ALLOW_EXEC_FALLBACK=1 at runtime.
+#ifdef ENABLE_EXEC_FALLBACK
   const char *allow_fallback = std::getenv("ALLOW_EXEC_FALLBACK");
   if (allow_fallback && std::string(allow_fallback) == "1")
   {
     std::cerr << "IoctlClient: pipe unavailable, using exec fallback due to ALLOW_EXEC_FALLBACK=1\n";
     return run_kernel_service_once(opcode, request_id);
   }
+#endif
 
-  std::cerr << "IoctlClient: pipe unavailable and exec fallback disabled (ALLOW_EXEC_FALLBACK!=1)\n";
+  std::cerr << "IoctlClient: pipe unavailable and exec fallback disabled (compile-time or runtime)\n";
   return std::string();
 }
 /**

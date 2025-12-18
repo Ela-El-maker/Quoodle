@@ -1,10 +1,16 @@
 #include "ws_protocol.hpp"
-
+#include "telemetry_collector.hpp"
 #include <chrono>
 #include <random>
 #include <sstream>
 
 #include "../utils/json_canonicalizer.hpp"
+#include "../utils/sha256.hpp"
+
+
+
+//Global or static collector instance to track deltas across samples
+static TelemetryCollector g_collector;
 
 namespace
 {
@@ -14,7 +20,7 @@ namespace
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<uint32_t> dis(0, 0xFFFFFFFF);
-        uint32_t data[4] = {dis(gen), dis(gen), dis(gen), dis(gen())};
+        uint32_t data[4] = {dis(gen), dis(gen), dis(gen), dis(gen)};
 
         data[1] = (data[1] & 0xFFFF0FFF) | 0x00004000; // version 4
         data[2] = (data[2] & 0x3FFFFFFF) | 0x80000000; // variant
@@ -118,8 +124,7 @@ std::string canonical_auth_without_sig(const AuthEnvelope &env)
     });
 }
 
-// Deterministic SHA-256 based signature for dev/test use.
-#include "../utils/sha256.hpp"
+
 
 std::string sign_placeholder(const std::string &canonical_json)
 {
@@ -128,42 +133,51 @@ std::string sign_placeholder(const std::string &canonical_json)
 
 std::string build_signed_auth_json(AuthEnvelope envelope)
 {
-    auto canonical = canonical_auth_without_sig(envelope);
-    envelope.sig = sign_placeholder(canonical);
+  // 1. Generate the canonical string for the body first
+  // 2. Sign it
+  // 3. Build the final envelope
 
-    using utils::canonical_object;
-    using utils::escape_json;
+  using utils::canonical_object;
+  using utils::escape_json;
 
-    std::string agent_info = canonical_object({
-        {"agent_version", "\"" + escape_json(envelope.body.agent_info.agent_version) + "\""},
-        {"attestation_hash", "\"" + escape_json(envelope.body.agent_info.attestation_hash) + "\""},
-        {"hwid_hash", "\"" + escape_json(envelope.body.agent_info.hwid_hash) + "\""},
-        {"os_build", "\"" + escape_json(envelope.body.agent_info.os_build) + "\""},
-    });
+  // Helper for null/string handling
+  auto json_val = [](const std::string &s)
+  {
+    return (s == "null" || s.empty()) ? "null" : "\"" + escape_json(s) + "\"";
+  };
 
-    std::string auth = canonical_object({
-        {"jwt", "\"" + escape_json(envelope.body.jwt) + "\""},
-        {"nonce", "\"" + escape_json(envelope.body.nonce) + "\""},
-    });
+  // Construct Body
+  std::string agent_info = canonical_object({
+      {"agent_version", "\"" + escape_json(envelope.body.agent_info.agent_version) + "\""},
+      {"attestation_hash", "\"" + escape_json(envelope.body.agent_info.attestation_hash) + "\""},
+      {"hwid_hash", "\"" + escape_json(envelope.body.agent_info.hwid_hash) + "\""},
+      {"os_build", "\"" + escape_json(envelope.body.agent_info.os_build) + "\""},
+  });
 
-    std::string body = canonical_object({
-        {"agent_info", agent_info},
-        {"auth", auth},
-    });
+  std::string auth = canonical_object({
+      {"jwt", "\"" + escape_json(envelope.body.jwt) + "\""},
+      {"nonce", "\"" + escape_json(envelope.body.nonce) + "\""},
+  });
 
-    std::string session_id_value = (envelope.session_id == "null") ? "null" : "\"" + escape_json(envelope.session_id) + "\"";
+  std::string body = canonical_object({
+      {"agent_info", agent_info},
+      {"auth", auth},
+  });
 
-    // Lexicographic order with sig included: body, device_id, from, message_id, session_id, sig, timestamp, type
-    return canonical_object({
-        {"body", body},
-        {"device_id", "\"" + escape_json(envelope.device_id) + "\""},
-        {"from", "\"" + escape_json(envelope.from) + "\""},
-        {"message_id", "\"" + escape_json(envelope.message_id) + "\""},
-        {"session_id", session_id_value},
-        {"sig", "\"" + escape_json(envelope.sig) + "\""},
-        {"timestamp", "\"" + escape_json(envelope.timestamp) + "\""},
-        {"type", "\"" + escape_json(envelope.type) + "\""},
-    });
+  // Generate Signature on the data WITHOUT the signature field
+  envelope.sig = sign_placeholder(canonical_auth_without_sig(envelope));
+
+  // Final Envelope (Alphabetical order is mandatory for some backends)
+  return canonical_object({
+      {"body", body},
+      {"device_id", "\"" + escape_json(envelope.device_id) + "\""},
+      {"from", "\"" + escape_json(envelope.from) + "\""},
+      {"message_id", "\"" + escape_json(envelope.message_id) + "\""},
+      {"session_id", json_val(envelope.session_id)},
+      {"sig", "\"" + escape_json(envelope.sig) + "\""},
+      {"timestamp", "\"" + escape_json(envelope.timestamp) + "\""},
+      {"type", "\"" + escape_json(envelope.type) + "\""},
+  });
 }
 
 std::string build_signed_heartbeat_json(const std::string &device_id,
@@ -282,16 +296,19 @@ std::string build_signed_telemetry_json(const std::string &device_id,
     env.type = "TELEMETRY";
     env.device_id = device_id;
     env.session_id = session_id;
+    env.from = "agent:" + device_id;
     env.message_id = generate_uuid();
     env.timestamp = iso_timestamp();
-    env.sig = "";
+
+    // Fetch real metrics
+    auto sample = g_collector.collect();
 
     std::string metrics = canonical_object({
-        {"cpu", "\"12%\""},
-        {"disk_usage", "\"60%\""},
-        {"network_rx", "\"1.8Mbps\""},
-        {"network_tx", "\"2.3Mbps\""},
-        {"ram", "\"45%\""},
+        {"cpu", "\"" + escape_json(sample.cpu) + "\""},
+        {"disk_usage", "\"" + escape_json(sample.disk) + "\""},
+        {"network_rx", "\"" + escape_json(sample.network_rx) + "\""},
+        {"network_tx", "\"" + escape_json(sample.network_tx) + "\""},
+        {"ram", "\"" + escape_json(sample.ram) + "\""},
     });
 
     std::string body = canonical_object({

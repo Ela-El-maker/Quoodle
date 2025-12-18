@@ -1,7 +1,7 @@
 #include "json_canonicalizer.hpp"
 
 #include <sstream>
-
+#include <iomanip>
 namespace utils {
 
 std::string escape_json(const std::string& input) {
@@ -16,13 +16,16 @@ std::string escape_json(const std::string& input) {
             case '\r': oss << "\\r"; break;
             case '\t': oss << "\\t"; break;
             default:
-                if (static_cast<unsigned char>(c) < 0x20) {
-                    oss << "\\u"
-                        << std::hex << std::uppercase
-                        << static_cast<int>(c);
-                } else {
-                    oss << c;
-                }
+              if (static_cast<unsigned char>(c) < 0x20)
+              {
+                oss << "\\u"
+                    << std::hex << std::setw(4) << std::setfill('0') << std::uppercase
+                    << static_cast<int>(c);
+              }
+              else
+              {
+                oss << c;
+              }
                 break;
         }
     }

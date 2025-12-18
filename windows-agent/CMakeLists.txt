@@ -4,6 +4,19 @@ project(windows-agent LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Dangerous: runtime exec fallback option (disabled by default). Set ON only for debugging.
+option(ENABLE_EXEC_FALLBACK "Enable exec fallback (dangerous)" OFF)
+# Prevent accidental fallback in Release builds
+string(TOUPPER "${CMAKE_BUILD_TIME}" BUILD_TYPE_UPPER)
+if(ENABLE_EXEC_FALLBACK AND BUILD_TYPE_UPPER STREQUAL "RELEASE")
+    message(FATAL_ERROR "Security Gate: ENABLE_EXEC_FALLBACK cannot be enabled in RELEASE mode!")
+endif()
+
+if(ENABLE_EXEC_FALLBACK)
+  message(WARNING "ENABLE_EXEC_FALLBACK is ON. This allows the agent to exec the kernel_service binary as a fallback — do not enable in production.")
+  add_compile_definitions(ENABLE_EXEC_FALLBACK=1)
+endif()
+
 # Try to locate libsodium for Ed25519 support (optional)
 find_path(SODIUM_INCLUDE_DIR sodium.h)
 find_library(SODIUM_LIB sodium)

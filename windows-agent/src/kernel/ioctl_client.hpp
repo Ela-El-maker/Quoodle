@@ -33,9 +33,17 @@ public:
     KernelExecResult ping(const std::string& request_id);
 
 private:
+    bool ensure_connection(); // Helper to reconnect if pipe drops
+    void disconnect();
+
+
     // Core communication handler (Pipe + Fallback)
     std::string execute_request(const std::string& opcode, const std::string& request_id);
 
     // Internal JSON parsing
     KernelExecResult parse_result_from_json(const std::string& json);
+    
+    #ifdef _WIN32
+    HANDLE hPersistentPipe = INVALID_HANDLE_VALUE;
+    #endif
 };

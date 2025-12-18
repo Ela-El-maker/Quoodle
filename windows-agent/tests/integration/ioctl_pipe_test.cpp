@@ -5,23 +5,33 @@
 #include <string>
 #include <chrono>
 #include <iostream>
+#include <atomic>
 
 #include "../../src/kernel/ioctl_client.hpp"
 
+// Atomic flag to ensure threads don't overlap on the pipe handle
+static std::atomic<bool> server_ready(false);
+
 static std::string to_json_response(const std::string &request_id, const std::string &status, const std::string &result)
 {
-    return std::string("{\"request_id\":\"") + request_id + "\",\"status\":\"" + status + "\",\"kernel_exec_id\":\"kexec-test\",\"timestamp\":\"2025-12-17T00:00:00Z\",\"result\":\"" + result + "\",\"error_code\":0,\"error_message\":\"\",\"sig\":\"test-sig\"}";
+    // Simplified JSON generator for testing
+    return std::string("{\"request_id\":\"") + request_id + 
+           "\",\"status\":\"" + status + 
+           "\",\"kernel_exec_id\":\"kexec-test\",\"timestamp\":\"2025-12-18T00:00:00Z\",\"result\":\"" + 
+           result + "\",\"error_code\":0,\"error_message\":\"\",\"sig\":\"test-sig\"}";
 }
 
-// Simple mock pipe server that accepts one request then returns a response.
+// Simple mock pipe server that handles exactly ONE connection
 static void run_mock_pipe_server()
 {
     const char *pipeName = "\\\\.\\pipe\\KernelService";
+    
+    // Create the pipe with a security descriptor that allows local access
     HANDLE hPipe = CreateNamedPipeA(
         pipeName,
         PIPE_ACCESS_DUPLEX,
         PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
-        1,
+        PIPE_UNLIMITED_INSTANCES, // More robust than '1'
         8192,
         8192,
         0,
@@ -29,108 +39,104 @@ static void run_mock_pipe_server()
 
     if (hPipe == INVALID_HANDLE_VALUE)
     {
-        std::cerr << "mock_pipe: CreateNamedPipeA failed\n";
+        std::cerr << "mock_pipe: CreateNamedPipeA failed (err=" << GetLastError() << ")\n";
         return;
     }
+
+    // Signal main thread that pipe is open
+    server_ready = true;
 
     BOOL connected = ConnectNamedPipe(hPipe, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
     if (!connected)
     {
+        std::cerr << "mock_pipe: ConnectNamedPipe failed (err=" << GetLastError() << ")\n";
         CloseHandle(hPipe);
-        std::cerr << "mock_pipe: ConnectNamedPipe failed\n";
         return;
     }
 
-    // Read request
+    // Read request from client
     std::string req;
+    char buf[4096];
+    DWORD bytesRead = 0;
+    if (ReadFile(hPipe, buf, sizeof(buf) - 1, &bytesRead, NULL) && bytesRead > 0)
     {
-        char buf[4096];
-        DWORD read = 0;
-        while (true)
-        {
-            BOOL ok = ReadFile(hPipe, buf, sizeof(buf), &read, NULL);
-            if (!ok || read == 0)
-                break;
-            req.append(buf, buf + read);
-            if (read < (DWORD)sizeof(buf))
-                break;
-        }
+        buf[bytesRead] = '\0';
+        req = buf;
     }
 
-    // Look for request_id and opcode in simple way
+    // Simple lambda to extract values from the raw JSON string
     auto find_val = [&](const std::string &key) -> std::string
     {
-        std::string needle = '"' + key + '"';
+        std::string needle = "\"" + key + "\"";
         auto pos = req.find(needle);
-        if (pos == std::string::npos)
-            return std::string();
-        auto colon = req.find(':', pos + needle.size());
-        if (colon == std::string::npos)
-            return std::string();
-        auto q1 = req.find('"', colon);
-        if (q1 == std::string::npos)
-            return std::string();
-        auto q2 = req.find('"', q1 + 1);
-        if (q2 == std::string::npos)
-            return std::string();
+        if (pos == std::string::npos) return "";
+        auto q1 = req.find("\"", req.find(":", pos) + 1);
+        auto q2 = req.find("\"", q1 + 1);
         return req.substr(q1 + 1, q2 - q1 - 1);
     };
 
     std::string opcode = find_val("opcode");
     std::string request_id = find_val("request_id");
-    if (request_id.empty())
-        request_id = "test-req";
+    if (request_id.empty()) request_id = "test-req";
 
-    std::string response = to_json_response(request_id, "ok", opcode == "ping" ? "pong" : "lock_screen_executed");
+    // Prepare response based on the opcode sent
+    std::string result_str = (opcode == "ping") ? "pong" : "lock_screen_executed";
+    std::string response = to_json_response(request_id, "ok", result_str);
 
     DWORD written = 0;
     WriteFile(hPipe, response.c_str(), (DWORD)response.size(), &written, NULL);
     FlushFileBuffers(hPipe);
+    
     DisconnectNamedPipe(hPipe);
     CloseHandle(hPipe);
 }
 
 int main()
 {
-    // Start mock server
-    std::thread server_thread(run_mock_pipe_server);
-
-    // Give server a short moment to create pipe and wait
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
     IoctlClient client;
-    auto res = client.ping("req-1");
-    if (res.status != "ok" || res.result != "pong")
+
+    // --- TEST 1: PING ---
     {
-        std::cerr << "ping failed: status=" << res.status << " result=" << res.result << "\n";
-        return 2;
+        server_ready = false;
+        std::thread t(run_mock_pipe_server);
+        while(!server_ready) std::this_thread::yield(); // Wait for server to init
+
+        auto res = client.ping("req-ping-1");
+        if (res.status != "ok" || res.result != "pong")
+        {
+            std::cerr << "TEST FAILED: ping. Status=" << res.status << ", Result=" << res.result << "\n";
+            t.join();
+            return 2;
+        }
+        t.join();
+        std::cout << "Sub-test: Ping... OK\n";
     }
 
-    // Start another server instance for lock_screen (single-use mock)
-    std::thread server_thread2(run_mock_pipe_server);
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-    auto res2 = client.lock_screen("req-2");
-    if (res2.status != "ok")
+    // --- TEST 2: LOCK_SCREEN ---
     {
-        std::cerr << "lock_screen failed: status=" << res2.status << "\n";
-        return 3;
+        server_ready = false;
+        std::thread t(run_mock_pipe_server);
+        while(!server_ready) std::this_thread::yield();
+
+        auto res = client.lock_screen("req-lock-2");
+        if (res.status != "ok" || res.result != "lock_screen_executed")
+        {
+            std::cerr << "TEST FAILED: lock_screen. Status=" << res.status << "\n";
+            t.join();
+            return 3;
+        }
+        t.join();
+        std::cout << "Sub-test: LockScreen... OK\n";
     }
 
-    server_thread.join();
-    server_thread2.join();
-
-    std::cout << "ioctl_integration_test: PASS\n";
+    std::cout << "ioctl_integration_test: ALL PASS\n";
     return 0;
 }
 
 #else
-
 #include <iostream>
-int main()
-{
+int main() {
     std::cout << "ioctl_integration_test: SKIPPED (non-Windows)\n";
     return 0;
 }
-
 #endif
