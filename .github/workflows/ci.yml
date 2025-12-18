@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: |
+          mkdir -p build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+        shell: bash
+
+      - name: Build
+        run: |
+          cd build
+          cmake --build . --config Release --target ioctl_integration_test
+        shell: bash
+
+      - name: Run tests
+        run: |
+          cd build
+          ctest --verbose --output-on-failure -R ioctl_integration_test || ./ioctl_integration_test${{ runner.os == 'Windows' && '.exe' || '' }}
+        shell: bash

@@ -47,3 +47,7 @@ add_executable(ioctl_integration_test
 
 target_include_directories(ioctl_integration_test PRIVATE src)
 
+include(CTest)
+enable_testing()
+add_test(NAME ioctl_integration_test COMMAND ioctl_integration_test)
+
