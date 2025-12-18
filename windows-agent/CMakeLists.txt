@@ -64,6 +64,7 @@ add_executable(agent
   src/ota/ota_manager.hpp
   src/quarantine/quarantine_manager.hpp
   src/recovery/recovery_manager.hpp
+  src/telemetry/telemetry_collector.cpp
   src/ws/ws_client.cpp
   src/ws/ws_protocol.cpp
   src/utils/json_canonicalizer.cpp
@@ -73,6 +74,10 @@ add_executable(agent
 
 target_include_directories(agent PRIVATE src)
 target_link_libraries(agent PRIVATE ixwebsocket::ixwebsocket nlohmann_json::nlohmann_json)
+# Link Windows-specific system libraries used by telemetry and networking
+if(WIN32)
+  target_link_libraries(agent PRIVATE pdh iphlpapi)
+endif()
 if(HAVE_SODIUM)
   target_include_directories(agent PRIVATE ${SODIUM_INCLUDE_DIR})
   target_link_libraries(agent PRIVATE ${SODIUM_LIB})

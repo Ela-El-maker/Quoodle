@@ -3,6 +3,8 @@
 #include <map>
 
 #ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <windows.h>
 #include <pdh.h>
 #include <netioapi.h>
@@ -12,7 +14,8 @@
 #pragma comment(lib, "iphlpapi.lib")
 #endif
 
-struct TelemetrySample {
+struct TelemetrySample
+{
     std::string cpu;
     std::string ram;
     std::string disk;
@@ -20,7 +23,8 @@ struct TelemetrySample {
     std::string network_rx;
 };
 
-class TelemetryCollector {
+class TelemetryCollector
+{
 public:
     TelemetryCollector();
     ~TelemetryCollector();
@@ -34,7 +38,8 @@ private:
     bool pdhInitialized = false;
 
     // Network Logic
-    struct NetStats {
+    struct NetStats
+    {
         uint64_t rx_bytes;
         uint64_t tx_bytes;
         std::chrono::steady_clock::time_point timestamp;

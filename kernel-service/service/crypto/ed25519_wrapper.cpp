@@ -1,5 +1,5 @@
 #include "ed25519_wrapper.hpp"
-#include "../../utils/logger.hpp"
+#include "utils/logger.hpp"
 
 #ifdef HAVE_SODIUM
 #include <sodium.h>
