@@ -47,9 +47,20 @@ namespace
     resp.result = result;
     resp.error_code = error_code;
     resp.error_message = error_message;
-    // Simple hash-based signature for basic data integrity
+    // Sign response: prefer Ed25519 when available; otherwise fall back to hash-based signature
     std::string payload = request_id + status + result + std::to_string(error_code);
-    resp.sig = std::to_string(std::hash<std::string>{}(payload));
+    std::string sig;
+#ifdef HAVE_SODIUM
+    sig = ed25519_sign_message(payload);
+    if (sig.empty())
+    {
+      // fallback to hash if signing failed
+      sig = std::to_string(std::hash<std::string>{}(payload));
+    }
+#else
+    sig = std::to_string(std::hash<std::string>{}(payload));
+#endif
+    resp.sig = sig;
     return resp;
   }
 

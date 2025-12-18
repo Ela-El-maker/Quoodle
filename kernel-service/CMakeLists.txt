@@ -4,9 +4,18 @@ project(kernel_service LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Optional libsodium for Ed25519 signing/verification
+find_path(SODIUM_INCLUDE_DIR sodium.h)
+find_library(SODIUM_LIB sodium)
+if(SODIUM_INCLUDE_DIR AND SODIUM_LIB)
+    message(STATUS "Found libsodium for Ed25519 support")
+    set(HAVE_SODIUM 1)
+endif()
+
 add_library(kernel_service STATIC
     service/main.cpp
     service/dispatcher.cpp
+    service/crypto/ed25519_wrapper.cpp
     service/opcodes/lock_screen.cpp
     service/opcodes/ping.cpp
     service/opcodes/stage_update.cpp
@@ -20,3 +29,8 @@ add_library(kernel_service STATIC
 )
 
 target_include_directories(kernel_service PUBLIC service)
+if(HAVE_SODIUM)
+    target_include_directories(kernel_service PUBLIC ${SODIUM_INCLUDE_DIR})
+    target_link_libraries(kernel_service PUBLIC ${SODIUM_LIB})
+    target_compile_definitions(kernel_service PUBLIC HAVE_SODIUM=1)
+endif()
