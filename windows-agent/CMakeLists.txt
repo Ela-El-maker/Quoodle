@@ -11,6 +11,21 @@ if(SODIUM_INCLUDE_DIR AND SODIUM_LIB)
   message(STATUS "Found libsodium for Ed25519 support")
   set(HAVE_SODIUM 1)
 endif()
+if(NOT HAVE_SODIUM)
+  include(FetchContent)
+  FetchContent_Declare(
+    libsodium
+    GIT_REPOSITORY https://github.com/jedisct1/libsodium.git
+    GIT_TAG stable
+  )
+  FetchContent_MakeAvailable(libsodium)
+  if(TARGET libsodium)
+    set(SODIUM_LIB libsodium)
+    # libsodium provides include dir via target
+    set(SODIUM_INCLUDE_DIR ${libsodium_SOURCE_DIR}/src/libsodium/include)
+    set(HAVE_SODIUM 1)
+  endif()
+endif()
 
 include(FetchContent)
 

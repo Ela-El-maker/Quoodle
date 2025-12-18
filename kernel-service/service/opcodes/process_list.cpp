@@ -31,7 +31,7 @@ std::vector<std::string> execute_process_list(bool include_cmdline)
   PROCESSENTRY32W pe{};
   pe.dwSize = sizeof(pe);
 
-  if (Process32First(snap, &pe))
+  if (Process32FirstW(snap, &pe))
   {
     do
     {

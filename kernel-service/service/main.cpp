@@ -1,5 +1,6 @@
 #include "dispatcher.hpp"
 #include "utils/logger.hpp"
+#include "crypto/ed25519_verify_wrapper.hpp"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -110,57 +111,95 @@ int main(int argc, char **argv)
 
   utils::log_info("KernelService starting (named-pipe server mode)");
 #ifdef _WIN32
-    auto pipe_server = [&]()
+  auto pipe_server = [&]()
+  {
+    Dispatcher disp;
+    const char *pipeName = "\\\\.\\pipe\\KernelService";
+
+    while (true)
     {
-        Dispatcher disp;
-        const char *pipeName = "\\\\.\\pipe\\KernelService";
+      // Note: Use &sa if you implemented the Security Descriptor from the previous step
+      HANDLE hPipe = CreateNamedPipeA(
+          pipeName,
+          PIPE_ACCESS_DUPLEX,
+          PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+          PIPE_UNLIMITED_INSTANCES,
+          8192,
+          8192,
+          0,
+          NULL);
 
-        while (true)
+      if (hPipe == INVALID_HANDLE_VALUE)
+      {
+        utils::log_error("pipe_server: CreateNamedPipeA failed");
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        continue;
+      }
+
+      if (ConnectNamedPipe(hPipe, NULL) || GetLastError() == ERROR_PIPE_CONNECTED)
+      {
+        char buffer[8192];
+        DWORD read = 0;
+        if (ReadFile(hPipe, buffer, sizeof(buffer), &read, NULL) && read > 0)
         {
-            // Note: Use &sa if you implemented the Security Descriptor from the previous step
-            HANDLE hPipe = CreateNamedPipeA(
-                pipeName,
-                PIPE_ACCESS_DUPLEX,
-                PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
-                PIPE_UNLIMITED_INSTANCES,
-                8192,
-                8192,
-                0,
-                NULL); 
+          std::string req(buffer, read);
+          std::string opcode = extract_json_string(req, "opcode");
+          std::string request_id = extract_json_string(req, "request_id");
+          if (request_id.empty())
+            request_id = "req-unknown";
 
-            if (hPipe == INVALID_HANDLE_VALUE) {
-                utils::log_error("pipe_server: CreateNamedPipeA failed");
-                std::this_thread::sleep_for(std::chrono::seconds(1));
-                continue;
-            }
-
-            if (ConnectNamedPipe(hPipe, NULL) || GetLastError() == ERROR_PIPE_CONNECTED)
+          // Optional signed requests: if a signature and signed_payload are included,
+          // verify using configured controller public key (KERNEL_CONTROLLER_PUBKEY_B64).
+          std::string sig = extract_json_string(req, "sig");
+          std::string signed_payload = extract_json_string(req, "signed_payload");
+          if (!sig.empty() && !signed_payload.empty())
+          {
+            const char *pub_b64 = std::getenv("KERNEL_CONTROLLER_PUBKEY_B64");
+            if (!pub_b64)
             {
-                char buffer[8192];
-                DWORD read = 0;
-                if (ReadFile(hPipe, buffer, sizeof(buffer), &read, NULL) && read > 0)
-                {
-                    std::string req(buffer, read);
-                    std::string opcode = extract_json_string(req, "opcode");
-                    std::string request_id = extract_json_string(req, "request_id");
-                    if (request_id.empty()) request_id = "req-unknown";
-
-                    KernelResponse resp;
-                    if (opcode == "lock_screen") resp = disp.handle_lock_screen(request_id);
-                    else if (opcode == "ping")    resp = disp.handle_ping(request_id);
-                    else                         resp = disp.handle_unknown(request_id, opcode);
-
-                    std::string out = to_json(resp);
-                    DWORD written = 0;
-                    WriteFile(hPipe, out.c_str(), (DWORD)out.size(), &written, NULL);
-                    FlushFileBuffers(hPipe);
-                }
+              utils::log_error("pipe_server: signature provided but KERNEL_CONTROLLER_PUBKEY_B64 not set");
+              KernelResponse resp_err = disp.handle_unknown(request_id, "signature_missing_pubkey");
+              std::string out_err = to_json(resp_err);
+              DWORD written_err = 0;
+              WriteFile(hPipe, out_err.c_str(), static_cast<DWORD>(out_err.size()), &written_err, NULL);
+              FlushFileBuffers(hPipe);
+              DisconnectNamedPipe(hPipe);
+              CloseHandle(hPipe);
+              continue;
             }
-            DisconnectNamedPipe(hPipe);
-            CloseHandle(hPipe);
+            if (!ed25519_verify_message(signed_payload, sig, std::string(pub_b64)))
+            {
+              utils::log_error("pipe_server: signature verification failed");
+              KernelResponse resp_err = disp.handle_unknown(request_id, "signature_invalid");
+              std::string out_err = to_json(resp_err);
+              DWORD written_err = 0;
+              WriteFile(hPipe, out_err.c_str(), static_cast<DWORD>(out_err.size()), &written_err, NULL);
+              FlushFileBuffers(hPipe);
+              DisconnectNamedPipe(hPipe);
+              CloseHandle(hPipe);
+              continue;
+            }
+          }
+
+          KernelResponse resp;
+          if (opcode == "lock_screen")
+            resp = disp.handle_lock_screen(request_id);
+          else if (opcode == "ping")
+            resp = disp.handle_ping(request_id);
+          else
+            resp = disp.handle_unknown(request_id, opcode);
+
+          std::string out = to_json(resp);
+          DWORD written = 0;
+          WriteFile(hPipe, out.c_str(), (DWORD)out.size(), &written, NULL);
+          FlushFileBuffers(hPipe);
         }
-    };
-    pipe_server();
+      }
+      DisconnectNamedPipe(hPipe);
+      CloseHandle(hPipe);
+    }
+  };
+  pipe_server();
 #endif
-    return 0;
+  return 0;
 }
