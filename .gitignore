@@ -8,6 +8,8 @@
 /dist/
 .DS_Store
 .dart_tool/
+.github/
+.vscode/
 
 # Build directories
 build/
