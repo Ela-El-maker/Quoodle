@@ -17,6 +17,8 @@ class Device extends Model
         'device_id',
         'device_name',
         'hwid',
+        'hwid_hash',
+        'ed25519_pubkey_b64',
         'lifecycle_state',
         'last_seen',
         'agent_version',

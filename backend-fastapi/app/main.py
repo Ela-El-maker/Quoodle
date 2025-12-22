@@ -30,8 +30,10 @@ from app.ws.webhooks import (
     notify_device_offline,
     notify_device_online,
 )
+from app.middleware.laravel_signature import LaravelSignatureMiddleware
 
 app = FastAPI(title="Secure Device Control - FastAPI Controller")
+app.add_middleware(LaravelSignatureMiddleware)
 app.include_router(create_router(manager))
 
 device_registry = DeviceKeyRegistry(
@@ -46,6 +48,7 @@ replay = ReplayProtector(
         redis_url=settings.redis_url,
         max_clock_skew_seconds=settings.max_clock_skew_seconds,
         require_seq=settings.require_agent_seq,
+        key_namespace="agent",
     )
 )
 

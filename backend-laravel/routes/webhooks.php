@@ -7,7 +7,7 @@ use App\Http\Controllers\Webhooks\DevicePresenceWebhookController;
 use App\Http\Controllers\Webhooks\TelemetryWebhookController;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('api/v1/webhook')->group(function (): void {
+Route::prefix('api/v1/webhook')->middleware('fastapi.signature')->group(function (): void {
     Route::post('/device/online', [DevicePresenceWebhookController::class, 'online']);
     Route::post('/device/offline', [DevicePresenceWebhookController::class, 'offline']);
     Route::post('/command/result', [CommandResultWebhookController::class, 'store']);

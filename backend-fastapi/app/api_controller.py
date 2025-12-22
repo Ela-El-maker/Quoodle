@@ -2,6 +2,7 @@ import uuid
 from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from app.api.schemas import (
     CommandDispatchRequest,
@@ -19,6 +20,10 @@ from app.state import (
 )
 from app.ws.connection_manager import ConnectionManager
 from app.ws.protocol import iso_timestamp, compute_sig
+
+
+class DeviceKeyUpsertRequest(BaseModel):
+    ed25519_pubkey_b64: str
 
 
 def build_command_delivery(payload: Dict[str, Any], session_id: str) -> Dict[str, Any]:
@@ -181,6 +186,18 @@ def create_router(manager: ConnectionManager) -> APIRouter:
             "reason": payload.reason,
             "allowlist": quarantine_handler.allowlist(),
         }
+
+    @router.post("/admin/device-keys/{device_id}")
+    async def upsert_device_key(device_id: str, payload: DeviceKeyUpsertRequest):
+        # Lazily import to avoid circular references with app.main.
+        from app.main import device_registry
+
+        pub = payload.ed25519_pubkey_b64.strip()
+        if not pub:
+            raise HTTPException(status_code=400, detail="ed25519_pubkey_b64 required")
+
+        device_registry.upsert_pubkey_b64(device_id, pub)
+        return {"status": "ok", "device_id": device_id}
 
     @router.delete("/admin/quarantine/{device_id}")
     async def lift_quarantine(device_id: str):

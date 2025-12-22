@@ -2,11 +2,14 @@
 
 namespace App\Services\Commands;
 
+use App\Jobs\DispatchCommandToFastApi;
 use App\Models\Command;
 use App\Models\Device;
+use App\Models\User;
 use App\Services\CommandRegistry\Registry;
 use App\Services\Compliance\ComplianceChecker;
 use App\Services\PolicyEngine\PolicyEvaluator;
+use App\Services\Security\TOTPService;
 use Illuminate\Support\Str;
 
 class CommandService
@@ -15,7 +18,8 @@ class CommandService
         private readonly Registry $registry,
         private readonly PolicyEvaluator $policyEvaluator,
         private readonly ComplianceChecker $complianceChecker,
-        private readonly FastAPIDispatcher $dispatcher
+        private readonly FastAPIDispatcher $dispatcher,
+        private readonly TOTPService $totp,
     ) {
     }
 
@@ -52,13 +56,23 @@ class CommandService
             return ['status' => 'rejected', 'reason' => 'compliance_failed', 'compliance' => $compliance];
         }
 
+        $twoFactorVerified = false;
+        $twoFactorCode = $payload['two_factor_code'] ?? null;
+        $userId = $payload['user_id'] ?? null;
+        if (is_string($twoFactorCode) && $twoFactorCode !== '' && is_string($userId) && $userId !== '') {
+            $user = User::find($userId);
+            if ($user && $user->two_factor_enabled && ! empty($user->two_factor_secret)) {
+                $twoFactorVerified = $this->totp->verify($user->two_factor_secret, $twoFactorCode);
+            }
+        }
+
         $policy = $this->policyEvaluator->evaluate([
             'user_id' => $payload['user_id'] ?? 'unknown',
             'user_role' => $payload['user_role'] ?? 'user',
             'device_lifecycle_state' => $device->lifecycle_state,
             'policy_hash' => $payload['policy_hash'] ?? null,
             'expected_policy_hash' => $device->policy_hash,
-            'two_factor_verified' => ! empty($payload['two_factor_code']),
+            'two_factor_verified' => $twoFactorVerified,
         ], $definition, $device);
 
         if ($policy['decision'] === 'deny') {
@@ -67,6 +81,10 @@ class CommandService
 
         if ($policy['decision'] === 'require_2fa' && empty($payload['two_factor_code'])) {
             return ['status' => 'require_2fa', 'reason' => '2fa_required', 'policy' => $policy];
+        }
+
+        if ($policy['decision'] === 'require_2fa' && ! empty($payload['two_factor_code']) && ! $twoFactorVerified) {
+            return ['status' => 'rejected', 'reason' => 'invalid_2fa', 'policy' => $policy];
         }
 
         $command = Command::create([
@@ -82,19 +100,10 @@ class CommandService
             'execution_state' => 'queued',
         ]);
 
-        $dispatchResult = $this->dispatcher->dispatch($command, $policy, $compliance);
-        $state = match ($dispatchResult['status'] ?? 'queued') {
-            'dispatched', 'queued' => 'sent',
-            'device_offline' => 'queued',
-            default => 'queued',
-        };
+        // Async dispatch to avoid blocking the mobile/UI call path.
+        DispatchCommandToFastApi::dispatch($command->id, $policy, $compliance);
 
-        $command->update([
-            'state' => $state,
-            'execution_state' => $state,
-            'dispatched_at' => $state === 'sent' ? now() : null,
-            'reason' => $dispatchResult['reason'] ?? null,
-        ]);
+        $state = 'queued';
 
         return [
             'status' => 'accepted',

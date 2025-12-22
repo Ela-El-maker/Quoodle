@@ -3,21 +3,36 @@
 namespace App\Services\Commands;
 
 use App\Models\Command;
+use App\Services\Security\Ed25519CanonicalJson;
+use App\Services\Security\Ed25519Signer;
+use App\Services\Security\MonotonicCounter;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 class FastAPIDispatcher
 {
+    public function __construct(
+        private readonly MonotonicCounter $counter,
+    ) {
+    }
+
     public function dispatch(Command $command, array $policyDecision, array $compliance): array
     {
         $base = rtrim(config('services.fastapi.base_url'), '/');
         $url = $base.'/command/dispatch';
 
+        $serviceSkB64 = config('services.fastapi.service_private_key_b64');
+        if (! is_string($serviceSkB64) || $serviceSkB64 === '') {
+            throw new RuntimeException('Missing services.fastapi.service_private_key_b64 (LARAVEL_SERVICE_PRIVATE_KEY_B64)');
+        }
+        $signer = new Ed25519Signer($serviceSkB64);
+
         $payload = [
             'command_id' => $command->id,
             'device_id' => $command->device_id,
             'trace_id' => $command->trace_id,
-            'seq' => random_int(1, 100000),
+            'seq' => $this->counter->next('fastapi_dispatch'),
             'method' => $command->method,
             'params' => $command->params ?? [],
             'sensitive' => $command->sensitive,
@@ -44,11 +59,28 @@ class FastAPIDispatcher
                     'policy_version' => 'policy-placeholder',
                     'device_id' => $command->device_id,
                 ],
-                'sig' => 'laravel-sig-placeholder',
+                'sig' => null,
             ],
         ];
 
+        // Per spec, envelope.sig is a Laravel signature. Sign envelope without the sig field.
+        $payload['envelope']['sig'] = $signer->signJsonValue(Ed25519CanonicalJson::stripSig($payload['envelope']));
+
+        // Transport-level request signature header: sign full request body.
+        $requestSig = $signer->signJsonValue($payload);
+
+        // Persist audit data on the command record.
+        $command->update([
+            'server_seq' => $payload['seq'],
+            'envelope' => $payload['envelope'],
+            'envelope_sig' => $payload['envelope']['sig'],
+            'request_sig' => $requestSig,
+        ]);
+
         $response = Http::acceptJson()
+            ->withHeaders([
+                'X-Laravel-Signature' => $requestSig,
+            ])
             ->timeout(5)
             ->retry(1, 200)
             ->post($url, $payload);

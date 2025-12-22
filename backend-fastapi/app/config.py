@@ -23,5 +23,14 @@ class Settings(BaseModel):
     device_registry_db_path: str = os.getenv("DEVICE_REGISTRY_DB_PATH", "./data/device_registry.db")
     device_pubkeys_seed_path: str | None = os.getenv("DEVICE_PUBKEYS_PATH")
 
+    # Laravel ↔ FastAPI (server-to-server) request signing
+    require_laravel_signature: bool = os.getenv("REQUIRE_LARAVEL_SIGNATURE", "false").lower() in ("1", "true", "yes")
+    laravel_service_pubkey_b64: str | None = os.getenv("LARAVEL_SERVICE_PUBKEY_B64")
+    require_laravel_seq: bool = os.getenv("REQUIRE_LARAVEL_SEQ", "false").lower() in ("1", "true", "yes")
+
+    # FastAPI → Laravel webhook signing
+    sign_laravel_webhooks: bool = os.getenv("SIGN_LARAVEL_WEBHOOKS", "false").lower() in ("1", "true", "yes")
+    fastapi_service_private_key_b64: str | None = os.getenv("FASTAPI_SERVICE_PRIVATE_KEY_B64")
+
 
 settings = Settings()

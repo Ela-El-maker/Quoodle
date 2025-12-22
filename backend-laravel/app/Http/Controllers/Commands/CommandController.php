@@ -48,7 +48,7 @@ class CommandController extends Controller
                 'policy' => $result['policy'] ?? null,
                 'compliance' => $result['compliance'] ?? null,
                 'errors' => $result['errors'] ?? null,
-            ], $result['status'] === 'require_2fa' ? 403 : 422);
+            ], ($result['status'] === 'require_2fa' || ($result['reason'] ?? null) === 'invalid_2fa') ? 403 : 422);
         }
 
         $command = $result['command'];

@@ -1,6 +1,7 @@
 import httpx
 
 from app.config import settings
+from app.services.fastapi_service_signing import ServiceSigningError, sign_fastapi_to_laravel
 
 
 async def forward_command_result(payload: dict) -> None:
@@ -22,5 +23,13 @@ async def forward_command_result(payload: dict) -> None:
         "timestamp": payload.get("timestamp"),
     }
 
+    headers = None
+    try:
+        headers = sign_fastapi_to_laravel(data)
+    except ServiceSigningError:
+        if settings.sign_laravel_webhooks:
+            raise
+        headers = None
+
     async with httpx.AsyncClient() as client:
-        await client.post(target, json=data, timeout=5.0)
+        await client.post(target, json=data, headers=headers, timeout=5.0)

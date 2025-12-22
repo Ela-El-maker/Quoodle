@@ -7,14 +7,23 @@ To fully meet the protocol and security requirements in `docs/specs` and `docs/s
 
 Device public key registry:
 
-- `DEVICE_REGISTRY_DB_PATH` (default `./data/device_registry.db`): SQLite DB storing `device_id -> ed25519_pub_b64`.
-- `DEVICE_PUBKEYS_PATH` (optional): JSON file used to seed the registry, e.g. `{ "PC001": "<PUBKEY_B64>", ... }`.
 
 Replay protection:
 
-- `REDIS_URL` (recommended in production): Enables Redis-backed replay protection.
-- `MAX_CLOCK_SKEW_SECONDS` (default `5`): Reject inbound messages if timestamp skew exceeds this.
-- `REQUIRE_AGENT_SEQ` (default `true`): Require and enforce monotonic `seq` on inbound messages.
+
+### Laravel ↔ FastAPI control-plane signing
+
+FastAPI must not trust unsigned internal POSTs. Enable verification of Laravel-signed requests:
+
+- `REQUIRE_LARAVEL_SIGNATURE` (default: `false`): When `true`, FastAPI enforces `X-Laravel-Signature` on `POST /api/v1/command/dispatch`.
+- `LARAVEL_SERVICE_PUBKEY_B64`: Base64-encoded Ed25519 public key for the Laravel service.
+
+### FastAPI → Laravel webhook signing
+
+Laravel must not trust inbound webhooks without verifying the sender.
+
+- `SIGN_LARAVEL_WEBHOOKS` (default: `false`): When `true`, FastAPI signs outbound webhook requests to Laravel.
+- `FASTAPI_SERVICE_PRIVATE_KEY_B64`: Base64-encoded Ed25519 private key for the FastAPI service.
 
 Message signing:
 

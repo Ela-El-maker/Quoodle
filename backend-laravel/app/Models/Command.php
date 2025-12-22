@@ -31,6 +31,10 @@ class Command extends Model
         'error_code',
         'error_message',
         'completed_at',
+        'server_seq',
+        'envelope',
+        'envelope_sig',
+        'request_sig',
     ];
 
     protected $casts = [
@@ -41,5 +45,7 @@ class Command extends Model
         'completed_at' => 'datetime',
         'result' => 'array',
         'error_code' => 'integer',
+        'server_seq' => 'integer',
+        'envelope' => 'array',
     ];
 }

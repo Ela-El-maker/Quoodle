@@ -4,12 +4,20 @@ from typing import Any, Dict
 import httpx
 
 from app.config import settings
+from app.services.fastapi_service_signing import ServiceSigningError, sign_fastapi_to_laravel
 
 
 async def _post(path: str, payload: Dict[str, Any]) -> None:
     url = f"{settings.laravel_webhook_base.rstrip('/')}/{path.lstrip('/')}"
+    headers = None
+    try:
+        headers = sign_fastapi_to_laravel(payload)
+    except ServiceSigningError:
+        if settings.sign_laravel_webhooks:
+            raise
+        headers = None
     async with httpx.AsyncClient() as client:
-        await client.post(url, json=payload, timeout=5.0)
+        await client.post(url, json=payload, headers=headers, timeout=5.0)
 
 
 async def notify_device_online(device_id: str, session_id: str, agent_info: Dict[str, Any]) -> None:

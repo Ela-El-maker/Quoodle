@@ -30,6 +30,7 @@ class ReplayConfig:
     redis_url: Optional[str]
     max_clock_skew_seconds: int = 5
     require_seq: bool = True
+    key_namespace: str = "agent"
 
 
 class ReplayProtector:
@@ -80,7 +81,7 @@ class ReplayProtector:
             self._mem_last_seq[device_id] = seq
             return
 
-        key = f"agent:last_seq:{device_id}"
+        key = f"{self._cfg.key_namespace}:last_seq:{device_id}"
         # Atomic compare-and-set via Lua
         script = (
             "local cur = redis.call('GET', KEYS[1]); "
@@ -107,7 +108,7 @@ class ReplayProtector:
             self._mem_last_seq[mem_key] = 1  # type: ignore[index]
             return
 
-        key = f"agent:nonce:{device_id}:{nonce}"
+        key = f"{self._cfg.key_namespace}:nonce:{device_id}:{nonce}"
         created = await self._redis.set(key, "1", nx=True, ex=ttl_seconds)
         if not created:
             raise ReplayError("Replay detected (nonce reuse)")

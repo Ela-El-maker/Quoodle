@@ -18,6 +18,29 @@ class SignatureError(ValueError):
     pass
 
 
+def verify_ed25519_detached(message: bytes, signature_b64: str, pubkey_b64: str) -> None:
+    if not HAVE_PYNACL_VERIFY or VerifyKey is None:
+        raise SignatureError("PyNaCl not installed; cannot verify Ed25519 signatures")
+
+    if not isinstance(signature_b64, str) or not signature_b64:
+        raise SignatureError("Missing signature")
+
+    try:
+        sig = base64.b64decode(signature_b64)
+    except Exception as exc:
+        raise SignatureError("signature is not valid base64") from exc
+
+    try:
+        pub = base64.b64decode(pubkey_b64)
+    except Exception as exc:
+        raise SignatureError("pubkey is not valid base64") from exc
+
+    try:
+        VerifyKey(pub).verify(message, sig)
+    except Exception as exc:
+        raise SignatureError("Ed25519 verification failed") from exc
+
+
 def verify_ed25519_signature(payload: Dict[str, Any], pubkey_b64: str) -> None:
     if not HAVE_PYNACL_VERIFY or VerifyKey is None:
         raise SignatureError("PyNaCl not installed; cannot verify Ed25519 signatures")
@@ -39,7 +62,4 @@ def verify_ed25519_signature(payload: Dict[str, Any], pubkey_b64: str) -> None:
     # Canonical bytes of full message excluding sig
     msg = canonicalize_json(strip_sig(payload))
 
-    try:
-        VerifyKey(pub).verify(msg, sig)
-    except Exception as exc:
-        raise SignatureError("Ed25519 verification failed") from exc
+    verify_ed25519_detached(msg, sig_b64, pubkey_b64)

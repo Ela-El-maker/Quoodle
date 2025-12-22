@@ -20,6 +20,8 @@ Route::middleware('api')->group(function (): void {
     // Auth & tokens
     Route::post('/register', [RegisterController::class, 'register']);
     Route::post('/login', [LoginController::class, 'login']);
+    Route::post('/2fa/setup', [TwoFactorController::class, 'setup']);
+    Route::post('/2fa/confirm', [TwoFactorController::class, 'confirm']);
     Route::post('/2fa/verify', [TwoFactorController::class, 'verify']);
     Route::post('/token/refresh', [TokenController::class, 'refresh']);
     Route::post('/logout', [TokenController::class, 'logout']);

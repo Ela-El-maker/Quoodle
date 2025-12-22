@@ -37,6 +37,12 @@ return [
 
     'fastapi' => [
         'base_url' => env('FASTAPI_BASE_URL', 'http://localhost:8001/api/v1'),
+        // Laravel → FastAPI service-to-service signing
+        'service_private_key_b64' => env('LARAVEL_SERVICE_PRIVATE_KEY_B64'),
+
+        // FastAPI → Laravel webhook verification
+        'require_webhook_signature' => env('REQUIRE_FASTAPI_SIGNATURE', false),
+        'service_public_key_b64' => env('FASTAPI_SERVICE_PUBLIC_KEY_B64'),
     ],
 
     'laravel_webhook' => [
