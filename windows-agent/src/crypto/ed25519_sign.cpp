@@ -2,6 +2,7 @@
 #include <sstream>
 #include <functional>
 #include <cstdlib>
+#include <iostream>
 #ifdef HAVE_SODIUM
 #include <sodium.h>
 #include <vector>

@@ -65,8 +65,10 @@ add_executable(agent
   src/quarantine/quarantine_manager.hpp
   src/recovery/recovery_manager.hpp
   src/telemetry/telemetry_collector.cpp
+  src/crypto/ed25519_sign.cpp
   src/ws/ws_client.cpp
   src/ws/ws_protocol.cpp
+  src/ws/sequence_manager.cpp
   src/utils/json_canonicalizer.cpp
   src/utils/sha256.cpp
   src/kernel/ioctl_client.cpp
@@ -77,7 +79,7 @@ target_include_directories(agent PRIVATE src)
 target_link_libraries(agent PRIVATE ixwebsocket::ixwebsocket nlohmann_json::nlohmann_json)
 # Link Windows-specific system libraries used by telemetry and networking
 if(WIN32)
-  target_link_libraries(agent PRIVATE pdh iphlpapi)
+  target_link_libraries(agent PRIVATE pdh iphlpapi crypt32)
 endif()
 if(HAVE_SODIUM)
   target_include_directories(agent PRIVATE ${SODIUM_INCLUDE_DIR})
@@ -98,6 +100,16 @@ add_executable(ioctl_signed_test
   src/utils/sha256.cpp
 )
 
+add_executable(ws_protocol_signing_test
+  tests/unit/ws_protocol_signing_test.cpp
+  src/ws/ws_protocol.cpp
+  src/ws/sequence_manager.cpp
+  src/crypto/ed25519_sign.cpp
+  src/telemetry/telemetry_collector.cpp
+  src/utils/json_canonicalizer.cpp
+  src/utils/dpapi_loader.cpp
+)
+
 target_include_directories(ioctl_integration_test PRIVATE src)
 if(HAVE_SODIUM)
   target_include_directories(ioctl_integration_test PRIVATE ${SODIUM_INCLUDE_DIR})
@@ -111,8 +123,20 @@ if(HAVE_SODIUM)
   target_compile_definitions(ioctl_signed_test PRIVATE HAVE_SODIUM=1)
 endif()
 
+target_include_directories(ws_protocol_signing_test PRIVATE src)
+target_link_libraries(ws_protocol_signing_test PRIVATE nlohmann_json::nlohmann_json)
+if(WIN32)
+  target_link_libraries(ws_protocol_signing_test PRIVATE pdh iphlpapi crypt32)
+endif()
+if(HAVE_SODIUM)
+  target_include_directories(ws_protocol_signing_test PRIVATE ${SODIUM_INCLUDE_DIR})
+  target_link_libraries(ws_protocol_signing_test PRIVATE ${SODIUM_LIB})
+  target_compile_definitions(ws_protocol_signing_test PRIVATE HAVE_SODIUM=1)
+endif()
+
 include(CTest)
 enable_testing()
 add_test(NAME ioctl_integration_test COMMAND ioctl_integration_test)
 add_test(NAME ioctl_signed_test COMMAND ioctl_signed_test)
+add_test(NAME ws_protocol_signing_test COMMAND ws_protocol_signing_test)
 

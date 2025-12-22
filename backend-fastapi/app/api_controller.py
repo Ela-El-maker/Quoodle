@@ -1,42 +1,24 @@
-"""Compatibility shim for `app.api`.
+import uuid
+from typing import Any, Dict
 
-This repo contains both:
-- a directory `app/api/` (schemas/routes)
-- and a module file `app/api.py`
+from fastapi import APIRouter, HTTPException
 
-Python treats `app.api` as a module (this file), which would normally prevent
-imports like `app.api.schemas`. To keep existing imports working, we expose the
-submodules by defining `__path__` to point at the `app/api/` directory.
-
-The actual REST router builders live in `app/api_controller.py`.
-"""
-
-from __future__ import annotations
-
-import os
-
-# Allow `import app.api.schemas` even though `app.api` is a module.
-__path__ = [os.path.join(os.path.dirname(__file__), "api")]
-
-def create_router(manager):
-    from app.api_controller import create_router as _create_router
-
-    return _create_router(manager)
-
-
-def build_command_delivery(payload, session_id):
-    from app.api_controller import build_command_delivery as _build_command_delivery
-
-    return _build_command_delivery(payload, session_id)
-
-
-def build_dispatch_response(status, device_id, command_id, reason=None):
-    from app.api_controller import build_dispatch_response as _build_dispatch_response
-
-    return _build_dispatch_response(status, device_id, command_id, reason)
-
-
-__all__ = ["create_router", "build_command_delivery", "build_dispatch_response"]
+from app.api.schemas import (
+    CommandDispatchRequest,
+    PolicyPushRequest,
+    OTAPublishRequest,
+    QuarantineRequest,
+)
+from app.config import settings
+from app.state import (
+    event_bus,
+    offline_queue,
+    ota_manager,
+    policy_resolver,
+    quarantine_handler,
+)
+from app.ws.connection_manager import ConnectionManager
+from app.ws.protocol import iso_timestamp, compute_sig
 
 
 def build_command_delivery(payload: Dict[str, Any], session_id: str) -> Dict[str, Any]:
@@ -66,7 +48,9 @@ def build_command_delivery(payload: Dict[str, Any], session_id: str) -> Dict[str
             "origin_user_id": meta.get("origin_user_id", payload.get("origin_user_id", "user-unknown")),
             "enc": meta.get("enc", "none"),
             "enc_key_id": meta.get("enc_key_id"),
-            "policy_version": meta.get("policy_version", payload.get("policy", {}).get("policy_version", "policy-placeholder")),
+            "policy_version": meta.get(
+                "policy_version", payload.get("policy", {}).get("policy_version", "policy-placeholder")
+            ),
             "policy_hash": payload.get("policy", {}).get("policy_hash"),
             "compliance": payload.get("compliance"),
         },
@@ -84,9 +68,7 @@ def build_command_delivery(payload: Dict[str, Any], session_id: str) -> Dict[str
         "message_id": f"m-cmd-delivery-{uuid.uuid4()}",
         "session_id": session_id,
         "timestamp": iso_timestamp(),
-        "body": {
-            "command_envelope": command_envelope
-        },
+        "body": {"command_envelope": command_envelope},
     }
     message["sig"] = compute_sig(message)
     return message
@@ -193,7 +175,12 @@ def create_router(manager: ConnectionManager) -> APIRouter:
     @router.post("/admin/quarantine/{device_id}")
     async def set_quarantine(device_id: str, payload: QuarantineRequest):
         quarantine_handler.set_quarantine(device_id, payload.reason)
-        return {"status": "quarantined", "device_id": device_id, "reason": payload.reason, "allowlist": quarantine_handler.allowlist()}
+        return {
+            "status": "quarantined",
+            "device_id": device_id,
+            "reason": payload.reason,
+            "allowlist": quarantine_handler.allowlist(),
+        }
 
     @router.delete("/admin/quarantine/{device_id}")
     async def lift_quarantine(device_id: str):

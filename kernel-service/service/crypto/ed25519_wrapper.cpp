@@ -86,8 +86,8 @@ std::string ed25519_sign_message(const std::string &message)
   char out_b64[crypto_sign_BYTES * 2 + 16];
   sodium_bin2base64(out_b64, sizeof(out_b64), sig, crypto_sign_BYTES, sodium_base64_VARIANT_ORIGINAL);
   // After signing is finished
-sodium_memzero(sk.data(), sk.size()); // Clears the secret from RAM immediately
-return std::string(out_b64);
+  sodium_memzero(sk.data(), sk.size()); // Clears the secret from RAM immediately
+  return std::string(out_b64);
 #else
   (void)message;
   utils::log_warn("ed25519_wrapper: libsodium not available at build time; signing disabled");

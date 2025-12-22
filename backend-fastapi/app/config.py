@@ -12,5 +12,16 @@ class Settings(BaseModel):
     controller_id: str = os.getenv("CONTROLLER_ID", "controller")
     laravel_webhook_base: str = os.getenv("LARAVEL_WEBHOOK_BASE", "http://localhost/api/v1/webhook")
 
+    # Security / signing / replay protection
+    redis_url: str | None = os.getenv("REDIS_URL")
+    max_clock_skew_seconds: int = int(os.getenv("MAX_CLOCK_SKEW_SECONDS", "5"))
+    require_ed25519: bool = os.getenv("REQUIRE_ED25519", "true").lower() in ("1", "true", "yes")
+    allow_dev_sig_fallback: bool = os.getenv("ALLOW_DEV_SIG_FALLBACK", "false").lower() in ("1", "true", "yes")
+    require_agent_seq: bool = os.getenv("REQUIRE_AGENT_SEQ", "true").lower() in ("1", "true", "yes")
+
+    # Device key registry (SQLite + optional seeding JSON)
+    device_registry_db_path: str = os.getenv("DEVICE_REGISTRY_DB_PATH", "./data/device_registry.db")
+    device_pubkeys_seed_path: str | None = os.getenv("DEVICE_PUBKEYS_PATH")
+
 
 settings = Settings()

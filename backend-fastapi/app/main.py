@@ -4,10 +4,12 @@ import uuid
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
-from app.api import create_router, build_command_delivery
+from app.api_controller import create_router, build_command_delivery
 from app.config import settings
 from app.state import manager, offline_queue, ota_manager, policy_resolver, risk_scorer
 from app.ws.auth import validate_auth_jwt
+from app.services.device_registry import DeviceKeyRegistry, DeviceKeyRegistryConfig
+from app.services.replay_protection import ReplayProtector, ReplayConfig, ReplayError, extract_seq_from_message
 from app.ws.protocol import (
     build_auth_ack,
     build_auth_error,
@@ -18,6 +20,7 @@ from app.ws.protocol import (
     validate_heartbeat,
     validate_telemetry,
 )
+from app.ws.signing import verify_ed25519_signature, SignatureError
 from app.ws.results import forward_command_result
 from app.ws.webhooks import (
     fire_and_forget,
@@ -31,6 +34,21 @@ from app.ws.webhooks import (
 app = FastAPI(title="Secure Device Control - FastAPI Controller")
 app.include_router(create_router(manager))
 
+device_registry = DeviceKeyRegistry(
+    DeviceKeyRegistryConfig(
+        db_path=settings.device_registry_db_path,
+        seed_json_path=settings.device_pubkeys_seed_path,
+    )
+)
+
+replay = ReplayProtector(
+    ReplayConfig(
+        redis_url=settings.redis_url,
+        max_clock_skew_seconds=settings.max_clock_skew_seconds,
+        require_seq=settings.require_agent_seq,
+    )
+)
+
 
 @app.get("/health")
 async def health():
@@ -43,6 +61,7 @@ async def agent_ws(websocket: WebSocket):
     device_id = "unknown"
     session_id_assigned = None
     agent_info: dict[str, str] = {}
+    agent_pubkey_b64: str | None = None
     try:
         raw = await websocket.receive_text()
         try:
@@ -60,6 +79,25 @@ async def agent_ws(websocket: WebSocket):
             return
 
         device_id = payload.get("device_id", device_id)
+
+        # Load device public key for signature verification.
+        agent_pubkey_b64 = device_registry.get_pubkey_b64(device_id)
+        if not agent_pubkey_b64:
+            await websocket.send_json(build_auth_error(device_id, "AUTH_UNKNOWN_DEVICE", "Unknown device_id"))
+            await websocket.close(code=4401)
+            return
+
+        # Replay and signature checks must occur before trusting AUTH body.
+        try:
+            replay.validate_timestamp(payload.get("timestamp", ""))
+            nonce = payload.get("body", {}).get("auth", {}).get("nonce")
+            if isinstance(nonce, str):
+                await replay.check_and_store_nonce(device_id, nonce)
+            verify_ed25519_signature(payload, agent_pubkey_b64)
+        except (ReplayError, SignatureError):
+            await websocket.close(code=4401)
+            return
+
         auth_token = payload["body"]["auth"]["jwt"]
         agent_info = payload["body"].get("agent_info", {})
         agent_info["connected_at"] = iso_timestamp()
@@ -81,6 +119,7 @@ async def agent_ws(websocket: WebSocket):
             os_build=agent_info.get("os_build"),
             attestation_hash=agent_info.get("attestation_hash"),
             connected_at=agent_info.get("connected_at"),
+            agent_pubkey_b64=agent_pubkey_b64,
         )
 
         fire_and_forget(notify_device_online(device_id, session_id, agent_info))
@@ -104,6 +143,17 @@ async def agent_ws(websocket: WebSocket):
                     message = json.loads(incoming)
                 except json.JSONDecodeError:
                     continue
+
+                # Mandatory security checks for every inbound message.
+                try:
+                    replay.validate_timestamp(message.get("timestamp", ""))
+                    await replay.check_and_update_seq(device_id, extract_seq_from_message(message))
+                    if agent_pubkey_b64 is None:
+                        raise SignatureError("Missing cached pubkey")
+                    verify_ed25519_signature(message, agent_pubkey_b64)
+                except (ReplayError, SignatureError):
+                    await websocket.close(code=4401)
+                    break
 
                 mtype = message.get("type")
                 if mtype == "HEARTBEAT":

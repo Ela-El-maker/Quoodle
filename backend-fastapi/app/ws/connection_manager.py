@@ -14,6 +14,7 @@ class ConnectionEntry:
     os_build: str | None
     attestation_hash: str | None
     connected_at: str
+    agent_pubkey_b64: str | None = None
 
 
 class ConnectionManager:
@@ -30,6 +31,7 @@ class ConnectionManager:
         os_build: str | None,
         attestation_hash: str | None,
         connected_at: str,
+        agent_pubkey_b64: str | None = None,
     ) -> None:
         async with self.lock:
             self.active_connections[device_id] = ConnectionEntry(
@@ -40,6 +42,7 @@ class ConnectionManager:
                 os_build=os_build,
                 attestation_hash=attestation_hash,
                 connected_at=connected_at,
+                agent_pubkey_b64=agent_pubkey_b64,
             )
 
     async def unregister(self, device_id: str) -> Optional[ConnectionEntry]:
