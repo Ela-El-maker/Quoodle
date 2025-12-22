@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/api_service.dart';
+import '../../services/mobile_identity_service.dart';
 import '../devices/device_list_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -18,6 +19,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   final ApiService _api = ApiService();
+  final MobileIdentityService _identity = MobileIdentityService();
   bool _loading = false;
 
   @override
@@ -31,11 +33,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
+    await _identity.ensureKeypair();
+    final pub = await _identity.publicKeyBase64();
     await _api.register(
       displayName: _displayName.text,
       email: _email.text,
       password: _password.text,
-      pubkey: 'mobile-pubkey-placeholder',
+      pubkey: pub,
     );
     if (mounted) {
       Navigator.pushReplacementNamed(context, DeviceListScreen.route);
@@ -61,13 +65,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
               TextFormField(
                 controller: _email,
                 decoration: const InputDecoration(labelText: 'Email'),
-                validator: (v) => v != null && v.contains('@') ? null : 'Enter valid email',
+                validator: (v) =>
+                    v != null && v.contains('@') ? null : 'Enter valid email',
               ),
               TextFormField(
                 controller: _password,
                 decoration: const InputDecoration(labelText: 'Password'),
                 obscureText: true,
-                validator: (v) => v != null && v.length >= 8 ? null : 'Min 8 chars',
+                validator: (v) =>
+                    v != null && v.length >= 8 ? null : 'Min 8 chars',
               ),
               const SizedBox(height: 16),
               ElevatedButton(

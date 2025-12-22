@@ -28,6 +28,8 @@ Route::middleware('api')->group(function (): void {
 
     // Devices & pairing
     Route::get('/devices', [DeviceController::class, 'index']);
+    Route::get('/devices/unpaired', [DeviceController::class, 'unpaired']);
+    Route::post('/devices/{device_id}/claim', [DeviceController::class, 'claim']);
     Route::get('/devices/{device_id}', [DeviceController::class, 'show']);
     Route::post('/devices/{device_id}/rename', [DeviceController::class, 'rename']);
     Route::post('/pair/init', [PairingController::class, 'init']);

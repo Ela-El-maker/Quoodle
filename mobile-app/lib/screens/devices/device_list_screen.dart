@@ -4,6 +4,7 @@ import '../../models/device.dart';
 import '../../services/api_service.dart';
 import '../pairing/qr_scan_screen.dart';
 import 'device_detail_screen.dart';
+import 'unpaired_devices_screen.dart';
 
 class DeviceListScreen extends StatefulWidget {
   const DeviceListScreen({super.key});
@@ -31,6 +32,13 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
         title: const Text('Devices'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.link),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const UnpairedDevicesScreen()),
+            ),
+          ),
+          IconButton(
             icon: const Icon(Icons.qr_code_scanner),
             onPressed: () => Navigator.pushNamed(context, QrScanScreen.route),
           ),
@@ -53,11 +61,13 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
               return ListTile(
                 leading: const Icon(Icons.computer),
                 title: Text(device.deviceName ?? device.deviceId),
-                subtitle: Text('State: ${device.lifecycleState} • Last seen: ${device.lastSeen ?? '-'}'),
+                subtitle: Text(
+                    'State: ${device.lifecycleState} • Last seen: ${device.lastSeen ?? '-'}'),
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => DeviceDetailScreen(deviceId: device.deviceId),
+                    builder: (_) =>
+                        DeviceDetailScreen(deviceId: device.deviceId),
                   ),
                 ),
               );

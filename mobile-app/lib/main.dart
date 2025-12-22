@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'services/mobile_identity_service.dart';
+import 'services/session_store.dart';
 import 'screens/alerts/alerts_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
@@ -11,7 +13,10 @@ import 'screens/pairing/qr_scan_screen.dart';
 import 'screens/telemetry/telemetry_view.dart';
 import 'screens/updates/update_list_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await SessionStore.init();
+  await MobileIdentityService().ensureKeypair();
   runApp(const SecureDeviceApp());
 }
 
@@ -26,7 +31,8 @@ class SecureDeviceApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
       ),
-      initialRoute: LoginScreen.route,
+      initialRoute:
+          SessionStore.isLoggedIn ? DeviceListScreen.route : LoginScreen.route,
       routes: {
         LoginScreen.route: (_) => const LoginScreen(),
         RegisterScreen.route: (_) => const RegisterScreen(),
@@ -44,20 +50,35 @@ class SecureDeviceApp extends StatelessWidget {
               ),
             );
           case DeviceDetailScreen.route:
-            final deviceId = (settings.arguments as Map<String, dynamic>?)?['device_id'] as String? ?? '';
-            return MaterialPageRoute(builder: (_) => DeviceDetailScreen(deviceId: deviceId));
+            final deviceId = (settings.arguments
+                    as Map<String, dynamic>?)?['device_id'] as String? ??
+                '';
+            return MaterialPageRoute(
+                builder: (_) => DeviceDetailScreen(deviceId: deviceId));
           case SendCommandScreen.route:
-            final deviceId = (settings.arguments as Map<String, dynamic>?)?['device_id'] as String? ?? '';
-            return MaterialPageRoute(builder: (_) => SendCommandScreen(deviceId: deviceId));
+            final deviceId = (settings.arguments
+                    as Map<String, dynamic>?)?['device_id'] as String? ??
+                '';
+            return MaterialPageRoute(
+                builder: (_) => SendCommandScreen(deviceId: deviceId));
           case TelemetryViewScreen.route:
-            final deviceId = (settings.arguments as Map<String, dynamic>?)?['device_id'] as String? ?? '';
-            return MaterialPageRoute(builder: (_) => TelemetryViewScreen(deviceId: deviceId));
+            final deviceId = (settings.arguments
+                    as Map<String, dynamic>?)?['device_id'] as String? ??
+                '';
+            return MaterialPageRoute(
+                builder: (_) => TelemetryViewScreen(deviceId: deviceId));
           case AlertsScreen.route:
-            final deviceId = (settings.arguments as Map<String, dynamic>?)?['device_id'] as String? ?? '';
-            return MaterialPageRoute(builder: (_) => AlertsScreen(deviceId: deviceId));
+            final deviceId = (settings.arguments
+                    as Map<String, dynamic>?)?['device_id'] as String? ??
+                '';
+            return MaterialPageRoute(
+                builder: (_) => AlertsScreen(deviceId: deviceId));
           case UpdateListScreen.route:
-            final deviceId = (settings.arguments as Map<String, dynamic>?)?['device_id'] as String? ?? '';
-            return MaterialPageRoute(builder: (_) => UpdateListScreen(deviceId: deviceId));
+            final deviceId = (settings.arguments
+                    as Map<String, dynamic>?)?['device_id'] as String? ??
+                '';
+            return MaterialPageRoute(
+                builder: (_) => UpdateListScreen(deviceId: deviceId));
         }
         return null;
       },

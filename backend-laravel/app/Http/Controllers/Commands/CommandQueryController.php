@@ -51,6 +51,12 @@ class CommandQueryController extends Controller
             'state' => $cmd->state,
             'queued_at' => optional($cmd->queued_at)?->toIso8601String(),
             'completed_at' => optional($cmd->completed_at)?->toIso8601String(),
+            'audit' => [
+                'server_seq' => $cmd->server_seq,
+                'request_sig' => $cmd->request_sig,
+                'envelope_sig' => $cmd->envelope_sig,
+                'envelope' => $cmd->envelope,
+            ],
             'result' => [
                 'status' => $result['status'] ?? null,
                 'notes' => $result['notes'] ?? null,

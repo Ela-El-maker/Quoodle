@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/api_service.dart';
+import '../../services/session_store.dart';
 import '../devices/device_list_screen.dart';
 import 'register_screen.dart';
 import 'twofa_screen.dart';
@@ -36,13 +37,29 @@ class _LoginScreenState extends State<LoginScreen> {
     final response = await _api.login(
       email: _emailController.text,
       password: _passwordController.text,
-      twoFactorCode: _twoFactorController.text.isEmpty ? null : _twoFactorController.text,
+      twoFactorCode:
+          _twoFactorController.text.isEmpty ? null : _twoFactorController.text,
       deviceFingerprint: 'mobile-fingerprint-placeholder',
       pushToken: null,
     );
+
+    final userId = response['user_id'] as String?;
+    final sessionId = response['session_id'] as String?;
+    final jwt = response['jwt'] as String?;
+    final refresh = response['refresh_token'] as String?;
+    if (userId != null && sessionId != null) {
+      await SessionStore.setAuth(
+          userId: userId,
+          sessionId: sessionId,
+          jwt: jwt,
+          refreshToken: refresh);
+    }
+
     if (mounted && response['two_factor_required'] == true) {
-      Navigator.pushReplacementNamed(context, TwoFAScreen.route,
-          arguments: {'user_id': response['user_id'], 'session_id': response['session_id']});
+      Navigator.pushReplacementNamed(context, TwoFAScreen.route, arguments: {
+        'user_id': response['user_id'],
+        'session_id': response['session_id']
+      });
     } else if (mounted) {
       Navigator.pushReplacementNamed(context, DeviceListScreen.route);
     }
@@ -63,17 +80,20 @@ class _LoginScreenState extends State<LoginScreen> {
               TextFormField(
                 controller: _emailController,
                 decoration: const InputDecoration(labelText: 'Email'),
-                validator: (v) => v != null && v.contains('@') ? null : 'Enter valid email',
+                validator: (v) =>
+                    v != null && v.contains('@') ? null : 'Enter valid email',
               ),
               TextFormField(
                 controller: _passwordController,
                 decoration: const InputDecoration(labelText: 'Password'),
                 obscureText: true,
-                validator: (v) => v != null && v.length >= 8 ? null : 'Min 8 chars',
+                validator: (v) =>
+                    v != null && v.length >= 8 ? null : 'Min 8 chars',
               ),
               TextFormField(
                 controller: _twoFactorController,
-                decoration: const InputDecoration(labelText: '2FA Code (if required)'),
+                decoration:
+                    const InputDecoration(labelText: '2FA Code (if required)'),
               ),
               const SizedBox(height: 16),
               SizedBox(
@@ -84,7 +104,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               TextButton(
-                onPressed: () => Navigator.pushNamed(context, RegisterScreen.route),
+                onPressed: () =>
+                    Navigator.pushNamed(context, RegisterScreen.route),
                 child: const Text('Create account'),
               ),
             ],
