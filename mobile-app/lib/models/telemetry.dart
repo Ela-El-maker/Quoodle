@@ -8,6 +8,7 @@ class TelemetrySnapshot {
     required this.networkTx,
     required this.networkRx,
     required this.riskScore,
+    required this.policyHash,
   });
 
   final String deviceId;
@@ -18,6 +19,7 @@ class TelemetrySnapshot {
   final String? networkTx;
   final String? networkRx;
   final num? riskScore;
+  final String? policyHash;
 
   factory TelemetrySnapshot.fromJson(Map<String, dynamic> json) {
     final metrics = json['metrics'] as Map<String, dynamic>? ?? {};
@@ -30,6 +32,7 @@ class TelemetrySnapshot {
       networkTx: metrics['network_tx'] as String?,
       networkRx: metrics['network_rx'] as String?,
       riskScore: metrics['risk_score'] as num?,
+      policyHash: metrics['policy_hash'] as String?,
     );
   }
 }

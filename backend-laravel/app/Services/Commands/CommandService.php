@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\CommandRegistry\Registry;
 use App\Services\Compliance\ComplianceChecker;
 use App\Services\PolicyEngine\PolicyEvaluator;
+use App\Services\Security\StateVerifier;
 use App\Services\Security\TOTPService;
 use Illuminate\Support\Str;
 
@@ -20,6 +21,7 @@ class CommandService
         private readonly ComplianceChecker $complianceChecker,
         private readonly FastAPIDispatcher $dispatcher,
         private readonly TOTPService $totp,
+        private readonly StateVerifier $stateVerifier,
     ) {
     }
 
@@ -99,6 +101,12 @@ class CommandService
             'status' => 'accepted',
             'execution_state' => 'queued',
         ]);
+
+        // Ground-truth loop: after sensitive commands, require telemetry to confirm policy sync.
+        if (! empty($payload['sensitive'])) {
+            $delay = (int) config('security.state_verify_delay_seconds', 10);
+            $this->stateVerifier->registerPolicyHashCheck($command, $device, $delay);
+        }
 
         // Async dispatch to avoid blocking the mobile/UI call path.
         DispatchCommandToFastApi::dispatch($command->id, $policy, $compliance);

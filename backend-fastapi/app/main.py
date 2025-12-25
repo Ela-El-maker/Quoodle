@@ -86,6 +86,11 @@ async def agent_ws(websocket: WebSocket):
         # Load device public key for signature verification.
         agent_pubkey_b64 = device_registry.get_pubkey_b64(device_id)
         if not agent_pubkey_b64:
+            # Fail-closed: do not authenticate, but allow the system to surface the device
+            # as "pending_pairing" in Laravel for discovery UX.
+            agent_info = payload.get("body", {}).get("agent_info", {}) or {}
+            agent_info["connected_at"] = iso_timestamp()
+            fire_and_forget(notify_device_online(device_id, "unpaired", agent_info))
             await websocket.send_json(build_auth_error(device_id, "AUTH_UNKNOWN_DEVICE", "Unknown device_id"))
             await websocket.close(code=4401)
             return
@@ -173,6 +178,7 @@ async def agent_ws(websocket: WebSocket):
                         await websocket.close(code=4400)
                         break
                     metrics = message.get("body", {}).get("metrics", {})
+                    policy_hash = message.get("body", {}).get("policy_hash")
                     risk = risk_scorer.score(metrics)
                     fire_and_forget(
                         forward_telemetry_summary(
@@ -180,6 +186,7 @@ async def agent_ws(websocket: WebSocket):
                             metrics,
                             message.get("timestamp", iso_timestamp()),
                             risk_score=risk,
+                            policy_hash=policy_hash if isinstance(policy_hash, str) else None,
                         )
                     )
                     continue

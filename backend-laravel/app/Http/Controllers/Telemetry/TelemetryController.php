@@ -24,6 +24,7 @@ class TelemetryController extends Controller
                 'network_tx' => null,
                 'network_rx' => null,
                 'risk_score' => null,
+                'policy_hash' => null,
             ],
         ]);
     }

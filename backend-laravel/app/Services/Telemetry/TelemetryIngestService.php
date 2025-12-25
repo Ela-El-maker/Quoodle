@@ -20,12 +20,14 @@ class TelemetryIngestService
                 'network_tx' => $rollup['avg_tx'] ?? null,
                 'network_rx' => $rollup['avg_rx'] ?? null,
                 'risk_score' => $rollup['risk_score_avg'] ?? null,
+                'policy_hash' => $rollup['policy_hash'] ?? null,
             ],
         ]);
 
         Device::where('device_id', $deviceId)->update([
             'last_seen' => now(),
             'risk_score' => $snapshot->metrics['risk_score'] ?? null,
+            'reported_policy_hash' => $snapshot->metrics['policy_hash'] ?? null,
         ]);
 
         return [

@@ -53,7 +53,13 @@ async def forward_command_ack(body: Dict[str, Any], device_id: str, timestamp: s
     await _post("command/ack", payload)
 
 
-async def forward_telemetry_summary(device_id: str, metrics: Dict[str, Any], timestamp: str, risk_score: float | None = None) -> None:
+async def forward_telemetry_summary(
+    device_id: str,
+    metrics: Dict[str, Any],
+    timestamp: str,
+    risk_score: float | None = None,
+    policy_hash: str | None = None,
+) -> None:
     try:
         def _percent(val: str | None) -> float | None:
             if not val:
@@ -70,6 +76,7 @@ async def forward_telemetry_summary(device_id: str, metrics: Dict[str, Any], tim
             "avg_disk": _percent(metrics.get("disk_usage")) or 0.0,
             "max_cpu": _percent(metrics.get("cpu")) or 0.0,
             "risk_score_avg": risk_score or 0.0,
+            "policy_hash": policy_hash,
         }
     except Exception:
         rollup = {
@@ -78,6 +85,7 @@ async def forward_telemetry_summary(device_id: str, metrics: Dict[str, Any], tim
             "avg_disk": 0.0,
             "max_cpu": 0.0,
             "risk_score_avg": 0.0,
+            "policy_hash": policy_hash,
         }
 
     payload = {

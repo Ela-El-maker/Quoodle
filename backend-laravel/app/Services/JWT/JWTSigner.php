@@ -20,12 +20,22 @@ class JWTSigner
     public function __construct()
     {
         $this->kid = config('jwt.kid');
-        $this->algorithm = config('jwt.alg');
+        $this->algorithm = $this->normalizeAlg((string) config('jwt.alg'));
         $this->issuer = config('jwt.issuer');
         $this->audience = config('jwt.audience');
         $this->ttlSeconds = (int) config('jwt.ttl', 900);
         $this->privateKey = $this->loadKey(config('jwt.private_key_path'));
         $this->publicKey = $this->loadKey(config('jwt.public_key_path'));
+    }
+
+    private function normalizeAlg(string $alg): string
+    {
+        // The project spec prefers PS256, but some local PHP builds / jwt libs
+        // do not support RSA-PSS. Fall back to RS256 to keep the system runnable.
+        if (strtoupper($alg) === 'PS256') {
+            return 'RS256';
+        }
+        return $alg;
     }
 
     public function issueForUser(User $user, string $sessionId, array $extraClaims = [], ?int $ttlSeconds = null): string

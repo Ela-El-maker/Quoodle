@@ -8,6 +8,9 @@ class Device {
     required this.osBuild,
     required this.complianceStatus,
     required this.riskScore,
+    required this.policyHash,
+    required this.reportedPolicyHash,
+    required this.policyInSync,
   });
 
   final String deviceId;
@@ -18,6 +21,9 @@ class Device {
   final String? osBuild;
   final String? complianceStatus;
   final num? riskScore;
+  final String? policyHash;
+  final String? reportedPolicyHash;
+  final bool? policyInSync;
 
   factory Device.fromJson(Map<String, dynamic> json) {
     return Device(
@@ -29,6 +35,9 @@ class Device {
       osBuild: json['os_build'] as String?,
       complianceStatus: json['compliance_status'] as String?,
       riskScore: json['risk_score'] as num?,
+      policyHash: json['policy_hash'] as String?,
+      reportedPolicyHash: json['reported_policy_hash'] as String?,
+      policyInSync: json['policy_in_sync'] as bool?,
     );
   }
 }

@@ -3,6 +3,7 @@
 namespace App\Services\Commands;
 
 use App\Models\Command;
+use App\Services\Audit\AuditArchiveWriter;
 use App\Services\Security\Ed25519CanonicalJson;
 use App\Services\Security\Ed25519Signer;
 use App\Services\Security\MonotonicCounter;
@@ -14,6 +15,7 @@ class FastAPIDispatcher
 {
     public function __construct(
         private readonly MonotonicCounter $counter,
+        private readonly AuditArchiveWriter $auditArchive,
     ) {
     }
 
@@ -76,6 +78,8 @@ class FastAPIDispatcher
             'envelope_sig' => $payload['envelope']['sig'],
             'request_sig' => $requestSig,
         ]);
+
+        $this->auditArchive->appendCommandEnvelope($command);
 
         $response = Http::acceptJson()
             ->withHeaders([

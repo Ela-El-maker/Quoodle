@@ -65,6 +65,7 @@ class PairingController extends Controller
             'device_name' => $cached['device_label'] ?? 'New Device',
             'lifecycle_state' => 'active',
             'compliance_status' => 'unknown',
+            'policy_hash' => (string) config('policy.master_hash'),
         ]);
 
         return response()->json([

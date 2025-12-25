@@ -35,8 +35,8 @@ class DevicePresenceWebhookController extends Controller
             'last_seen' => $data['connected_at'],
             'agent_version' => $data['agent_version'],
             'os_build' => $data['os_build'],
-            'policy_hash' => $device->policy_hash,
-            'lifecycle_state' => 'active',
+            'policy_hash' => $device->policy_hash ?: (string) config('policy.master_hash'),
+            'lifecycle_state' => $data['session_id'] === 'unpaired' ? 'pending_pairing' : 'active',
         ]);
 
         return response()->json(['status' => 'ack']);

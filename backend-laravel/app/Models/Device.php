@@ -25,6 +25,7 @@ class Device extends Model
         'agent_version',
         'os_build',
         'policy_hash',
+        'reported_policy_hash',
         'compliance_status',
         'risk_score',
     ];

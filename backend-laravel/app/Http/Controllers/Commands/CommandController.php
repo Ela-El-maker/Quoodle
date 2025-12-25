@@ -20,7 +20,8 @@ class CommandController extends Controller
             'client_message_id' => ['required', 'string', 'max:190'],
             'device_id' => ['required', 'string', 'max:190'],
             'method' => ['required', 'string', 'max:190'],
-            'params' => ['required', 'array'],
+            // Commands like lock_screen legitimately have an empty params object.
+            'params' => ['present', 'array'],
             'sensitive' => ['required', 'boolean'],
             'two_factor_code' => ['nullable', 'string', 'max:190'],
             'policy_hash' => ['nullable', 'string'],

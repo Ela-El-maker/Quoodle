@@ -144,6 +144,10 @@ def validate_heartbeat(payload: Dict[str, Any], expected_session: str) -> None:
     if "status" not in body:
         raise ValueError("Heartbeat body.status required")
 
+    # Optional policy anchor (agent-reported hash of currently enforced policy bundle).
+    if "policy_hash" in body and body.get("policy_hash") is not None and not isinstance(body.get("policy_hash"), str):
+        raise ValueError("Heartbeat body.policy_hash must be a string")
+
 
 def validate_telemetry(payload: Dict[str, Any], expected_session: str) -> None:
     required_fields = ["type", "from", "device_id", "message_id", "body", "sig", "session_id", "timestamp"]
@@ -162,6 +166,10 @@ def validate_telemetry(payload: Dict[str, Any], expected_session: str) -> None:
     body = payload.get("body") or {}
     if "metrics" not in body or "telemetry_scope" not in body or "timestamp" not in body:
         raise ValueError("Telemetry body missing required fields")
+
+    # Optional policy anchor.
+    if "policy_hash" in body and body.get("policy_hash") is not None and not isinstance(body.get("policy_hash"), str):
+        raise ValueError("Telemetry body.policy_hash must be a string")
     metrics = body.get("metrics") or {}
     for field in ["cpu", "ram", "disk_usage", "network_tx", "network_rx"]:
         if field not in metrics:

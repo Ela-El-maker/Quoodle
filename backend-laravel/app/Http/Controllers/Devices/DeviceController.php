@@ -124,6 +124,10 @@ class DeviceController extends Controller
 
         $latestTelemetry = TelemetrySnapshot::where('device_id', $device_id)->orderByDesc('timestamp')->first();
 
+        $reportedPolicyHash = is_array($latestTelemetry?->metrics) ? ($latestTelemetry->metrics['policy_hash'] ?? null) : null;
+        $expectedPolicyHash = $device->policy_hash;
+        $policyInSync = ! empty($expectedPolicyHash) && ! empty($reportedPolicyHash) && $expectedPolicyHash === $reportedPolicyHash;
+
         return response()->json([
             'device_id' => $device->device_id,
             'device_name' => $device->device_name,
@@ -133,6 +137,8 @@ class DeviceController extends Controller
             'agent_version' => $device->agent_version,
             'os_build' => $device->os_build,
             'policy_hash' => $device->policy_hash,
+            'reported_policy_hash' => $device->reported_policy_hash,
+            'policy_in_sync' => $policyInSync,
             'compliance' => [
                 'status' => $device->compliance_status ?? 'unknown',
                 'last_evaluated_at' => optional($device->updated_at)?->toIso8601String(),
@@ -143,12 +149,14 @@ class DeviceController extends Controller
                 'ram' => $latestTelemetry->metrics['ram'] ?? null,
                 'disk_usage' => $latestTelemetry->metrics['disk_usage'] ?? null,
                 'risk_score' => $latestTelemetry->metrics['risk_score'] ?? null,
+                'policy_hash' => $latestTelemetry->metrics['policy_hash'] ?? null,
                 'timestamp' => optional($latestTelemetry->timestamp)?->toIso8601String(),
             ] : [
                 'cpu' => null,
                 'ram' => null,
                 'disk_usage' => null,
                 'risk_score' => null,
+                'policy_hash' => null,
                 'timestamp' => null,
             ],
         ]);

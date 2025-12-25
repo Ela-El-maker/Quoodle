@@ -88,11 +88,36 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           final device = snapshot.data!;
+          final expected = device.policyHash;
+          final reported = device.reportedPolicyHash ?? _telemetry?.policyHash;
+          final outOfSync = (device.policyInSync == false) ||
+              (expected != null &&
+                  expected.isNotEmpty &&
+                  reported != null &&
+                  reported.isNotEmpty &&
+                  expected != reported);
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
               Text(device.deviceName ?? device.deviceId,
                   style: Theme.of(context).textTheme.headlineSmall),
+              if (outOfSync)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8, bottom: 8),
+                  child: Material(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        'Policy Out of Sync: device is reporting a different policy hash than the server expects.',
+                        style: TextStyle(
+                            color:
+                                Theme.of(context).colorScheme.onErrorContainer),
+                      ),
+                    ),
+                  ),
+                ),
               Text('State: ${device.lifecycleState}'),
               Text('Agent: ${device.agentVersion ?? 'n/a'}'),
               Text('OS: ${device.osBuild ?? 'n/a'}'),
