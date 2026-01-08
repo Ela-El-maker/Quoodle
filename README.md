@@ -1,4 +1,4 @@
-# 📘 **Secure Device Control System — README.md**
+# 📘 **Secure Device Control System — Ferov**
 
 ### *Full Architecture • Trust Model • Repository Structure • Runtime Flows • Development Roadmap*
 
