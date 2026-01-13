@@ -54,6 +54,23 @@ FetchContent_Declare(
   GIT_TAG v3.12.0
 )
 
+# SQLite3 for persistent queue
+find_package(SQLite3)
+if(NOT SQLite3_FOUND)
+  FetchContent_Declare(
+    sqlite3
+    URL https://www.sqlite.org/2024/sqlite-amalgamation-3450100.zip
+  )
+  FetchContent_MakeAvailable(sqlite3)
+  add_library(sqlite3_lib STATIC ${sqlite3_SOURCE_DIR}/sqlite3.c)
+  target_include_directories(sqlite3_lib PUBLIC ${sqlite3_SOURCE_DIR})
+  set(SQLITE3_LIB sqlite3_lib)
+  set(SQLITE3_INCLUDE_DIR ${sqlite3_SOURCE_DIR})
+else()
+  set(SQLITE3_LIB SQLite::SQLite3)
+  set(SQLITE3_INCLUDE_DIR ${SQLite3_INCLUDE_DIRS})
+endif()
+
 FetchContent_MakeAvailable(ixwebsocket)
 FetchContent_MakeAvailable(nlohmann_json)
 
@@ -77,10 +94,11 @@ add_executable(agent
   src/utils/sha256.cpp
   src/kernel/ioctl_client.cpp
   src/utils/dpapi_loader.cpp
+  src/storage/sqlite_queue.cpp
 )
 
-target_include_directories(agent PRIVATE src)
-target_link_libraries(agent PRIVATE ixwebsocket::ixwebsocket nlohmann_json::nlohmann_json)
+target_include_directories(agent PRIVATE src ${SQLITE3_INCLUDE_DIR})
+target_link_libraries(agent PRIVATE ixwebsocket::ixwebsocket nlohmann_json::nlohmann_json ${SQLITE3_LIB})
 # Link Windows-specific system libraries used by telemetry and networking
 if(WIN32)
   target_link_libraries(agent PRIVATE pdh iphlpapi crypt32)
@@ -155,10 +173,19 @@ if(HAVE_SODIUM)
   target_compile_definitions(e2e_signature_chain_test PRIVATE HAVE_SODIUM=1)
 endif()
 
+# Task 2.4: SQLite queue unit tests
+add_executable(sqlite_queue_test
+  tests/unit/sqlite_queue_test.cpp
+  src/storage/sqlite_queue.cpp
+)
+target_include_directories(sqlite_queue_test PRIVATE src ${SQLITE3_INCLUDE_DIR})
+target_link_libraries(sqlite_queue_test PRIVATE ${SQLITE3_LIB})
+
 include(CTest)
 enable_testing()
 add_test(NAME ioctl_integration_test COMMAND ioctl_integration_test)
 add_test(NAME ioctl_signed_test COMMAND ioctl_signed_test)
 add_test(NAME ws_protocol_signing_test COMMAND ws_protocol_signing_test)
 add_test(NAME e2e_signature_chain_test COMMAND e2e_signature_chain_test)
+add_test(NAME sqlite_queue_test COMMAND sqlite_queue_test)
 
