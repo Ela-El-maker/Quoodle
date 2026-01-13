@@ -1,0 +1,36 @@
+version: "3.9"
+services:
+  laravel:
+    build: ./docker/laravel
+    ports:
+      - "8080:80"
+    environment:
+      - APP_ENV=local
+      - FASTAPI_BASE_URL=http://fastapi:8000/api/v1
+    depends_on:
+      - mysql
+      - redis
+  fastapi:
+    build: ./docker/fastapi
+    ports:
+      - "8000:8000"
+    environment:
+      - LARAVEL_WEBHOOK_BASE=http://laravel/api/v1/webhook
+      - REDIS_HOST=redis
+    depends_on:
+      - redis
+  agent:
+    build: ./docker/agent
+    environment:
+      - AGENT_ENDPOINT=ws://fastapi:8000/agent
+  mobile:
+    build: ./docker/mobile
+  redis:
+    image: redis:7-alpine
+  mysql:
+    image: mysql:8.4
+    environment:
+      - MYSQL_DATABASE=secure_device
+      - MYSQL_ROOT_PASSWORD=devpassword
+    ports:
+      - "3306:3306"

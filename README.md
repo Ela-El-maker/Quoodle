@@ -1,8 +1,211 @@
-# 📘 **Secure Device Control System — Ferov**
+# 📘 **Quoodle**
 
-### *Full Architecture • Trust Model • Repository Structure • Runtime Flows • Development Roadmap*
+### _Full Architecture • Trust Model • Repository Structure • Runtime Flows • Development Roadmap_
+
+# **Quoodle Project Naming & Structure Convention (Full)**
+
+## **1️⃣ Platform Root Name**
+
+- **Name:** `Quoodle`
+- **Rule:** This is the **umbrella / ecosystem / platform name**.
+- **Never add adjectives, suffixes, or tech info.**
+- **Example:** `Quoodle` (project root, repo name, company/research identity)
 
 ---
+
+## **2️⃣ Component Naming**
+
+**Pattern:**
+
+```
+quoodle-<role>[-<scope>]
+```
+
+Where:
+
+- `<role>` = one-word description of the component’s **function or authority**
+- `<scope>` = optional, only if it specifies platform/environment (windows, mobile, dev, prod)
+
+**Rules:**
+
+- Lowercase
+- Kebab-case (`-` instead of `_`)
+- No framework or tech in name (e.g., no `laravel` or `fastapi`)
+- Never use adjectives like “secure” or “new”
+
+---
+
+### **Roles Table**
+
+| Role Type               | Example Name             | What it Means                                        |
+| ----------------------- | ------------------------ | ---------------------------------------------------- |
+| Control / Governance    | `quoodle-control-plane`  | Manages users, policies, audit logs, CA, trust model |
+| Transport / Gateway     | `quoodle-gateway`        | WSS/real-time message routing between mobile ↔ agent |
+| Execution / Enforcement | `quoodle-agent-windows`  | User-mode agent running on target device             |
+| Execution / Enforcement | `quoodle-kernel-guard`   | Privileged kernel service handling sensitive ops     |
+| Client / Intent         | `quoodle-mobile-client`  | Mobile Flutter app, scans QR, issues commands        |
+| Client / Intent         | `quoodle-desktop-client` | Optional future desktop app                          |
+| Support / Infra         | `quoodle-infra`          | Terraform, Docker, K8s scripts                       |
+| Support / Dev tools     | `quoodle-tools`          | Utility scripts, analysis tools                      |
+| Support / Automation    | `quoodle-scripts`        | Automation scripts for building/testing              |
+
+---
+
+### **Scope Suffixes (Optional)**
+
+Use **only for platform or environment distinction**, never for adjectives:
+
+| Scope   | Meaning                                 |
+| ------- | --------------------------------------- |
+| windows | Windows agent or binaries               |
+| linux   | Linux agent or binaries                 |
+| mobile  | Mobile client (Flutter / iOS / Android) |
+| dev     | Development environment                 |
+| prod    | Production environment                  |
+
+**Example:**
+
+- `quoodle-agent-windows` → Windows target agent
+- `quoodle-gateway-dev` → Development WSS gateway
+
+---
+
+## **3️⃣ Repository / Folder Naming**
+
+**Rule:** Match component naming exactly:
+
+```
+quoodle-<role>[-<scope>]
+```
+
+**Apply to your current tree:**
+
+| Current         | New Name                                     |
+| --------------- | -------------------------------------------- |
+| backend-laravel | quoodle-control-plane                        |
+| backend-fastapi | quoodle-gateway                              |
+| windows-agent   | quoodle-agent-windows                        |
+| kernel-service  | quoodle-kernel-guard                         |
+| mobile-app      | quoodle-mobile-client                        |
+| mira            | experiments/mira OR quoodle-mobile-client-v2 |
+| infrastructure  | quoodle-infra                                |
+| tools           | quoodle-tools                                |
+| scripts         | quoodle-scripts                              |
+
+---
+
+## **4️⃣ Binary / Executable Naming**
+
+- Pattern: `<role>[-<scope>]`
+- Lowercase, no spaces
+- Include version in filename if necessary
+
+**Examples:**
+
+```
+quoodle-agent-windows-v1.0.0.exe
+quoodle-kernel-guard-v1.0.0.sys
+quoodle-mobile-client-v1.0.0.apk
+quoodle-gateway-v1.0.0
+```
+
+---
+
+## **5️⃣ Protocol / Spec Naming**
+
+**Pattern:**
+
+```
+quoodle-<component>-<protocol>-v<major>
+```
+
+**Examples:**
+
+```
+quoodle-wss-gateway-v1.json
+quoodle-agent-kernel-ioctl-v1.json
+quoodle-pairing-protocol-v1.json
+quoodle-ota-pipeline-v1.json
+```
+
+**Rules:**
+
+- Use `v<number>` for versioning of protocol or spec
+- Do not include component framework or tech
+- Keep JSON, Markdown, or YAML extension as appropriate
+
+---
+
+## **6️⃣ Release / OTA Tracks**
+
+**Pattern:**
+
+```
+track/<release-name>
+```
+
+- Can be creative, because this is internal only
+- Examples:
+
+```
+track/atlas
+track/helios
+track/experimental
+```
+
+- Rule: Do not use these names in architecture diagrams or repo names
+
+---
+
+## **7️⃣ Docs Naming**
+
+- All docs in `docs/` folder
+- Pattern: `docs/<type>/<component>/<name>.md|json`
+
+**Example Tree:**
+
+```
+docs/specs/quoodle-wss-gateway-v1.json
+docs/architecture/quoodle-control-plane.md
+docs/security/quoodle-audit-chain.md
+docs/policy/quoodle-policy-bundle.md
+```
+
+- Use version numbers for protocol / spec files, not for architecture docs
+- Markdown only for human-readable explanations
+
+---
+
+## **8️⃣ Internal / Experimental Code**
+
+- Use `experiments/` for code that is not production-ready or is temporary
+- Examples:
+
+```
+experiments/mira
+experiments/mobile-ui-test
+```
+
+- Do not mix experiments with main components
+
+---
+
+## **9️⃣ Versioning**
+
+- Only version **protocols, binaries, and specs**
+- Do not version folders or repo names
+- Example:
+
+```
+quoodle-agent-windows-v1.0.0.exe
+quoodle-pairing-protocol-v1.json
+```
+
+---
+
+## **10️⃣ Summary / One-Sentence Rule for Everything**
+
+> **Name by what it does, not by what it’s written in. Prefix with `quoodle-`. Only add scope if it specifies platform/environment. Everything else lives in experiments.**
 
 ## 🧭 **1. Overview**
 
@@ -29,13 +232,13 @@ The system enforces **strong cryptographic identity**, **strict command validati
 
 The architecture is designed around:
 
-* **Strict trust boundaries**
-* **End-to-end canonical JSON + Ed25519 signatures**
-* **JWT-based identity with KID rotation**
-* **Device certificates issued by intermediate CA**
-* **Secure IOCTL requests to KernelService**
-* **Short-lived, tamper-evident audit logs**
-* **Policy evaluation at 3 layers**: Laravel → FastAPI → Agent
+- **Strict trust boundaries**
+- **End-to-end canonical JSON + Ed25519 signatures**
+- **JWT-based identity with KID rotation**
+- **Device certificates issued by intermediate CA**
+- **Secure IOCTL requests to KernelService**
+- **Short-lived, tamper-evident audit logs**
+- **Policy evaluation at 3 layers**: Laravel → FastAPI → Agent
 
 Security is treated as **a first-class subsystem**, not an afterthought.
 
@@ -144,13 +347,13 @@ Below is the authoritative high-level summary across all JSON specs.
 
 ### **6.3 Authentication & Presence**
 
-* Agent sends `AUTH` message signed with device cert
-* FastAPI validates → assigns `session_id`
-* Agent starts:
+- Agent sends `AUTH` message signed with device cert
+- FastAPI validates → assigns `session_id`
+- Agent starts:
 
-  * Heartbeat
-  * Telemetry streaming
-  * Policy synchronization
+  - Heartbeat
+  - Telemetry streaming
+  - Policy synchronization
 
 Presence is tracked via Redis TTL.
 
@@ -167,20 +370,23 @@ Sequence:
 1. Mobile sends command
 2. Laravel:
 
-   * Validates user
-   * Evaluates policy
-   * Signs command
-   * Enqueues to Redis
+   - Validates user
+   - Evaluates policy
+   - Signs command
+   - Enqueues to Redis
+
 3. FastAPI:
 
-   * Verifies signature
-   * Checks device presence
-   * Sends COMMAND_DELIVERY via WSS
+   - Verifies signature
+   - Checks device presence
+   - Sends COMMAND_DELIVERY via WSS
+
 4. Agent:
 
-   * Validates signature, policy, TTL
-   * ACKs command
-   * Calls KernelService via IOCTL
+   - Validates signature, policy, TTL
+   - ACKs command
+   - Calls KernelService via IOCTL
+
 5. KernelService executes opcode and returns signed result
 6. Agent returns `COMMAND_RESULT` to FastAPI
 7. FastAPI → Laravel → Mobile notifications
@@ -190,13 +396,13 @@ Sequence:
 
 ### **6.5 Telemetry Flow**
 
-* Agent sends periodic metrics: CPU, RAM, DISK, NET, risk indicators
-* FastAPI ingests → Redis streams → Analytics workers → MySQL
-* Alerts forwarded to:
+- Agent sends periodic metrics: CPU, RAM, DISK, NET, risk indicators
+- FastAPI ingests → Redis streams → Analytics workers → MySQL
+- Alerts forwarded to:
 
-  * Mobile
-  * Agent
-  * Admin dashboard
+  - Mobile
+  - Agent
+  - Admin dashboard
 
 ---
 
@@ -206,11 +412,12 @@ Sequence:
 2. FastAPI announces update
 3. Agent performs:
 
-   * Precheck
-   * Download
-   * Verify manifest signature
-   * `STAGE_UPDATE` → KernelService
-   * `COMMIT_UPDATE` + optional reboot
+   - Precheck
+   - Download
+   - Verify manifest signature
+   - `STAGE_UPDATE` → KernelService
+   - `COMMIT_UPDATE` + optional reboot
+
 4. Post-install report flows upward to dashboard
 
 ---
@@ -219,17 +426,17 @@ Sequence:
 
 Policies enforced at 3 layers:
 
-* **Laravel (primary, authoritative)**
-* **FastAPI (secondary routing checks)**
-* **Agent (local last-line enforcement)**
+- **Laravel (primary, authoritative)**
+- **FastAPI (secondary routing checks)**
+- **Agent (local last-line enforcement)**
 
 Compliance engine periodically verifies:
 
-* Agent version
-* OS build
-* Certificate validity
-* Policy hash correctness
-* Tamper checks
+- Agent version
+- OS build
+- Certificate validity
+- Policy hash correctness
+- Tamper checks
 
 Alerts generated if any violation occurs.
 
@@ -241,79 +448,79 @@ Alerts generated if any violation occurs.
 
 Handles:
 
-* JWT & JWKS
-* User auth
-* Certificate Authority operations
-* Device pairing APIs
-* Policy engine
-* Command ingestion (signed envelopes)
-* OTA release management
-* Audit chain
-* Dashboard logic
+- JWT & JWKS
+- User auth
+- Certificate Authority operations
+- Device pairing APIs
+- Policy engine
+- Command ingestion (signed envelopes)
+- OTA release management
+- Audit chain
+- Dashboard logic
 
 ### **7.2 backend-fastapi**
 
 Provides:
 
-* WebSocket controller
-* Device real-time routing
-* Telemetry ingestion
-* Command dispatcher
-* OTA distribution backend
-* Presence tracker
-* Queue workers (DLQ, analytics, alerts)
+- WebSocket controller
+- Device real-time routing
+- Telemetry ingestion
+- Command dispatcher
+- OTA distribution backend
+- Presence tracker
+- Queue workers (DLQ, analytics, alerts)
 
 ### **7.3 windows-agent (C++)**
 
 Implements:
 
-* WSS client (TLS 1.3)
-* Command queue
-* Signature verification
-* Policy caching
-* Telemetry collector
-* IOCTL interface to KernelService
+- WSS client (TLS 1.3)
+- Command queue
+- Signature verification
+- Policy caching
+- Telemetry collector
+- IOCTL interface to KernelService
 
 ### **7.4 kernel-service (C/C++)**
 
 Privileged executor for:
 
-* System control (lock, reboot, shutdown)
-* Process enumeration
-* Attestation & tamper checks
-* Update staging and commit
-* Strict signature/param validation
+- System control (lock, reboot, shutdown)
+- Process enumeration
+- Attestation & tamper checks
+- Update staging and commit
+- Strict signature/param validation
 
 ### **7.5 mobile-app (Flutter)**
 
 User UI for:
 
-* Registration
-* Device pairing
-* Command interface
-* Live telemetry
-* Alerts/logs
-* Updates & compliance status
+- Registration
+- Device pairing
+- Command interface
+- Live telemetry
+- Alerts/logs
+- Updates & compliance status
 
 ### **7.6 infrastructure**
 
 Contains:
 
-* Docker images
-* Kubernetes manifests
-* Terraform modules
-* GitHub Actions CI/CD
-* Monitoring stack (Prometheus + Grafana)
+- Docker images
+- Kubernetes manifests
+- Terraform modules
+- GitHub Actions CI/CD
+- Monitoring stack (Prometheus + Grafana)
 
 ### **7.7 docs**
 
 Single source of truth for:
 
-* Specs
-* Sequence diagrams
-* Protocol definitions
-* Threat modeling
-* Onboarding & training materials
+- Specs
+- Sequence diagrams
+- Protocol definitions
+- Threat modeling
+- Onboarding & training materials
 
 ---
 
@@ -321,24 +528,24 @@ Single source of truth for:
 
 ### **Unit tests**
 
-* Laravel: Services, Auth, PolicyEvaluator, CA
-* FastAPI: WSS handlers, signature validation, queue workers
-* Agent: signature logic, queue logic, IOCTL parser
-* KernelService: opcode validation, attestation logic
+- Laravel: Services, Auth, PolicyEvaluator, CA
+- FastAPI: WSS handlers, signature validation, queue workers
+- Agent: signature logic, queue logic, IOCTL parser
+- KernelService: opcode validation, attestation logic
 
 ### **Integration tests**
 
-* Full command round trip
-* OTA update simulation
-* Pairing sequence
-* Policy update + enforcement
-* Failure cases (device offline, invalid signature, expired TTL)
+- Full command round trip
+- OTA update simulation
+- Pairing sequence
+- Policy update + enforcement
+- Failure cases (device offline, invalid signature, expired TTL)
 
 ### **End-to-End tests**
 
-* Local environment via Docker Compose
-* Synthetic devices + mock KernelService
-* Chaos testing (network dropout, backpressure, failures)
+- Local environment via Docker Compose
+- Synthetic devices + mock KernelService
+- Chaos testing (network dropout, backpressure, failures)
 
 ---
 
@@ -368,10 +575,10 @@ A detailed version exists in `Development Flow.md`.
 
 This repository contains:
 
-* Complete architecture documentation
-* Complete JSON specifications
-* Complete development plan
-* Production-grade folder skeleton for every repo
+- Complete architecture documentation
+- Complete JSON specifications
+- Complete development plan
+- Production-grade folder skeleton for every repo
 
 **Next step:** begin Phase 0 — scaffold the monorepo, create folders, and initialize each repo.
 
@@ -382,8 +589,8 @@ This repository contains:
 This is an academic simulation and open for improvement.
 Please follow:
 
-* `docs/onboarding/contribution_guide.md`
-* Format all code with Prettier, PHP-CS-Fixer, Black, or clang-format depending on repo
-* Sign-off commits if contributing to core protocols
+- `docs/onboarding/contribution_guide.md`
+- Format all code with Prettier, PHP-CS-Fixer, Black, or clang-format depending on repo
+- Sign-off commits if contributing to core protocols
 
 # ferov

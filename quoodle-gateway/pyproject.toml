@@ -1,0 +1,9 @@
+[project]
+name = "secure-device-control-fastapi"
+version = "0.1.0"
+description = "FastAPI controller for Secure Device Control"
+requires-python = ">=3.11"
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
