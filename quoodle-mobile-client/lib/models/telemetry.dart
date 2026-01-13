@@ -35,6 +35,22 @@ class TelemetrySnapshot {
       policyHash: metrics['policy_hash'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'device_id': deviceId,
+      'timestamp': timestamp,
+      'metrics': {
+        'cpu': cpu,
+        'ram': ram,
+        'disk_usage': diskUsage,
+        'network_tx': networkTx,
+        'network_rx': networkRx,
+        'risk_score': riskScore,
+        'policy_hash': policyHash,
+      },
+    };
+  }
 }
 
 class TelemetryPoint {

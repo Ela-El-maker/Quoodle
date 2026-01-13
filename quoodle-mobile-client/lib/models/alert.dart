@@ -28,4 +28,16 @@ class AlertItem {
       acknowledged: json['acknowledged'] as bool? ?? false,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'alert_id': alertId,
+      'device_id': deviceId,
+      'severity': severity,
+      'category': category,
+      'message': message,
+      'timestamp': timestamp,
+      'acknowledged': acknowledged,
+    };
+  }
 }

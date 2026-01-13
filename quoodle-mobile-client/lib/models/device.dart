@@ -40,4 +40,20 @@ class Device {
       policyInSync: json['policy_in_sync'] as bool?,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'device_id': deviceId,
+      'device_name': deviceName,
+      'lifecycle_state': lifecycleState,
+      'last_seen': lastSeen,
+      'agent_version': agentVersion,
+      'os_build': osBuild,
+      'compliance_status': complianceStatus,
+      'risk_score': riskScore,
+      'policy_hash': policyHash,
+      'reported_policy_hash': reportedPolicyHash,
+      'policy_in_sync': policyInSync,
+    };
+  }
 }
