@@ -93,6 +93,9 @@ private:
     // Internal JSON parsing
     KernelExecResult parse_result_from_json(const std::string &json);
 
+    // Parse and verify kernel response signature
+    KernelExecResult parse_and_verify_response(const std::string &json, const std::string &request_id);
+
     // Build canonical payload for signing (fields in lexicographic order)
     std::string build_canonical_payload(const std::string &request_id, const std::string &timestamp,
                                         const std::string &opcode, const std::string &params,

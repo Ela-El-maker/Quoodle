@@ -2,6 +2,8 @@
 #include "../agent_state.hpp"
 #include "../crypto/ed25519_sign.hpp"
 #include "../crypto/json_canonicalizer.hpp"
+#include "../crypto/kernel_response_verifier.hpp"
+#include "../logging/logger.hpp"
 #include "../utils/time_utils.hpp"
 
 #include <random>
@@ -22,6 +24,16 @@
 // Thread-safe sequence counter
 static std::mutex s_sequence_mutex;
 static std::uint64_t s_sequence_counter{0};
+
+// Environment variable to control kernel response signature verification (default: enabled)
+static bool is_kernel_response_verification_required()
+{
+    const char *env = std::getenv("AGENT_REQUIRE_KERNEL_SIGNATURE");
+    // Default to enabled (1) unless explicitly disabled
+    if (!env)
+        return true;
+    return std::string(env) != "0";
+}
 
 /*
  * PRIVATE HELPER: run_kernel_service_once
@@ -163,8 +175,44 @@ KernelExecResult IoctlClient::parse_result_from_json(const std::string &json)
   resp.result = extract_json_string(json, "result");
   resp.error_message = extract_json_string(json, "error_message");
   resp.error_code = extract_json_int(json, "error_code");
+  // Try both 'sig' and 'signature' field names
   resp.sig = extract_json_string(json, "sig");
+  if (resp.sig.empty())
+  {
+    resp.sig = extract_json_string(json, "signature");
+  }
   return resp;
+}
+
+/**
+ * Verify kernel response signature.
+ * Returns true if verification passes or is disabled.
+ * If verification fails, modifies resp to indicate the error.
+ */
+static bool verify_kernel_response_signature(const std::string &json, KernelExecResult &resp)
+{
+  if (!is_kernel_response_verification_required())
+  {
+    Logger::log(LogLevel::Debug, "Kernel response signature verification disabled");
+    return true;
+  }
+
+  auto verify_result = crypto::verify_kernel_response(json, "");
+  if (!verify_result.valid)
+  {
+    Logger::log(LogLevel::Warn, "Kernel response signature verification failed: " +
+                                verify_result.error_code + " - " + verify_result.error_message);
+    
+    // Preserve the request_id but mark as verification failure
+    resp.status = "error";
+    resp.error_code = 2001; // SIGNATURE_INVALID per KernelErrorCodes
+    resp.error_message = "kernel_signature_" + verify_result.error_code;
+    resp.result = "";
+    return false;
+  }
+
+  Logger::log(LogLevel::Debug, "Kernel response signature verified successfully");
+  return true;
 }
 
 std::uint64_t IoctlClient::next_sequence()
@@ -276,6 +324,26 @@ static KernelExecResult make_error(const std::string &request_id, int code, cons
 }
 
 /**
+ * Helper to parse and verify kernel response.
+ * If verification is enabled and fails, returns error result.
+ */
+KernelExecResult IoctlClient::parse_and_verify_response(const std::string &json, const std::string &request_id)
+{
+  KernelExecResult resp = parse_result_from_json(json);
+  
+  // Verify signature if enabled
+  if (!verify_kernel_response_signature(json, resp))
+  {
+    // resp has already been modified by verify_kernel_response_signature
+    // but ensure request_id is preserved
+    resp.request_id = request_id;
+    return resp;
+  }
+  
+  return resp;
+}
+
+/**
  * PUBLIC API: lock_screen
  */
 KernelExecResult IoctlClient::lock_screen(const std::string &request_id, const AgentState &state,
@@ -284,7 +352,7 @@ KernelExecResult IoctlClient::lock_screen(const std::string &request_id, const A
   std::string json = execute_request("EXEC_LOCK_SCREEN", request_id, "{}", state, command_message_id);
   if (json.empty())
     return make_error(request_id, -1, "ipc_failure");
-  return parse_result_from_json(json);
+  return parse_and_verify_response(json, request_id);
 }
 
 /**
@@ -296,7 +364,7 @@ KernelExecResult IoctlClient::ping(const std::string &request_id, const AgentSta
   std::string json = execute_request("ping", request_id, "{}", state, command_message_id);
   if (json.empty())
     return make_error(request_id, -1, "ipc_failure");
-  return parse_result_from_json(json);
+  return parse_and_verify_response(json, request_id);
 }
 
 /**
@@ -308,7 +376,7 @@ KernelExecResult IoctlClient::reboot(const std::string &request_id, const AgentS
   std::string json = execute_request("EXEC_REBOOT", request_id, "{}", state, command_message_id);
   if (json.empty())
     return make_error(request_id, -1, "ipc_failure");
-  return parse_result_from_json(json);
+  return parse_and_verify_response(json, request_id);
 }
 
 /**
@@ -320,7 +388,7 @@ KernelExecResult IoctlClient::shutdown(const std::string &request_id, const Agen
   std::string json = execute_request("EXEC_SHUTDOWN", request_id, "{}", state, command_message_id);
   if (json.empty())
     return make_error(request_id, -1, "ipc_failure");
-  return parse_result_from_json(json);
+  return parse_and_verify_response(json, request_id);
 }
 
 /**
@@ -332,7 +400,7 @@ KernelExecResult IoctlClient::logout(const std::string &request_id, const AgentS
   std::string json = execute_request("EXEC_LOGOUT", request_id, "{}", state, command_message_id);
   if (json.empty())
     return make_error(request_id, -1, "ipc_failure");
-  return parse_result_from_json(json);
+  return parse_and_verify_response(json, request_id);
 }
 
 /**
@@ -344,7 +412,7 @@ KernelExecResult IoctlClient::collect_system_info(const std::string &request_id,
   std::string json = execute_request("COLLECT_SYSTEM_INFO", request_id, "{}", state, command_message_id);
   if (json.empty())
     return make_error(request_id, -1, "ipc_failure");
-  return parse_result_from_json(json);
+  return parse_and_verify_response(json, request_id);
 }
 
 /**
@@ -356,7 +424,7 @@ KernelExecResult IoctlClient::get_process_list(const std::string &request_id, co
   std::string json = execute_request("GET_PROCESS_LIST", request_id, "{}", state, command_message_id);
   if (json.empty())
     return make_error(request_id, -1, "ipc_failure");
-  return parse_result_from_json(json);
+  return parse_and_verify_response(json, request_id);
 }
 
 /**
@@ -370,7 +438,7 @@ KernelExecResult IoctlClient::validate_update_package(const std::string &request
   std::string json = execute_request("VALIDATE_UPDATE_PACKAGE", request_id, params, state, command_message_id);
   if (json.empty())
     return make_error(request_id, -1, "ipc_failure");
-  return parse_result_from_json(json);
+  return parse_and_verify_response(json, request_id);
 }
 
 /**
@@ -385,7 +453,7 @@ KernelExecResult IoctlClient::stage_update(const std::string &request_id, const 
   std::string json = execute_request("STAGE_UPDATE", request_id, params, state, command_message_id);
   if (json.empty())
     return make_error(request_id, -1, "ipc_failure");
-  return parse_result_from_json(json);
+  return parse_and_verify_response(json, request_id);
 }
 
 /**
@@ -397,7 +465,7 @@ KernelExecResult IoctlClient::commit_update(const std::string &request_id, const
   std::string json = execute_request("COMMIT_UPDATE", request_id, "{}", state, command_message_id);
   if (json.empty())
     return make_error(request_id, -1, "ipc_failure");
-  return parse_result_from_json(json);
+  return parse_and_verify_response(json, request_id);
 }
 
 /**
@@ -411,7 +479,7 @@ KernelExecResult IoctlClient::rollback_update(const std::string &request_id, con
   std::string json = execute_request("ROLLBACK_UPDATE", request_id, params, state, command_message_id);
   if (json.empty())
     return make_error(request_id, -1, "ipc_failure");
-  return parse_result_from_json(json);
+  return parse_and_verify_response(json, request_id);
 }
 
 /**
@@ -423,7 +491,7 @@ KernelExecResult IoctlClient::run_attestation(const std::string &request_id, con
   std::string json = execute_request("RUN_ATTESTATION", request_id, "{}", state, command_message_id);
   if (json.empty())
     return make_error(request_id, -1, "ipc_failure");
-  return parse_result_from_json(json);
+  return parse_and_verify_response(json, request_id);
 }
 
 /**
@@ -435,7 +503,7 @@ KernelExecResult IoctlClient::run_tamper_check(const std::string &request_id, co
   std::string json = execute_request("RUN_TAMPER_CHECK", request_id, "{}", state, command_message_id);
   if (json.empty())
     return make_error(request_id, -1, "ipc_failure");
-  return parse_result_from_json(json);
+  return parse_and_verify_response(json, request_id);
 }
 
 /**
@@ -449,5 +517,5 @@ KernelExecResult IoctlClient::self_repair(const std::string &request_id, const A
   std::string json = execute_request("SELF_REPAIR", request_id, params, state, command_message_id);
   if (json.empty())
     return make_error(request_id, -1, "ipc_failure");
-  return parse_result_from_json(json);
+  return parse_and_verify_response(json, request_id);
 }

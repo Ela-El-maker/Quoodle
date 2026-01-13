@@ -66,6 +66,10 @@ add_executable(agent
   src/recovery/recovery_manager.hpp
   src/telemetry/telemetry_collector.cpp
   src/crypto/ed25519_sign.cpp
+  src/crypto/ed25519_verify.cpp
+  src/crypto/command_verifier.cpp
+  src/crypto/json_canonicalizer.cpp
+  src/crypto/kernel_response_verifier.cpp
   src/ws/ws_client.cpp
   src/ws/ws_protocol.cpp
   src/ws/sequence_manager.cpp
@@ -91,13 +95,18 @@ endif()
 add_executable(ioctl_integration_test
   tests/integration/ioctl_pipe_test.cpp
   src/kernel/ioctl_client.cpp
+  src/crypto/kernel_response_verifier.cpp
   src/utils/sha256.cpp
 )
 
 add_executable(ioctl_signed_test
   tests/integration/ioctl_signed_test.cpp
   src/kernel/ioctl_client.cpp
+  src/crypto/ed25519_sign.cpp
+  src/crypto/json_canonicalizer.cpp
+  src/crypto/kernel_response_verifier.cpp
   src/utils/sha256.cpp
+  src/utils/dpapi_loader.cpp
 )
 
 add_executable(ws_protocol_signing_test
@@ -105,6 +114,7 @@ add_executable(ws_protocol_signing_test
   src/ws/ws_protocol.cpp
   src/ws/sequence_manager.cpp
   src/crypto/ed25519_sign.cpp
+  src/crypto/json_canonicalizer.cpp
   src/telemetry/telemetry_collector.cpp
   src/utils/json_canonicalizer.cpp
   src/utils/dpapi_loader.cpp
