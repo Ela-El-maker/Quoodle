@@ -144,9 +144,21 @@ if(HAVE_SODIUM)
   target_compile_definitions(ws_protocol_signing_test PRIVATE HAVE_SODIUM=1)
 endif()
 
+# Task 1.7: End-to-end signature chain integration test
+add_executable(e2e_signature_chain_test
+  tests/integration/e2e_signature_chain_test.cpp
+)
+target_include_directories(e2e_signature_chain_test PRIVATE src)
+if(HAVE_SODIUM)
+  target_include_directories(e2e_signature_chain_test PRIVATE ${SODIUM_INCLUDE_DIR})
+  target_link_libraries(e2e_signature_chain_test PRIVATE ${SODIUM_LIB})
+  target_compile_definitions(e2e_signature_chain_test PRIVATE HAVE_SODIUM=1)
+endif()
+
 include(CTest)
 enable_testing()
 add_test(NAME ioctl_integration_test COMMAND ioctl_integration_test)
 add_test(NAME ioctl_signed_test COMMAND ioctl_signed_test)
 add_test(NAME ws_protocol_signing_test COMMAND ws_protocol_signing_test)
+add_test(NAME e2e_signature_chain_test COMMAND e2e_signature_chain_test)
 
