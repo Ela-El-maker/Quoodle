@@ -100,6 +100,13 @@ class ApiService {
     });
   }
 
+  /// Update the push notification token for the current session.
+  Future<Map<String, dynamic>> updatePushToken(String pushToken) {
+    return _post('/session/push-token', {
+      'push_token': pushToken,
+    });
+  }
+
   Future<Map<String, dynamic>> verify2fa({
     required String userId,
     required String sessionId,
