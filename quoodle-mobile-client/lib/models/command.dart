@@ -46,4 +46,23 @@ class CommandState {
       envelopeSig: audit?['envelope_sig'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'command_id': commandId,
+      'device_id': deviceId,
+      'method': method,
+      'state': state,
+      'queued_at': queuedAt,
+      'completed_at': completedAt,
+      'result_status': resultStatus,
+      'error_code': errorCode,
+      'error_message': errorMessage,
+      'audit': {
+        'server_seq': serverSeq,
+        'request_sig': requestSig,
+        'envelope_sig': envelopeSig,
+      },
+    };
+  }
 }
