@@ -12,8 +12,13 @@ class Settings(BaseModel):
     controller_id: str = os.getenv("CONTROLLER_ID", "controller")
     laravel_webhook_base: str = os.getenv("LARAVEL_WEBHOOK_BASE", "http://localhost:8000/api/v1/webhook")
 
-    # Security / signing / replay protection
+    # Redis configuration
     redis_url: str | None = os.getenv("REDIS_URL")
+    redis_max_connections: int = int(os.getenv("REDIS_MAX_CONNECTIONS", "10"))
+    redis_socket_timeout: float = float(os.getenv("REDIS_SOCKET_TIMEOUT", "5.0"))
+    redis_key_prefix: str = os.getenv("REDIS_KEY_PREFIX", "quoodle:")
+
+    # Security / signing / replay protection
     max_clock_skew_seconds: int = int(os.getenv("MAX_CLOCK_SKEW_SECONDS", "5"))
     require_ed25519: bool = os.getenv("REQUIRE_ED25519", "true").lower() in ("1", "true", "yes")
     allow_dev_sig_fallback: bool = os.getenv("ALLOW_DEV_SIG_FALLBACK", "false").lower() in ("1", "true", "yes")

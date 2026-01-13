@@ -1,14 +1,17 @@
 import asyncio
 import json
+import logging
 import uuid
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 from app.api_controller import create_router, build_command_delivery
 from app.config import settings
-from app.state import manager, offline_queue, ota_manager, policy_resolver, risk_scorer
+from app.state import manager, offline_queue, ota_manager, policy_resolver, risk_scorer, eventbus, presence
 from app.ws.auth import validate_auth_jwt
 from app.services.device_registry import DeviceKeyRegistry, DeviceKeyRegistryConfig
+from app.services.redis_service import RedisConfig, init_redis, close_redis, get_redis_service
 from app.services.replay_protection import ReplayProtector, ReplayConfig, ReplayError, extract_seq_from_message
 from app.ws.protocol import (
     build_auth_ack,
@@ -32,7 +35,41 @@ from app.ws.webhooks import (
 )
 from app.middleware.laravel_signature import LaravelSignatureMiddleware
 
-app = FastAPI(title="Secure Device Control - FastAPI Controller")
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan manager for startup/shutdown."""
+    # Startup
+    logger.info("Starting FastAPI gateway...")
+
+    # Initialize Redis connection
+    redis_config = RedisConfig(
+        url=settings.redis_url,
+        max_connections=settings.redis_max_connections,
+        socket_timeout=settings.redis_socket_timeout,
+        key_prefix=settings.redis_key_prefix,
+    )
+    redis = await init_redis(redis_config)
+
+    if redis.is_connected:
+        logger.info("Redis connected successfully")
+        # Start event bus Redis subscriptions
+        await eventbus.start_redis_subscription()
+    else:
+        logger.warning("Running without Redis - using in-memory fallback")
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down FastAPI gateway...")
+    await replay.close()
+    await close_redis()
+    logger.info("Cleanup complete")
+
+
+app = FastAPI(title="Secure Device Control - FastAPI Controller", lifespan=lifespan)
 app.add_middleware(LaravelSignatureMiddleware)
 app.include_router(create_router(manager))
 
@@ -55,7 +92,13 @@ replay = ReplayProtector(
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    """Health check endpoint with Redis status."""
+    redis = get_redis_service()
+    redis_ok = await redis.ping() if redis else False
+    return {
+        "status": "ok",
+        "redis": "connected" if redis_ok else "disconnected",
+    }
 
 
 @app.websocket("/agent")
