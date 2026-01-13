@@ -10,8 +10,9 @@
 #include <string>
 #include <sstream>
 #include <thread>
+#include <vector>
 
-// --- Helper Functions Moved to Global/Static Scope ---
+// --- JSON Parsing Helpers ---
 
 static std::string extract_json_string(const std::string &json, const std::string &key)
 {
@@ -29,6 +30,88 @@ static std::string extract_json_string(const std::string &json, const std::strin
   if (second_quote == std::string::npos)
     return {};
   return json.substr(first_quote + 1, second_quote - first_quote - 1);
+}
+
+static int extract_json_int(const std::string &json, const std::string &key, int default_val = 0)
+{
+  std::string needle = '"' + key + '"';
+  auto pos = json.find(needle);
+  if (pos == std::string::npos)
+    return default_val;
+  auto colon = json.find(':', pos + needle.size());
+  if (colon == std::string::npos)
+    return default_val;
+  // Skip whitespace
+  size_t start = colon + 1;
+  while (start < json.size() && (json[start] == ' ' || json[start] == '\t'))
+    start++;
+  if (start >= json.size())
+    return default_val;
+  // Parse integer
+  std::string num_str;
+  while (start < json.size() && (isdigit(json[start]) || json[start] == '-'))
+  {
+    num_str += json[start];
+    start++;
+  }
+  if (num_str.empty())
+    return default_val;
+  return std::stoi(num_str);
+}
+
+static bool extract_json_bool(const std::string &json, const std::string &key, bool default_val = false)
+{
+  std::string needle = '"' + key + '"';
+  auto pos = json.find(needle);
+  if (pos == std::string::npos)
+    return default_val;
+  auto colon = json.find(':', pos + needle.size());
+  if (colon == std::string::npos)
+    return default_val;
+  // Skip whitespace
+  size_t start = colon + 1;
+  while (start < json.size() && (json[start] == ' ' || json[start] == '\t'))
+    start++;
+  if (start >= json.size())
+    return default_val;
+  // Check for true/false
+  if (json.substr(start, 4) == "true")
+    return true;
+  if (json.substr(start, 5) == "false")
+    return false;
+  return default_val;
+}
+
+static std::vector<std::string> extract_json_string_array(const std::string &json, const std::string &key)
+{
+  std::vector<std::string> result;
+  std::string needle = '"' + key + '"';
+  auto pos = json.find(needle);
+  if (pos == std::string::npos)
+    return result;
+  auto colon = json.find(':', pos + needle.size());
+  if (colon == std::string::npos)
+    return result;
+  auto bracket = json.find('[', colon);
+  if (bracket == std::string::npos)
+    return result;
+  auto close_bracket = json.find(']', bracket);
+  if (close_bracket == std::string::npos)
+    return result;
+  // Extract strings within the array
+  size_t i = bracket + 1;
+  while (i < close_bracket)
+  {
+    auto quote1 = json.find('"', i);
+    if (quote1 == std::string::npos || quote1 >= close_bracket)
+      break;
+    auto quote2 = json.find('"', quote1 + 1);
+    if (quote2 == std::string::npos || quote2 >= close_bracket)
+      break;
+    result.push_back(json.substr(quote1 + 1, quote2 - quote1 - 1));
+    i = quote2 + 1;
+  }
+  return result;
 }
 
 static std::string json_escape(const std::string &s)
@@ -77,36 +160,133 @@ static std::string to_json(const KernelResponse &r)
   return oss.str();
 }
 
+/**
+ * dispatch_opcode - Routes an opcode to the appropriate handler.
+ * Supports all 14 opcodes from the spec:
+ *
+ * SystemControl:
+ *   - EXEC_LOCK_SCREEN, lock_screen
+ *   - EXEC_REBOOT, reboot
+ *   - EXEC_SHUTDOWN, shutdown
+ *   - EXEC_LOGOUT, logout
+ *
+ * AgentInternal:
+ *   - EXEC_PING_KERNEL, ping
+ *   - EXEC_COLLECT_SYSTEM_INFO, collect_system_info
+ *   - EXEC_GET_PROCESS_LIST, get_process_list
+ *   - EXEC_VALIDATE_UPDATE_PACKAGE, validate_update_package
+ *
+ * UpdateAndStaging:
+ *   - STAGE_UPDATE, stage_update
+ *   - COMMIT_UPDATE, commit_update
+ *   - ROLLBACK_UPDATE, rollback_update
+ *
+ * SecurityIntegrity:
+ *   - EXEC_RUN_ATTESTATION, run_attestation
+ *   - EXEC_RUN_TAMPER_CHECK, run_tamper_check
+ *   - EXEC_SELF_REPAIR, self_repair
+ */
+static KernelResponse dispatch_opcode(Dispatcher &disp, const std::string &req, const std::string &opcode, const std::string &request_id)
+{
+  // ============== SystemControl ==============
+  if (opcode == "EXEC_LOCK_SCREEN" || opcode == "lock_screen")
+  {
+    return disp.handle_lock_screen(request_id);
+  }
+  else if (opcode == "EXEC_REBOOT" || opcode == "reboot")
+  {
+    int delay = extract_json_int(req, "delay_seconds", 0);
+    return disp.handle_reboot(request_id, delay);
+  }
+  else if (opcode == "EXEC_SHUTDOWN" || opcode == "shutdown")
+  {
+    bool force = extract_json_bool(req, "force", false);
+    return disp.handle_shutdown(request_id, force);
+  }
+  else if (opcode == "EXEC_LOGOUT" || opcode == "logout")
+  {
+    return disp.handle_logout(request_id);
+  }
+  // ============== AgentInternal ==============
+  else if (opcode == "EXEC_PING_KERNEL" || opcode == "ping")
+  {
+    return disp.handle_ping(request_id);
+  }
+  else if (opcode == "EXEC_COLLECT_SYSTEM_INFO" || opcode == "collect_system_info")
+  {
+    auto fields = extract_json_string_array(req, "fields");
+    return disp.handle_collect_system_info(request_id, fields);
+  }
+  else if (opcode == "EXEC_GET_PROCESS_LIST" || opcode == "get_process_list")
+  {
+    bool include_cmdline = extract_json_bool(req, "include_cmdline", false);
+    return disp.handle_get_process_list(request_id, include_cmdline);
+  }
+  else if (opcode == "EXEC_VALIDATE_UPDATE_PACKAGE" || opcode == "validate_update_package")
+  {
+    std::string path = extract_json_string(req, "path");
+    return disp.handle_validate_update_package(request_id, path);
+  }
+  // ============== UpdateAndStaging ==============
+  else if (opcode == "STAGE_UPDATE" || opcode == "stage_update")
+  {
+    std::string package_path = extract_json_string(req, "package_path");
+    bool sandbox = extract_json_bool(req, "sandbox", true);
+    return disp.handle_stage_update(request_id, package_path, sandbox);
+  }
+  else if (opcode == "COMMIT_UPDATE" || opcode == "commit_update")
+  {
+    std::string sandbox_id = extract_json_string(req, "sandbox_id");
+    return disp.handle_commit_update(request_id, sandbox_id);
+  }
+  else if (opcode == "ROLLBACK_UPDATE" || opcode == "rollback_update")
+  {
+    std::string snapshot_id = extract_json_string(req, "snapshot_id");
+    return disp.handle_rollback_update(request_id, snapshot_id);
+  }
+  // ============== SecurityIntegrity ==============
+  else if (opcode == "EXEC_RUN_ATTESTATION" || opcode == "run_attestation")
+  {
+    bool include_tpm = extract_json_bool(req, "include_tpm", false);
+    return disp.handle_run_attestation(request_id, include_tpm);
+  }
+  else if (opcode == "EXEC_RUN_TAMPER_CHECK" || opcode == "run_tamper_check")
+  {
+    return disp.handle_run_tamper_check(request_id);
+  }
+  else if (opcode == "EXEC_SELF_REPAIR" || opcode == "self_repair")
+  {
+    return disp.handle_self_repair(request_id);
+  }
+  // ============== Unknown ==============
+  else
+  {
+    return disp.handle_unknown(request_id, opcode);
+  }
+}
+
 // --- Main Entry Point ---
 
 int main(int argc, char **argv)
 {
-  // CLI one-shot mode: kernel_service --once <opcode> <request_id>
+  // CLI one-shot mode: kernel_service --once <opcode> <request_id> [json_params]
   if (argc >= 2 && std::string(argv[1]) == "--once")
   {
     const char *allow_fallback = std::getenv("ALLOW_EXEC_FALLBACK");
     if (!(allow_fallback && std::string(allow_fallback) == "1"))
     {
-      // FIXED: Changed log_warn to log_error (or you can add log_warn to logger.hpp)
       utils::log_error("--once mode disabled: ALLOW_EXEC_FALLBACK!=1");
+      return 1;
     }
-    else
-    {
-      std::string opcode = (argc >= 3) ? argv[2] : std::string();
-      std::string request_id = (argc >= 4) ? argv[3] : std::string("req-unknown");
 
-      Dispatcher disp;
-      KernelResponse resp;
-      if (opcode == "lock_screen")
-        resp = disp.handle_lock_screen(request_id);
-      else if (opcode == "ping")
-        resp = disp.handle_ping(request_id);
-      else
-        resp = disp.handle_unknown(request_id, opcode);
+    std::string opcode = (argc >= 3) ? argv[2] : std::string();
+    std::string request_id = (argc >= 4) ? argv[3] : std::string("req-cli");
+    std::string json_params = (argc >= 5) ? argv[4] : std::string("{}");
 
-      std::cout << to_json(resp) << std::endl;
-      return 0;
-    }
+    Dispatcher disp;
+    KernelResponse resp = dispatch_opcode(disp, json_params, opcode, request_id);
+    std::cout << to_json(resp) << std::endl;
+    return 0;
   }
 
   utils::log_info("KernelService starting (named-pipe server mode)");
@@ -170,13 +350,8 @@ int main(int argc, char **argv)
             }
           }
 
-          KernelResponse resp;
-          if (opcode == "lock_screen")
-            resp = disp.handle_lock_screen(request_id);
-          else if (opcode == "ping")
-            resp = disp.handle_ping(request_id);
-          else
-            resp = disp.handle_unknown(request_id, opcode);
+          // Route to appropriate handler using dispatch_opcode (supports all 14 opcodes)
+          KernelResponse resp = dispatch_opcode(disp, req, opcode, request_id);
 
           std::string out = to_json(resp);
           DWORD written = 0;
