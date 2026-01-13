@@ -1,0 +1,417 @@
+Here’s the “how this whole thing actually runs” story, end-to-end, based on your JSON specs. I’ll walk it in logical runtime order and stitch all the flows together.
+
+---
+
+## 0. Main actors & purpose
+
+**Goal:** Let a user control their own Windows PC from a mobile app, in a lab / academic setting, with strong security, audit, and OTA updates.
+
+**Core components:**
+
+* **Mobile App (Flutter)** – user-facing; pairing, sending commands, viewing telemetry, alerts, audit logs. 
+* **Laravel** – main API, auth, CA/key manager, policy engine, dashboard backend, webhooks, audit trail. 
+* **FastAPI Controller** – WSS controller that talks to Windows agents, handles command dispatch, telemetry, OTA orchestration. 
+* **WindowsAgent (user-mode)** – runs on the PC, maintains WSS connection, enforces policy, queues commands, calls KernelService. 
+* **KernelService** – privileged helper (C/C++ style service) with a strict IOCTL API and enumerated opcodes. 
+* **Redis** – streams for commands, telemetry, DLQ, online presence. 
+* **MySQL** – users, devices, commands, telemetry rollups, audits, policies. 
+* **ObjectStore (S3 / MinIO)** – big artifacts: screenshots, logs, update packages. 
+* **Vault/KMS / HSM** – keys, CA, rotation, revocation. 
+
+Security posture: TLS 1.3, Ed25519/RSA-PSS signing, AES-256-GCM encryption, short-lived JWTs, strong audit & key rotation. 
+
+---
+
+## 1. Cryptographic bootstrap & key management (before anything else)
+
+Before any runtime flows, you bootstrap trust:
+
+1. **Root & intermediates**
+
+   * Offline Root CA created in HSM; intermediate CA(s) created for staging/prod. 
+   * Root is never online; intermediates sign device and server certs.
+
+2. **Key types you use**
+
+   * Root/Intermediate: RSA-4096 or ECDSA P-384.
+   * Device certs: ECDSA P-256 or Ed25519, 1-year lifetime.
+   * JWT signing keys: Ed25519 or RSA-PSS, rotated every 7 days; tokens live ~900s.
+   * Encryption keys: AES-256-GCM for payloads, wrapped by KMS. 
+
+3. **JWKS & KID**
+
+   * All JWTs and signed envelopes carry a `kid`.
+   * Services fetch JWKS from `/.well-known/jwks.json` and cache it. 
+
+4. **Device key issuance (during pairing)**
+
+   * Laravel, acting as CA, issues device certs after pairing, using intermediate CA and recording fingerprints in MySQL + Redis. 
+
+5. **Rotation and revocation**
+
+   * Automated periodic rotation: new signing key, JWKS updated, dual acceptance window. 
+   * Revocation: update CRL/OCSP, broadcast revocation event through FastAPI; agents wipe keys and go into “re-pair needed”. 
+   * Emergency: mass revoke, quarantine devices, SOC notifications. 
+
+Everything else (discovery, commands, OTA, etc.) assumes this trust and key lifecycle are in place.
+
+---
+
+## 2. Device discovery (0. DiscoveryFlow)
+
+When an unpaired agent boots for the first time:
+
+1. **Unauthenticated discovery handshake**
+
+   * Agent opens WSS to FastAPI with minimal data: `hwid_hash`, nonce, version, `agent_manifest_hash`. 
+   * FastAPI validates structure, rate-limits, and returns a short-lived `challenge_token` JWT plus a `pair_init_url`. 
+
+2. **Challenge confirmation**
+
+   * Agent POSTs `/api/discovery/confirm` with the `challenge_token` and a signed nonce response. 
+   * FastAPI verifies token and signature, creates a temporary `discovery_session` (TTL ~10 min).
+   * It then calls Laravel webhook `/webhook/discovery_event` with `hwid_hash`, version, timestamp. 
+
+**Outcome:** Device shows up in Laravel’s dashboard as **“Pending Pairing”**, with only hashed identifiers; no telemetry yet. 
+
+---
+
+## 3. User registration & device pairing (1. PairingFlow)
+
+### 3.1 User signs up on mobile
+
+1. **Register**
+
+   * Mobile → Laravel: `POST /api/register` with email + mobile public key (`MobilePub`). 
+   * Laravel creates user record, stores `MobilePub`, issues a **JWT** and user_id. 
+   * Mobile stores JWT and keys in secure storage (Keychain / Encrypted SharedPreferences) and protects the app with biometrics. 
+
+### 3.2 Agent requests pairing
+
+2. **Agent → Laravel: `/api/pair/request`**
+
+   * Sends `device_name`, raw `hwid`, and `AgentPub`. 
+   * Laravel creates a device record, signs a short-lived `pair_token` JWT bound to `AgentPub`. 
+
+3. **Agent displays QR**
+
+   * Response contains `pair_token` (TTL ~5 min); Agent shows it as QR. 
+
+### 3.3 Mobile confirms pairing
+
+4. **Mobile scans QR and confirms**
+
+   * Mobile → Laravel: `POST /api/pair/confirm` with `pair_token`. 
+   * Laravel validates token, **links user↔device**, and **issues device mTLS cert** (from intermediate CA).
+   * Laravel notifies FastAPI via `/webhook/device/paired` and sends `Webhook /device/activate` to the Agent with `device_id` and `SignedDeviceCert`. 
+
+5. **Agent authenticates to FastAPI**
+
+   * Agent connects WSS again with `type=auth` + `SignedDeviceCert`. 
+   * FastAPI introspects cert via Laravel (or JWKS / CA), then creates a Redis presence entry `agent:online:PC001` and assigns a `session_id`. 
+
+**Outcome:** Device is now **paired**, **trusted**, and **online**, ready for commands and telemetry.
+
+---
+
+## 4. Normal runtime: presence, heartbeat, telemetry (3. TelemetryFlow)
+
+Once authenticated:
+
+1. **Session established**
+
+   * Agent sends AUTH over WSS; FastAPI validates JWT and nonce, then returns `status=connected`, heartbeat and telemetry intervals. 
+
+2. **Heartbeat**
+
+   * Agent sends periodic `heartbeat` messages (`status=alive`, timestamp).
+   * FastAPI sets/refreshes `agent:online:PC001` in Redis with TTL (e.g. 60s). 
+
+3. **Telemetry stream**
+
+   * Agent sends `type=telemetry` messages with CPU, RAM, disk, network metrics, signed by the agent. 
+   * FastAPI verifies signature and publishes to `stream:telemetry:PC001` in Redis. 
+
+4. **Analytics & rollup**
+
+   * **AnalyticsWorker** consumes telemetry streams, enriches with context, calculates risk score, and stores events into `telemetry_events` in MySQL. 
+   * **RollupWorker** aggregates hourly/daily metrics and inserts into `device_metrics_hourly`. 
+
+5. **Alerts from anomalies**
+
+   * If `risk_score > 0.8` or anomaly detected, Laravel asks FastAPI to `publish_alert`. 
+   * FastAPI pushes an `alert_push` event over WSS to both the agent and Laravel dashboard. 
+
+6. **Dashboard live view**
+
+   * Laravel dashboard subscribes to device telemetry via FastAPI WSS.
+   * FastAPI streams telemetry updates to the dashboard UI in real time. 
+
+---
+
+## 5. Sending and executing a command (2. CommandExecutionFlow)
+
+This is the core pipeline: **Mobile → Laravel → Redis → FastAPI → Agent → KernelService → Agent → FastAPI → Laravel → Mobile.** 
+
+### 5.1 Ingest & policy check
+
+1. **Mobile calls API**
+
+   * Mobile → Laravel: `POST /api/command` with command details (`device_id`, `method`, `params`, `ttl_seconds`, `message_id`, `trace_id`). 
+
+2. **Laravel processing**
+
+   * Validates user JWT, checks **RBAC & policy** (including 2FA or multiple approvals for sensitive commands like `memory_dump`). 
+   * Canonicalizes payload, signs with `sig_laravel`, stores command (state=`queued`) in MySQL.
+   * Publishes to Redis `stream:device:PC001`.
+   * Returns `status=accepted`, `state=queued` to Mobile. 
+
+3. **Policy engine details**
+
+   * Laravel’s PolicyEngine evaluates rules: per user, command, device, time, rate, and “ethical” policies. 
+   * Decision is logged with signed audit: user, command, device, allow/deny, timestamp. 
+
+### 5.2 FastAPI routing
+
+4. **FastAPI consumes from Redis**
+
+   * Uses `XREADGROUP` on `stream:device:PC001`. 
+   * Verifies Laravel signature, TTL, sequential ordering, and checks if device is online using Redis presence. 
+   * If online → dispatch; if offline → keep queued and handle retries / DLQ; if queue full → mark `backpressure`. 
+   * Optionally sends status (`dispatched|queued|backpressure`) back to Laravel for UI updates. 
+
+### 5.3 WSS delivery to Agent
+
+5. **FastAPI → Agent (COMMAND_DELIVERY)**
+
+   * Over WSS, sends a signed **command envelope** with header (ttl, priority, etc.), body (method, params, sensitivity), meta (device_id, origin_user_id, policy_version), and `sig`. 
+
+6. **Agent receives and ACKs**
+
+   * Agent validates controller signature, checks `seq` vs last seen, verifies TTL, and validates against local **policy bundle**.  
+   * If valid, writes command to an encrypted local SQLite queue and emits `COMMAND_ACK` with `status=received`. 
+   * MySQL command state moves: `queued → sent → ack_received`. 
+
+### 5.4 Agent → KernelService execution
+
+7. **Agent calls KernelService via IOCTL**
+
+   * Sends a strictly structured `RequestSchema` including `request_id`, `opcode`, `params`, `agent_sequence`, `policy_hash`, `command_message_id`, and signed with Ed25519. 
+   * Allowed opcodes include system control (`EXEC_LOCK_SCREEN`, `EXEC_REBOOT`, `EXEC_SHUTDOWN`…), internal actions, update opcodes (`STAGE_UPDATE`, `COMMIT_UPDATE`), and security ops like `EXEC_RUN_ATTESTATION`, `EXEC_RUN_TAMPER_CHECK`. 
+
+8. **KernelService executes**
+
+   * Validates signature, opcode, and parameters.
+   * Performs the action with correct privilege and safety; for dangerous ops, policy may deny or require special handling. 
+   * Responds with signed `ResponseSchema` (`status=executing|ok|failed|denied`, `kernel_exec_id`, `error_code`, `result`). 
+
+9. **Agent updates state**
+
+   * On `status=executing`, it marks command as `executing` in MySQL; on `ok`/`failed`, it gets ready to send results upstream. 
+
+### 5.5 Returning results and artifacts
+
+10. **Agent → FastAPI (COMMAND_RESULT)**
+
+    * For small results: send result payload directly on WSS with `status`, `notes`, optional `artifact_url`. 
+    * For large artifacts (e.g. screenshot, logs):
+
+      * Agent asks Laravel for a presigned upload URL (`/api/artifact/request`).
+      * Uploads encrypted artifact to ObjectStore.
+      * Returns `artifact_url` + checksum in the result. 
+
+11. **FastAPI → Laravel**
+
+    * Validates agent signature, updates MySQL command state (`result_posted → completed`), and calls `/api/command/result` on Laravel with summary + artifact pointer. 
+
+12. **Laravel → Mobile**
+
+    * Pushes a real-time notification (push or WSS) with `command_id`, `status`, and short result. 
+    * Mobile UI shows result dialog or banner; sends `ack_viewed`. 
+
+### 5.6 Reliability, DLQ, and observability
+
+* Retries:
+
+  * Send retries: 3 with exponential backoff (30s, 120s, 600s). 
+  * Execution retry: 1 automatic for kernel failures. 
+* DLQ:
+
+  * After max retries, command goes to `stream:dlq:device:PC001`, state=`failed`, and operator is notified. 
+* Metrics & tracing:
+
+  * Command ingest rate, dispatch latency, execution times, success rate, DLQ count; distributed tracing with `trace_id`. 
+
+---
+
+## 6. OTA updates flow (5. OTAUpdateFlow)
+
+You also have a complete OTA story:
+
+1. **Release is created in Laravel**
+
+   * Admin defines release `rel-2025-10-29-001`, version `2.0.1`, manifest URLs, hash, rollout stage (`canary`, etc.) and target selector (tags). 
+
+2. **FastAPI broadcasts update**
+
+   * Laravel tells FastAPI to announce update to matching devices.
+   * FastAPI publishes `update_available` events to per-device streams or pushes via WSS for online agents. 
+
+3. **Agent pre-checks**
+
+   * Agent receives `update_available` with manifest and presigned URLs, min OS build, policy flags (auto_install, allow_reboot). 
+   * Checks disk space, power, OS compatibility, and local policy; then sends `update_precheck` (`ok|fail`, reasons). 
+
+4. **Download & validation**
+
+   * Agent downloads update (possibly chunked/resumable) from ObjectStore using presigned URLs. 
+   * Verifies manifest signature and SHA-256 hash before staging.
+
+5. **Staging via KernelService**
+
+   * Agent asks KernelService to `STAGE_UPDATE` (opcode) into a sandbox directory; KernelService runs smoke tests and returns `status=staged`, `sandbox_id`. 
+
+6. **Commit / rollback**
+
+   * If smoke tests pass: Agent sends `COMMIT_UPDATE` with `sandbox_id`; KernelService atomically swaps active binaries/configs and handles rollback on failure. 
+   * If commit fails: automatic rollback using snapshot; error logged & reported.
+
+7. **Reboot coordination**
+
+   * If required, Agent schedules safe reboot windows and informs user; stores state to resume after reboot. 
+
+8. **Post-install health reporting**
+
+   * Agent sends `update_result` to FastAPI with status, metrics (boot time, service start), and whether rollback snapshot is available. 
+   * FastAPI forwards to Laravel; Laravel updates rollout progress and analytics. 
+
+---
+
+## 7. Policy enforcement & security flows (7. PolicyEnforcementFlow)
+
+Policy is enforced in **three places**:
+
+1. **Laravel PolicyEngine (central)**
+
+   * On every command, Laravel calls PolicyEngine with (user, command, device).
+   * Rules: RBAC, time windows, device posture, command sensitivity, ethical constraints. 
+   * Result (`allowed/denied`, reason) is written to immutable AuditTrail. 
+
+2. **Policy distribution**
+
+   * When policies change, Laravel publishes new `policy_hash` and version to FastAPI.
+   * FastAPI relays to all agents via `POLICY_UPDATE` messages. Agents refresh their encrypted `policy_bundle.json.enc`. 
+
+3. **Local enforcement on Agent**
+
+   * Before calling KernelService, Agent checks command against cached policy.
+   * If the backend is temporarily unreachable, Agent uses the last trusted policy bundle. 
+
+4. **Violation handling**
+
+   * If a command violates policy or keys are expired → command is rejected, an alert is fired in SecurityFlow, and admins are notified via webhook. 
+
+---
+
+## 8. Mobile app flow (9. MobileAppFlow)
+
+From the user’s perspective on mobile: 
+
+1. **Auth & security**
+
+   * Uses JWTs stored in encrypted storage; supports biometric lock and 2FA.
+   * Tokens are refreshed with short TTL (~1h). 
+
+2. **Pairing**
+
+   * Scan QR from Agent to pair, then show **device_paired** success events. 
+
+3. **Live monitoring**
+
+   * View live telemetry (CPU, RAM, alerts) for each device (data streamed from Laravel dashboard via FastAPI).
+
+4. **Control**
+
+   * Send safe commands like `lock_screen`, `reboot` (subject to policy & 2FA).
+   * See command status and result. `command_completed` triggers `showResultDialog`. 
+
+5. **Alerts & audit**
+
+   * Critical alerts (like “High CPU Usage”) show as critical banners. 
+   * User can browse audit & update logs (backed by Laravel’s audit tables & S3 evidence).
+
+6. **Offline handling**
+
+   * Commands are queued locally (limit=3), with backoff and sync-on-reconnect. 
+
+---
+
+## 9. Admin dashboard & analytics (10. DashboardAnalyticsFlow)
+
+Admin / researcher view in Laravel + Vue: 
+
+* **Widgets:**
+
+  * Device health (online/offline, uptime).
+  * Command timeline & status per device.
+  * OTA rollout progress, failure rate.
+  * Security & policy alerts feed.
+  * Audit log browser with filters and signed exports (CSV, PDF, JSON).  
+
+* **Data sources:** MySQL, Redis, FastAPI WSS, ObjectStore. 
+
+* **Access control:** roles like `admin`, `auditor`, `student` with different permissions (control vs view-only). 
+
+---
+
+## 10. Data model, audit, and global system properties
+
+1. **Data schema** (MySQL)
+
+   * `users`, `devices`, `commands`, `telemetry_events`, `device_metrics_hourly`, `audit_trail`, etc. 
+
+2. **Audit**
+
+   * Audit events include ids, actor, action, state, timestamps, payload hash, signature.
+   * Stored append-only in MySQL; periodically replicated to S3 with hash-chaining for tamper detection.  
+
+3. **System-wide security & reliability**
+
+   * Transport: TLS 1.3 (+ optional mTLS).
+   * Payload encryption: AES-256-GCM.
+   * Signing: Ed25519 / RSA-PSS, SHA-256 integrity.
+   * Auth: short-lived JWT + 2FA.
+   * Reliability: offline queue limit, retries, DLQ, monitoring. 
+
+---
+
+## 11. Error paths, backpressure & testing
+
+The design explicitly covers operational edge cases: 
+
+* **Invalid signatures** → drop message, log SIGNATURE_INVALID(2001), notify security webhook.
+* **TTL expired** → state `expired`, notify originator.
+* **Device offline** → keep in Redis/MySQL until reconnect, notify user.
+* **Kernel failure** → capture kernel logs, 1 auto-retry, then mark failed and escalate.
+* **Queue backpressure** → when local queue reaches `queue_limit`, FastAPI reports `backpressure` and user is notified.
+
+Testing hooks: `/api/test/command?simulate=kernel_failure|slow|success` and fault injection in staging to validate the whole pipeline under failure. 
+
+---
+
+## TL;DR – Lifecycle summary
+
+Putting it all into a single flow:
+
+1. **Keys & CA are bootstrapped** → Laravel, FastAPI, Agents, Mobile share trust anchors.
+2. **Agent starts unpaired** → Discovery handshake with FastAPI → Laravel shows “Pending Pairing”.
+3. **User registers on mobile** → Mobile gets JWT + keys.
+4. **Agent asks for pairing** → Gets `pair_token` → shows QR → Mobile scans → Laravel links user↔device, issues device cert, tells FastAPI, activates agent.
+5. **Agent authenticates via WSS** → presence + telemetry + heartbeat start.
+6. **User sends a command from mobile** → Laravel validates auth & policy, signs and queues → FastAPI routes, pushes to Agent → Agent validates + queues → KernelService executes via strict IOCTL → results bubble back through Agent → FastAPI → Laravel → Mobile.
+7. **Telemetry & analytics** run continuously → anomalies trigger alerts to agent, mobile, and dashboard.
+8. **OTA updates** are rolled out via FastAPI, staged and committed via KernelService with rollback and health checks.
+9. **Policies, keys, and certs** are rotated and enforced centrally and at the edge, with revocation and emergency playbooks.
+10. **Everything is audited** with tamper-evident logs, metrics, and DLQs for operators to re-run or investigate.
+
+That’s the full operational picture as defined by your JSON blueprints. 
