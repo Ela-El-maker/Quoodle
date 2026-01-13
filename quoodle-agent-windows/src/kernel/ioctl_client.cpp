@@ -1,4 +1,9 @@
 #include "ioctl_client.hpp"
+#include "../agent_state.hpp"
+#include "../crypto/ed25519_sign.hpp"
+#include "../crypto/json_canonicalizer.hpp"
+#include "../utils/time_utils.hpp"
+
 #include <random>
 #include <sstream>
 #include <string>
@@ -12,6 +17,11 @@
 #endif
 #include <thread>
 #include <chrono>
+#include <mutex>
+
+// Thread-safe sequence counter
+static std::mutex s_sequence_mutex;
+static std::uint64_t s_sequence_counter{0};
 
 /*
  * PRIVATE HELPER: run_kernel_service_once
@@ -109,6 +119,7 @@ void IoctlClient::disconnect()
   }
 #endif
 }
+
 bool IoctlClient::ensure_connection()
 {
 #ifdef _WIN32
@@ -156,11 +167,39 @@ KernelExecResult IoctlClient::parse_result_from_json(const std::string &json)
   return resp;
 }
 
+std::uint64_t IoctlClient::next_sequence()
+{
+  std::lock_guard<std::mutex> lock(s_sequence_mutex);
+  return ++s_sequence_counter;
+}
+
+std::string IoctlClient::build_canonical_payload(const std::string &request_id, const std::string &timestamp,
+                                                 const std::string &opcode, const std::string &params,
+                                                 std::uint64_t agent_sequence, const std::string &policy_hash,
+                                                 const std::string &command_message_id)
+{
+  // Build canonical JSON with fields in lexicographic order (A-Z)
+  // Fields: agent_sequence, command_message_id, opcode, params, policy_hash, request_id, timestamp
+  std::vector<std::pair<std::string, std::string>> fields;
+  fields.emplace_back("agent_sequence", std::to_string(agent_sequence));
+  fields.emplace_back("command_message_id", "\"" + crypto::escape_json(command_message_id) + "\"");
+  fields.emplace_back("opcode", "\"" + crypto::escape_json(opcode) + "\"");
+  fields.emplace_back("params", params.empty() ? "{}" : params); // params is already JSON
+  fields.emplace_back("policy_hash", "\"" + crypto::escape_json(policy_hash) + "\"");
+  fields.emplace_back("request_id", "\"" + crypto::escape_json(request_id) + "\"");
+  fields.emplace_back("timestamp", "\"" + crypto::escape_json(timestamp) + "\"");
+
+  return crypto::canonical_object(fields);
+}
+
 /**
  * PRIVATE CORE: execute_request
  * Logic for "Pipe First, Process Fallback"
+ * Now builds signed JSON request with all required fields.
  */
-std::string IoctlClient::execute_request(const std::string &opcode, const std::string &request_id)
+std::string IoctlClient::execute_request(const std::string &opcode, const std::string &request_id,
+                                         const std::string &params_json, const AgentState &state,
+                                         const std::string &command_message_id)
 {
   if (!ensure_connection())
   {
@@ -171,11 +210,36 @@ std::string IoctlClient::execute_request(const std::string &opcode, const std::s
     return "";
   }
 
-  std::string req = "{\"opcode\":\"" + opcode + "\",\"request_id\":\"" + request_id + "\"}";
+  // Generate timestamp and sequence
+  std::string timestamp = utils::iso_timestamp();
+  std::uint64_t seq = next_sequence();
+  std::string policy_hash = state.policy_hash();
+
+  // Build canonical payload for signing
+  std::string canonical = build_canonical_payload(request_id, timestamp, opcode, params_json,
+                                                  seq, policy_hash, command_message_id);
+
+  // Sign the canonical payload
+  std::string signature = ed25519_sign_payload(canonical);
+
+  // Build the full request JSON (includes signature)
+  std::ostringstream req;
+  req << "{";
+  req << "\"request_id\":\"" << crypto::escape_json(request_id) << "\",";
+  req << "\"timestamp\":\"" << crypto::escape_json(timestamp) << "\",";
+  req << "\"opcode\":\"" << crypto::escape_json(opcode) << "\",";
+  req << "\"params\":" << (params_json.empty() ? "{}" : params_json) << ",";
+  req << "\"agent_sequence\":" << seq << ",";
+  req << "\"policy_hash\":\"" << crypto::escape_json(policy_hash) << "\",";
+  req << "\"command_message_id\":\"" << crypto::escape_json(command_message_id) << "\",";
+  req << "\"signature\":\"" << crypto::escape_json(signature) << "\"";
+  req << "}";
+
+  std::string request_str = req.str();
   DWORD written = 0;
 
 #ifdef _WIN32
-  if (WriteFile(hPipe, req.c_str(), (DWORD)req.size(), &written, NULL))
+  if (WriteFile(hPipe, request_str.c_str(), (DWORD)request_str.size(), &written, NULL))
   {
     std::string out;
     char buf[4096];
@@ -205,24 +269,185 @@ std::string IoctlClient::execute_request(const std::string &opcode, const std::s
   return "";
 }
 
+// Helper to create error response
+static KernelExecResult make_error(const std::string &request_id, int code, const std::string &msg)
+{
+  return {request_id, "error", "", "", "", code, msg, ""};
+}
+
 /**
  * PUBLIC API: lock_screen
  */
-KernelExecResult IoctlClient::lock_screen(const std::string &request_id)
+KernelExecResult IoctlClient::lock_screen(const std::string &request_id, const AgentState &state,
+                                          const std::string &command_message_id)
 {
-  std::string json = execute_request("lock_screen", request_id);
+  std::string json = execute_request("EXEC_LOCK_SCREEN", request_id, "{}", state, command_message_id);
   if (json.empty())
-    return {request_id, "error", "", "", "", -1, "ipc_failure", ""};
+    return make_error(request_id, -1, "ipc_failure");
   return parse_result_from_json(json);
 }
 
 /**
  * PUBLIC API: ping
  */
-KernelExecResult IoctlClient::ping(const std::string &request_id)
+KernelExecResult IoctlClient::ping(const std::string &request_id, const AgentState &state,
+                                   const std::string &command_message_id)
 {
-  std::string json = execute_request("ping", request_id);
+  std::string json = execute_request("ping", request_id, "{}", state, command_message_id);
   if (json.empty())
-    return {request_id, "error", "", "", "", -1, "ipc_failure", ""};
+    return make_error(request_id, -1, "ipc_failure");
+  return parse_result_from_json(json);
+}
+
+/**
+ * PUBLIC API: reboot
+ */
+KernelExecResult IoctlClient::reboot(const std::string &request_id, const AgentState &state,
+                                     const std::string &command_message_id)
+{
+  std::string json = execute_request("EXEC_REBOOT", request_id, "{}", state, command_message_id);
+  if (json.empty())
+    return make_error(request_id, -1, "ipc_failure");
+  return parse_result_from_json(json);
+}
+
+/**
+ * PUBLIC API: shutdown
+ */
+KernelExecResult IoctlClient::shutdown(const std::string &request_id, const AgentState &state,
+                                       const std::string &command_message_id)
+{
+  std::string json = execute_request("EXEC_SHUTDOWN", request_id, "{}", state, command_message_id);
+  if (json.empty())
+    return make_error(request_id, -1, "ipc_failure");
+  return parse_result_from_json(json);
+}
+
+/**
+ * PUBLIC API: logout
+ */
+KernelExecResult IoctlClient::logout(const std::string &request_id, const AgentState &state,
+                                     const std::string &command_message_id)
+{
+  std::string json = execute_request("EXEC_LOGOUT", request_id, "{}", state, command_message_id);
+  if (json.empty())
+    return make_error(request_id, -1, "ipc_failure");
+  return parse_result_from_json(json);
+}
+
+/**
+ * PUBLIC API: collect_system_info
+ */
+KernelExecResult IoctlClient::collect_system_info(const std::string &request_id, const AgentState &state,
+                                                  const std::string &command_message_id)
+{
+  std::string json = execute_request("COLLECT_SYSTEM_INFO", request_id, "{}", state, command_message_id);
+  if (json.empty())
+    return make_error(request_id, -1, "ipc_failure");
+  return parse_result_from_json(json);
+}
+
+/**
+ * PUBLIC API: get_process_list
+ */
+KernelExecResult IoctlClient::get_process_list(const std::string &request_id, const AgentState &state,
+                                               const std::string &command_message_id)
+{
+  std::string json = execute_request("GET_PROCESS_LIST", request_id, "{}", state, command_message_id);
+  if (json.empty())
+    return make_error(request_id, -1, "ipc_failure");
+  return parse_result_from_json(json);
+}
+
+/**
+ * PUBLIC API: validate_update_package
+ */
+KernelExecResult IoctlClient::validate_update_package(const std::string &request_id, const AgentState &state,
+                                                      const std::string &package_path,
+                                                      const std::string &command_message_id)
+{
+  std::string params = "{\"package_path\":\"" + crypto::escape_json(package_path) + "\"}";
+  std::string json = execute_request("VALIDATE_UPDATE_PACKAGE", request_id, params, state, command_message_id);
+  if (json.empty())
+    return make_error(request_id, -1, "ipc_failure");
+  return parse_result_from_json(json);
+}
+
+/**
+ * PUBLIC API: stage_update
+ */
+KernelExecResult IoctlClient::stage_update(const std::string &request_id, const AgentState &state,
+                                           const std::string &version, const std::string &package_path,
+                                           const std::string &command_message_id)
+{
+  std::string params = "{\"version\":\"" + crypto::escape_json(version) +
+                       "\",\"package_path\":\"" + crypto::escape_json(package_path) + "\"}";
+  std::string json = execute_request("STAGE_UPDATE", request_id, params, state, command_message_id);
+  if (json.empty())
+    return make_error(request_id, -1, "ipc_failure");
+  return parse_result_from_json(json);
+}
+
+/**
+ * PUBLIC API: commit_update
+ */
+KernelExecResult IoctlClient::commit_update(const std::string &request_id, const AgentState &state,
+                                            const std::string &command_message_id)
+{
+  std::string json = execute_request("COMMIT_UPDATE", request_id, "{}", state, command_message_id);
+  if (json.empty())
+    return make_error(request_id, -1, "ipc_failure");
+  return parse_result_from_json(json);
+}
+
+/**
+ * PUBLIC API: rollback_update
+ */
+KernelExecResult IoctlClient::rollback_update(const std::string &request_id, const AgentState &state,
+                                              const std::string &reason,
+                                              const std::string &command_message_id)
+{
+  std::string params = reason.empty() ? "{}" : "{\"reason\":\"" + crypto::escape_json(reason) + "\"}";
+  std::string json = execute_request("ROLLBACK_UPDATE", request_id, params, state, command_message_id);
+  if (json.empty())
+    return make_error(request_id, -1, "ipc_failure");
+  return parse_result_from_json(json);
+}
+
+/**
+ * PUBLIC API: run_attestation
+ */
+KernelExecResult IoctlClient::run_attestation(const std::string &request_id, const AgentState &state,
+                                              const std::string &command_message_id)
+{
+  std::string json = execute_request("RUN_ATTESTATION", request_id, "{}", state, command_message_id);
+  if (json.empty())
+    return make_error(request_id, -1, "ipc_failure");
+  return parse_result_from_json(json);
+}
+
+/**
+ * PUBLIC API: run_tamper_check
+ */
+KernelExecResult IoctlClient::run_tamper_check(const std::string &request_id, const AgentState &state,
+                                               const std::string &command_message_id)
+{
+  std::string json = execute_request("RUN_TAMPER_CHECK", request_id, "{}", state, command_message_id);
+  if (json.empty())
+    return make_error(request_id, -1, "ipc_failure");
+  return parse_result_from_json(json);
+}
+
+/**
+ * PUBLIC API: self_repair
+ */
+KernelExecResult IoctlClient::self_repair(const std::string &request_id, const AgentState &state,
+                                          const std::string &component,
+                                          const std::string &command_message_id)
+{
+  std::string params = component.empty() ? "{}" : "{\"component\":\"" + crypto::escape_json(component) + "\"}";
+  std::string json = execute_request("SELF_REPAIR", request_id, params, state, command_message_id);
+  if (json.empty())
+    return make_error(request_id, -1, "ipc_failure");
   return parse_result_from_json(json);
 }
