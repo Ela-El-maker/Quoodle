@@ -16,15 +16,33 @@ use App\Http\Controllers\Telemetry\TelemetryController;
 use App\Http\Controllers\Updates\UpdateController;
 use Illuminate\Support\Facades\Route;
 
+/*
+|--------------------------------------------------------------------------
+| Public Routes (No Authentication Required)
+|--------------------------------------------------------------------------
+*/
 Route::middleware('api')->group(function (): void {
-    // Auth & tokens
+    // Authentication endpoints
     Route::post('/register', [RegisterController::class, 'register']);
     Route::post('/login', [LoginController::class, 'login']);
+    Route::post('/token/refresh', [TokenController::class, 'refresh']);
+
+    // 2FA verification (user has partial auth)
+    Route::post('/2fa/verify', [TwoFactorController::class, 'verify']);
+});
+
+/*
+|--------------------------------------------------------------------------
+| Protected Routes (JWT Authentication Required)
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['api', 'jwt.auth'])->group(function (): void {
+    // Session management
+    Route::post('/logout', [TokenController::class, 'logout']);
+
+    // 2FA setup (requires auth to enable 2FA)
     Route::post('/2fa/setup', [TwoFactorController::class, 'setup']);
     Route::post('/2fa/confirm', [TwoFactorController::class, 'confirm']);
-    Route::post('/2fa/verify', [TwoFactorController::class, 'verify']);
-    Route::post('/token/refresh', [TokenController::class, 'refresh']);
-    Route::post('/logout', [TokenController::class, 'logout']);
 
     // Devices & pairing
     Route::get('/devices', [DeviceController::class, 'index']);
