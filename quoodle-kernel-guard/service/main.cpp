@@ -1,5 +1,6 @@
 #include "dispatcher.hpp"
 #include "utils/logger.hpp"
+#include "utils/json_canonicalizer.hpp"
 #include "crypto/ed25519_verify_wrapper.hpp"
 
 #ifdef _WIN32
@@ -11,6 +12,20 @@
 #include <sstream>
 #include <thread>
 #include <vector>
+#include <algorithm>
+
+// --- Configuration ---
+
+/**
+ * Check if signature verification is required.
+ * Set KERNEL_REQUIRE_SIGNATURE=1 to enforce signature verification on all requests.
+ * In production, this should always be enabled.
+ */
+static bool is_signature_required()
+{
+  const char *env = std::getenv("KERNEL_REQUIRE_SIGNATURE");
+  return env && std::string(env) == "1";
+}
 
 // --- JSON Parsing Helpers ---
 
@@ -113,6 +128,143 @@ static std::vector<std::string> extract_json_string_array(const std::string &jso
   }
   return result;
 }
+
+// --- Request Signature Verification ---
+
+/**
+ * Build a canonical payload from the request for signature verification.
+ * Per spec, the signed payload includes these fields in lexicographic order:
+ *   - agent_sequence
+ *   - command_message_id
+ *   - opcode
+ *   - params (as JSON string)
+ *   - policy_hash
+ *   - request_id
+ *   - timestamp
+ *
+ * The signature field itself is NOT included in the canonical payload.
+ */
+static std::string build_canonical_request_payload(const std::string &req)
+{
+  // Extract all signable fields
+  std::string request_id = extract_json_string(req, "request_id");
+  std::string timestamp = extract_json_string(req, "timestamp");
+  std::string opcode = extract_json_string(req, "opcode");
+  std::string policy_hash = extract_json_string(req, "policy_hash");
+  std::string command_message_id = extract_json_string(req, "command_message_id");
+  int agent_sequence = extract_json_int(req, "agent_sequence", 0);
+
+  // Extract params as raw JSON substring (between "params": and the next field)
+  std::string params_json = "{}";
+  auto params_pos = req.find("\"params\"");
+  if (params_pos != std::string::npos)
+  {
+    auto colon = req.find(':', params_pos);
+    if (colon != std::string::npos)
+    {
+      // Skip whitespace
+      size_t start = colon + 1;
+      while (start < req.size() && (req[start] == ' ' || req[start] == '\t' || req[start] == '\n'))
+        start++;
+
+      if (start < req.size() && req[start] == '{')
+      {
+        // Find matching closing brace
+        int depth = 1;
+        size_t end = start + 1;
+        while (end < req.size() && depth > 0)
+        {
+          if (req[end] == '{')
+            depth++;
+          else if (req[end] == '}')
+            depth--;
+          end++;
+        }
+        params_json = req.substr(start, end - start);
+      }
+    }
+  }
+
+  // Build canonical object with fields in lexicographic order
+  std::vector<std::pair<std::string, std::string>> fields = {
+      {"agent_sequence", std::to_string(agent_sequence)},
+      {"command_message_id", "\"" + utils::escape_json(command_message_id) + "\""},
+      {"opcode", "\"" + utils::escape_json(opcode) + "\""},
+      {"params", params_json},
+      {"policy_hash", "\"" + utils::escape_json(policy_hash) + "\""},
+      {"request_id", "\"" + utils::escape_json(request_id) + "\""},
+      {"timestamp", "\"" + utils::escape_json(timestamp) + "\""}};
+
+  return utils::canonical_object(fields);
+}
+
+/**
+ * Verify the request signature.
+ * Returns true if:
+ *   - Signature verification is disabled (KERNEL_REQUIRE_SIGNATURE != 1), OR
+ *   - The signature is valid
+ *
+ * Returns false if signature verification is required and fails.
+ */
+static bool verify_request_signature(const std::string &req, std::string &error_out)
+{
+  // Check if signature verification is required
+  if (!is_signature_required())
+  {
+    utils::log_info("signature_verify: signature verification disabled (KERNEL_REQUIRE_SIGNATURE != 1)");
+    return true;
+  }
+
+  // Extract signature from request
+  std::string sig = extract_json_string(req, "signature");
+  if (sig.empty())
+  {
+    // Also check for "sig" as an alias
+    sig = extract_json_string(req, "sig");
+  }
+
+  if (sig.empty())
+  {
+    error_out = "SIGNATURE_MISSING";
+    utils::log_error("signature_verify: signature field missing from request");
+    return false;
+  }
+
+  // Build canonical payload
+  std::string canonical_payload = build_canonical_request_payload(req);
+  utils::log_info("signature_verify: canonical_payload = " + canonical_payload);
+
+  // Verify using Ed25519
+  // The public key is loaded from environment (KERNEL_CONTROLLER_PUBKEY_B64) or file
+  if (!ed25519_verify_message(canonical_payload, sig, std::string()))
+  {
+    error_out = "SIGNATURE_INVALID";
+    utils::log_error("signature_verify: Ed25519 signature verification failed");
+    return false;
+  }
+
+  utils::log_info("signature_verify: signature verified successfully");
+  return true;
+}
+
+/**
+ * Create an error response for signature verification failures.
+ */
+static KernelResponse make_signature_error_response(const std::string &request_id, const std::string &error_code)
+{
+  KernelResponse resp;
+  resp.request_id = request_id.empty() ? "req-unknown" : request_id;
+  resp.status = "denied";
+  resp.kernel_exec_id = "";
+  resp.timestamp = ""; // Will be filled by caller if needed
+  resp.result = "signature_verification_failed";
+  resp.error_code = 2001; // SIGNATURE_INVALID per spec
+  resp.error_message = error_code;
+  resp.sig = "";
+  return resp;
+}
+
+// --- JSON Output Helpers ---
 
 static std::string json_escape(const std::string &s)
 {
@@ -328,26 +480,21 @@ int main(int argc, char **argv)
           if (request_id.empty())
             request_id = "req-unknown";
 
-          // Optional signed requests: if a signature and signed_payload are included,
-          // verify using configured controller public key (KERNEL_CONTROLLER_PUBKEY_B64).
-          std::string sig = extract_json_string(req, "sig");
-          std::string signed_payload = extract_json_string(req, "signed_payload");
-          if (!sig.empty() && !signed_payload.empty())
+          // ============== Signature Verification ==============
+          // When KERNEL_REQUIRE_SIGNATURE=1, all requests must be signed.
+          // The canonical payload is built from request fields and verified using Ed25519.
+          std::string sig_error;
+          if (!verify_request_signature(req, sig_error))
           {
-            // ed25519_verify_message will attempt to load the controller public key
-            // from the provided string or from environment/file (KERNEL_CONTROLLER_PUBKEY_B64 or KERNEL_CONTROLLER_PUBKEY_PATH).
-            if (!ed25519_verify_message(signed_payload, sig, std::string()))
-            {
-              utils::log_error("pipe_server: signature verification failed or pubkey missing");
-              KernelResponse resp_err = disp.handle_unknown(request_id, "signature_invalid");
-              std::string out_err = to_json(resp_err);
-              DWORD written_err = 0;
-              WriteFile(hPipe, out_err.c_str(), static_cast<DWORD>(out_err.size()), &written_err, NULL);
-              FlushFileBuffers(hPipe);
-              DisconnectNamedPipe(hPipe);
-              CloseHandle(hPipe);
-              continue;
-            }
+            utils::log_error("pipe_server: signature verification failed: " + sig_error);
+            KernelResponse resp_err = make_signature_error_response(request_id, sig_error);
+            std::string out_err = to_json(resp_err);
+            DWORD written_err = 0;
+            WriteFile(hPipe, out_err.c_str(), static_cast<DWORD>(out_err.size()), &written_err, NULL);
+            FlushFileBuffers(hPipe);
+            DisconnectNamedPipe(hPipe);
+            CloseHandle(hPipe);
+            continue;
           }
 
           // Route to appropriate handler using dispatch_opcode (supports all 14 opcodes)
