@@ -35,50 +35,90 @@ Route::middleware('api')->group(function (): void {
 |--------------------------------------------------------------------------
 | Protected Routes (JWT Authentication Required)
 |--------------------------------------------------------------------------
+|
+| Route organization by role requirement:
+|   - Viewer (any authenticated): view devices, telemetry, alerts
+|   - Operator (or admin): execute commands, manage devices, ack alerts
+|   - Admin only: policy management, user management
+|
 */
 Route::middleware(['api', 'jwt.auth'])->group(function (): void {
-    // Session management
+    // Session management (all authenticated users)
     Route::post('/logout', [TokenController::class, 'logout']);
 
-    // 2FA setup (requires auth to enable 2FA)
+    // 2FA setup (all authenticated users can setup their own 2FA)
     Route::post('/2fa/setup', [TwoFactorController::class, 'setup']);
     Route::post('/2fa/confirm', [TwoFactorController::class, 'confirm']);
 
-    // Devices & pairing
-    Route::get('/devices', [DeviceController::class, 'index']);
-    Route::get('/devices/unpaired', [DeviceController::class, 'unpaired']);
-    Route::post('/devices/{device_id}/claim', [DeviceController::class, 'claim']);
-    Route::get('/devices/{device_id}', [DeviceController::class, 'show']);
-    Route::post('/devices/{device_id}/rename', [DeviceController::class, 'rename']);
-    Route::post('/pair/init', [PairingController::class, 'init']);
-    Route::post('/pair/confirm', [PairingController::class, 'confirm']);
+    /*
+    |----------------------------------------------------------------------
+    | Viewer Routes (Any Authenticated User)
+    |----------------------------------------------------------------------
+    | Read-only access to devices, telemetry, updates, alerts
+    */
+    Route::middleware('role:viewer')->group(function (): void {
+        // Devices listing (read-only)
+        Route::get('/devices', [DeviceController::class, 'index']);
+        Route::get('/devices/unpaired', [DeviceController::class, 'unpaired']);
+        Route::get('/devices/{device_id}', [DeviceController::class, 'show']);
 
-    // Commands
-    Route::post('/commands', [CommandController::class, 'store']);
-    Route::get('/commands/{command_id}', [CommandQueryController::class, 'show']);
-    Route::get('/devices/{device_id}/commands', [CommandQueryController::class, 'deviceCommands']);
+        // Telemetry (read-only)
+        Route::get('/devices/{device_id}/telemetry/latest', [TelemetryController::class, 'latest']);
+        Route::get('/devices/{device_id}/telemetry/history', [TelemetryController::class, 'history']);
 
-    // Telemetry
-    Route::get('/devices/{device_id}/telemetry/latest', [TelemetryController::class, 'latest']);
-    Route::get('/devices/{device_id}/telemetry/history', [TelemetryController::class, 'history']);
+        // Updates info (read-only)
+        Route::get('/devices/{device_id}/updates', [UpdateController::class, 'list']);
+        Route::get('/devices/{device_id}/updates/{release_id}', [UpdateController::class, 'show']);
 
-    // Updates
-    Route::get('/devices/{device_id}/updates', [UpdateController::class, 'list']);
-    Route::get('/devices/{device_id}/updates/{release_id}', [UpdateController::class, 'show']);
+        // Audit trail (read-only)
+        Route::get('/audit/device/{device_id}', [AuditTrailController::class, 'chain']);
 
-    // Audit & alerts
-    Route::get('/audit/device/{device_id}', [AuditTrailController::class, 'chain']);
-    Route::get('/alerts', [AlertsController::class, 'index']);
-    Route::post('/alerts/{alert_id}/ack', [AlertsController::class, 'acknowledge']);
+        // Alerts listing (read-only)
+        Route::get('/alerts', [AlertsController::class, 'index']);
 
-    // Policy Engine
-    Route::post('/policy/evaluate', [PolicyController::class, 'evaluate']);
-    Route::post('/policy/validate_bundle', [PolicyController::class, 'validateBundle']);
+        // Command status (read-only)
+        Route::get('/commands/{command_id}', [CommandQueryController::class, 'show']);
+        Route::get('/devices/{device_id}/commands', [CommandQueryController::class, 'deviceCommands']);
 
-    // Compliance Engine
-    Route::get('/compliance/profiles', [ComplianceController::class, 'profiles']);
-    Route::post('/compliance/evaluate', [ComplianceController::class, 'evaluate']);
+        // Compliance profiles (read-only)
+        Route::get('/compliance/profiles', [ComplianceController::class, 'profiles']);
+    });
 
-    // Audit Trail append
-    Route::post('/audit/append', [AuditTrailController::class, 'append']);
+    /*
+    |----------------------------------------------------------------------
+    | Operator Routes (Operator or Admin)
+    |----------------------------------------------------------------------
+    | Execute commands, manage devices, acknowledge alerts
+    */
+    Route::middleware('role:operator')->group(function (): void {
+        // Device management
+        Route::post('/devices/{device_id}/claim', [DeviceController::class, 'claim']);
+        Route::post('/devices/{device_id}/rename', [DeviceController::class, 'rename']);
+        Route::post('/pair/init', [PairingController::class, 'init']);
+        Route::post('/pair/confirm', [PairingController::class, 'confirm']);
+
+        // Commands execution
+        Route::post('/commands', [CommandController::class, 'store']);
+
+        // Alert acknowledgment
+        Route::post('/alerts/{alert_id}/ack', [AlertsController::class, 'acknowledge']);
+
+        // Compliance evaluation
+        Route::post('/compliance/evaluate', [ComplianceController::class, 'evaluate']);
+
+        // Audit Trail append
+        Route::post('/audit/append', [AuditTrailController::class, 'append']);
+    });
+
+    /*
+    |----------------------------------------------------------------------
+    | Admin Routes (Admin Only)
+    |----------------------------------------------------------------------
+    | Policy management, user management, system configuration
+    */
+    Route::middleware('role:admin')->group(function (): void {
+        // Policy Engine management
+        Route::post('/policy/evaluate', [PolicyController::class, 'evaluate']);
+        Route::post('/policy/validate_bundle', [PolicyController::class, 'validateBundle']);
+    });
 });
