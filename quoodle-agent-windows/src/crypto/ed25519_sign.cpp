@@ -56,9 +56,13 @@ std::string ed25519_sign_payload(const std::string &payload)
     unsigned char sig[crypto_sign_BYTES];
     if (crypto_sign_detached(sig, NULL, reinterpret_cast<const unsigned char *>(payload.data()), payload.size(), sk.data()) != 0)
     {
+        sodium_memzero(sk.data(), sk.size()); // Clear secret key on error
         std::cerr << "ed25519_sign: crypto_sign_detached failed\n";
         return {};
     }
+
+    // Clear secret key from memory immediately after use
+    sodium_memzero(sk.data(), sk.size());
 
     char out[crypto_sign_BYTES * 2 + 16];
     sodium_bin2base64(out, sizeof(out), sig, crypto_sign_BYTES, sodium_base64_VARIANT_ORIGINAL);
