@@ -19,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api();
 
         $middleware->alias([
+            'jwt.auth' => \App\Http\Middleware\VerifyJWT::class,
             'fastapi.signature' => \App\Http\Middleware\VerifyFastApiSignature::class,
         ]);
     })
