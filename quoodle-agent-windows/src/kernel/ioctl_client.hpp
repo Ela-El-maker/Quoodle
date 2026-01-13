@@ -15,14 +15,14 @@ class AgentState; // Forward declaration
  */
 struct KernelExecResult
 {
-    std::string request_id;
-    std::string status;
-    std::string kernel_exec_id;
-    std::string timestamp;
-    std::string result;
-    int error_code{0};
-    std::string error_message;
-    std::string sig;
+  std::string request_id;
+  std::string status;
+  std::string kernel_exec_id;
+  std::string timestamp;
+  std::string result;
+  int error_code{0};
+  std::string error_message;
+  std::string sig;
 };
 
 /**
@@ -43,70 +43,70 @@ struct KernelExecResult
 class IoctlClient
 {
 public:
-    IoctlClient() = default;
-    ~IoctlClient();
+  IoctlClient() = default;
+  ~IoctlClient();
 
-    // Public API for supported Kernel operations
-    // Each method accepts agent state for policy_hash and generates signed requests.
-    KernelExecResult lock_screen(const std::string &request_id, const AgentState &state,
-                                 const std::string &command_message_id = "");
-    KernelExecResult ping(const std::string &request_id, const AgentState &state,
+  // Public API for supported Kernel operations
+  // Each method accepts agent state for policy_hash and generates signed requests.
+  KernelExecResult lock_screen(const std::string &request_id, const AgentState &state,
+                               const std::string &command_message_id = "");
+  KernelExecResult ping(const std::string &request_id, const AgentState &state,
+                        const std::string &command_message_id = "");
+  KernelExecResult reboot(const std::string &request_id, const AgentState &state,
                           const std::string &command_message_id = "");
-    KernelExecResult reboot(const std::string &request_id, const AgentState &state,
+  KernelExecResult shutdown(const std::string &request_id, const AgentState &state,
                             const std::string &command_message_id = "");
-    KernelExecResult shutdown(const std::string &request_id, const AgentState &state,
-                              const std::string &command_message_id = "");
-    KernelExecResult logout(const std::string &request_id, const AgentState &state,
-                            const std::string &command_message_id = "");
-    KernelExecResult collect_system_info(const std::string &request_id, const AgentState &state,
-                                         const std::string &command_message_id = "");
-    KernelExecResult get_process_list(const std::string &request_id, const AgentState &state,
-                                      const std::string &command_message_id = "");
-    KernelExecResult validate_update_package(const std::string &request_id, const AgentState &state,
-                                             const std::string &package_path,
-                                             const std::string &command_message_id = "");
-    KernelExecResult stage_update(const std::string &request_id, const AgentState &state,
-                                  const std::string &version, const std::string &package_path,
-                                  const std::string &command_message_id = "");
-    KernelExecResult commit_update(const std::string &request_id, const AgentState &state,
-                                   const std::string &command_message_id = "");
-    KernelExecResult rollback_update(const std::string &request_id, const AgentState &state,
-                                     const std::string &reason = "",
-                                     const std::string &command_message_id = "");
-    KernelExecResult run_attestation(const std::string &request_id, const AgentState &state,
-                                     const std::string &command_message_id = "");
-    KernelExecResult run_tamper_check(const std::string &request_id, const AgentState &state,
-                                      const std::string &command_message_id = "");
-    KernelExecResult self_repair(const std::string &request_id, const AgentState &state,
-                                 const std::string &component = "",
+  KernelExecResult logout(const std::string &request_id, const AgentState &state,
+                          const std::string &command_message_id = "");
+  KernelExecResult collect_system_info(const std::string &request_id, const AgentState &state,
+                                       const std::string &command_message_id = "");
+  KernelExecResult get_process_list(const std::string &request_id, const AgentState &state,
+                                    const std::string &command_message_id = "");
+  KernelExecResult validate_update_package(const std::string &request_id, const AgentState &state,
+                                           const std::string &package_path,
+                                           const std::string &command_message_id = "");
+  KernelExecResult stage_update(const std::string &request_id, const AgentState &state,
+                                const std::string &version, const std::string &package_path,
+                                const std::string &command_message_id = "");
+  KernelExecResult commit_update(const std::string &request_id, const AgentState &state,
                                  const std::string &command_message_id = "");
+  KernelExecResult rollback_update(const std::string &request_id, const AgentState &state,
+                                   const std::string &reason = "",
+                                   const std::string &command_message_id = "");
+  KernelExecResult run_attestation(const std::string &request_id, const AgentState &state,
+                                   const std::string &command_message_id = "");
+  KernelExecResult run_tamper_check(const std::string &request_id, const AgentState &state,
+                                    const std::string &command_message_id = "");
+  KernelExecResult self_repair(const std::string &request_id, const AgentState &state,
+                               const std::string &component = "",
+                               const std::string &command_message_id = "");
 
 private:
-    bool ensure_connection(); // Helper to reconnect if pipe drops
-    void disconnect();
+  bool ensure_connection(); // Helper to reconnect if pipe drops
+  void disconnect();
 
-    // Core communication handler (Pipe + Fallback)
-    std::string execute_request(const std::string &opcode, const std::string &request_id,
-                                const std::string &params_json, const AgentState &state,
-                                const std::string &command_message_id);
+  // Core communication handler (Pipe + Fallback)
+  std::string execute_request(const std::string &opcode, const std::string &request_id,
+                              const std::string &params_json, const AgentState &state,
+                              const std::string &command_message_id);
 
-    // Internal JSON parsing
-    KernelExecResult parse_result_from_json(const std::string &json);
+  // Internal JSON parsing
+  KernelExecResult parse_result_from_json(const std::string &json);
 
-    // Parse and verify kernel response signature
-    KernelExecResult parse_and_verify_response(const std::string &json, const std::string &request_id);
+  // Parse and verify kernel response signature
+  KernelExecResult parse_and_verify_response(const std::string &json, const std::string &request_id);
 
-    // Build canonical payload for signing (fields in lexicographic order)
-    std::string build_canonical_payload(const std::string &request_id, const std::string &timestamp,
-                                        const std::string &opcode, const std::string &params,
-                                        std::uint64_t agent_sequence, const std::string &policy_hash,
-                                        const std::string &command_message_id);
+  // Build canonical payload for signing (fields in lexicographic order)
+  std::string build_canonical_payload(const std::string &request_id, const std::string &timestamp,
+                                      const std::string &opcode, const std::string &params,
+                                      std::uint64_t agent_sequence, const std::string &policy_hash,
+                                      const std::string &command_message_id);
 
-    // Get next sequence number (thread-safe, monotonic)
-    std::uint64_t next_sequence();
+  // Get next sequence number (thread-safe, monotonic)
+  std::uint64_t next_sequence();
 
 #ifdef _WIN32
-    HANDLE hPipe = INVALID_HANDLE_VALUE;
+  HANDLE hPipe = INVALID_HANDLE_VALUE;
 #endif
-    std::uint64_t sequence_{0};
+  std::uint64_t sequence_{0};
 };

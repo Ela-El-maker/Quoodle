@@ -28,11 +28,11 @@ static std::uint64_t s_sequence_counter{0};
 // Environment variable to control kernel response signature verification (default: enabled)
 static bool is_kernel_response_verification_required()
 {
-    const char *env = std::getenv("AGENT_REQUIRE_KERNEL_SIGNATURE");
-    // Default to enabled (1) unless explicitly disabled
-    if (!env)
-        return true;
-    return std::string(env) != "0";
+  const char *env = std::getenv("AGENT_REQUIRE_KERNEL_SIGNATURE");
+  // Default to enabled (1) unless explicitly disabled
+  if (!env)
+    return true;
+  return std::string(env) != "0";
 }
 
 /*
@@ -201,8 +201,8 @@ static bool verify_kernel_response_signature(const std::string &json, KernelExec
   if (!verify_result.valid)
   {
     Logger::log(LogLevel::Warn, "Kernel response signature verification failed: " +
-                                verify_result.error_code + " - " + verify_result.error_message);
-    
+                                    verify_result.error_code + " - " + verify_result.error_message);
+
     // Preserve the request_id but mark as verification failure
     resp.status = "error";
     resp.error_code = 2001; // SIGNATURE_INVALID per KernelErrorCodes
@@ -330,7 +330,7 @@ static KernelExecResult make_error(const std::string &request_id, int code, cons
 KernelExecResult IoctlClient::parse_and_verify_response(const std::string &json, const std::string &request_id)
 {
   KernelExecResult resp = parse_result_from_json(json);
-  
+
   // Verify signature if enabled
   if (!verify_kernel_response_signature(json, resp))
   {
@@ -339,7 +339,7 @@ KernelExecResult IoctlClient::parse_and_verify_response(const std::string &json,
     resp.request_id = request_id;
     return resp;
   }
-  
+
   return resp;
 }
 
