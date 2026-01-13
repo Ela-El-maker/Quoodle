@@ -10,21 +10,35 @@
 #include <nlohmann/json.hpp>
 
 #include "../kernel/ioctl_client.hpp"
+#include "../crypto/command_verifier.hpp"
 #include "ws_protocol.hpp"
+
+// Environment variable to control signature verification (default: enabled)
+static bool is_signature_verification_required()
+{
+    const char *env = std::getenv("AGENT_REQUIRE_COMMAND_SIGNATURE");
+    // Default to enabled (1) unless explicitly disabled
+    if (!env)
+        return true;
+    return std::string(env) != "0";
+}
 
 WsClient::WsClient(std::string endpoint, std::string device_id)
     : endpoint_(std::move(endpoint)), device_id_(std::move(device_id)), state_(device_id_) {}
 
-void WsClient::set_initial_message(const std::string& message) {
+void WsClient::set_initial_message(const std::string &message)
+{
     initial_message_ = message;
 }
 
-void WsClient::connect_and_run() {
+void WsClient::connect_and_run()
+{
     ix::initNetSystem();
     ix::WebSocket socket;
     socket.setUrl(endpoint_);
 
-    socket.setOnMessageCallback([&](const ix::WebSocketMessagePtr& msg) {
+    socket.setOnMessageCallback([&](const ix::WebSocketMessagePtr &msg)
+                                {
         if (msg->type == ix::WebSocketMessageType::Open) {
             Logger::log(LogLevel::Info, "connected, sending AUTH");
             socket.sendText(initial_message_);
@@ -64,6 +78,41 @@ void WsClient::connect_and_run() {
                     std::string policy_hash = envelope["meta"].value("policy_hash", "");
 
                     if (!session_id.empty() && !command_message_id.empty()) {
+                        // Verify command envelope signature before processing
+                        if (is_signature_verification_required()) {
+                            std::string envelope_str = envelope.dump();
+                            auto verify_result = crypto::verify_command_envelope(envelope_str, last_command_seq_, "");
+                            
+                            if (!verify_result.valid) {
+                                Logger::log(LogLevel::Warn, "COMMAND_DELIVERY signature verification failed: " + 
+                                           verify_result.error_code + " - " + verify_result.error_message);
+                                
+                                // Send rejection ACK with reason
+                                auto rejected_ack = build_command_ack_json(device_id_, session_id, command_message_id, 
+                                                                           "rejected", verify_result.error_code);
+                                socket.sendText(rejected_ack);
+                                
+                                // Send error result
+                                int error_code = 4003;
+                                if (verify_result.error_code == "TTL_EXPIRED") error_code = 4005;
+                                else if (verify_result.error_code == "SEQ_REPLAY") error_code = 4006;
+                                
+                                auto denied = build_command_result_json(device_id_, session_id, command_message_id,
+                                                                        trace_id, "failed", verify_result.error_code,
+                                                                        verify_result.error_message, "", "", error_code, "");
+                                socket.sendText(denied);
+                                return;
+                            }
+                            
+                            // Update last sequence on successful verification
+                            std::uint64_t new_seq = envelope.value("seq", static_cast<std::uint64_t>(0));
+                            if (new_seq > last_command_seq_) {
+                                last_command_seq_ = new_seq;
+                            }
+                            
+                            Logger::log(LogLevel::Debug, "COMMAND_DELIVERY signature verified successfully");
+                        }
+                        
                         auto ack = build_command_ack_json(device_id_, session_id, command_message_id, "received", "");
                         socket.sendText(ack);
 
@@ -86,13 +135,13 @@ void WsClient::connect_and_run() {
 
                         IoctlClient ioctl;
                         if (method == "lock_screen") {
-                            auto res = ioctl.lock_screen(command_message_id);
+                            auto res = ioctl.lock_screen(command_message_id, state_, command_message_id);
                             auto result_msg = build_command_result_json(device_id_, session_id, command_message_id,
                                                                         trace_id, "completed", "ok", "lock_screen done",
                                                                         "", "", res.error_code, res.error_message);
                             socket.sendText(result_msg);
                         } else if (method == "ping") {
-                            auto res = ioctl.ping(command_message_id);
+                            auto res = ioctl.ping(command_message_id, state_, command_message_id);
                             auto result_msg = build_command_result_json(device_id_, session_id, command_message_id,
                                                                         trace_id, "completed", "ok", res.result,
                                                                         "", "", res.error_code, res.error_message);
@@ -127,8 +176,7 @@ void WsClient::connect_and_run() {
             Logger::log(LogLevel::Error, std::string("ws error: ") + msg->errorInfo.reason);
         } else if (msg->type == ix::WebSocketMessageType::Close) {
             Logger::log(LogLevel::Info, "ws closed");
-        }
-    });
+        } });
 
     socket.start();
 

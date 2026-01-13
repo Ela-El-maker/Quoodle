@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <cstdint>
 
 #include "../agent_state.hpp"
 #include "../logging/logger.hpp"
@@ -8,11 +9,12 @@
 #include "../quarantine/quarantine_manager.hpp"
 #include "../recovery/recovery_manager.hpp"
 
-class WsClient {
+class WsClient
+{
 public:
     WsClient(std::string endpoint, std::string device_id);
 
-    void set_initial_message(const std::string& message);
+    void set_initial_message(const std::string &message);
 
     void connect_and_run();
 
@@ -27,4 +29,7 @@ private:
     OTAManager ota_;
     QuarantineManager quarantine_;
     RecoveryManager recovery_;
+
+    // Sequence tracking for replay protection
+    std::uint64_t last_command_seq_{0};
 };
