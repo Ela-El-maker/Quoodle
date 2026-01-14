@@ -9,6 +9,8 @@
 .DS_Store
 .dart_tool/
 .github/
+!/.github/
+!/.github/workflows/
 .vscode/
 
 # Build directories
