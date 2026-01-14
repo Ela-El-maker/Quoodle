@@ -1,7 +1,7 @@
 #pragma once
 
-#ifdef _WIN32
 #include <string>
+#ifdef _WIN32
 #include <windows.h>
 
 // Try to load a DPAPI-protected base64 blob either from env (env_var)
