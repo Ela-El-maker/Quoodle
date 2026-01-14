@@ -13,5 +13,9 @@ jobs:
         run: composer install --working-dir=quoodle-control-plane --no-interaction
       - name: Lint
         run: cd quoodle-control-plane && ./vendor/bin/pint --test || true
+      - name: Prepare .env
+        run: cp quoodle-control-plane/.env.example quoodle-control-plane/.env
+      - name: Generate app key
+        run: cd quoodle-control-plane && php artisan key:generate
       - name: Tests
         run: cd quoodle-control-plane && php artisan test --testsuite=Feature
