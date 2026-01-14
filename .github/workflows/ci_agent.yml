@@ -6,6 +6,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Configure
-        run: cmake -S windows-agent -B windows-agent/build
+        run: cmake -S quoodle-agent-windows -B quoodle-agent-windows/build
       - name: Build
-        run: cmake --build windows-agent/build --config Release
+        run: cmake --build quoodle-agent-windows/build --config Release

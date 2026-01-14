@@ -11,7 +11,7 @@ jobs:
           channel: "stable"
       - name: Get packages
         run: flutter pub get
-        working-directory: mobile-app
+        working-directory: quoodle-mobile-client
       - name: Analyze
         run: flutter analyze
-        working-directory: mobile-app
+        working-directory: quoodle-mobile-client
