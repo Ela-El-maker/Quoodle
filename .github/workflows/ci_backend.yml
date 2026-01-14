@@ -8,7 +8,7 @@ jobs:
       - name: PHP setup
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.3"
+          php-version: "8.4"
       - name: Install deps
         run: composer install --working-dir=quoodle-control-plane --no-interaction
       - name: Lint
