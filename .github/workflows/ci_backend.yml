@@ -10,8 +10,8 @@ jobs:
         with:
           php-version: '8.3'
       - name: Install deps
-        run: composer install --working-dir=backend-laravel --no-interaction
+        run: composer install --working-dir=quoodle-control-plane --no-interaction
       - name: Lint
-        run: cd backend-laravel && ./vendor/bin/pint --test || true
+        run: cd quoodle-control-plane && ./vendor/bin/pint --test || true
       - name: Tests
-        run: cd backend-laravel && php artisan test --testsuite=Feature
+        run: cd quoodle-control-plane && php artisan test --testsuite=Feature

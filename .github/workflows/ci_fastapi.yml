@@ -10,6 +10,6 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install deps
-        run: pip install -r backend-fastapi/requirements.txt
+        run: pip install -r quoodle-gateway/requirements.txt
       - name: Lint
-        run: python -m pyflakes backend-fastapi || true
+        run: python -m pyflakes quoodle-gateway || true
