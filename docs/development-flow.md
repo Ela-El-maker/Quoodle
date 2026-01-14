@@ -29,7 +29,7 @@ This roadmap is the **master engineering plan** for the Secure Device Control Sy
 ```
 secure-device-control/
 │
-├── backend-laravel/
+├── quoodle-control-plane/
 ├── backend-fastapi/
 ├── quoodle-agent-windows/
 ├── kernel-service/
@@ -44,7 +44,7 @@ Use the skeleton structure from `skeleton for all repositories.md`.
 
 ## **1.2 Initialize each repository**
 
-- Laravel: `laravel new backend-laravel`
+- Laravel: `laravel new quoodle-control-plane`
 - FastAPI: create `pyproject.toml`, `app/main.py`, dependencies etc.
 - WindowsAgent: initialize CMake project
 - KernelService: C/C++ project with CMake

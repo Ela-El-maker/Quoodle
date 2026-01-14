@@ -13,7 +13,7 @@ This is the canonical folder layout for the **Secure Device Control System (Acad
 ```text
 secure-device-control/
 │
-├── backend-laravel/        # Laravel API, CA, policy engine, dashboards
+├── quoodle-control-plane/        # Laravel API, CA, policy engine, dashboards
 ├── backend-fastapi/        # FastAPI WSS controller, router, telemetry gateway
 ├── quoodle-agent-windows/          # User-mode Windows agent (C++23)
 ├── kernel-service/         # Privileged service / driver (C / C++)
@@ -39,13 +39,13 @@ secure-device-control/
 
 ============================================================
 
-# 📌 **1. backend-laravel (PHP/Laravel 12)**
+# 📌 **1. quoodle-control-plane (PHP/Laravel 12)**
 
 ============================================================
 
 ```
 
-backend-laravel/
+quoodle-control-plane/
 │
 ├── app/
 │ ├── Console/
