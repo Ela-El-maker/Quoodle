@@ -80,17 +80,17 @@ quoodle-<role>[-<scope>]
 
 **Apply to your current tree:**
 
-| Current         | New Name                                     |
-| --------------- | -------------------------------------------- |
-| backend-laravel | quoodle-control-plane                        |
-| backend-fastapi | quoodle-gateway                              |
-| windows-agent   | quoodle-agent-windows                        |
-| kernel-service  | quoodle-kernel-guard                         |
-| mobile-app      | quoodle-mobile-client                        |
-| mira            | experiments/mira OR quoodle-mobile-client-v2 |
-| infrastructure  | quoodle-infra                                |
-| tools           | quoodle-tools                                |
-| scripts         | quoodle-scripts                              |
+| Current               | New Name                                     |
+| --------------------- | -------------------------------------------- |
+| backend-laravel       | quoodle-control-plane                        |
+| backend-fastapi       | quoodle-gateway                              |
+| quoodle-agent-windows | quoodle-agent-windows                        |
+| kernel-service        | quoodle-kernel-guard                         |
+| mobile-app            | quoodle-mobile-client                        |
+| mira                  | experiments/mira OR quoodle-mobile-client-v2 |
+| infrastructure        | quoodle-infra                                |
+| tools                 | quoodle-tools                                |
+| scripts               | quoodle-scripts                              |
 
 ---
 
@@ -274,7 +274,7 @@ secure-device-control/
 │
 ├── backend-laravel/
 ├── backend-fastapi/
-├── windows-agent/
+├── quoodle-agent-windows/
 ├── kernel-service/
 ├── mobile-app/
 ├── infrastructure/
@@ -470,7 +470,7 @@ Provides:
 - Presence tracker
 - Queue workers (DLQ, analytics, alerts)
 
-### **7.3 windows-agent (C++)**
+### **7.3 quoodle-agent-windows (C++)**
 
 Implements:
 
@@ -592,5 +592,3 @@ Please follow:
 - `docs/onboarding/contribution_guide.md`
 - Format all code with Prettier, PHP-CS-Fixer, Black, or clang-format depending on repo
 - Sign-off commits if contributing to core protocols
-
-

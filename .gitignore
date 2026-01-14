@@ -57,5 +57,5 @@ ci_secrets.env
 scripts/ci_secrets_output.txt
 
 # Ignore system-specific agent/kernel artifacts
-windows-agent/build/
+quoodle-agent-windows/build/
 kernel-service/build/
