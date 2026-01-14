@@ -26,7 +26,7 @@ if(NOT HAVE_SODIUM)
     endif()
 endif()
 
-add_library(kernel_service STATIC
+set(KERNEL_SRCS
     service/main.cpp
     service/dispatcher.cpp
     service/crypto/ed25519_verify_wrapper.cpp
@@ -34,29 +34,38 @@ add_library(kernel_service STATIC
     service/utils/dpapi_loader.cpp
     service/utils/logger.cpp
     service/utils/json_canonicalizer.cpp
-    
-    # SystemControl opcodes
-    service/opcodes/lock_screen.cpp
-    service/opcodes/reboot.cpp
-    service/opcodes/shutdown.cpp
-    service/opcodes/logout.cpp
-    
+
     # AgentInternal opcodes
     service/opcodes/ping.cpp
-    service/opcodes/collect_system_info.cpp
-    service/opcodes/process_list.cpp
-    service/opcodes/validate_update_package.cpp
     
     # UpdateAndStaging opcodes
     service/opcodes/stage_update.cpp
     service/opcodes/commit_update.cpp
     service/opcodes/rollback_update.cpp
-    
+
     # SecurityIntegrity opcodes
     service/opcodes/attestation.cpp
     service/opcodes/tamper_check.cpp
     service/opcodes/self_repair.cpp
 )
+
+# Windows-specific sources
+if(WIN32)
+    list(APPEND KERNEL_SRCS
+        # SystemControl opcodes
+        service/opcodes/lock_screen.cpp
+        service/opcodes/reboot.cpp
+        service/opcodes/shutdown.cpp
+        service/opcodes/logout.cpp
+
+        # AgentInternal opcodes
+        service/opcodes/collect_system_info.cpp
+        service/opcodes/process_list.cpp
+        service/opcodes/validate_update_package.cpp
+    )
+endif()
+
+add_library(kernel_service STATIC ${KERNEL_SRCS})
 
 target_include_directories(kernel_service PUBLIC service)
 if(HAVE_SODIUM)

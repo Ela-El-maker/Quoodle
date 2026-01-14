@@ -123,7 +123,7 @@ def main() -> int:
     fastapi_sk_b64 = os.getenv("SRS_FASTAPI_SERVICE_PRIVATE_KEY_B64")
 
     verify_delay = int(os.getenv("STATE_VERIFY_DELAY_SECONDS", "10"))
-    audit_archive_path = os.getenv("AUDIT_ARCHIVE_PATH", os.path.join("backend-laravel", "storage", "app", "audit_archive.jsonl"))
+    audit_archive_path = os.getenv("AUDIT_ARCHIVE_PATH", os.path.join("quoodle-control-plane", "storage", "app", "audit_archive.jsonl"))
 
     client = httpx.Client(timeout=10)
 

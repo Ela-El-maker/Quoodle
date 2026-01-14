@@ -283,7 +283,7 @@ def main() -> int:
 
     # static check for encrypted cast
     try:
-        user_model_path = os.path.join(os.path.dirname(__file__), "..", "..", "backend-laravel", "app", "Models", "User.php")
+        user_model_path = os.path.join(os.path.dirname(__file__), "..", "..", "quoodle-control-plane", "app", "Models", "User.php")
         user_model_path = os.path.abspath(user_model_path)
         txt = open(user_model_path, "r", encoding="utf-8").read()
         enc_ok = "'two_factor_secret' => 'encrypted'" in txt

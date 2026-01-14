@@ -82,7 +82,7 @@ quoodle-<role>[-<scope>]
 
 | Current               | New Name                                     |
 | --------------------- | -------------------------------------------- |
-| backend-laravel       | quoodle-control-plane                        |
+| quoodle-control-plane | quoodle-control-plane                        |
 | backend-fastapi       | quoodle-gateway                              |
 | quoodle-agent-windows | quoodle-agent-windows                        |
 | kernel-service        | quoodle-kernel-guard                         |
@@ -272,7 +272,7 @@ Security is treated as **a first-class subsystem**, not an afterthought.
 ```
 secure-device-control/
 │
-├── backend-laravel/
+├── quoodle-control-plane/
 ├── backend-fastapi/
 ├── quoodle-agent-windows/
 ├── kernel-service/
@@ -444,7 +444,7 @@ Alerts generated if any violation occurs.
 
 ## 🧱 **7. Repository Summaries**
 
-### **7.1 backend-laravel**
+### **7.1 quoodle-control-plane**
 
 Handles:
 
