@@ -1,0 +1,119 @@
+version: '3.8'
+
+services:
+  # -----------------------------------------------------------------------------
+  # DATABASE (MySQL) - Primary Store for Laravel
+  # -----------------------------------------------------------------------------
+  db:
+    image: mysql:8.0
+    container_name: quoodle-db
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: secure_device
+      MYSQL_ROOT_PASSWORD: devpassword
+      MYSQL_USER: quoodle
+      MYSQL_PASSWORD: quoodle_pass
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # -----------------------------------------------------------------------------
+  # REDIS - Shared Cache & Message Queue
+  # -----------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: quoodle-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # -----------------------------------------------------------------------------
+  # CONTROL PLANE (Laravel)
+  # -----------------------------------------------------------------------------
+  control-plane:
+    build:
+      context: ./quoodle-control-plane
+      dockerfile: Dockerfile
+    container_name: quoodle-control-plane
+    ports:
+      - "8080:80"
+    environment:
+      APP_NAME: "Quoodle Control Plane"
+      APP_ENV: local
+      APP_KEY: ${APP_KEY:-base64:plv/DqGgI8k6y/7y/y/y/y/y/y/y/y/y/y/y/y/y/y=}
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8080
+      
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_DATABASE: secure_device
+      DB_USERNAME: root
+      DB_PASSWORD: devpassword
+      
+      REDIS_HOST: redis
+      REDIS_PASSWORD: null
+      REDIS_PORT: 6379
+      
+      # Integration
+      FASTAPI_BASE_URL: http://gateway:8000/api/v1
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - quoodle-net
+
+  # -----------------------------------------------------------------------------
+  # GATEWAY (FastAPI)
+  # -----------------------------------------------------------------------------
+  gateway:
+    build:
+      context: ./quoodle-gateway
+      dockerfile: Dockerfile
+    container_name: quoodle-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      # Core
+      HEARTBEAT_INTERVAL_SECONDS: 30
+      TELEMETRY_INTERVAL_SECONDS: 60
+      POLICY_HASH: "sha256:dev_policy_hash_12345"
+      CONTROLLER_ID: "dev_controller_01"
+      
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+      REDIS_KEY_PREFIX: "quoodle:"
+      
+      # Integration
+      LARAVEL_WEBHOOK_BASE: http://control-plane:80/api/v1/webhook
+      
+      # Security (Dev Defaults)
+      REQUIRE_ED25519: "false"
+      ALLOW_DEV_SIG_FALLBACK: "true"
+      REQUIRE_AGENT_SEQ: "false"
+      
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - quoodle-net
+
+networks:
+  quoodle-net:
+    driver: bridge
+
+volumes:
+  db_data:
+  redis_data:
