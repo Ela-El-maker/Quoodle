@@ -79,7 +79,7 @@ class RedisService:
         Returns True if connected, False if using fallback.
         """
         if not HAVE_REDIS or not self._config.url:
-            logger.warning("Redis not available, using in-memory fallback")
+            logger.warning("⚠️  REDIS NOT CONFIGURED OR NOT AVAILABLE. Using IN-MEMORY fallback. THIS IS NOT FOR PRODUCTION.")
             return False
 
         try:
