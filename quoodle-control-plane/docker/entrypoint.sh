@@ -9,8 +9,9 @@ sleep 5
 echo "Running migrations..."
 php artisan migrate --force
 
-# Cache config
+# Clear old config and cache fresh (picks up runtime env from docker-compose)
 echo "Caching configuration..."
+php artisan config:clear
 php artisan config:cache
 php artisan route:cache
 

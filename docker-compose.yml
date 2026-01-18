@@ -8,7 +8,7 @@ services:
     image: mysql:8.0
     container_name: quoodle-db
     ports:
-      - "3306:3306"
+      - "3307:3306"
     environment:
       MYSQL_DATABASE: secure_device
       MYSQL_ROOT_PASSWORD: devpassword
@@ -17,9 +17,11 @@ services:
     volumes:
       - db_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
       timeout: 20s
       retries: 10
+    networks:
+      - quoodle-net
 
   # -----------------------------------------------------------------------------
   # REDIS - Shared Cache & Message Queue
@@ -32,10 +34,12 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - quoodle-net
 
   # -----------------------------------------------------------------------------
   # CONTROL PLANE (Laravel)
@@ -50,23 +54,24 @@ services:
     environment:
       APP_NAME: "Quoodle Control Plane"
       APP_ENV: local
-      APP_KEY: ${APP_KEY:-base64:plv/DqGgI8k6y/7y/y/y/y/y/y/y/y/y/y/y/y/y/y=}
+      APP_KEY: "base64:QxkzZLJ3rLZLy960pyF2CN1TRfB2glfQOh4vZBI0pHY="
       APP_DEBUG: "true"
       APP_URL: http://localhost:8080
-      
+
       DB_CONNECTION: mysql
-      DB_HOST: db
+      DB_HOST: quoodle-db
       DB_PORT: 3306
       DB_DATABASE: secure_device
       DB_USERNAME: root
       DB_PASSWORD: devpassword
-      
+
       REDIS_HOST: redis
       REDIS_PASSWORD: null
       REDIS_PORT: 6379
-      
+
       # Integration
       FASTAPI_BASE_URL: http://gateway:8000/api/v1
+      LARAVEL_SERVICE_PRIVATE_KEY_B64: "b1gtyMTpPZwNkqBe8RQcFt6g1dJzG7TgC8Q+P8Hm5K9x8zkzt0tn7mL+6I5LBgzc3upfSvfg1W+a9Q+FJLJRuw=="
     depends_on:
       db:
         condition: service_healthy
@@ -91,19 +96,22 @@ services:
       TELEMETRY_INTERVAL_SECONDS: 60
       POLICY_HASH: "sha256:dev_policy_hash_12345"
       CONTROLLER_ID: "dev_controller_01"
-      
+
       # Redis
       REDIS_URL: redis://redis:6379/0
       REDIS_KEY_PREFIX: "quoodle:"
-      
+
       # Integration
       LARAVEL_WEBHOOK_BASE: http://control-plane:80/api/v1/webhook
-      
+      JWKS_URL: http://control-plane:80/.well-known/jwks.json
+
       # Security (Dev Defaults)
       REQUIRE_ED25519: "false"
       ALLOW_DEV_SIG_FALLBACK: "true"
       REQUIRE_AGENT_SEQ: "false"
-      
+      REQUIRE_LARAVEL_SIGNATURE: "true"
+      LARAVEL_SERVICE_PUBKEY_B64: "cfM5M7dLZ+5i/uiOSwYM3N7qX0r34NVvmvUPhSSyUbs="
+
     depends_on:
       redis:
         condition: service_healthy

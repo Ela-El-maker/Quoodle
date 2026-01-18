@@ -84,4 +84,10 @@ class LaravelSignatureMiddleware(BaseHTTPMiddleware):
             except ReplayError:
                 return JSONResponse({"detail": "Replay detected"}, status_code=401)
 
+        # Re-inject the body so downstream handlers can read it.
+        async def receive():
+            return {"type": "http.request", "body": raw}
+
+        request._receive = receive
+
         return await call_next(request)
