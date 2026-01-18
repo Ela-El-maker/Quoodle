@@ -1,4 +1,4 @@
-FROM php:8.2-fpm
+FROM php:8.4-fpm
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -31,7 +31,7 @@ COPY . /var/www
 COPY --chown=www-data:www-data . /var/www
 
 # Install composer dependencies
-RUN composer install --no-interaction --optimize-autoloader --no-dev
+RUN composer install --no-interaction --optimize-autoloader
 
 # Copy docker config
 COPY docker/nginx.conf /etc/nginx/sites-available/default

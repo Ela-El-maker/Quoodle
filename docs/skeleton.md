@@ -14,11 +14,11 @@ This is the canonical folder layout for the **Secure Device Control System (Acad
 secure-device-control/
 │
 ├── quoodle-control-plane/        # Laravel API, CA, policy engine, dashboards
-├── backend-fastapi/        # FastAPI WSS controller, router, telemetry gateway
-├── quoodle-agent-windows/          # User-mode Windows agent (C++23)
-├── kernel-service/         # Privileged service / driver (C / C++)
-├── mobile-app/             # Flutter mobile client
-├── infrastructure/         # Docker, k8s, Terraform, CI/CD, monitoring
+├── quoodle-gateway/        # FastAPI WSS controller, router, telemetry gateway
+├── quoodle-agent-windows/    # C++ Client Agent (User Mode)
+├── quoodle-kernel-guard/     # Privileged service / driver (C / C++)
+├── quoodle-mobile-client/    # Flutter mobile client
+├── quoodle-infra/            # Docker, k8s, Terraform, CI/CD, monitoring
 ├── docs/                   # Architecture, specs, threat model, report
 │
 ├── .github/                # Global GitHub Actions (monorepo-level)
@@ -155,13 +155,14 @@ quoodle-control-plane/
 
 ============================================================
 
-# ⚡ **2. backend-fastapi (Python/FastAPI)**
+# ⚡ **2. quoodle-gateway (Python/FastAPI)**
 
-============================================================
+**Role:** Real-time WebSocket hub, telemetry ingestion, command dispatch, OTA orchestration.
 
-```
+**Structure:**
 
-backend-fastapi/
+```text
+quoodle-gateway/
 │
 ├── app/
 │ ├── main.py
@@ -234,10 +235,11 @@ backend-fastapi/
 
 # 🪟 **3. quoodle-agent-windows (C++23)**
 
-============================================================
+**Role:** C++ Client Agent (User Mode)
 
-```
+**Structure:**
 
+```text
 quoodle-agent-windows/
 │
 ├── src/
@@ -299,13 +301,14 @@ quoodle-agent-windows/
 
 ============================================================
 
-# 🔧 **4. kernel-service (C / C++)**
+# 🔧 **4. quoodle-kernel-guard (C / C++)**
 
-============================================================
+**Role:** Privileged operations, anti-tamper, update commitment, IOCTL handler.
 
-```
+**Structure:**
 
-kernel-service/
+```text
+quoodle-kernel-guard/
 │
 ├── service/
 │ ├── main.cpp
@@ -351,13 +354,14 @@ kernel-service/
 
 ============================================================
 
-# 📱 **5. mobile-app (Flutter)**
+# 📱 **5. quoodle-mobile-client (Flutter)**
 
-============================================================
+**Role:** User UI, pairing, telemetry visualization, command issuance.
 
-```
+**Structure:**
 
-mobile-app/
+```text
+quoodle-mobile-client/
 │
 ├── lib/
 │ ├── main.dart
@@ -410,13 +414,14 @@ mobile-app/
 
 ============================================================
 
-# ☁️ **6. infrastructure (DevOps / IaC)**
+# ☁️ **6. quoodle-infra (DevOps / IaC)**
 
-============================================================
+**Role:** Deployment manifests, Docker images, CI/CD pipelines, terraform state.
 
-```
+**Structure:**
 
-infrastructure/
+```text
+quoodle-infra/
 │
 ├── docker-compose.yml
 │

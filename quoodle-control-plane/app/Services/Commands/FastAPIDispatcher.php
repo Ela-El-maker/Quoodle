@@ -36,7 +36,7 @@ class FastAPIDispatcher
             'trace_id' => $command->trace_id,
             'seq' => $this->counter->next('fastapi_dispatch'),
             'method' => $command->method,
-            'params' => $command->params ?? [],
+            'params' => (object) ($command->params ?? []),
             'sensitive' => $command->sensitive,
             'policy' => $policyDecision,
             'compliance' => $compliance,
@@ -51,7 +51,7 @@ class FastAPIDispatcher
                 ],
                 'body' => [
                     'method' => $command->method,
-                    'params' => $command->params ?? [],
+                    'params' => (object) ($command->params ?? []),
                     'sensitive' => $command->sensitive,
                 ],
                 'meta' => [

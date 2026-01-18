@@ -30,11 +30,11 @@ This roadmap is the **master engineering plan** for the Secure Device Control Sy
 secure-device-control/
 │
 ├── quoodle-control-plane/
-├── backend-fastapi/
+├── quoodle-gateway/
 ├── quoodle-agent-windows/
-├── kernel-service/
-├── mobile-app/
-├── infrastructure/
+├── quoodle-kernel-guard/
+├── quoodle-mobile-client/
+├── quoodle-infra/
 └── docs/
 ```
 
@@ -48,8 +48,8 @@ Use the skeleton structure from `skeleton for all repositories.md`.
 - FastAPI: create `pyproject.toml`, `app/main.py`, dependencies etc.
 - WindowsAgent: initialize CMake project
 - KernelService: C/C++ project with CMake
-- Mobile app: `flutter create mobile-app`
-- Infrastructure: create Dockerfiles + k8s templates
+- Mobile app: `flutter create quoodle-mobile-client`
+- Infrastructure: create Dockerfiles + k8s templates in `quoodle-infra`
 
 ---
 

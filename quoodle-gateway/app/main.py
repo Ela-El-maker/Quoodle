@@ -182,7 +182,7 @@ async def agent_ws(websocket: WebSocket):
         # Send latest policy/OTA and any queued commands
         await policy_resolver.send_current(websocket, device_id, session_id)
         await ota_manager.send_latest(websocket, device_id, session_id)
-        for queued in offline_queue.drain(device_id):
+        for queued in await offline_queue.drain(device_id):
             message = build_command_delivery(queued, session_id)
             await websocket.send_json(message)
 
