@@ -24,7 +24,12 @@
 static bool is_signature_required()
 {
   const char *env = std::getenv("KERNEL_REQUIRE_SIGNATURE");
-  return env && std::string(env) == "1";
+  if (!env) {
+      // SECURE BY DEFAULT: If variable is missing, require signature.
+      utils::log_info("KERNEL_REQUIRE_SIGNATURE not set. Defaulting to ENABLED (Secure).");
+      return true;
+  }
+  return std::string(env) == "1";
 }
 
 // --- JSON Parsing Helpers ---

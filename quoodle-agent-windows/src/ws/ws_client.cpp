@@ -20,9 +20,22 @@ static bool is_signature_verification_required()
 {
   const char *env = std::getenv("AGENT_REQUIRE_COMMAND_SIGNATURE");
   // Default to enabled (1) unless explicitly disabled
-  if (!env)
+  if (!env) {
+    static bool logged = false;
+    if (!logged) {
+        Logger::log(LogLevel::Warn, "AGENT_REQUIRE_COMMAND_SIGNATURE not set. Defaulting to ENABLED.");
+        logged = true;
+    }
     return true;
-  return std::string(env) != "0";
+  }
+  
+  bool required = std::string(env) != "0";
+  static bool logged = false;
+    if (!logged) {
+        Logger::log(LogLevel::Info, std::string("Signature verification is ") + (required ? "REQUIRED" : "DISABLED"));
+        logged = true;
+    }
+  return required;
 }
 
 WsClient::WsClient(const AgentConfig &config)

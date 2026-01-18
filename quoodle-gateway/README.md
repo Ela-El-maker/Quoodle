@@ -1,35 +1,50 @@
-# FastAPI Controller
-Implements WSS control channel for agents, REST webhooks to Laravel, and telemetry/command routing per docs/specs.
+# 🔌 quoodle-gateway
 
-## Security-critical configuration
+**Role**: Transport / Gateway
+**Tech Stack**: FastAPI (Python 3.10+)
+**Responsibility**: Real-time WSS Hub, Command Dispatcher, Telemetry Ingestion.
 
-To fully meet the protocol and security requirements in `docs/specs` and `docs/security`:
+---
 
-Device public key registry:
+## 📖 Overview
 
+The `quoodle-gateway` acts as the high-performance edge for the system. It maintains persistent WebSocket connections with thousands of agents and routes messages between the Control Plane and the Agents.
 
-Replay protection:
+It does **not** make policy decisions; it enforces routing rules and validates signatures before forwarding.
 
+## 🛠️ Build & Run
 
-### Laravel ↔ FastAPI control-plane signing
+### Prerequisites
+- Python 3.10+
+- Redis
 
-FastAPI must not trust unsigned internal POSTs. Enable verification of Laravel-signed requests:
+### Setup
 
-- `REQUIRE_LARAVEL_SIGNATURE` (default: `false`): When `true`, FastAPI enforces `X-Laravel-Signature` on `POST /api/v1/command/dispatch`.
-- `LARAVEL_SERVICE_PUBKEY_B64`: Base64-encoded Ed25519 public key for the Laravel service.
+```bash
+# 1. Create venv
+python3 -m venv venv
+source venv/bin/activate
 
-### FastAPI → Laravel webhook signing
+# 2. Install dependencies
+pip install -r requirements.txt
+```
 
-Laravel must not trust inbound webhooks without verifying the sender.
+### Running
 
-- `SIGN_LARAVEL_WEBHOOKS` (default: `false`): When `true`, FastAPI signs outbound webhook requests to Laravel.
-- `FASTAPI_SERVICE_PRIVATE_KEY_B64`: Base64-encoded Ed25519 private key for the FastAPI service.
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
 
-Message signing:
+## 🔐 Configuration
 
-- `REQUIRE_ED25519` (default `true`): Require Ed25519 signing/verification (PyNaCl).
-- `ALLOW_DEV_SIG_FALLBACK` (default `false`): If `true`, allows deterministic SHA256 fallback when Ed25519 signing is unavailable (dev-only).
+Based on `docs/specs`, the following security settings are critical:
 
-Controller signing key (outbound controller messages):
+- **`REQUIRE_LARAVEL_SIGNATURE`**: Must be `true` to reject unauthorized commands from the backend.
+- **`SIGN_LARAVEL_WEBHOOKS`**: Must be `true` so the Control Plane trusts our telemetry updates.
+- **`REQUIRE_ED25519`**: Enforces strict signature verification on all Agent messages.
 
-- `ED25519_PRIVATE_KEY_B64` or `ED25519_PRIVATE_KEY_PATH` or `ED25519_PRIVATE_KEY_DPAPI_B64` / `ED25519_PRIVATE_KEY_DPAPI_PATH`
+## 📡 API Endpoints
+
+- `GET /health`: Liveness probe.
+- `WS  /agent`: WebSocket endpoint for `quoodle-agent-windows`.
+- `POST /command/dispatch`: Internal hook for Control Plane to push commands.

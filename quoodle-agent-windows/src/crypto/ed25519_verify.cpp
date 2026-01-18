@@ -64,7 +64,7 @@ namespace crypto
 
     if (pubkey_copy.empty())
     {
-      Logger::log(LogLevel::Error, "ed25519_verify: no public key available");
+      Logger::log(LogLevel::Error, "ed25519_verify: NO PUBLIC KEY AVAILABLE. Set CONTROLLER_PUBKEY_B64 env var or check DPAPI/File configuration.");
       return false;
     }
 

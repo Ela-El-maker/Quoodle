@@ -98,7 +98,8 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
         Route::post('/pair/confirm', [PairingController::class, 'confirm']);
 
         // Commands execution
-        Route::post('/commands', [CommandController::class, 'store']);
+        // Commands execution (Token Required)
+        Route::middleware('jwt.auth')->post('/commands', [CommandController::class, 'store']);
 
         // Alert acknowledgment
         Route::post('/alerts/{alert_id}/ack', [AlertsController::class, 'acknowledge']);
