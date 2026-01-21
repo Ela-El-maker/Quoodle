@@ -8,8 +8,9 @@ class Settings(BaseModel):
     jwt_issuer: str = os.getenv("JWT_ISSUER", "secure-device-control-system")
     heartbeat_interval_seconds: int = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "30"))
     telemetry_interval_seconds: int = int(os.getenv("TELEMETRY_INTERVAL_SECONDS", "60"))
-    policy_hash: str = os.getenv("POLICY_HASH", "sha256:policy_placeholder")
+    policy_hash: str | None = os.getenv("POLICY_HASH")
     controller_id: str = os.getenv("CONTROLLER_ID", "controller")
+    policy_version: str | None = os.getenv("POLICY_VERSION")
     laravel_webhook_base: str = os.getenv("LARAVEL_WEBHOOK_BASE", "http://localhost:8000/api/v1/webhook")
 
     # Redis configuration

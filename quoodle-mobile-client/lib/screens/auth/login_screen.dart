@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../services/session_store.dart';
 import '../devices/device_list_screen.dart';
+import '../../services/mobile_identity_service.dart';
 import 'register_screen.dart';
 import 'twofa_screen.dart';
 
@@ -22,6 +23,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _twoFactorController = TextEditingController();
   bool _isLoading = false;
   final ApiService _api = ApiService();
+  final MobileIdentityService _identity = MobileIdentityService();
 
   @override
   void dispose() {
@@ -34,12 +36,14 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
+    await _identity.ensureKeypair();
+    final deviceFingerprint = await _identity.deviceFingerprint();
     final response = await _api.login(
       email: _emailController.text,
       password: _passwordController.text,
       twoFactorCode:
           _twoFactorController.text.isEmpty ? null : _twoFactorController.text,
-      deviceFingerprint: 'mobile-fingerprint-placeholder',
+      deviceFingerprint: deviceFingerprint,
       pushToken: null,
     );
 

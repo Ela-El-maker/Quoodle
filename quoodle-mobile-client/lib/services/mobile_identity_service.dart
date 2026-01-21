@@ -30,6 +30,13 @@ class MobileIdentityService {
     return base64Encode(publicKey.bytes);
   }
 
+  Future<String> deviceFingerprint() async {
+    final pubB64 = await publicKeyBase64();
+    final pubBytes = base64Decode(pubB64);
+    final digest = await Sha256().hash(pubBytes);
+    return _toHex(digest.bytes);
+  }
+
   Future<KeyPair> _keyPair() async {
     final seedB64 = await _storage.read(key: _kSeed);
     if (seedB64 == null || seedB64.isEmpty) {
@@ -48,5 +55,13 @@ class MobileIdentityService {
       bytes[i] = rng.nextInt(256);
     }
     return bytes;
+  }
+
+  String _toHex(List<int> bytes) {
+    final buffer = StringBuffer();
+    for (final b in bytes) {
+      buffer.write(b.toRadixString(16).padLeft(2, '0'));
+    }
+    return buffer.toString();
   }
 }

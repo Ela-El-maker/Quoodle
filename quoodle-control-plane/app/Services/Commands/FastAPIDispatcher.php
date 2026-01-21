@@ -23,10 +23,15 @@ class FastAPIDispatcher
     {
         $base = rtrim(config('services.fastapi.base_url'), '/');
         $url = $base.'/command/dispatch';
+        $policyVersion = (string) config('policy.version');
+        $policyHash = (string) config('policy.master_hash');
 
         $serviceSkB64 = config('services.fastapi.service_private_key_b64');
         if (! is_string($serviceSkB64) || $serviceSkB64 === '') {
             throw new RuntimeException('Missing services.fastapi.service_private_key_b64 (LARAVEL_SERVICE_PRIVATE_KEY_B64)');
+        }
+        if ($policyVersion === '' || $policyHash === '') {
+            throw new RuntimeException('POLICY_VERSION and POLICY_HASH must be configured');
         }
         $signer = new Ed25519Signer($serviceSkB64);
 
@@ -58,7 +63,8 @@ class FastAPIDispatcher
                     'origin_user_id' => 'user-unknown',
                     'enc' => 'none',
                     'enc_key_id' => null,
-                    'policy_version' => 'policy-placeholder',
+                    'policy_version' => $policyVersion,
+                    'policy_hash' => $policyHash,
                     'device_id' => $command->device_id,
                 ],
                 'sig' => null,

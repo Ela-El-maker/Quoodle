@@ -11,8 +11,8 @@ class PolicyResolver:
 
     def __init__(self) -> None:
         self._current: Dict[str, Any] = {
-            "policy_version": "policy-placeholder",
-            "policy_hash": "sha256:policy_placeholder",
+            "policy_version": settings.policy_version,
+            "policy_hash": settings.policy_hash,
             "policy_url": None,
             "effective_from": iso_timestamp(),
             "signature": None,

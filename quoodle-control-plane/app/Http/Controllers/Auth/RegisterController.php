@@ -41,6 +41,7 @@ class RegisterController extends Controller
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
             'public_key' => $data['pubkey'],
+            'role' => (string) config('security.default_user_role', User::ROLE_VIEWER),
         ]);
 
         $sessionId = Str::uuid()->toString();
@@ -63,6 +64,7 @@ class RegisterController extends Controller
             'refresh_token' => $refreshToken,
             'requires_2fa_enrollment' => false,
             'user_id' => $user->id,
+            'user_role' => $user->role,
         ], 201);
     }
 }

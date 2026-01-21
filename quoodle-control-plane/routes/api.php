@@ -26,6 +26,8 @@ Route::middleware('api')->group(function (): void {
     Route::post('/register', [RegisterController::class, 'register']);
     Route::post('/login', [LoginController::class, 'login']);
     Route::post('/token/refresh', [TokenController::class, 'refresh']);
+    Route::post('/pair/request', [PairingController::class, 'request']);
+    Route::post('/agent/token', [PairingController::class, 'agentToken']);
 
     // 2FA verification (user has partial auth)
     Route::post('/2fa/verify', [TwoFactorController::class, 'verify']);
@@ -82,6 +84,10 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
 
         // Compliance profiles (read-only)
         Route::get('/compliance/profiles', [ComplianceController::class, 'profiles']);
+
+        // Pairing (viewer can pair their own device)
+        Route::post('/pair/init', [PairingController::class, 'init']);
+        Route::post('/pair/confirm', [PairingController::class, 'confirm']);
     });
 
     /*
@@ -94,8 +100,6 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
         // Device management
         Route::post('/devices/{device_id}/claim', [DeviceController::class, 'claim']);
         Route::post('/devices/{device_id}/rename', [DeviceController::class, 'rename']);
-        Route::post('/pair/init', [PairingController::class, 'init']);
-        Route::post('/pair/confirm', [PairingController::class, 'confirm']);
 
         // Commands execution
         // Commands execution (Token Required)

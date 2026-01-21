@@ -70,6 +70,7 @@ class LoginController extends Controller
             'two_factor_pending' => $twoFactorPending,
             'two_factor_required' => $twoFactorRequired,
             'user_id' => $user->id,
+            'user_role' => $user->role,
         ]);
     }
 }

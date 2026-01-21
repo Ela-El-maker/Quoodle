@@ -6,9 +6,10 @@ BASE_URL="http://localhost:8080/api"
 echo "---------------------------------------------------"
 echo "TEST 1: Public endpoint (Login) - Should Pass (200)"
 echo "---------------------------------------------------"
+DEVICE_FINGERPRINT=$(printf "%s" "admin@quoodle.com" | sha256sum | awk '{print $1}')
 curl -s -X POST "$BASE_URL/login" \
      -H "Content-Type: application/json" \
-     -d '{"email":"admin@quoodle.com", "password":"password"}' | grep "token"
+     -d "{\"email\":\"admin@quoodle.com\", \"password\":\"password\", \"device_fingerprint\":\"${DEVICE_FINGERPRINT}\"}" | grep "jwt"
 if [ $? -eq 0 ]; then echo "✅ PASS"; else echo "❌ FAIL"; fi
 
 echo ""

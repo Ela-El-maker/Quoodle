@@ -19,6 +19,10 @@ php artisan route:cache
 echo "Starting Nginx..."
 service nginx start
 
+# Start Laravel queue worker in background
+echo "Starting Laravel queue worker..."
+php artisan queue:work --sleep=1 --tries=3 --timeout=60 &
+
 # Start PHP-FPM in foreground
 echo "Starting PHP-FPM..."
 php-fpm

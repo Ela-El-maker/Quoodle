@@ -44,6 +44,9 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting FastAPI gateway...")
 
+    if not settings.policy_hash or not settings.policy_version:
+        raise RuntimeError("POLICY_HASH and POLICY_VERSION must be configured")
+
     # Initialize Redis connection
     redis_config = RedisConfig(
         url=settings.redis_url,

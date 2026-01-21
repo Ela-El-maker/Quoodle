@@ -20,7 +20,7 @@ class QrPairingData {
     required this.version,
     required this.deviceId,
     required this.pairToken,
-    required this.pairSessionId,
+    this.pairSessionId,
     required this.timestamp,
     this.controllerUrl,
     this.deviceLabel,
@@ -36,7 +36,7 @@ class QrPairingData {
   final int version;
   final String deviceId;
   final String pairToken;
-  final String pairSessionId;
+  final String? pairSessionId;
   final String timestamp;
   final String? controllerUrl;
   final String? deviceLabel;
@@ -95,9 +95,6 @@ class QrPairingData {
     }
 
     final pairSessionId = json['pair_session_id'] as String?;
-    if (pairSessionId == null || pairSessionId.isEmpty) {
-      throw const QrParseException('Missing "pair_session_id" field');
-    }
 
     final timestamp = json['timestamp'] as String?;
     if (timestamp == null || timestamp.isEmpty) {
@@ -137,7 +134,7 @@ class QrPairingData {
         'version': version,
         'device_id': deviceId,
         'pair_token': pairToken,
-        'pair_session_id': pairSessionId,
+        if (pairSessionId != null) 'pair_session_id': pairSessionId,
         'timestamp': timestamp,
         if (controllerUrl != null) 'controller_url': controllerUrl,
         if (deviceLabel != null) 'device_label': deviceLabel,
