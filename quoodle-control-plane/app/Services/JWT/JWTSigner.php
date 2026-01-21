@@ -56,6 +56,23 @@ class JWTSigner
         return JWT::encode($claims, $this->privateKey, $this->algorithm, $this->kid);
     }
 
+    public function issueForDevice(string $deviceId, array $extraClaims = [], ?int $ttlSeconds = null): string
+    {
+        $now = time();
+        $claims = array_merge([
+            'iss' => $this->issuer,
+            'aud' => $this->audience,
+            'iat' => $now,
+            'nbf' => $now,
+            'exp' => $now + ($ttlSeconds ?? $this->ttlSeconds),
+            'jti' => Str::uuid()->toString(),
+            'sub' => $deviceId,
+            'scope' => 'device',
+        ], $extraClaims);
+
+        return JWT::encode($claims, $this->privateKey, $this->algorithm, $this->kid);
+    }
+
     public function publicKey(): string
     {
         return $this->publicKey;

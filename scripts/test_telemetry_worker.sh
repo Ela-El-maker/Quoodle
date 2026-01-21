@@ -2,7 +2,7 @@
 # test_telemetry_worker.sh - Verify Telemetry Worker Logic
 
 export PYTHONPATH=/home/ela/Work-Force/Quoodle/quoodle-gateway
-WORKER_SCRIPT="app/workers/telemetry_worker.py"
+WORKER_SCRIPT="/home/ela/Work-Force/Quoodle/quoodle-gateway/app/workers/telemetry_worker.py"
 LOG_FILE="worker_test.log"
 
 echo "---------------------------------------------------"

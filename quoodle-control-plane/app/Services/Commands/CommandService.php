@@ -32,6 +32,19 @@ class CommandService
             return ['status' => 'rejected', 'reason' => 'device_not_found'];
         }
 
+        $existing = Command::where('client_message_id', $payload['client_message_id'])
+            ->where('device_id', $payload['device_id'])
+            ->first();
+        if ($existing) {
+            return [
+                'status' => 'accepted',
+                'state' => $existing->state,
+                'policy' => null,
+                'compliance' => null,
+                'command' => $existing,
+            ];
+        }
+
         $definition = $this->registry->get($payload['method']);
         if (! $definition) {
             return ['status' => 'rejected', 'reason' => 'unknown_command'];

@@ -27,6 +27,11 @@ class DevicePresenceWebhookController extends Controller
 
         $data = $validator->validated();
 
+        $policyHash = (string) config('policy.master_hash');
+        if ($policyHash === '') {
+            return response()->json(['status' => 'invalid', 'reason' => 'policy_hash_not_configured'], 500);
+        }
+
         $device = Device::firstOrCreate(['device_id' => $data['device_id']], [
             'device_name' => $data['device_id'],
         ]);
@@ -35,7 +40,7 @@ class DevicePresenceWebhookController extends Controller
             'last_seen' => $data['connected_at'],
             'agent_version' => $data['agent_version'],
             'os_build' => $data['os_build'],
-            'policy_hash' => $device->policy_hash ?: (string) config('policy.master_hash'),
+            'policy_hash' => $device->policy_hash ?: $policyHash,
             'lifecycle_state' => $data['session_id'] === 'unpaired' ? 'pending_pairing' : 'active',
         ]);
 

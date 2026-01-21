@@ -4,6 +4,11 @@ namespace App\Http\Controllers\Devices;
 
 use App\Http\Controllers\Controller;
 use App\Models\Device;
+use App\Services\Devices\FastApiDeviceKeySync;
+use App\Services\JWT\JWTSigner;
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -13,6 +18,12 @@ use Illuminate\Support\Str;
 class PairingController extends Controller
 {
     private const CACHE_PREFIX = 'pair_session_';
+
+    public function __construct(
+        private readonly JWTSigner $jwtSigner,
+        private readonly FastApiDeviceKeySync $keySync,
+    ) {
+    }
 
     public function init(Request $request): JsonResponse
     {
@@ -25,8 +36,7 @@ class PairingController extends Controller
         }
 
         $pairSessionId = Str::uuid()->toString();
-        $pairToken = Str::uuid()->toString();
-        Cache::put(self::CACHE_PREFIX.$pairToken, [
+        Cache::put(self::CACHE_PREFIX.$pairSessionId, [
             'pair_session_id' => $pairSessionId,
             'device_label' => $validator->validated()['device_label'] ?? null,
         ], now()->addMinutes(10));
@@ -37,7 +47,65 @@ class PairingController extends Controller
             'qr_metadata' => [
                 'info' => 'Scan with Windows Agent pairing QR',
             ],
+        ]);
+    }
+
+    public function request(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'device_name' => ['required', 'string', 'max:190'],
+            'hwid' => ['required', 'string', 'max:190'],
+            'pubkey' => ['required', 'string', 'max:2048'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['status' => 'invalid', 'errors' => $validator->errors()], 422);
+        }
+
+        $data = $validator->validated();
+        $policyHash = (string) config('policy.master_hash');
+        if ($policyHash === '') {
+            return response()->json(['status' => 'invalid', 'reason' => 'policy_hash_not_configured'], 500);
+        }
+
+        $device = Device::where('hwid', $data['hwid'])->first();
+
+        if ($device && ! empty($device->user_id)) {
+            return response()->json(['status' => 'conflict', 'reason' => 'already_claimed'], 409);
+        }
+
+        if (! $device) {
+            $device = Device::create([
+                'device_id' => (string) Str::uuid(),
+                'device_name' => $data['device_name'],
+                'hwid' => $data['hwid'],
+                'lifecycle_state' => 'pending_pairing',
+                'compliance_status' => 'unknown',
+                'policy_hash' => $policyHash,
+                'ed25519_pubkey_b64' => $data['pubkey'],
+            ]);
+        } else {
+            $device->update([
+                'device_name' => $data['device_name'],
+                'ed25519_pubkey_b64' => $data['pubkey'],
+            ]);
+        }
+
+        $pairToken = $this->jwtSigner->issueForDevice(
+            $device->device_id,
+            [
+                'scope' => 'pair_token',
+                'device_name' => $device->device_name,
+                'ed25519_pubkey_b64' => $device->ed25519_pubkey_b64,
+                'hwid' => $device->hwid,
+            ],
+            (int) config('jwt.pair_token_ttl', 300),
+        );
+
+        return response()->json([
             'pair_token' => $pairToken,
+            'expires_at' => now()->addSeconds((int) config('jwt.pair_token_ttl', 300))->toIso8601String(),
+            'device_id' => $device->device_id,
         ]);
     }
 
@@ -53,20 +121,71 @@ class PairingController extends Controller
         }
 
         $data = $validator->validated();
-        $cached = Cache::pull(self::CACHE_PREFIX.$data['pair_token']);
-
-        if (! $cached) {
-            return response()->json(['status' => 'expired', 'device_id' => null, 'device_name' => null, 'lifecycle_state' => null]);
+        $user = Auth::user();
+        if (! $user) {
+            return response()->json(['status' => 'invalid_session'], 401);
         }
 
-        $deviceId = Str::uuid()->toString();
-        $device = Device::create([
-            'device_id' => $deviceId,
-            'device_name' => $cached['device_label'] ?? 'New Device',
+        $policyHash = (string) config('policy.master_hash');
+        if ($policyHash === '') {
+            return response()->json(['status' => 'invalid', 'reason' => 'policy_hash_not_configured'], 500);
+        }
+
+        try {
+            $claims = $this->decodePairToken($data['pair_token']);
+        } catch (\Throwable $e) {
+            return response()->json(['status' => 'invalid', 'reason' => 'invalid_pair_token'], 401);
+        }
+
+        if (($claims['scope'] ?? null) !== 'pair_token') {
+            return response()->json(['status' => 'invalid', 'reason' => 'invalid_scope'], 401);
+        }
+
+        $cached = null;
+        if (! empty($data['pair_session_id'])) {
+            $cached = Cache::pull(self::CACHE_PREFIX.$data['pair_session_id']);
+            if (! $cached) {
+                return response()->json(['status' => 'expired', 'device_id' => null, 'device_name' => null, 'lifecycle_state' => null]);
+            }
+        }
+
+        $deviceId = (string) ($claims['sub'] ?? '');
+        if ($deviceId === '') {
+            return response()->json(['status' => 'invalid', 'reason' => 'missing_device_id'], 401);
+        }
+
+        $device = Device::find($deviceId);
+        if (! $device) {
+            $device = Device::create([
+                'device_id' => $deviceId,
+                'device_name' => $claims['device_name'] ?? 'New Device',
+                'hwid' => $claims['hwid'] ?? null,
+                'lifecycle_state' => 'active',
+                'compliance_status' => 'unknown',
+                'policy_hash' => $policyHash,
+                'ed25519_pubkey_b64' => $claims['ed25519_pubkey_b64'] ?? null,
+            ]);
+        }
+
+        if (! empty($device->user_id) && $device->user_id !== $user->id) {
+            return response()->json(['status' => 'conflict', 'device_id' => $device->device_id, 'device_name' => $device->device_name, 'lifecycle_state' => $device->lifecycle_state], 409);
+        }
+
+        $deviceName = $claims['device_name'] ?? $device->device_name;
+        if (is_array($cached) && ! empty($cached['device_label'])) {
+            $deviceName = $cached['device_label'];
+        }
+
+        $device->update([
+            'user_id' => $user->id,
+            'device_name' => $deviceName,
             'lifecycle_state' => 'active',
-            'compliance_status' => 'unknown',
-            'policy_hash' => (string) config('policy.master_hash'),
+            'ed25519_pubkey_b64' => $claims['ed25519_pubkey_b64'] ?? $device->ed25519_pubkey_b64,
         ]);
+
+        if (! empty($device->ed25519_pubkey_b64)) {
+            $this->keySync->push($device);
+        }
 
         return response()->json([
             'status' => 'ok',
@@ -74,5 +193,81 @@ class PairingController extends Controller
             'device_name' => $device->device_name,
             'lifecycle_state' => $device->lifecycle_state,
         ]);
+    }
+
+    public function agentToken(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'pair_token' => ['required', 'string'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['status' => 'invalid', 'errors' => $validator->errors()], 422);
+        }
+
+        $policyHash = (string) config('policy.master_hash');
+        if ($policyHash === '') {
+            return response()->json(['status' => 'invalid', 'reason' => 'policy_hash_not_configured'], 500);
+        }
+
+        try {
+            $claims = $this->decodePairToken($validator->validated()['pair_token']);
+        } catch (\Throwable $e) {
+            return response()->json(['status' => 'invalid', 'reason' => 'invalid_pair_token'], 401);
+        }
+
+        if (($claims['scope'] ?? null) !== 'pair_token') {
+            return response()->json(['status' => 'invalid', 'reason' => 'invalid_scope'], 401);
+        }
+
+        $deviceId = (string) ($claims['sub'] ?? '');
+        if ($deviceId === '') {
+            return response()->json(['status' => 'invalid', 'reason' => 'missing_device_id'], 401);
+        }
+
+        $device = Device::find($deviceId);
+        if (! $device || empty($device->user_id)) {
+            return response()->json(['status' => 'invalid', 'reason' => 'device_not_paired'], 409);
+        }
+
+        $jwt = $this->jwtSigner->issueForDevice($deviceId, [
+            'scope' => 'agent',
+            'policy_hash' => $policyHash,
+        ]);
+
+        return response()->json([
+            'status' => 'ok',
+            'device_id' => $deviceId,
+            'jwt' => $jwt,
+        ]);
+    }
+
+    private function decodePairToken(string $token): array
+    {
+        $publicKeyPath = config('jwt.public_key_path');
+        if (! is_string($publicKeyPath) || $publicKeyPath === '' || ! file_exists($publicKeyPath)) {
+            throw new \RuntimeException('JWT public key not configured');
+        }
+
+        $publicKey = file_get_contents($publicKeyPath);
+        if ($publicKey === false) {
+            throw new \RuntimeException('Unable to read JWT public key');
+        }
+
+        $alg = strtoupper((string) config('jwt.alg', 'RS256'));
+        if ($alg === 'PS256') {
+            $alg = 'RS256';
+        }
+
+        $decoded = JWT::decode($token, new Key($publicKey, $alg));
+
+        if (($decoded->iss ?? null) !== config('jwt.issuer')) {
+            throw new \RuntimeException('Invalid issuer');
+        }
+        if (($decoded->aud ?? null) !== config('jwt.audience')) {
+            throw new \RuntimeException('Invalid audience');
+        }
+
+        return json_decode(json_encode($decoded), true);
     }
 }

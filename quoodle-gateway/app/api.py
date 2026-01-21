@@ -66,7 +66,7 @@ def build_command_delivery(payload: Dict[str, Any], session_id: str) -> Dict[str
             "origin_user_id": meta.get("origin_user_id", payload.get("origin_user_id", "user-unknown")),
             "enc": meta.get("enc", "none"),
             "enc_key_id": meta.get("enc_key_id"),
-            "policy_version": meta.get("policy_version", payload.get("policy", {}).get("policy_version", "policy-placeholder")),
+            "policy_version": meta.get("policy_version", payload.get("policy", {}).get("policy_version", settings.policy_version)),
             "policy_hash": payload.get("policy", {}).get("policy_hash"),
             "compliance": payload.get("compliance"),
         },

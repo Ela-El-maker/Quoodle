@@ -7,6 +7,7 @@ return [
     'alg' => env('JWT_ALG', 'PS256'),
     'ttl' => (int) env('JWT_TTL', 900),
     'refresh_ttl' => (int) env('JWT_REFRESH_TTL', 3600),
+    'pair_token_ttl' => (int) env('JWT_PAIR_TOKEN_TTL', 300),
     'private_key_path' => (function (): string {
         $p = env('JWT_PRIVATE_KEY_PATH');
         if (is_string($p) && $p !== '') {
