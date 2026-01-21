@@ -7,7 +7,7 @@ How the Flutter app consumes backend APIs and notifications.
 - Device selection limited to devices bound to user; include JWT in all calls.
 
 ## Core Flows
-- Pairing: call `/device/pair` to request pairing code; poll for completion; receive device cert fingerprint.
+- Pairing: call `/api/pair/init` to create a pairing session; scan agent QR and POST `/api/pair/confirm` with `pair_token`; receive `agent_jwt` for first agent auth.
 - Commands: send via Laravel command endpoint; receive command id; subscribe to push/WebSocket updates for status.
 - Telemetry: fetch via `/telemetry/latest` with pagination; show compliance badges from `/compliance/status`.
 - Alerts: subscribe to push notifications; acknowledge via `/alerts/{id}/ack`.

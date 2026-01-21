@@ -1,17 +1,18 @@
 # Gaps & Next Steps
 
-> **Last Updated:** 2026-01-18 (Phase 3 Complete)
+> **Last Updated:** 2026-01-21 (Phase 3 Complete + E2E Validation)
 
 ## 📌 Roadmap Status
 
-| Phase | Focus | Status | Notes |
-| :--- | :--- | :--- | :--- |
-| **Phase 0** | Repo Skeleton & CI | ✅ Done | Monorepo established. |
-| **Phase 1** | Security Hardening | ✅ Done | API Auth, Agent/Kernel Sig Verification (Fail-Closed). |
-| **Phase 2** | Reliability | ✅ Done | Telemetry persistence, Redis hardening, Backoff. |
-| **Phase 3** | Dev Experience | ✅ Done | Docker Compose stack + `setup_dev.sh`. |
-| **Phase 4** | Documentation Polish | 🚧 In Progress | Cleaning up legacy references. |
-| **Phase 5** | Operational Docs | ⏳ Pending | Runbooks, Deployment Guides. |
+| Phase         | Focus                    | Status     | Notes                                                  |
+| :------------ | :----------------------- | :--------- | :----------------------------------------------------- |
+| **Phase 0**   | Repo Skeleton & CI       | ✅ Done    | Monorepo established.                                  |
+| **Phase 1**   | Security Hardening       | ✅ Done    | API Auth, Agent/Kernel Sig Verification (Fail-Closed). |
+| **Phase 2**   | Reliability              | ✅ Done    | Telemetry persistence, Redis hardening, Backoff.       |
+| **Phase 3**   | Dev Experience           | ✅ Done    | Docker Compose stack + `setup_dev.sh`.                 |
+| **Phase 3.1** | E2E Testing & Validation | ✅ Done    | Comprehensive test suite with full system validation.  |
+| **Phase 4**   | Documentation Polish     | ✅ Done    | All READMEs updated with current status and versions.  |
+| **Phase 5**   | Operational Docs         | ⏳ Pending | Runbooks, Deployment Guides.                           |
 
 ## 🚨 Critical Gaps (High Priority)
 
@@ -29,5 +30,7 @@
 
 ## 📝 Next Steps (Immediate)
 
-1.  **Documentation Cleanup**: Finish removing references to `backend-fastapi` and `kernel-service` in deep architecture docs.
-2.  **Verify Setup Script**: Ensure `setup_dev.sh` works cleanly on a fresh machine (CI enforcement).
+1.  **✅ E2E Validation Complete**: Full system testing implemented and passing. All core functionality validated.
+2.  **✅ Documentation Updated**: All READMEs and component docs reflect current PHP 8.4, Python 3.11 versions.
+3.  **Verify Setup Script**: Ensure `setup_dev.sh` works cleanly on a fresh machine (CI enforcement).
+4.  **Production Readiness**: Consider mTLS implementation for production deployments.

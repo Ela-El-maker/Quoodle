@@ -42,3 +42,15 @@ class OTAPublishRequest(BaseModel):
 
 class QuarantineRequest(BaseModel):
     reason: str
+
+
+class DevicePairedRequest(BaseModel):
+    device_id: str
+    device_name: str
+    user_id: str
+    ed25519_pubkey_b64: str
+    policy_hash: str
+    policy_version: str
+    paired_at: str
+    agent_jwt: str | None = None
+    agent_jwt_expires_at: str | None = None

@@ -1,7 +1,7 @@
 # 🎮 quoodle-control-plane
 
 **Role**: Control / Governance
-**Tech Stack**: Laravel (PHP 8.2+)
+**Tech Stack**: Laravel (PHP 8.4+)
 **Responsibility**: Identity Provider, Certificate Authority (CA), Policy Engine, Audit Log.
 
 ---
@@ -19,7 +19,8 @@ The `quoodle-control-plane` is the **Root of Trust** for the Quoodle system. It 
 ## 🛠️ Build & Run
 
 ### Prerequisites
-- PHP 8.2+
+
+- PHP 8.4+
 - Composer
 - MySQL 8.0+
 - Redis

@@ -17,6 +17,7 @@ TEST_USER_EMAIL="${TEST_USER_EMAIL:-admin@quoodle.com}"
 TEST_USER_PASSWORD="${TEST_USER_PASSWORD:-password}"
 RUNS="${RUNS:-3}"
 SEED="${SEED:-1337}"
+RUN_NONCE="${RUN_NONCE:-$TS}"
 
 if [ $# -ge 1 ]; then
   RUNS="$1"
@@ -31,6 +32,7 @@ fi
   echo "fastapi=${FASTAPI_BASE_URL}"
   echo "runs=${RUNS}"
   echo "seed=${SEED}"
+  echo "run_nonce=${RUN_NONCE}"
   echo "user_email=${TEST_USER_EMAIL}"
   if [ -n "${TEST_USER_PASSWORD}" ]; then
     echo "user_password=***"
@@ -48,4 +50,5 @@ TEST_USER_EMAIL="$TEST_USER_EMAIL" \
 TEST_USER_PASSWORD="$TEST_USER_PASSWORD" \
 RUNS="$RUNS" \
 SEED="$SEED" \
+RUN_NONCE="$RUN_NONCE" \
 python3 e2e_quoodle_harness.py | tee "$LOG_FILE"

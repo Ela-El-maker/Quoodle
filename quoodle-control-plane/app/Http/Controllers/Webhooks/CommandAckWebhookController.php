@@ -30,10 +30,13 @@ class CommandAckWebhookController extends Controller
             return response()->json(['status' => 'unknown_command'], 404);
         }
 
-        $command->update([
-            'state' => $data['status'] === 'received' ? 'ack_received' : 'failed',
-            'reason' => $data['reason'] ?? null,
-        ]);
+        // Do not regress terminal states when ACK races with RESULT.
+        Command::where('id', $command->id)
+            ->whereNotIn('state', ['completed', 'failed', 'expired'])
+            ->update([
+                'state' => $data['status'] === 'received' ? 'ack_received' : 'failed',
+                'reason' => $data['reason'] ?? null,
+            ]);
 
         return response()->json(['status' => 'ok']);
     }

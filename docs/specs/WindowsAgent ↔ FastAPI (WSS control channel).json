@@ -31,8 +31,28 @@
         "from": "agent|controller",
         "device_id": "string (Agent's logical id, e.g. PC001)",
         "session_id": "string or null (set after auth)",
+        "seq": "integer (monotonic per device for replay protection)",
         "body": "Object; structure depends on type",
         "sig": "string; Ed25519 signature over canonical JSON of the entire message (excluding sig field)"
+      }
+    },
+
+    "Security": {
+      "CanonicalJSON": {
+        "encoding": "UTF-8",
+        "object_key_order": "lexicographic",
+        "array_order": "preserve",
+        "whitespace": "none (compact separators)",
+        "disallow_nan_infinity": true,
+        "exclude_fields": [
+          "sig"
+        ],
+        "null_handling": "include nulls as-is"
+      },
+      "ReplayProtection": {
+        "timestamp": "ISO8601 (validate max clock skew)",
+        "seq": "integer (monotonic per device)",
+        "nonce": "required for AUTH messages"
       }
     },
 

@@ -174,7 +174,9 @@
           "status": "'ok'|'invalid'|'expired'|'conflict'",
           "device_id": "string|null",
           "device_name": "string|null",
-          "lifecycle_state": "string|null"
+          "lifecycle_state": "string|null",
+          "agent_jwt": "string|null (short-lived agent JWT for first WSS auth)",
+          "agent_jwt_expires_at": "ISO8601|null"
         }
       }
     },

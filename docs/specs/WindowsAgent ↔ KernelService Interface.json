@@ -31,6 +31,25 @@
       }
     },
 
+    "Security": {
+      "CanonicalJSON": {
+        "encoding": "UTF-8",
+        "object_key_order": "lexicographic",
+        "array_order": "preserve",
+        "whitespace": "none (compact separators)",
+        "disallow_nan_infinity": true,
+        "exclude_fields": [
+          "signature"
+        ],
+        "null_handling": "include nulls as-is"
+      },
+      "ReplayProtection": {
+        "request_id": "UUID (unique per request)",
+        "agent_sequence": "integer (monotonic per agent)",
+        "timestamp": "ISO8601 (validate max clock skew)"
+      }
+    },
+
     "AllowedOpcodes": {
       "SystemControl": [
         {

@@ -36,6 +36,8 @@ TEST_USER_EMAIL = os.getenv("TEST_USER_EMAIL", "")
 TEST_USER_PASSWORD = os.getenv("TEST_USER_PASSWORD", "")
 RUNS = int(os.getenv("RUNS", "3"))
 SEED = int(os.getenv("SEED", "1337"))
+READY_TIMEOUT = float(os.getenv("READY_TIMEOUT", "60"))
+READY_INTERVAL = float(os.getenv("READY_INTERVAL", "1"))
 HTTP_TIMEOUT = float(os.getenv("HTTP_TIMEOUT", "8"))
 POLL_TIMEOUT = float(os.getenv("POLL_TIMEOUT", "60"))
 POLL_INTERVAL = float(os.getenv("POLL_INTERVAL", "2"))
@@ -53,6 +55,7 @@ LARAVEL_SERVICE_PRIVATE_KEY_B64 = os.getenv("LARAVEL_SERVICE_PRIVATE_KEY_B64", "
 FASTAPI_SERVICE_PRIVATE_KEY_B64 = os.getenv("FASTAPI_SERVICE_PRIVATE_KEY_B64", "")
 LARAVEL_COMMAND_PUBLIC_KEY_B64 = os.getenv("LARAVEL_COMMAND_PUBLIC_KEY_B64", "")
 FASTAPI_WSS_PUBLIC_KEY_B64 = os.getenv("FASTAPI_WSS_PUBLIC_KEY_B64", "")
+RUN_NONCE = os.getenv("RUN_NONCE", "") or uuid.uuid4().hex[:8]
 
 DISPATCH_MODE = os.getenv("DISPATCH_MODE", "laravel")  # laravel|direct
 WEBHOOK_MODE = os.getenv("WEBHOOK_MODE", "fastapi")    # fastapi|direct|both
@@ -180,14 +183,15 @@ def http_request(method: str, url: str, headers=None, json_body=None, trace_id=N
             time.sleep(0.5 * (2 ** attempt))
 
 
-def wait_for_http(url: str, attempts: int = 10, delay: float = 0.5) -> None:
-    for _ in range(attempts):
+def wait_for_http(url: str) -> None:
+    deadline = time.time() + READY_TIMEOUT
+    while time.time() < deadline:
         try:
             resp = requests.get(url, timeout=HTTP_TIMEOUT)
             if resp.status_code >= 100:
                 return
         except Exception:
-            time.sleep(delay)
+            time.sleep(READY_INTERVAL)
     raise RuntimeError(f"service_not_ready:{url}")
 
 
@@ -912,13 +916,13 @@ def run_once(run_idx: int) -> Dict[str, Any]:
     jwt = auth.get("jwt")
     user_id = auth.get("user_id")
 
-    local_device_id = f"SIM-PC-{SEED}-{run_idx}"
+    local_device_id = f"SIM-PC-{SEED}-{RUN_NONCE}-{run_idx}"
     pair_result = pair_device(trace_id, jwt, local_device_id)
     if pair_result.get("status") not in ("ok", "paired", None):
         return {"status": "FAIL", "reason": "pairing_failed"}
 
     device_id = pair_result.get("device_id") or local_device_id
-    agent_jwt = AGENT_JWT
+    agent_jwt = AGENT_JWT or pair_result.get("agent_jwt")
     if not agent_jwt:
         agent_jwt = get_agent_jwt(trace_id, pair_result.get("pair_token", ""))
 

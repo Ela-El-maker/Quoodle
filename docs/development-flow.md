@@ -279,7 +279,7 @@ Implement:
 
 Implement:
 
-- `/api/command` POST
+- `/api/commands` POST
 - Policy engine integration (basic)
 - Command signing
 - Save to DB
@@ -372,7 +372,7 @@ Implement:
 FastAPI:
 
 - Validate agent signature
-- Call Laravel `/command/result` webhook
+- Call Laravel `/api/v1/webhook/command/result` webhook
 
 Laravel:
 

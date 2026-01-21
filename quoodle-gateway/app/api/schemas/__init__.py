@@ -1,5 +1,6 @@
 from .requests import (
     CommandDispatchRequest,
+    DevicePairedRequest,
     PolicyPushRequest,
     OTAPublishRequest,
     QuarantineRequest,
@@ -7,6 +8,7 @@ from .requests import (
 
 __all__ = [
     "CommandDispatchRequest",
+    "DevicePairedRequest",
     "PolicyPushRequest",
     "OTAPublishRequest",
     "QuarantineRequest",

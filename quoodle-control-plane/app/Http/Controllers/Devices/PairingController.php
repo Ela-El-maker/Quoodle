@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Devices;
 use App\Http\Controllers\Controller;
 use App\Models\Device;
 use App\Services\Devices\FastApiDeviceKeySync;
+use App\Services\Devices\FastApiDevicePairedWebhook;
 use App\Services\JWT\JWTSigner;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
@@ -22,6 +23,7 @@ class PairingController extends Controller
     public function __construct(
         private readonly JWTSigner $jwtSigner,
         private readonly FastApiDeviceKeySync $keySync,
+        private readonly FastApiDevicePairedWebhook $pairedWebhook,
     ) {
     }
 
@@ -183,15 +185,26 @@ class PairingController extends Controller
             'ed25519_pubkey_b64' => $claims['ed25519_pubkey_b64'] ?? $device->ed25519_pubkey_b64,
         ]);
 
+        $agentJwtTtl = (int) config('jwt.ttl', 900);
+        $agentJwtExpiresAt = now()->addSeconds($agentJwtTtl)->toIso8601String();
+        $agentJwt = $this->jwtSigner->issueForDevice($device->device_id, [
+            'scope' => 'agent',
+            'policy_hash' => $policyHash,
+        ], $agentJwtTtl);
+
         if (! empty($device->ed25519_pubkey_b64)) {
             $this->keySync->push($device);
         }
+
+        $this->pairedWebhook->notify($device, $agentJwt, $agentJwtExpiresAt);
 
         return response()->json([
             'status' => 'ok',
             'device_id' => $device->device_id,
             'device_name' => $device->device_name,
             'lifecycle_state' => $device->lifecycle_state,
+            'agent_jwt' => $agentJwt,
+            'agent_jwt_expires_at' => $agentJwtExpiresAt,
         ]);
     }
 

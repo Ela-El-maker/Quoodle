@@ -30,6 +30,7 @@ from app.ws.webhooks import (
     forward_command_ack,
     forward_attestation,
     forward_telemetry_summary,
+    notify_device_activated,
     notify_device_offline,
     notify_device_online,
 )
@@ -177,6 +178,15 @@ async def agent_ws(websocket: WebSocket):
         )
 
         fire_and_forget(notify_device_online(device_id, session_id, agent_info))
+        current_policy = policy_resolver.current()
+        fire_and_forget(
+            notify_device_activated(
+                device_id,
+                session_id,
+                iso_timestamp(),
+                current_policy.get("policy_hash"),
+            )
+        )
         fire_and_forget(forward_attestation(device_id, iso_timestamp(), agent_info.get("attestation_hash")))
 
         auth_ack = build_auth_ack(device_id, session_id)

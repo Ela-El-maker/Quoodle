@@ -102,13 +102,13 @@ When an unpaired agent boots for the first time:
 4. **Mobile scans QR and confirms**
 
    * Mobile → Laravel: `POST /api/pair/confirm` with `pair_token`. 
-   * Laravel validates token, **links user↔device**, and **issues device mTLS cert** (from intermediate CA).
-   * Laravel notifies FastAPI via `/webhook/device/paired` and sends `Webhook /device/activate` to the Agent with `device_id` and `SignedDeviceCert`. 
+   * Laravel validates token, **links user↔device**, and issues a short-lived `agent_jwt` for first WSS auth.
+   * Laravel notifies FastAPI via `/api/v1/webhook/device/paired`. FastAPI later calls `/api/v1/webhook/device/activated` after successful agent AUTH. 
 
 5. **Agent authenticates to FastAPI**
 
-   * Agent connects WSS again with `type=auth` + `SignedDeviceCert`. 
-   * FastAPI introspects cert via Laravel (or JWKS / CA), then creates a Redis presence entry `agent:online:PC001` and assigns a `session_id`. 
+   * Agent connects WSS again with `type=AUTH` + `agent_jwt`. 
+   * FastAPI validates JWT via JWKS, then creates a Redis presence entry `agent:online:PC001` and assigns a `session_id`. 
 
 **Outcome:** Device is now **paired**, **trusted**, and **online**, ready for commands and telemetry.
 
@@ -157,7 +157,7 @@ This is the core pipeline: **Mobile → Laravel → Redis → FastAPI → Agent 
 
 1. **Mobile calls API**
 
-   * Mobile → Laravel: `POST /api/command` with command details (`device_id`, `method`, `params`, `ttl_seconds`, `message_id`, `trace_id`). 
+   * Mobile → Laravel: `POST /api/commands` with command details (`device_id`, `method`, `params`, `ttl_seconds`, `message_id`, `trace_id`). 
 
 2. **Laravel processing**
 
@@ -222,7 +222,7 @@ This is the core pipeline: **Mobile → Laravel → Redis → FastAPI → Agent 
 
 11. **FastAPI → Laravel**
 
-    * Validates agent signature, updates MySQL command state (`result_posted → completed`), and calls `/api/command/result` on Laravel with summary + artifact pointer. 
+    * Validates agent signature, updates MySQL command state (`result_posted → completed`), and calls `/api/v1/webhook/command/result` on Laravel with summary + artifact pointer. 
 
 12. **Laravel → Mobile**
 

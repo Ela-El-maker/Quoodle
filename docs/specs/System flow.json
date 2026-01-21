@@ -32,7 +32,7 @@
               "to": "WindowsAgent",
               "body": {
                 "challenge_token": "jwt(challenge, exp=60s)",
-                "pair_init_url": "https://api/pair/request",
+                "pair_init_url": "https://api.example.com/api/pair/request",
                 "expires_in": "60"
               }
             }
@@ -140,14 +140,17 @@
                 "pair_token": "jwt_pair_token"
               }
             },
-            "Process": "Laravel links user↔device, generates mTLS cert for Agent, notifies FastAPI via /webhook/device/paired.",
+            "Process": "Laravel links user↔device, issues agent_jwt, syncs device key, and notifies FastAPI via /api/v1/webhook/device/paired.",
             "Response": {
               "from": "Laravel",
-              "to": "WindowsAgent",
-              "method": "Webhook /device/activate",
+              "to": "MobileApp",
               "body": {
+                "status": "ok",
                 "device_id": "PC001",
-                "cert": "SignedDeviceCert"
+                "device_name": "UserLaptop",
+                "lifecycle_state": "active",
+                "agent_jwt": "jwt_agent",
+                "agent_jwt_expires_at": "2025-11-22T12:10:00Z"
               }
             },
             "Audit": "Laravel logs event 'device_paired' with timestamp and IP.",
@@ -160,11 +163,20 @@
               "to": "FastAPI",
               "method": "WSS connect",
               "body": {
-                "type": "auth",
-                "cert": "SignedDeviceCert"
+                "type": "AUTH",
+                "auth": {
+                  "jwt": "jwt_agent",
+                  "nonce": "123456789"
+                },
+                "agent_info": {
+                  "agent_version": "2.0.1",
+                  "os_build": "19045",
+                  "hwid_hash": "sha256:abc...",
+                  "attestation_hash": "sha256:def..."
+                }
               }
             },
-            "Process": "FastAPI validates cert via Laravel introspection, creates Redis presence entry.",
+            "Process": "FastAPI validates agent_jwt + signature, creates Redis presence entry, and notifies Laravel via /api/v1/webhook/device/activated.",
             "Response": {
               "from": "FastAPI",
               "to": "WindowsAgent",
@@ -242,7 +254,7 @@
             "Request": {
               "from": "MobileApp",
               "to": "Laravel",
-              "method": "POST /api/command",
+              "method": "POST /api/commands",
               "body": {
                 "message_id": "CMD-0001-uuid",
                 "trace_id": "TRACE-0001",
@@ -374,7 +386,7 @@
             "Response": {
               "from": "FastAPI",
               "to": "Laravel",
-              "method": "POST /api/command/result",
+              "method": "POST /api/v1/webhook/command/result",
               "body": {
                 "command_id": "CMD-0001-uuid",
                 "status": "completed",

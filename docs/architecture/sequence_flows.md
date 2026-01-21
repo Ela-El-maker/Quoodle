@@ -24,16 +24,16 @@ sequenceDiagram
     Agent->>Agent: Display QR Code (Pairing Token)
     
     Note over Mobile: User Scans QR
-    Mobile->>Control: POST /pair (Pairing Token, DeviceID)
+    Mobile->>Control: POST /api/pair/confirm (pair_token, pair_session_id)
     Control->>Control: Validate Token
-    Control->>Control: Issue Device Certificate (Signed by CA)
-    Control-->>Mobile: Success
+    Control->>Control: Issue agent_jwt for first WSS auth
+    Control-->>Mobile: Success (agent_jwt)
     
-    Control->>Gateway: Notify: Device Paired
-    Gateway->>Agent: Send Certificate & Config
+    Control->>Gateway: POST /api/v1/webhook/device/paired
+    Gateway->>Control: POST /api/v1/webhook/device/activated
     
-    Agent->>Agent: Store Cert in Secure Storage
-    Agent->>Gateway: Reconnect (mTLS with new Cert)
+    Agent->>Agent: Store device keys in secure storage
+    Agent->>Gateway: Reconnect (AUTH with agent_jwt)
     Note over Agent: Device is Trusted
 ```
 
@@ -52,7 +52,7 @@ sequenceDiagram
     participant Agent as quoodle-agent-windows
     participant Kernel as quoodle-kernel-guard
 
-    Mobile->>Control: POST /command/issued (OpCode, Params)
+    Mobile->>Control: POST /api/commands (OpCode, Params)
     Control->>Control: AuthZ & Policy Check
     Control->>Control: Sign Command (Ed25519)
     Control->>Gateway: Dispatch Command Envelope

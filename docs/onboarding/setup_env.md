@@ -1,6 +1,6 @@
 # Setup Environment
 
-1. Install PHP 8.3, Composer, Python 3.11, Node (for Laravel tooling), and Flutter SDK.
+1. Install PHP 8.4, Composer, Python 3.11, Node (for Laravel tooling), and Flutter SDK.
 2. Clone repo
 3. Install Laravel deps: `composer install` inside `quoodle-control-plane`.
 4. Install FastAPI deps: `pip install -r quoodle-gateway/requirements.txt`.

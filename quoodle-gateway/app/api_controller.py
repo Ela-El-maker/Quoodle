@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from app.api.schemas import (
     CommandDispatchRequest,
+    DevicePairedRequest,
     PolicyPushRequest,
     OTAPublishRequest,
     QuarantineRequest,
@@ -176,6 +177,15 @@ def create_router(manager: ConnectionManager) -> APIRouter:
 
         await event_bus.publish("ota.release.announced.v1", manifest)
         return {"status": "broadcasted", "reason": None, "release_id": payload.release_id}
+
+    @router.post("/webhook/device/paired")
+    async def device_paired(payload: DevicePairedRequest):
+        # Lazily import to avoid circular references with app.main.
+        from app.main import device_registry
+
+        device_registry.upsert_pubkey_b64(payload.device_id, payload.ed25519_pubkey_b64)
+        await event_bus.publish("device.paired.v1", payload.dict())
+        return {"status": "ack", "device_id": payload.device_id}
 
     @router.post("/admin/quarantine/{device_id}")
     async def set_quarantine(device_id: str, payload: QuarantineRequest):

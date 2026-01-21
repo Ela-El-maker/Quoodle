@@ -38,6 +38,7 @@ class LaravelSignatureMiddleware(BaseHTTPMiddleware):
             "/api/v1/command/dispatch",
             "/api/v1/policy/push",
             "/api/v1/update/deploy",
+            "/api/v1/webhook/device/paired",
             # Device key sync endpoint (Laravel is the authority).
             "/api/v1/admin/device-keys",
         }
