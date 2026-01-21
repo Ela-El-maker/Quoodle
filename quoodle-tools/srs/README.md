@@ -23,7 +23,7 @@ cd quoodle-control-plane
 php artisan serve --host 127.0.0.1 --port 8000
 
 # FastAPI (in another terminal)
-cd backend-fastapi
+cd quoodle-gateway
 uvicorn app.main:app --host 127.0.0.1 --port 8001
 ```
 

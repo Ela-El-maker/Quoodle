@@ -1,7 +1,7 @@
 # 🔌 quoodle-gateway
 
 **Role**: Transport / Gateway
-**Tech Stack**: FastAPI (Python 3.10+)
+**Tech Stack**: FastAPI (Python 3.11+)
 **Responsibility**: Real-time WSS Hub, Command Dispatcher, Telemetry Ingestion.
 
 ---
@@ -15,7 +15,8 @@ It does **not** make policy decisions; it enforces routing rules and validates s
 ## 🛠️ Build & Run
 
 ### Prerequisites
-- Python 3.10+
+
+- Python 3.11+
 - Redis
 
 ### Setup

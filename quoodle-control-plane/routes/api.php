@@ -88,6 +88,8 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
         // Pairing (viewer can pair their own device)
         Route::post('/pair/init', [PairingController::class, 'init']);
         Route::post('/pair/confirm', [PairingController::class, 'confirm']);
+        // Deprecated alias for legacy clients
+        Route::post('/pair', [PairingController::class, 'confirm']);
     });
 
     /*
@@ -104,6 +106,8 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
         // Commands execution
         // Commands execution (Token Required)
         Route::middleware('jwt.auth')->post('/commands', [CommandController::class, 'store']);
+        // Deprecated alias for legacy clients
+        Route::middleware('jwt.auth')->post('/command', [CommandController::class, 'store']);
 
         // Alert acknowledgment
         Route::post('/alerts/{alert_id}/ack', [AlertsController::class, 'acknowledge']);

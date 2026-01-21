@@ -32,6 +32,16 @@ async def notify_device_online(device_id: str, session_id: str, agent_info: Dict
     await _post("device/online", payload)
 
 
+async def notify_device_activated(device_id: str, session_id: str, activated_at: str, policy_hash: str | None) -> None:
+    payload = {
+        "device_id": device_id,
+        "session_id": session_id,
+        "activated_at": activated_at,
+        "policy_hash": policy_hash,
+    }
+    await _post("device/activated", payload)
+
+
 async def notify_device_offline(device_id: str, session_id: str | None, last_seen: str, reason: str) -> None:
     payload = {
         "device_id": device_id,

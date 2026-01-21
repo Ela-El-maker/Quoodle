@@ -47,6 +47,33 @@ class DevicePresenceWebhookController extends Controller
         return response()->json(['status' => 'ack']);
     }
 
+    public function activated(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'device_id' => ['required', 'string'],
+            'session_id' => ['required', 'string'],
+            'activated_at' => ['required', 'string'],
+            'policy_hash' => ['nullable', 'string'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['status' => 'invalid', 'errors' => $validator->errors()], 422);
+        }
+
+        $data = $validator->validated();
+        $device = Device::firstOrCreate(['device_id' => $data['device_id']], [
+            'device_name' => $data['device_id'],
+        ]);
+
+        $device->update([
+            'last_seen' => $data['activated_at'],
+            'policy_hash' => $data['policy_hash'] ?: $device->policy_hash,
+            'lifecycle_state' => 'active',
+        ]);
+
+        return response()->json(['status' => 'ack']);
+    }
+
     public function offline(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
