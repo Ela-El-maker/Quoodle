@@ -35,6 +35,7 @@ class FastAPIDispatcher
         }
         $signer = new Ed25519Signer($serviceSkB64);
 
+        $ttlSeconds = (int) ($command->ttl_seconds ?? config('security.command_ttl_seconds', 300));
         $payload = [
             'command_id' => $command->id,
             'device_id' => $command->device_id,
@@ -49,7 +50,7 @@ class FastAPIDispatcher
                 'header' => [
                     'version' => '1.1',
                     'timestamp' => now()->toIso8601String(),
-                    'ttl_seconds' => 300,
+                    'ttl_seconds' => $ttlSeconds,
                     'priority' => 'normal',
                     'requires_ack' => true,
                     'long_running' => false,

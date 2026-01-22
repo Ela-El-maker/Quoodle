@@ -9,6 +9,19 @@
       "environment": "Controlled academic lab",
       "security_scope": "Simulated only; no live or unauthorized use"
     },
+    "contract_authority": {
+      "controlplane_to_gateway_dispatch": {
+        "canonical": "HTTP",
+        "endpoint": "POST /api/v1/command/dispatch",
+        "deprecated": [
+          {
+            "name": "redis_stream_dispatch",
+            "status": "INTERNAL_ONLY",
+            "note": "Redis may be used inside FastAPI for buffering; not a contract surface."
+          }
+        ]
+      }
+    },
     "Flows": {
       "0.DiscoveryFlow": {
         "Purpose": "Enable unpaired Windows agents to securely advertise availability to the backend without revealing sensitive data.",
@@ -200,7 +213,7 @@
         "Actors": [
           "MobileApp",
           "Laravel (API + Auth)",
-          "Redis (streams & DLQ)",
+          "Redis (internal streams & DLQ)",
           "FastAPI (Controller)",
           "WindowsAgent (SYSTEM)",
           "KernelService (user-mode privileged helper)",
@@ -268,7 +281,7 @@
                 "signature": "sig_mobile"
               }
             },
-            "Process": "Laravel authenticates user JWT, checks RBAC & policy (two-person approval or 2FA for destructive). Canonicalizes JSON and signs a server envelope (sig_laravel). Inserts command row in MySQL (state=queued) and publishes to Redis stream: stream:device:PC001. Applies rate-limits and quota checks.",
+            "Process": "Laravel authenticates user JWT, checks RBAC & policy (two-person approval or 2FA for destructive). Canonicalizes JSON and signs a server envelope (sig_laravel). Inserts command row in MySQL (state=queued) and dispatches to FastAPI via HTTP POST /api/v1/command/dispatch. Redis may be used internally by FastAPI for buffering (non-contract). Applies rate-limits and quota checks.",
             "Response": {
               "from": "Laravel",
               "to": "MobileApp",
@@ -282,13 +295,20 @@
             "Audit": "Insert audit {event:'command_ingest', actor:UID001, message_id, hash:sha256(payload), signature:sig_laravel}"
           },
           {
-            "Step": "FastAPI consumes the command and decides routing",
+            "Step": "FastAPI receives HTTP dispatch and decides routing",
             "Request": {
-              "from": "FastAPI",
-              "to": "Redis",
-              "action": "XREADGROUP group=workers stream:device:PC001 >"
+              "from": "Laravel",
+              "to": "FastAPI",
+              "method": "POST /api/v1/command/dispatch",
+              "body": {
+                "command_id": "CMD-0001-uuid",
+                "device_id": "PC001",
+                "envelope": "{...}",
+                "seq": 1,
+                "trace_id": "TRACE-0001"
+              }
             },
-            "Process": "FastAPI validates Laravel signature, verifies command TTL & seq, checks device presence (Redis presence map). If device online, attempt delivery; else persist as queued and set dead-letter policy. Attach trace metadata. If queue_full, mark state 'backpressure' and respond to Laravel to inform user.",
+            "Process": "FastAPI validates Laravel signature, verifies command TTL & seq, checks device presence. It may enqueue internally for buffering (non-contract). If device online, attempt delivery; else persist as queued and set dead-letter policy. Attach trace metadata. If queue_full, mark state 'backpressure' and respond to Laravel to inform user.",
             "Response": {
               "from": "FastAPI",
               "to": "Laravel",
@@ -498,7 +518,7 @@
           "device_offline": {
             "detect": "no WSS connection",
             "action": [
-              "persist to Redis stream & MySQL",
+              "persist to offline queue (Redis/DB) & MySQL",
               "notify originator 'device_offline'"
             ],
             "retry": "deliver on reconnect"

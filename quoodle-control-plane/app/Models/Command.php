@@ -35,6 +35,8 @@ class Command extends Model
         'envelope',
         'envelope_sig',
         'request_sig',
+        'ttl_seconds',
+        'expires_at',
     ];
 
     protected $casts = [
@@ -43,9 +45,11 @@ class Command extends Model
         'queued_at' => 'datetime',
         'dispatched_at' => 'datetime',
         'completed_at' => 'datetime',
+        'expires_at' => 'datetime',
         'result' => 'array',
         'error_code' => 'integer',
         'server_seq' => 'integer',
         'envelope' => 'array',
+        'ttl_seconds' => 'integer',
     ];
 }

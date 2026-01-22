@@ -2,6 +2,15 @@
   "AgentKernelInterface": {
     "version": "1.0",
     "purpose": "Defines the complete, strict request/response data model between WindowsAgent (user mode) and KernelService (privileged kernel mode).",
+    "Compatibility": {
+      "abstract_contract": "PrivilegedExecutor (OS-agnostic request/response schema + opcode semantics).",
+      "transport": {
+        "windows": "IOCTL (this document)",
+        "linux": "privileged helper or ioctl-compatible bridge (to be implemented)",
+        "macos": "tbd"
+      },
+      "os_specific_rules": "OS-specific opcodes are allowed only when versioned and optional; core opcodes remain OS-agnostic."
+    },
 
     "RequestSchema": {
       "description": "All IOCTL requests from Agent to KernelService must follow this schema.",

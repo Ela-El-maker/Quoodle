@@ -4,6 +4,8 @@ The Quoodle system is defined by strict, canonical JSON specifications. These fi
 
 > **Note**: Developers must not manually implement protocols; use the generated types or strictly adhere to these JSON definitions.
 
+**Dispatch Contract**: Control Plane → Gateway command dispatch is canonical over HTTP `POST /api/v1/command/dispatch`. Redis streams may be used internally by the Gateway for buffering but are not a contract surface.
+
 ---
 
 ## 🏗️ Core Specifications Index

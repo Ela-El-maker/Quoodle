@@ -113,6 +113,7 @@
         "POST_/device/online": {
           "purpose": "FastAPI notifies Laravel that a device is online.",
           "request_schema": {
+            "event_id": "UUID",
             "device_id": "string",
             "session_id": "UUID",
             "agent_version": "string",
@@ -128,6 +129,7 @@
         "POST_/device/offline": {
           "purpose": "FastAPI notifies Laravel a device disconnected.",
           "request_schema": {
+            "event_id": "UUID",
             "device_id": "string",
             "session_id": "UUID",
             "last_seen": "ISO8601",
@@ -141,6 +143,7 @@
         "POST_/device/activated": {
           "purpose": "FastAPI notifies Laravel that a paired device has authenticated and is active.",
           "request_schema": {
+            "event_id": "UUID",
             "device_id": "string",
             "session_id": "UUID",
             "activated_at": "ISO8601",
@@ -154,6 +157,7 @@
         "POST_/command/result": {
           "purpose": "Agent → FastAPI → Laravel final execution result.",
           "request_schema": {
+            "event_id": "UUID",
             "command_id": "UUID",
             "device_id": "string",
             "trace_id": "UUID",
@@ -177,6 +181,7 @@
         "POST_/command/ack": {
           "purpose": "FastAPI forwards Agent command acknowledgment.",
           "request_schema": {
+            "event_id": "UUID",
             "command_id": "UUID",
             "device_id": "string",
             "status": "'received'|'rejected'",
@@ -191,6 +196,7 @@
         "POST_/telemetry/summary": {
           "purpose": "FastAPI submits aggregated telemetry (hourly or batch).",
           "request_schema": {
+            "event_id": "UUID",
             "device_id": "string",
             "timestamp": "ISO8601",
             "rollup": {
@@ -209,6 +215,7 @@
         "POST_/security/attestation": {
           "purpose": "FastAPI sends attestation results from the Agent.",
           "request_schema": {
+            "event_id": "UUID",
             "device_id": "string",
             "timestamp": "ISO8601",
             "attestation": {
@@ -276,7 +283,8 @@
       "ReplayProtection": {
         "timestamp": "ISO8601 (validate max clock skew)",
         "seq": "integer (monotonic per sender for signed requests)",
-        "idempotency_key": "optional header or field for safe retries"
+        "idempotency_key": "optional header or field for safe retries",
+        "event_id": "UUID for webhook idempotency"
       },
       "RateLimits": {
         "command_dispatch": "50 requests per second",

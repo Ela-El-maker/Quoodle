@@ -13,7 +13,7 @@ Here’s the “how this whole thing actually runs” story, end-to-end, based o
 * **FastAPI Controller** – WSS controller that talks to Windows agents, handles command dispatch, telemetry, OTA orchestration. 
 * **WindowsAgent (user-mode)** – runs on the PC, maintains WSS connection, enforces policy, queues commands, calls KernelService. 
 * **KernelService** – privileged helper (C/C++ style service) with a strict IOCTL API and enumerated opcodes. 
-* **Redis** – streams for commands, telemetry, DLQ, online presence. 
+* **Redis** – internal streams for buffering, telemetry rollups, DLQ, online presence (not a contract surface). 
 * **MySQL** – users, devices, commands, telemetry rollups, audits, policies. 
 * **ObjectStore (S3 / MinIO)** – big artifacts: screenshots, logs, update packages. 
 * **Vault/KMS / HSM** – keys, CA, rotation, revocation. 
@@ -151,7 +151,7 @@ Once authenticated:
 
 ## 5. Sending and executing a command (2. CommandExecutionFlow)
 
-This is the core pipeline: **Mobile → Laravel → Redis → FastAPI → Agent → KernelService → Agent → FastAPI → Laravel → Mobile.** 
+This is the core pipeline: **Mobile → Laravel → FastAPI (HTTP dispatch) → Agent → KernelService → Agent → FastAPI → Laravel → Mobile.** 
 
 ### 5.1 Ingest & policy check
 
@@ -163,7 +163,7 @@ This is the core pipeline: **Mobile → Laravel → Redis → FastAPI → Agent 
 
    * Validates user JWT, checks **RBAC & policy** (including 2FA or multiple approvals for sensitive commands like `memory_dump`). 
    * Canonicalizes payload, signs with `sig_laravel`, stores command (state=`queued`) in MySQL.
-   * Publishes to Redis `stream:device:PC001`.
+   * Dispatches to FastAPI via HTTP `POST /api/v1/command/dispatch` (FastAPI may enqueue internally).
    * Returns `status=accepted`, `state=queued` to Mobile. 
 
 3. **Policy engine details**
@@ -173,10 +173,10 @@ This is the core pipeline: **Mobile → Laravel → Redis → FastAPI → Agent 
 
 ### 5.2 FastAPI routing
 
-4. **FastAPI consumes from Redis**
+4. **FastAPI receives HTTP dispatch**
 
    * Uses `XREADGROUP` on `stream:device:PC001`. 
-   * Verifies Laravel signature, TTL, sequential ordering, and checks if device is online using Redis presence. 
+   * Verifies Laravel signature, TTL, sequential ordering, and checks if device is online using Redis presence. FastAPI may enqueue internally for buffering; this is not a contract surface. 
    * If online → dispatch; if offline → keep queued and handle retries / DLQ; if queue full → mark `backpressure`. 
    * Optionally sends status (`dispatched|queued|backpressure`) back to Laravel for UI updates. 
 

@@ -2,6 +2,10 @@
   "AgentFastAPIInterface": {
     "version": "1.0",
     "purpose": "Defines the complete request/response data model over a persistent WSS channel between WindowsAgent and FastAPI Controller.",
+    "Compatibility": {
+      "os_agnostic": true,
+      "note": "Agent platform may be Windows or Linux; WSS contract is OS-agnostic. OS-specific privileged execution is out of scope."
+    },
     "notes": [
       "This spec is only about the Agent ↔ FastAPI WebSocket protocol.",
       "Higher layers (Laravel, Mobile, KernelService) are out of scope here.",

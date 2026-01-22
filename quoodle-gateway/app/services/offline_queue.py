@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 import logging
+import time
+from datetime import datetime
 from collections import defaultdict, deque
 from typing import Any, Deque, Dict, List, Optional
 
@@ -60,6 +62,26 @@ class OfflineQueue:
         """Get Redis key for device queue."""
         return f"{self.KEY_PREFIX}{device_id}"
 
+    def _parse_iso8601(self, ts: str) -> Optional[float]:
+        try:
+            if ts.endswith("Z"):
+                ts = ts[:-1] + "+00:00"
+            dt = datetime.fromisoformat(ts)
+            return dt.timestamp()
+        except Exception:
+            return None
+
+    def _compute_expires_at(self, message: Dict[str, Any]) -> Optional[float]:
+        envelope = message.get("envelope") or {}
+        header = envelope.get("header") or {}
+        ts = header.get("timestamp")
+        ttl = header.get("ttl_seconds")
+        if isinstance(ts, str) and isinstance(ttl, int):
+            base = self._parse_iso8601(ts)
+            if base is not None:
+                return base + ttl
+        return None
+
     async def enqueue(
         self,
         device_id: str,
@@ -75,10 +97,13 @@ class OfflineQueue:
         queue_key = self._queue_key(device_id)
 
         # Wrap message with metadata
+        expires_at = self._compute_expires_at(message)
         envelope = json.dumps(
             {
                 "priority": priority,
                 "message": message,
+                "enqueued_at": time.time(),
+                "expires_at": expires_at,
             }
         )
 
@@ -116,7 +141,7 @@ class OfflineQueue:
         if len(queue) >= self._max:
             queue.popleft()
             dropped = True
-        queue.append({"priority": priority, "message": message})
+        queue.append({"priority": priority, "message": message, "expires_at": expires_at})
         return not dropped
 
     async def drain(self, device_id: str) -> List[Dict[str, Any]]:
@@ -142,6 +167,9 @@ class OfflineQueue:
                 for raw in raw_messages:
                     try:
                         envelope = json.loads(raw)
+                        expires_at = envelope.get("expires_at")
+                        if isinstance(expires_at, (int, float)) and time.time() > expires_at:
+                            continue
                         messages.append(
                             {
                                 "priority": envelope.get("priority", 0),
@@ -173,7 +201,14 @@ class OfflineQueue:
 
         # Sort by priority
         items.sort(key=lambda m: m.get("priority", 0), reverse=True)
-        return [m["message"] for m in items]
+        now = time.time()
+        filtered = []
+        for item in items:
+            expires_at = item.get("expires_at")
+            if isinstance(expires_at, (int, float)) and now > expires_at:
+                continue
+            filtered.append(item)
+        return [m["message"] for m in filtered]
 
     async def peek(self, device_id: str, count: int = 10) -> List[Dict[str, Any]]:
         """

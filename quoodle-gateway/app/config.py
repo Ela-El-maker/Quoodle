@@ -38,5 +38,16 @@ class Settings(BaseModel):
     sign_laravel_webhooks: bool = os.getenv("SIGN_LARAVEL_WEBHOOKS", "false").lower() in ("1", "true", "yes")
     fastapi_service_private_key_b64: str | None = os.getenv("FASTAPI_SERVICE_PRIVATE_KEY_B64")
 
+    # Webhook outbox (durable retries)
+    webhook_outbox_db_path: str = os.getenv("WEBHOOK_OUTBOX_DB_PATH", "./data/webhook_outbox.db")
+    webhook_outbox_max_attempts: int = int(os.getenv("WEBHOOK_OUTBOX_MAX_ATTEMPTS", "6"))
+    webhook_outbox_base_delay_seconds: int = int(os.getenv("WEBHOOK_OUTBOX_BASE_DELAY_SECONDS", "1"))
+    webhook_outbox_max_delay_seconds: int = int(os.getenv("WEBHOOK_OUTBOX_MAX_DELAY_SECONDS", "60"))
+    webhook_outbox_worker_interval_seconds: float = float(os.getenv("WEBHOOK_OUTBOX_WORKER_INTERVAL_SECONDS", "1"))
+
+    # Test-only fault injection
+    webhook_fault_mode: str = os.getenv("WEBHOOK_FAULT_MODE", "")
+    enable_test_endpoints: bool = os.getenv("ENABLE_TEST_ENDPOINTS", "false").lower() in ("1", "true", "yes")
+
 
 settings = Settings()

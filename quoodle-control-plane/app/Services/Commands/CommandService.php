@@ -3,6 +3,7 @@
 namespace App\Services\Commands;
 
 use App\Jobs\DispatchCommandToFastApi;
+use App\Jobs\ExpireCommandJob;
 use App\Models\Command;
 use App\Models\Device;
 use App\Models\User;
@@ -27,6 +28,8 @@ class CommandService
 
     public function enqueue(array $payload): array
     {
+        $ttlSeconds = (int) config('security.command_ttl_seconds', 300);
+        $expiryGrace = (int) config('security.command_expiry_grace_seconds', 120);
         $device = Device::find($payload['device_id']);
         if (! $device) {
             return ['status' => 'rejected', 'reason' => 'device_not_found'];
@@ -102,6 +105,7 @@ class CommandService
             return ['status' => 'rejected', 'reason' => 'invalid_2fa', 'policy' => $policy];
         }
 
+        $queuedAt = now();
         $command = Command::create([
             'client_message_id' => $payload['client_message_id'],
             'device_id' => $payload['device_id'],
@@ -109,10 +113,12 @@ class CommandService
             'params' => $payload['params'] ?? [],
             'sensitive' => $payload['sensitive'] ?? false,
             'trace_id' => (string) Str::uuid(),
-            'queued_at' => now(),
+            'queued_at' => $queuedAt,
             'state' => 'queued',
             'status' => 'accepted',
             'execution_state' => 'queued',
+            'ttl_seconds' => $ttlSeconds,
+            'expires_at' => $queuedAt->copy()->addSeconds($ttlSeconds),
         ]);
 
         // Ground-truth loop: after sensitive commands, require telemetry to confirm policy sync.
@@ -123,6 +129,7 @@ class CommandService
 
         // Async dispatch to avoid blocking the mobile/UI call path.
         DispatchCommandToFastApi::dispatch($command->id, $policy, $compliance);
+        ExpireCommandJob::dispatch($command->id)->delay($queuedAt->copy()->addSeconds($ttlSeconds + $expiryGrace));
 
         $state = 'queued';
 

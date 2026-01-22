@@ -1,0 +1,295 @@
+{
+  "system_name": "Quoodle (Linux Endpoint Integration - Defensive Architecture)",
+  "version": "linux-integration-sketch-v1",
+  "scope": {
+    "intact_components": ["MobileApp", "LaravelControlPlane", "FastAPIGateway"],
+    "new_components": ["LinuxAgent", "LinuxPrivilegedOpsService", "LinuxTelemetryCollector"],
+    "explicit_non_goals": [
+      "No stealth or persistence guidance",
+      "No unauthorized access patterns",
+      "No exploit/abuse enabling details"
+    ]
+  },
+  "components": [
+    {
+      "name": "MobileApp",
+      "role": "User interface for administrators/operators",
+      "trust_level": "untrusted-client",
+      "interfaces": ["REST_to_Laravel"]
+    },
+    {
+      "name": "LaravelControlPlane",
+      "role": "Root of trust: identity, policy authority, audit system of record",
+      "trust_level": "trusted-control-plane",
+      "interfaces": ["REST_from_Mobile", "REST_to_FastAPI", "Webhooks_from_FastAPI"],
+      "data_stores": ["SQL_SystemOfRecord", "AuditLog_AppendOnly", "KeyStore"]
+    },
+    {
+      "name": "FastAPIGateway",
+      "role": "Stateful gateway: session hub for endpoints, policy distribution, telemetry ingress",
+      "trust_level": "trusted-gateway",
+      "interfaces": ["REST_from_Laravel", "Webhooks_to_Laravel", "ControlChannel_to_Endpoints"],
+      "data_stores": ["QueueOrStream", "EndpointRegistry", "ReplayCache"]
+    },
+    {
+      "name": "LinuxAgent",
+      "role": "Endpoint agent: session management, policy enforcement, telemetry publishing, requests privileged actions",
+      "trust_level": "endpoint-agent",
+      "interfaces": ["ControlChannel_to_FastAPI", "LocalRPC_to_PrivilegedOps", "LocalTelemetrySources"],
+      "local_state": ["StateDB", "PolicyCache", "RetryQueue"]
+    },
+    {
+      "name": "LinuxPrivilegedOpsService",
+      "role": "Root-owned service providing controlled privileged operations behind policy gates",
+      "trust_level": "privileged-boundary",
+      "interfaces": ["LocalRPC_from_Agent"],
+      "security_controls": ["LeastPrivilege", "MandatoryAudit", "AllowlistOnly", "RateLimits"]
+    },
+    {
+      "name": "LinuxTelemetryCollector",
+      "role": "Telemetry gatherer for system health/compliance signals",
+      "trust_level": "endpoint-sensor",
+      "interfaces": ["LocalTelemetrySources", "LocalExport_to_Agent"],
+      "note": "May be embedded in LinuxAgent or run as a separate non-privileged service"
+    }
+  ],
+  "trust_boundaries": [
+    {
+      "boundary": "MobileApp -> LaravelControlPlane",
+      "controls": ["TLS", "UserAuth", "RateLimits", "DeviceBoundSessions"]
+    },
+    {
+      "boundary": "LaravelControlPlane <-> FastAPIGateway",
+      "controls": ["MutualAuthentication", "RequestSigning", "ReplayProtection", "SchemaValidation"]
+    },
+    {
+      "boundary": "FastAPIGateway <-> LinuxAgent",
+      "controls": ["AuthenticatedSession", "StrictSchema", "ReplayProtection", "PolicyVersionPinning", "AuditCorrelation"]
+    },
+    {
+      "boundary": "LinuxAgent -> LinuxPrivilegedOpsService",
+      "controls": ["LocalAuthz", "Allowlist", "TamperResistantAudit", "LeastPrivilege"]
+    }
+  ],
+  "flow_definitions": [
+    {
+      "flow_id": "F1_identity_enrollment",
+      "goal": "Enroll endpoint identity and bind it to a user/org in the control plane",
+      "steps": [
+        {
+          "step": 1,
+          "type": "sync",
+          "actor": "MobileApp",
+          "action": "Authenticate user",
+          "to": "LaravelControlPlane",
+          "observability": ["trace_id", "request_id", "user_id"]
+        },
+        {
+          "step": 2,
+          "type": "async",
+          "actor": "LinuxAgent",
+          "action": "Establish authenticated session with gateway (endpoint identity present)",
+          "to": "FastAPIGateway",
+          "observability": ["trace_id", "endpoint_session_id", "device_id"]
+        },
+        {
+          "step": 3,
+          "type": "sync",
+          "actor": "LaravelControlPlane",
+          "action": "Finalize enrollment and bind device to org/user, publish allowlisted policy",
+          "to": "FastAPIGateway",
+          "observability": ["trace_id", "device_id", "policy_version"]
+        }
+      ],
+      "success_criteria": [
+        "Device shows as enrolled in control plane",
+        "Gateway can associate session to enrolled device",
+        "Policy version pinned on device"
+      ]
+    },
+    {
+      "flow_id": "F2_policy_distribution",
+      "goal": "Keep endpoint policy consistent and enforceable across OS variants",
+      "steps": [
+        {
+          "step": 1,
+          "type": "async",
+          "actor": "LaravelControlPlane",
+          "action": "Publish policy update",
+          "to": "FastAPIGateway",
+          "observability": ["trace_id", "policy_version", "policy_hash"]
+        },
+        {
+          "step": 2,
+          "type": "async",
+          "actor": "FastAPIGateway",
+          "action": "Deliver policy update to endpoint session",
+          "to": "LinuxAgent",
+          "observability": ["trace_id", "device_id", "policy_version"]
+        },
+        {
+          "step": 3,
+          "type": "sync",
+          "actor": "LinuxAgent",
+          "action": "Validate policy and commit atomically",
+          "to": "LinuxAgent",
+          "observability": ["trace_id", "policy_version", "commit_status"]
+        }
+      ],
+      "success_criteria": [
+        "Policy hash matches control plane expectation",
+        "Policy update is atomic and rollback-safe on the endpoint"
+      ]
+    },
+    {
+      "flow_id": "F3_telemetry_pipeline",
+      "goal": "Collect, transport, persist, and query telemetry safely and reliably",
+      "steps": [
+        {
+          "step": 1,
+          "type": "async",
+          "actor": "LinuxTelemetryCollector",
+          "action": "Gather system health/compliance signals",
+          "to": "LinuxAgent",
+          "observability": ["trace_id", "telemetry_batch_id"]
+        },
+        {
+          "step": 2,
+          "type": "async",
+          "actor": "LinuxAgent",
+          "action": "Publish telemetry summary to gateway with retry + dedupe",
+          "to": "FastAPIGateway",
+          "observability": ["trace_id", "telemetry_batch_id", "retries"]
+        },
+        {
+          "step": 3,
+          "type": "async",
+          "actor": "FastAPIGateway",
+          "action": "Forward telemetry summary to control plane (idempotent webhook)",
+          "to": "LaravelControlPlane",
+          "observability": ["trace_id", "event_id", "device_id"]
+        },
+        {
+          "step": 4,
+          "type": "sync",
+          "actor": "MobileApp",
+          "action": "Query latest telemetry for device",
+          "to": "LaravelControlPlane",
+          "observability": ["trace_id", "device_id"]
+        }
+      ],
+      "success_criteria": [
+        "Telemetry persists durably in control plane",
+        "Duplicate delivery does not create duplicate records",
+        "Mobile can query latest/rolling telemetry reliably"
+      ]
+    },
+    {
+      "flow_id": "F4_controlled_privileged_operation",
+      "goal": "Perform privileged operations only with policy + audit + approvals, OS-agnostic interface",
+      "steps": [
+        {
+          "step": 1,
+          "type": "sync",
+          "actor": "MobileApp",
+          "action": "Request an allowed operation on a device",
+          "to": "LaravelControlPlane",
+          "observability": ["trace_id", "user_id", "device_id", "operation_id"]
+        },
+        {
+          "step": 2,
+          "type": "async",
+          "actor": "LaravelControlPlane",
+          "action": "Authorize, record audit intent, publish operation request to gateway",
+          "to": "FastAPIGateway",
+          "observability": ["trace_id", "operation_id", "policy_version"]
+        },
+        {
+          "step": 3,
+          "type": "async",
+          "actor": "FastAPIGateway",
+          "action": "Deliver operation request to LinuxAgent session",
+          "to": "LinuxAgent",
+          "observability": ["trace_id", "operation_id", "device_id"]
+        },
+        {
+          "step": 4,
+          "type": "sync",
+          "actor": "LinuxAgent",
+          "action": "Validate policy, then call local privileged service via allowlisted RPC",
+          "to": "LinuxPrivilegedOpsService",
+          "observability": ["trace_id", "operation_id", "local_request_id"]
+        },
+        {
+          "step": 5,
+          "type": "sync",
+          "actor": "LinuxPrivilegedOpsService",
+          "action": "Execute allowlisted privileged operation and emit local audit record",
+          "to": "LinuxAgent",
+          "observability": ["trace_id", "operation_id", "exec_status"]
+        },
+        {
+          "step": 6,
+          "type": "async",
+          "actor": "LinuxAgent",
+          "action": "Send operation result back to gateway (retry-safe)",
+          "to": "FastAPIGateway",
+          "observability": ["trace_id", "operation_id", "result_event_id"]
+        },
+        {
+          "step": 7,
+          "type": "async",
+          "actor": "FastAPIGateway",
+          "action": "Forward result to control plane (idempotent webhook), update lifecycle state",
+          "to": "LaravelControlPlane",
+          "observability": ["trace_id", "operation_id", "event_id"]
+        },
+        {
+          "step": 8,
+          "type": "sync",
+          "actor": "MobileApp",
+          "action": "Poll/read operation status and audit trail",
+          "to": "LaravelControlPlane",
+          "observability": ["trace_id", "operation_id"]
+        }
+      ],
+      "success_criteria": [
+        "Operation request is policy-authorized and fully audited",
+        "Local privileged boundary enforces allowlist + rate limits",
+        "Result delivery is idempotent and traceable end-to-end"
+      ]
+    }
+  ],
+  "reliability_requirements": {
+    "idempotency": {
+      "mobile_requests": ["client_message_id"],
+      "webhooks": ["event_id"],
+      "endpoint_results": ["result_event_id"]
+    },
+    "retries": {
+      "gateway_to_control_plane_webhooks": "exponential_backoff_with_dlq",
+      "agent_to_gateway_messages": "retry_with_dedupe_and_persistent_queue"
+    },
+    "ordering": {
+      "state_machine": "monotonic_state_transitions_only",
+      "out_of_order_handling": "ignore_stale_events_by_timestamp_and_precedence"
+    }
+  },
+  "observability": {
+    "required_correlation_fields": ["trace_id", "device_id", "operation_id", "event_id"],
+    "log_events": [
+      "auth.success",
+      "device.session.online",
+      "policy.commit",
+      "telemetry.publish",
+      "operation.requested",
+      "operation.executed",
+      "operation.result.delivered",
+      "audit.appended"
+    ]
+  },
+  "linux_specific_notes": {
+    "privileged_boundary": "Use a root-owned systemd service with a minimal allowlisted local API; avoid kernel modules unless strictly required.",
+    "future_portability": "By keeping Gateway<->Agent contract and ControlPlane behavior OS-agnostic, Windows and Linux endpoints can coexist without changing Mobile/Laravel/FastAPI."
+  }
+}

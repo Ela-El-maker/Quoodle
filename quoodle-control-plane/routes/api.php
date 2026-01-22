@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\TwoFactorController;
 use App\Http\Controllers\Alerts\AlertsController;
 use App\Http\Controllers\Commands\CommandController;
 use App\Http\Controllers\Commands\CommandQueryController;
+use App\Http\Controllers\Commands\ArtifactController;
 use App\Http\Controllers\Devices\DeviceController;
 use App\Http\Controllers\Devices\PairingController;
 use App\Http\Controllers\Policy\PolicyController;
@@ -28,6 +29,11 @@ Route::middleware('api')->group(function (): void {
     Route::post('/token/refresh', [TokenController::class, 'refresh']);
     Route::post('/pair/request', [PairingController::class, 'request']);
     Route::post('/agent/token', [PairingController::class, 'agentToken']);
+    // Agent artifact upload (device-scoped JWT)
+    Route::middleware('agent.jwt')->group(function (): void {
+        Route::post('/artifact/request', [ArtifactController::class, 'requestUpload']);
+        Route::post('/artifact/upload', [ArtifactController::class, 'upload']);
+    });
 
     // 2FA verification (user has partial auth)
     Route::post('/2fa/verify', [TwoFactorController::class, 'verify']);
@@ -71,6 +77,9 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
         // Updates info (read-only)
         Route::get('/devices/{device_id}/updates', [UpdateController::class, 'list']);
         Route::get('/devices/{device_id}/updates/{release_id}', [UpdateController::class, 'show']);
+
+        // Artifact download (read-only)
+        Route::get('/artifact/{artifact_id}', [ArtifactController::class, 'download']);
 
         // Audit trail (read-only)
         Route::get('/audit/device/{device_id}', [AuditTrailController::class, 'chain']);

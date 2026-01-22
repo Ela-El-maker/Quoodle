@@ -1,0 +1,858 @@
+{
+  "QuoodleEndToEndFlowSpec": {
+    "meta": {
+      "name": "Quoodle End-to-End System Flow",
+      "version": "1.0",
+      "goal": "Define a complete, consistent end-to-end flow for Mobile → Laravel → FastAPI → Agent → Privileged Boundary and back, with clear sync/async boundaries, state machines, reliability rules, and observability requirements.",
+      "compatibility_constraints": {
+        "mobile_unchanged": true,
+        "control_plane_unchanged": true,
+        "gateway_unchanged": true,
+        "notes": [
+          "Linux endpoint support is a future feature. This spec is OS-neutral at the top layers and supports multiple endpoint platforms via device platform/capabilities metadata."
+        ]
+      },
+      "security_note": "This spec describes system messaging, schemas, and verification requirements. It intentionally avoids operational instructions for privileged endpoint actions."
+    },
+
+    "actors": {
+      "MobileApp": {
+        "type": "client",
+        "trust_level": "untrusted",
+        "primary_responsibilities": [
+          "User authentication",
+          "Device pairing confirmation via scanned token",
+          "Command submission",
+          "Status/telemetry viewing"
+        ]
+      },
+      "LaravelControlPlane": {
+        "type": "service",
+        "trust_level": "trusted_root",
+        "primary_responsibilities": [
+          "Auth (JWT issuance/refresh)",
+          "Device registry (ownership, platform, capabilities)",
+          "Policy authority (versioning, distribution intent)",
+          "Command registry and lifecycle state machine",
+          "Audit chain (append-only)",
+          "Webhook ingestion from FastAPI"
+        ]
+      },
+      "FastAPIGateway": {
+        "type": "service",
+        "trust_level": "trusted_router",
+        "primary_responsibilities": [
+          "WSS hub for endpoint sessions",
+          "Verifies service signatures and enforces replay protection at service boundary",
+          "Routes commands to endpoint sessions",
+          "Receives endpoint ack/results/telemetry over WSS",
+          "Forwards events to Laravel via signed webhooks with retries + DLQ"
+        ]
+      },
+      "EndpointAgent": {
+        "type": "endpoint_service",
+        "trust_level": "semi_trusted",
+        "primary_responsibilities": [
+          "Maintains WSS session to FastAPI",
+          "Verifies inbound envelopes and replay protection",
+          "Manages local policy cache and policy_hash",
+          "Executes command lifecycle: delivery → ack → privileged_call → result",
+          "Publishes telemetry/alerts"
+        ],
+        "platforms": ["windows", "linux_future"]
+      },
+      "PrivilegedBoundary": {
+        "type": "local_privileged_service",
+        "trust_level": "local_root_trust",
+        "primary_responsibilities": [
+          "Validates signed local request schema",
+          "Enforces monotonic agent_sequence",
+          "Enforces policy_hash pinning",
+          "Enforces allowlist-only operation categories",
+          "Returns signed local response schema",
+          "Writes local audit events"
+        ],
+        "platforms": ["windows_kernel_service", "linux_privileged_daemon_future"]
+      }
+    },
+
+    "data_stores": {
+      "LaravelDB": {
+        "type": "durable",
+        "records": [
+          "users",
+          "sessions",
+          "devices",
+          "device_capabilities",
+          "policies",
+          "commands",
+          "command_events",
+          "audit_chain"
+        ]
+      },
+      "FastAPIRouterState": {
+        "type": "durable_or_semidurable",
+        "records": [
+          "device_sessions",
+          "device_registry_cache",
+          "service_replay_cache",
+          "webhook_dlq"
+        ]
+      },
+      "AgentLocalState": {
+        "type": "durable_on_endpoint",
+        "records": [
+          "device_keys",
+          "last_policy_bundle",
+          "policy_hash",
+          "replay_cache",
+          "outbox_queue (ack/results/telemetry)",
+          "command_dedup_store",
+          "agent_sequence_counter"
+        ]
+      }
+    },
+
+    "global_identifiers": {
+      "device_id": {
+        "type": "string",
+        "format": "stable opaque identifier",
+        "origin": "created at enrollment/pairing and stored in Laravel"
+      },
+      "command_id": {
+        "type": "string",
+        "format": "uuid_or_ulid",
+        "origin": "created by Laravel when command is accepted"
+      },
+      "message_id": {
+        "type": "string",
+        "format": "uuid_or_ulid",
+        "origin": "created by sender for each envelope; used for dedupe + replay protection"
+      },
+      "trace_id": {
+        "type": "string",
+        "format": "uuid_or_w3c_trace_id",
+        "origin": "created at first ingress (Mobile->Laravel), propagated through dispatch, WSS messages, and webhooks"
+      },
+      "idempotency_key": {
+        "type": "string",
+        "origin": "Mobile client_message_id for POST /api/commands; service message_id for webhooks/WSS"
+      }
+    },
+
+    "cryptography_and_integrity": {
+      "canonical_json": {
+        "purpose": "Ensure deterministic signing/verification across languages and runtimes.",
+        "rules": [
+          "UTF-8 encoding",
+          "Sort object keys lexicographically",
+          "No whitespace (compact separators)",
+          "Do not coerce numeric types inconsistently",
+          "Exclude signature fields themselves from signature input where specified"
+        ]
+      },
+      "signatures": {
+        "service_to_service": {
+          "algorithm": "Ed25519 (or equivalent strong signature)",
+          "directions": [
+            "Laravel -> FastAPI (dispatch/policy/update)",
+            "FastAPI -> Laravel (webhooks)"
+          ],
+          "fail_closed": true
+        },
+        "gateway_to_agent": {
+          "algorithm": "Ed25519 (or equivalent strong signature)",
+          "purpose": "Integrity of delivered envelopes over WSS"
+        },
+        "agent_to_privileged_boundary": {
+          "algorithm": "Ed25519 (or equivalent strong signature)",
+          "purpose": "Prevent untrusted local callers from invoking privileged actions; enforce allowlist + monotonic sequence"
+        }
+      },
+      "replay_protection": {
+        "required_fields_in_signed_envelopes": [
+          "message_id",
+          "nonce",
+          "issued_at",
+          "expires_at_or_ttl",
+          "kid (key id)"
+        ],
+        "enforced_at": ["FastAPIGateway", "EndpointAgent", "PrivilegedBoundary"],
+        "dedupe_keys": [
+          "device_id+message_id",
+          "device_id+command_id+phase"
+        ]
+      }
+    },
+
+    "observability": {
+      "structured_log_schema": {
+        "required_fields": [
+          "timestamp",
+          "level",
+          "service",
+          "env",
+          "trace_id",
+          "span_id",
+          "request_id",
+          "device_id(optional)",
+          "user_id(optional)",
+          "command_id(optional)",
+          "message_id(optional)",
+          "event_type",
+          "stage",
+          "sync_or_async",
+          "direction",
+          "endpoint_or_channel",
+          "latency_ms",
+          "result",
+          "error_code(optional)",
+          "retry_count(optional)"
+        ],
+        "redaction_rules": [
+          "Do not log secrets (tokens, private keys, raw signatures).",
+          "Mask or hash PII."
+        ]
+      },
+      "trace_propagation": {
+        "headers": ["traceparent(optional)", "x-trace-id", "x-request-id"],
+        "rule": "If trace_id exists, propagate it unchanged across Laravel<->FastAPI and include it in WSS envelope bodies where applicable."
+      },
+      "audit_chain": {
+        "purpose": "Append-only accountability for device and command lifecycle transitions.",
+        "events": [
+          "USER_LOGIN",
+          "DEVICE_PAIRED",
+          "DEVICE_ONLINE",
+          "POLICY_COMMITTED",
+          "COMMAND_CREATED",
+          "COMMAND_DISPATCHED",
+          "COMMAND_ACKED",
+          "PRIVILEGED_EXEC_ATTEMPT",
+          "COMMAND_RESULT_RECORDED",
+          "TELEMETRY_ACCEPTED"
+        ],
+        "hash_linking": {
+          "enabled": true,
+          "rule": "Each audit record includes prev_hash and current_hash over canonical JSON of record contents."
+        }
+      }
+    },
+
+    "state_machines": {
+      "device_presence": {
+        "states": ["offline", "online"],
+        "transitions": [
+          {
+            "from": "offline",
+            "to": "online",
+            "trigger": "FastAPI webhook device/online",
+            "sync_or_async": "async",
+            "idempotency": "event_id or message_id"
+          },
+          {
+            "from": "online",
+            "to": "offline",
+            "trigger": "FastAPI webhook device/offline",
+            "sync_or_async": "async",
+            "idempotency": "event_id or message_id"
+          }
+        ],
+        "ordering_rules": [
+          "Ignore stale transitions using event timestamp or sequence when present."
+        ]
+      },
+      "command_lifecycle": {
+        "states": ["queued", "dispatched", "ack_received", "executing", "completed", "failed", "expired"],
+        "terminal_states": ["completed", "failed", "expired"],
+        "allowed_transitions": [
+          { "from": "queued", "to": "dispatched", "on": "dispatch_to_fastapi", "sync_or_async": "async" },
+          { "from": "dispatched", "to": "ack_received", "on": "webhook_command_ack", "sync_or_async": "async" },
+          { "from": "ack_received", "to": "executing", "on": "agent_local_execute_start", "sync_or_async": "async" },
+          { "from": "executing", "to": "completed", "on": "webhook_command_result_success", "sync_or_async": "async" },
+          { "from": "executing", "to": "failed", "on": "webhook_command_result_failure", "sync_or_async": "async" },
+          { "from": "queued", "to": "expired", "on": "ttl_expired", "sync_or_async": "async" },
+          { "from": "dispatched", "to": "expired", "on": "ttl_expired", "sync_or_async": "async" },
+          { "from": "ack_received", "to": "expired", "on": "ttl_expired", "sync_or_async": "async" }
+        ],
+        "idempotency_rules": [
+          "Duplicate ACK events do not change state once ack_received.",
+          "Duplicate RESULT events do not change state once terminal.",
+          "Out-of-order RESULT before ACK is allowed if result is verifiable; state should jump to terminal and record missing ACK as anomaly (optional)."
+        ]
+      }
+    },
+
+    "interfaces": {
+      "Mobile_to_Laravel_REST": {
+        "transport": "HTTPS",
+        "auth": "Bearer JWT",
+        "endpoints": {
+          "POST_/api/register": {
+            "sync_or_async": "sync",
+            "request": { "display_name": "string", "email": "string", "password": "string" },
+            "response": { "user_id": "string", "status": "string" }
+          },
+          "POST_/api/login": {
+            "sync_or_async": "sync",
+            "request": { "email": "string", "password": "string", "device_fingerprint(optional)": "string" },
+            "response": { "jwt": "string", "refresh_token(optional)": "string", "user_id": "string" }
+          },
+          "POST_/api/pair/confirm": {
+            "sync_or_async": "sync",
+            "request": { "pair_token": "string", "device_label(optional)": "string" },
+            "response": { "status": "ok|error", "device_id": "string", "platform_family(optional)": "string" }
+          },
+          "POST_/api/commands": {
+            "sync_or_async": "sync",
+            "idempotency": "client_message_id",
+            "request": {
+              "device_id": "string",
+              "method": "string",
+              "params": "object",
+              "client_message_id": "string",
+              "requires_2fa(optional)": "boolean",
+              "two_factor_code(optional)": "string"
+            },
+            "response": { "command_id": "string", "state": "queued|dispatched", "trace_id(optional)": "string" }
+          },
+          "GET_/api/commands/{command_id}": {
+            "sync_or_async": "sync",
+            "response": { "command_id": "string", "state": "string", "result(optional)": "object", "error(optional)": "object" }
+          },
+          "GET_/api/devices": {
+            "sync_or_async": "sync",
+            "response": { "devices": "array" }
+          },
+          "GET_/api/devices/{device_id}/telemetry/latest": {
+            "sync_or_async": "sync",
+            "response": { "device_id": "string", "telemetry": "object", "timestamp": "string" }
+          }
+        }
+      },
+
+      "Laravel_to_FastAPI_REST": {
+        "transport": "HTTPS",
+        "auth": "ServiceSignature",
+        "endpoints": {
+          "POST_/api/v1/command/dispatch": {
+            "sync_or_async": "sync",
+            "replay_protection": ["message_id", "nonce", "issued_at", "expires_at_or_ttl"],
+            "request": {
+              "trace_id": "string",
+              "message_id": "string",
+              "nonce": "string",
+              "issued_at": "string",
+              "expires_at_or_ttl": "string_or_number",
+              "command_id": "string",
+              "device_id": "string",
+              "envelope": "object"
+            },
+            "response": { "status": "accepted|rejected|queued", "reason(optional)": "string" }
+          },
+          "POST_/api/v1/policy/push": {
+            "sync_or_async": "sync",
+            "request": {
+              "trace_id": "string",
+              "message_id": "string",
+              "policy_version": "string",
+              "policy_bundle": "object",
+              "policy_hash": "string"
+            },
+            "response": { "status": "accepted|rejected" }
+          },
+          "POST_/api/v1/update/deploy": {
+            "sync_or_async": "sync",
+            "request": { "trace_id": "string", "message_id": "string", "update_descriptor": "object" },
+            "response": { "status": "accepted|rejected" }
+          }
+        }
+      },
+
+      "FastAPI_to_Laravel_Webhooks": {
+        "transport": "HTTPS",
+        "auth": "ServiceSignature",
+        "delivery": {
+          "retry_policy": "exponential_backoff_with_jitter",
+          "max_attempts": 6,
+          "dlq": {
+            "enabled": true,
+            "dlq_record_fields": ["event_type", "trace_id", "message_id", "device_id", "command_id(optional)", "payload_hash"]
+          }
+        },
+        "endpoints": {
+          "POST_/webhook/device/online": {
+            "sync_or_async": "async",
+            "idempotency": "message_id",
+            "request": { "trace_id": "string", "message_id": "string", "device_id": "string", "session_id": "string", "timestamp": "string" },
+            "response": { "status": "ok" }
+          },
+          "POST_/webhook/device/offline": {
+            "sync_or_async": "async",
+            "idempotency": "message_id",
+            "request": { "trace_id": "string", "message_id": "string", "device_id": "string", "timestamp": "string" },
+            "response": { "status": "ok" }
+          },
+          "POST_/webhook/command/ack": {
+            "sync_or_async": "async",
+            "idempotency": "message_id",
+            "request": { "trace_id": "string", "message_id": "string", "command_id": "string", "device_id": "string", "timestamp": "string" },
+            "response": { "status": "ok" }
+          },
+          "POST_/webhook/command/result": {
+            "sync_or_async": "async",
+            "idempotency": "message_id",
+            "request": {
+              "trace_id": "string",
+              "message_id": "string",
+              "command_id": "string",
+              "device_id": "string",
+              "timestamp": "string",
+              "status": "completed|failed|expired",
+              "result(optional)": "object",
+              "error(optional)": "object"
+            },
+            "response": { "status": "ok" }
+          },
+          "POST_/webhook/telemetry/summary": {
+            "sync_or_async": "async",
+            "idempotency": "message_id",
+            "request": { "trace_id": "string", "message_id": "string", "device_id": "string", "timestamp": "string", "telemetry": "object" },
+            "response": { "status": "ok" }
+          }
+        }
+      },
+
+      "FastAPI_to_Agent_WSS": {
+        "transport": "WSS",
+        "auth": "WSS_AUTH_MESSAGE",
+        "envelope": "CommonWssEnvelope",
+        "message_types": {
+          "AUTH_ACK": {
+            "direction": "fastapi->agent",
+            "body": { "session_id": "string", "server_time": "string", "accepted": "boolean" }
+          },
+          "POLICY_UPDATE": {
+            "direction": "fastapi->agent",
+            "body": { "policy_version": "string", "policy_hash": "string", "policy_bundle": "object" }
+          },
+          "COMMAND_DELIVERY": {
+            "direction": "fastapi->agent",
+            "body": { "command_id": "string", "method": "string", "params": "object", "ttl_seconds": "number" }
+          }
+        }
+      },
+
+      "Agent_to_FastAPI_WSS": {
+        "transport": "WSS",
+        "envelope": "CommonWssEnvelope",
+        "message_types": {
+          "AUTH": {
+            "direction": "agent->fastapi",
+            "body": {
+              "device_id": "string",
+              "platform_family": "windows|linux",
+              "agent_version": "string",
+              "jwt": "string",
+              "attestation(optional)": "object"
+            }
+          },
+          "HEARTBEAT": {
+            "direction": "agent->fastapi",
+            "body": { "device_id": "string", "session_id": "string", "policy_hash(optional)": "string" }
+          },
+          "COMMAND_ACK": {
+            "direction": "agent->fastapi",
+            "body": { "command_id": "string", "device_id": "string", "ack": "boolean", "timestamp": "string" }
+          },
+          "COMMAND_RESULT": {
+            "direction": "agent->fastapi",
+            "body": {
+              "command_id": "string",
+              "device_id": "string",
+              "status": "completed|failed|expired",
+              "result(optional)": "object",
+              "error(optional)": "object",
+              "timestamp": "string"
+            }
+          },
+          "TELEMETRY": {
+            "direction": "agent->fastapi",
+            "body": { "device_id": "string", "timestamp": "string", "telemetry": "object", "policy_hash(optional)": "string" }
+          },
+          "ALERT": {
+            "direction": "agent->fastapi",
+            "body": { "device_id": "string", "timestamp": "string", "severity": "string", "alert": "object" }
+          }
+        }
+      },
+
+      "Agent_to_PrivilegedBoundary_LocalRPC": {
+        "transport": "local_only",
+        "request_schema": {
+          "request_id": "string",
+          "timestamp": "string",
+          "opcode_category": "string",
+          "params": "object",
+          "command_id": "string",
+          "command_message_id": "string",
+          "agent_sequence": "number",
+          "policy_hash": "string",
+          "signature": "string"
+        },
+        "response_schema": {
+          "request_id": "string",
+          "timestamp": "string",
+          "status": "ok|error",
+          "result(optional)": "object",
+          "error_code(optional)": "string",
+          "signature": "string"
+        },
+        "enforcement_rules": [
+          "Verify signature over canonical JSON",
+          "Enforce monotonic agent_sequence",
+          "Enforce allowlist-only opcode_category",
+          "Enforce policy_hash pinning"
+        ]
+      }
+    },
+
+    "end_to_end_flows": {
+      "E2E_01_UserAuth": {
+        "name": "Register + Login",
+        "sync_or_async": "sync",
+        "steps": [
+          {
+            "n": 1,
+            "actor_from": "MobileApp",
+            "actor_to": "LaravelControlPlane",
+            "interface": "Mobile_to_Laravel_REST",
+            "call": "POST_/api/register",
+            "expected_state_changes": ["user_record_created"]
+          },
+          {
+            "n": 2,
+            "actor_from": "MobileApp",
+            "actor_to": "LaravelControlPlane",
+            "interface": "Mobile_to_Laravel_REST",
+            "call": "POST_/api/login",
+            "expected_state_changes": ["session_active"],
+            "outputs": ["jwt", "trace_id(optional)"]
+          }
+        ]
+      },
+
+      "E2E_02_DeviceOnlineAndPairing": {
+        "name": "Agent online + Mobile pairing confirm",
+        "sync_or_async": "mixed",
+        "steps": [
+          {
+            "n": 1,
+            "actor_from": "EndpointAgent",
+            "actor_to": "FastAPIGateway",
+            "interface": "Agent_to_FastAPI_WSS",
+            "message": "AUTH",
+            "expected_state_changes": ["fastapi_session_created"]
+          },
+          {
+            "n": 2,
+            "actor_from": "FastAPIGateway",
+            "actor_to": "EndpointAgent",
+            "interface": "FastAPI_to_Agent_WSS",
+            "message": "AUTH_ACK",
+            "expected_state_changes": ["agent_online"]
+          },
+          {
+            "n": 3,
+            "actor_from": "FastAPIGateway",
+            "actor_to": "LaravelControlPlane",
+            "interface": "FastAPI_to_Laravel_Webhooks",
+            "call": "POST_/webhook/device/online",
+            "expected_state_changes": ["device_presence_online"]
+          },
+          {
+            "n": 4,
+            "actor_from": "MobileApp",
+            "actor_to": "LaravelControlPlane",
+            "interface": "Mobile_to_Laravel_REST",
+            "call": "POST_/api/pair/confirm",
+            "expected_state_changes": [
+              "device_owned_by_user",
+              "device_platform_recorded",
+              "device_capabilities_recorded_baseline",
+              "audit_DEVICE_PAIRED"
+            ]
+          },
+          {
+            "n": 5,
+            "actor_from": "LaravelControlPlane",
+            "actor_to": "FastAPIGateway",
+            "interface": "Laravel_to_FastAPI_REST",
+            "call": "POST_/api/v1/policy/push",
+            "expected_state_changes": ["policy_push_intent_recorded"]
+          }
+        ]
+      },
+
+      "E2E_03_PolicyDistribution": {
+        "name": "Policy push to agent and commit",
+        "sync_or_async": "async",
+        "steps": [
+          {
+            "n": 1,
+            "actor_from": "LaravelControlPlane",
+            "actor_to": "FastAPIGateway",
+            "interface": "Laravel_to_FastAPI_REST",
+            "call": "POST_/api/v1/policy/push",
+            "expected_state_changes": ["fastapi_policy_route_created"]
+          },
+          {
+            "n": 2,
+            "actor_from": "FastAPIGateway",
+            "actor_to": "EndpointAgent",
+            "interface": "FastAPI_to_Agent_WSS",
+            "message": "POLICY_UPDATE",
+            "expected_state_changes": ["agent_policy_received"]
+          },
+          {
+            "n": 3,
+            "actor_from": "EndpointAgent",
+            "actor_to": "EndpointAgent",
+            "interface": "internal",
+            "action": "commit_policy_atomically",
+            "expected_state_changes": ["agent_policy_committed", "policy_hash_updated"]
+          }
+        ]
+      },
+
+      "E2E_04_CommandSteelThread": {
+        "name": "Mobile command -> Dispatch -> WSS delivery -> Ack -> Privileged boundary -> Result -> Mobile sees terminal state",
+        "sync_or_async": "mixed",
+        "steps": [
+          {
+            "n": 1,
+            "actor_from": "MobileApp",
+            "actor_to": "LaravelControlPlane",
+            "interface": "Mobile_to_Laravel_REST",
+            "call": "POST_/api/commands",
+            "expected_state_changes": ["command_created_state_queued", "audit_COMMAND_CREATED"],
+            "idempotency": "client_message_id"
+          },
+          {
+            "n": 2,
+            "actor_from": "LaravelControlPlane",
+            "actor_to": "FastAPIGateway",
+            "interface": "Laravel_to_FastAPI_REST",
+            "call": "POST_/api/v1/command/dispatch",
+            "expected_state_changes": ["command_state_dispatched", "audit_COMMAND_DISPATCHED"],
+            "replay_protection": ["message_id", "nonce", "issued_at", "expires_at_or_ttl"]
+          },
+          {
+            "n": 3,
+            "actor_from": "FastAPIGateway",
+            "actor_to": "EndpointAgent",
+            "interface": "FastAPI_to_Agent_WSS",
+            "message": "COMMAND_DELIVERY",
+            "expected_state_changes": ["agent_command_received"]
+          },
+          {
+            "n": 4,
+            "actor_from": "EndpointAgent",
+            "actor_to": "FastAPIGateway",
+            "interface": "Agent_to_FastAPI_WSS",
+            "message": "COMMAND_ACK",
+            "expected_state_changes": ["fastapi_ack_received"]
+          },
+          {
+            "n": 5,
+            "actor_from": "FastAPIGateway",
+            "actor_to": "LaravelControlPlane",
+            "interface": "FastAPI_to_Laravel_Webhooks",
+            "call": "POST_/webhook/command/ack",
+            "expected_state_changes": ["command_state_ack_received", "audit_COMMAND_ACKED"]
+          },
+          {
+            "n": 6,
+            "actor_from": "EndpointAgent",
+            "actor_to": "PrivilegedBoundary",
+            "interface": "Agent_to_PrivilegedBoundary_LocalRPC",
+            "call": "request_schema",
+            "expected_state_changes": ["privileged_exec_attempt_logged_local"],
+            "notes": [
+              "No operational details here. The privileged boundary executes a policy-allowed operation category and returns a signed response."
+            ]
+          },
+          {
+            "n": 7,
+            "actor_from": "PrivilegedBoundary",
+            "actor_to": "EndpointAgent",
+            "interface": "Agent_to_PrivilegedBoundary_LocalRPC",
+            "call": "response_schema",
+            "expected_state_changes": ["privileged_exec_completed_local"]
+          },
+          {
+            "n": 8,
+            "actor_from": "EndpointAgent",
+            "actor_to": "FastAPIGateway",
+            "interface": "Agent_to_FastAPI_WSS",
+            "message": "COMMAND_RESULT",
+            "expected_state_changes": ["fastapi_result_received"]
+          },
+          {
+            "n": 9,
+            "actor_from": "FastAPIGateway",
+            "actor_to": "LaravelControlPlane",
+            "interface": "FastAPI_to_Laravel_Webhooks",
+            "call": "POST_/webhook/command/result",
+            "expected_state_changes": ["command_state_terminal", "audit_COMMAND_RESULT_RECORDED"]
+          },
+          {
+            "n": 10,
+            "actor_from": "MobileApp",
+            "actor_to": "LaravelControlPlane",
+            "interface": "Mobile_to_Laravel_REST",
+            "call": "GET_/api/commands/{command_id}",
+            "expected_state_changes": [],
+            "expected_output": ["terminal_state_visible_to_user"]
+          }
+        ]
+      },
+
+      "E2E_05_TelemetryLoop": {
+        "name": "Agent telemetry -> Gateway -> Laravel -> Mobile reads latest",
+        "sync_or_async": "async_then_sync",
+        "steps": [
+          {
+            "n": 1,
+            "actor_from": "EndpointAgent",
+            "actor_to": "FastAPIGateway",
+            "interface": "Agent_to_FastAPI_WSS",
+            "message": "TELEMETRY",
+            "expected_state_changes": ["fastapi_telemetry_received"]
+          },
+          {
+            "n": 2,
+            "actor_from": "FastAPIGateway",
+            "actor_to": "LaravelControlPlane",
+            "interface": "FastAPI_to_Laravel_Webhooks",
+            "call": "POST_/webhook/telemetry/summary",
+            "expected_state_changes": ["telemetry_persisted", "device_health_updated", "audit_TELEMETRY_ACCEPTED"]
+          },
+          {
+            "n": 3,
+            "actor_from": "MobileApp",
+            "actor_to": "LaravelControlPlane",
+            "interface": "Mobile_to_Laravel_REST",
+            "call": "GET_/api/devices/{device_id}/telemetry/latest",
+            "expected_output": ["latest_telemetry_visible_to_user"]
+          }
+        ]
+      }
+    },
+
+    "robustness_requirements": {
+      "idempotency": {
+        "mobile_command_create": {
+          "key": "client_message_id",
+          "server_behavior": "If same key repeats for same user+device, return the same command_id and current state."
+        },
+        "webhooks": {
+          "key": "message_id",
+          "server_behavior": "If same webhook repeats, do not duplicate state transitions or audit entries; return ok."
+        },
+        "wss_messages": {
+          "key": "device_id+message_id",
+          "behavior": "Deduplicate; do not re-execute terminal effects."
+        }
+      },
+      "timeouts_and_expiry": {
+        "command_ttl": {
+          "policy": "Commands must have TTL; if no terminal result by expiry, mark expired and record audit."
+        },
+        "webhook_delivery": {
+          "policy": "Retry with backoff; after max attempts, DLQ; expose DLQ metrics and replay tool."
+        }
+      },
+      "ordering_and_consistency": {
+        "rules": [
+          "Never allow state regression (terminal stays terminal).",
+          "Accept out-of-order events if verifiable; record anomalies for audit/diagnostics.",
+          "Use timestamps/sequence where available to ignore stale events."
+        ]
+      }
+    },
+
+    "test_plan_in_json": {
+      "goal": "Validate end-to-end flow correctness and consistency across multiple runs with controlled fault injections.",
+      "runs_required": 5,
+      "runs": [
+        {
+          "run_id": 1,
+          "name": "Happy path",
+          "flows": ["E2E_01_UserAuth", "E2E_02_DeviceOnlineAndPairing", "E2E_03_PolicyDistribution", "E2E_04_CommandSteelThread", "E2E_05_TelemetryLoop"],
+          "fault_injections": [],
+          "assertions": [
+            "No signature failures",
+            "Command reaches terminal state",
+            "Telemetry is persisted and readable"
+          ]
+        },
+        {
+          "run_id": 2,
+          "name": "WSS disconnect mid-command",
+          "flows": ["E2E_04_CommandSteelThread"],
+          "fault_injections": [
+            { "where": "Agent<->FastAPI", "inject": "disconnect_after_delivery_before_ack", "expected": "Agent reconnects; ACK and RESULT eventually delivered once" }
+          ],
+          "assertions": ["No duplicate terminal results", "No command state regression"]
+        },
+        {
+          "run_id": 3,
+          "name": "Duplicate delivery replay",
+          "flows": ["E2E_04_CommandSteelThread"],
+          "fault_injections": [
+            { "where": "FastAPI->Agent", "inject": "send_same_COMMAND_DELIVERY_twice_same_message_id", "expected": "Agent dedupes; does not re-execute privileged call" }
+          ],
+          "assertions": ["Exactly one privileged exec attempt recorded", "Idempotent ACK/RESULT behavior"]
+        },
+        {
+          "run_id": 4,
+          "name": "Webhook retry + DLQ path",
+          "flows": ["E2E_04_CommandSteelThread"],
+          "fault_injections": [
+            { "where": "FastAPI->Laravel webhook", "inject": "force_5xx_for_first_N_attempts", "expected": "FastAPI retries; succeeds or DLQ after max_attempts" }
+          ],
+          "assertions": ["Webhook retry_count increments", "If DLQ, DLQ record present and replayable"]
+        },
+        {
+          "run_id": 5,
+          "name": "Policy hash mismatch denial",
+          "flows": ["E2E_03_PolicyDistribution", "E2E_04_CommandSteelThread"],
+          "fault_injections": [
+            { "where": "Agent local", "inject": "stale_policy_hash", "expected": "Agent rejects command or privileged boundary denies; result is failed with typed error" }
+          ],
+          "assertions": ["Command terminal state is failed", "Audit includes policy mismatch anomaly"]
+        }
+      ],
+      "required_outputs": [
+        "Structured logs matching observability.log_schema",
+        "Command lifecycle snapshots from Laravel",
+        "Gateway webhook retry/DLQ metrics",
+        "Agent local outbox queue stats"
+      ]
+    },
+
+    "linux_future_feature_contract": {
+      "statement": "Linux support is achieved by implementing the same Agent<->FastAPI WSS protocol and the same local privileged boundary request/response schemas, while preserving device platform_family and capabilities in Laravel.",
+      "non_goals_now": [
+        "No changes to Mobile, Laravel, or FastAPI when Linux endpoints are added later",
+        "No OS-specific branching logic added to gateway routing; routing stays by device_id"
+      ],
+      "must_hold_invariants": [
+        "Same message types and envelope structure across OS families",
+        "Same replay protection fields and idempotency behavior",
+        "Capability-based command gating in Laravel"
+      ]
+    }
+  }
+}

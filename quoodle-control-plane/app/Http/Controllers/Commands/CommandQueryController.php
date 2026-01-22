@@ -16,6 +16,8 @@ class CommandQueryController extends Controller
             return response()->json(['message' => 'not_found'], 404);
         }
 
+        $this->expireIfNeeded($command);
+
         return response()->json($this->formatCommand($command));
     }
 
@@ -66,5 +68,27 @@ class CommandQueryController extends Controller
             'error_code' => $cmd->error_code,
             'error_message' => $cmd->error_message,
         ];
+    }
+
+    private function expireIfNeeded(Command $command): void
+    {
+        if (in_array($command->state, ['completed', 'failed', 'expired', 'rejected'], true)) {
+            return;
+        }
+
+        $expiresAt = $command->expires_at;
+        if (! $expiresAt) {
+            return;
+        }
+
+        $grace = (int) config('security.command_expiry_grace_seconds', 120);
+        if (now()->greaterThan($expiresAt->copy()->addSeconds($grace))) {
+            $command->update([
+                'state' => 'expired',
+                'execution_state' => 'expired',
+                'reason' => $command->reason ?: 'ttl_expired',
+                'completed_at' => now(),
+            ]);
+        }
     }
 }
