@@ -1,0 +1,37 @@
+{
+  "runs": 3,
+  "command_ids": [
+    "01kfknshee9t185wt45rsc7j1j",
+    "01kfknsnvf7bdbfv4qx2vwcbdd",
+    "01kfknst48qm0vhcn2wrxqs8p6"
+  ],
+  "devices": [
+    "0438cdfb-b717-4069-9da0-37ca12f6d717",
+    "6381de8d-f387-4692-bc49-f81cfc976878",
+    "ce55cc4a-0a12-45bd-891e-441efe6eafe2"
+  ],
+  "harness_summary": {
+    "timestamp": "2026-01-22T20:19:33.667935Z",
+    "level": "INFO",
+    "service": "e2e_harness",
+    "env": "local",
+    "trace_id": "ef831c4d-b681-4455-aef8-04b57862763e",
+    "span_id": "a5d90b22-9c47-498d-9d90-8248a40aaebe",
+    "request_id": "1aa42b23-11d3-48f6-95ad-9b257bc5d7b0",
+    "user_id(optional)": null,
+    "device_id(optional)": null,
+    "command_id(optional)": null,
+    "event_type": "run.start",
+    "stage": "run",
+    "sync_or_async": "sync",
+    "direction": "internal",
+    "endpoint_or_channel": "n/a",
+    "latency_ms": 0,
+    "result": "run_1",
+    "error_code(optional)": null,
+    "retry_count(optional)": null,
+    "idempotency_key(optional)": null
+  },
+  "trace_log": "/home/ela/Work-Force/Quoodle/logs/full_trace/full_trace_20260122T201933Z.jsonl",
+  "e2e_log": "/home/ela/Work-Force/Quoodle/logs/e2e/e2e_20260122T201933Z.jsonl"
+}

@@ -70,10 +70,10 @@ def sign_laravel_request(payload: dict) -> str:
 
 
 class AgentEmulator:
-    def __init__(self, device_id: str, jwt_token: str):
+    def __init__(self, device_id: str, jwt_token: str, signing_key: SigningKey | None = None):
         self.device_id = device_id
         self.jwt_token = jwt_token
-        self.signing_key = SigningKey.generate()
+        self.signing_key = signing_key or SigningKey.generate()
         self.verify_key = self.signing_key.verify_key
         self.pubkey_b64 = self.verify_key.encode(encoder=Base64Encoder).decode('utf-8')
         self.session_id = None
@@ -247,13 +247,15 @@ class AgentEmulator:
                 break
 
 
-async def run_mobile_api_flow() -> tuple[str, str, str]:
+async def run_mobile_api_flow() -> tuple[str, str, str, str, SigningKey]:
     """
     Simulates Mobile Client:
     1. Login to get JWT
-    2. Init + Confirm pairing to get Device ID
-    
-    Returns: (jwt_token, device_id, user_id)
+    2. Init pairing (mobile)
+    3. Agent pairing request (device side)
+    4. Confirm pairing (mobile) + mint agent JWT
+
+    Returns: (jwt_token, device_id, user_id, agent_jwt, agent_signing_key)
     """
     async with httpx.AsyncClient() as client:
         logger.info("📱 Starting Mobile Client Flow")
@@ -275,7 +277,7 @@ async def run_mobile_api_flow() -> tuple[str, str, str]:
         headers = {"Authorization": f"Bearer {token}"}
         logger.info("✅ Logged in to Laravel")
 
-        # 2. Init Pairing
+        # 2. Init Pairing (mobile)
         init_resp = await client.post(f"{LARAVEL_URL}/pair/init", 
             json={"device_label": DEVICE_LABEL}, 
             headers=headers
@@ -286,12 +288,30 @@ async def run_mobile_api_flow() -> tuple[str, str, str]:
             raise Exception("Pairing init failed")
             
         init_data = init_resp.json()
-        pair_token = init_data["pair_token"]
-        logger.info(f"✅ Pairing initiated, token: {pair_token[:20]}...")
+        pair_session_id = init_data.get("pair_session_id")
+        logger.info(f"✅ Pairing initiated, session: {pair_session_id}")
 
-        # 3. Confirm Pairing
+        # 3. Agent pairing request (device side)
+        agent_signing_key = SigningKey.generate()
+        agent_pubkey_b64 = agent_signing_key.verify_key.encode(encoder=Base64Encoder).decode("utf-8")
+        pair_request = await client.post(f"{LARAVEL_URL}/pair/request", json={
+            "device_name": DEVICE_LABEL,
+            "hwid": f"HWID-{uuid.uuid4()}",
+            "pubkey": agent_pubkey_b64
+        })
+        if pair_request.status_code != 200:
+            logger.error(f"❌ Pairing Request Failed: {pair_request.text}")
+            raise Exception("Pairing request failed")
+        request_data = pair_request.json()
+        pair_token = request_data.get("pair_token")
+        device_id = request_data.get("device_id")
+        if not pair_token or not device_id:
+            raise Exception("Pairing request missing token or device_id")
+        logger.info(f"✅ Pairing request ok, token: {pair_token[:20]}...")
+
+        # 4. Confirm Pairing (mobile)
         confirm_resp = await client.post(f"{LARAVEL_URL}/pair/confirm",
-            json={"pair_token": pair_token},
+            json={"pair_token": pair_token, "pair_session_id": pair_session_id},
             headers=headers
         )
 
@@ -301,8 +321,17 @@ async def run_mobile_api_flow() -> tuple[str, str, str]:
 
         device_id = confirm_resp.json()["device_id"]
         logger.info(f"✅ Paired! Device ID: {device_id}")
-        
-        return token, device_id, user_id
+
+        # 5. Agent token (device side)
+        agent_token_resp = await client.post(f"{LARAVEL_URL}/agent/token", json={"pair_token": pair_token})
+        if agent_token_resp.status_code != 200:
+            logger.error(f"❌ Agent token failed: {agent_token_resp.text}")
+            raise Exception("Agent token failed")
+        agent_jwt = agent_token_resp.json().get("jwt")
+        if not agent_jwt:
+            raise Exception("Agent token response missing jwt")
+
+        return token, device_id, user_id, agent_jwt, agent_signing_key
 
 
 async def send_command_via_api(token: str, device_id: str) -> dict:
@@ -337,10 +366,10 @@ async def main():
     
     try:
         # Phase 1: Mobile API Flow
-        jwt_token, device_id, user_id = await run_mobile_api_flow()
+        jwt_token, device_id, user_id, agent_jwt, agent_signing_key = await run_mobile_api_flow()
         
         # Phase 2: Agent Setup
-        agent = AgentEmulator(device_id, jwt_token)
+        agent = AgentEmulator(device_id, agent_jwt, signing_key=agent_signing_key)
         
         # Important: Register pubkey with Gateway BEFORE connecting
         if not await agent.register_pubkey_with_gateway():

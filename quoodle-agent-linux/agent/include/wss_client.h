@@ -73,6 +73,8 @@ private:
     bool use_tls_{false};
     SSL_CTX *tls_ctx_{nullptr};
     SSL *tls_{nullptr};
+    int duplicate_ack_remaining_{0};
+    int duplicate_result_remaining_{0};
 };
 
 }  // namespace quoodle
