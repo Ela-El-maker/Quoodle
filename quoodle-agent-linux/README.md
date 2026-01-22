@@ -42,6 +42,11 @@ Agent:
 - `QUOODLE_AGENT_KID`
 - `QUOODLE_AGENT_STATE_DIR` (default: `/var/lib/quoodle/agent`)
 - `QUOODLE_DAEMON_PUBKEY_B64` (verify daemon responses)
+- `QUOODLE_CONTROLLER_PUBKEY_B64` (verify WSS signatures)
+- `QUOODLE_ALLOW_UNVERIFIED_WSS` (dev-only; default false)
+- `QUOODLE_MAX_CLOCK_SKEW` (seconds; default 120)
+- `QUOODLE_TLS_INSECURE` (true to skip TLS verification; dev-only)
+- `QUOODLE_TLS_CA_FILE` / `QUOODLE_TLS_CA_PATH` (optional CA overrides)
 
 Daemon:
 - `QUOODLE_PRIV_SOCKET` (default: `/run/quoodle/privileged.sock`)
@@ -55,3 +60,4 @@ Daemon:
 - Canonicalization must use JCS (RFC 8785).
 - The daemon must persist `agent_sequence` and `request_id` dedupe state.
 - Unsupported methods must fail closed with `ERR_CAPABILITY_NOT_SUPPORTED`.
+- TLS is supported for `wss://` when OpenSSL is available.

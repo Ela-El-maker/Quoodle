@@ -6,7 +6,9 @@
 #include <unistd.h>
 
 #include <chrono>
+#include <cerrno>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
 #include <fstream>
 #include <iostream>
@@ -69,43 +71,65 @@ std::string StripSigForCanonical(const nlohmann::json &payload) {
     return CanonicalizeJcs(copy.dump());
 }
 
+bool ReadFull(int fd, void *buf, size_t len) {
+    size_t off = 0;
+    while (off < len) {
+        ssize_t r = read(fd, static_cast<char *>(buf) + off, len - off);
+        if (r == 0) {
+            return false;
+        }
+        if (r < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return false;
+        }
+        off += static_cast<size_t>(r);
+    }
+    return true;
+}
+
 bool ReadFrame(int fd, std::string *payload) {
-    uint32_t len = 0;
-    ssize_t n = read(fd, &len, sizeof(len));
-    if (n != sizeof(len)) {
+    uint32_t net_len = 0;
+    if (!ReadFull(fd, &net_len, sizeof(net_len))) {
         return false;
     }
-    len = ntohl(len);
+    uint32_t len = ntohl(net_len);
     if (len == 0 || len > 1024 * 1024) {
         return false;
     }
     std::string buf(len, '\0');
-    size_t off = 0;
-    while (off < len) {
-        ssize_t r = read(fd, buf.data() + off, len - off);
-        if (r <= 0) {
-            return false;
-        }
-        off += static_cast<size_t>(r);
+    if (!ReadFull(fd, buf.data(), len)) {
+        return false;
     }
     *payload = std::move(buf);
     return true;
 }
 
-bool WriteFrame(int fd, const std::string &payload) {
-    uint32_t len = htonl(static_cast<uint32_t>(payload.size()));
-    if (write(fd, &len, sizeof(len)) != sizeof(len)) {
-        return false;
-    }
+bool WriteFull(int fd, const void *buf, size_t len) {
     size_t off = 0;
-    while (off < payload.size()) {
-        ssize_t w = write(fd, payload.data() + off, payload.size() - off);
-        if (w <= 0) {
+    while (off < len) {
+        ssize_t w = write(fd, static_cast<const char *>(buf) + off, len - off);
+        if (w < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
             return false;
         }
         off += static_cast<size_t>(w);
     }
     return true;
+}
+
+bool WriteFrame(int fd, const std::string &payload) {
+    uint32_t net_len = htonl(static_cast<uint32_t>(payload.size()));
+    if (!WriteFull(fd, &net_len, sizeof(net_len))) {
+        return false;
+    }
+    if (payload.empty()) {
+        return true;
+    }
+    return WriteFull(fd, payload.data(), payload.size());
 }
 
 ExecutionResult BuildAgentLocalSuccess(const std::string &message) {
@@ -164,22 +188,26 @@ bool PrivilegedClient::SendRequest(const nlohmann::json &payload, nlohmann::json
     std::string socket_path = GetEnvOrDefault("QUOODLE_PRIV_SOCKET", "/run/quoodle/privileged.sock");
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) {
+        std::cerr << "PrivilegedClient: socket() failed: " << std::strerror(errno) << "\n";
         return false;
     }
     sockaddr_un addr{};
     addr.sun_family = AF_UNIX;
     std::snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", socket_path.c_str());
     if (connect(fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) != 0) {
+        std::cerr << "PrivilegedClient: connect() failed: " << std::strerror(errno) << "\n";
         close(fd);
         return false;
     }
     std::string payload_text = payload.dump();
     if (!WriteFrame(fd, payload_text)) {
+        std::cerr << "PrivilegedClient: write failed\n";
         close(fd);
         return false;
     }
     std::string response_text;
     if (!ReadFrame(fd, &response_text)) {
+        std::cerr << "PrivilegedClient: read failed\n";
         close(fd);
         return false;
     }
@@ -187,12 +215,14 @@ bool PrivilegedClient::SendRequest(const nlohmann::json &payload, nlohmann::json
     try {
         *response = nlohmann::json::parse(response_text);
     } catch (const std::exception &) {
+        std::cerr << "PrivilegedClient: response parse failed\n";
         return false;
     }
     return true;
 }
 
 ExecutionResult PrivilegedClient::Execute(const CommandRequest &request) {
+    try {
     const std::string cap = MapMethodToCapability(request.method);
     if (cap == "UNSUPPORTED") {
         return BuildUnsupported(request.method);
@@ -251,6 +281,7 @@ ExecutionResult PrivilegedClient::Execute(const CommandRequest &request) {
 
     nlohmann::json response;
     if (!SendRequest(payload, &response)) {
+        std::cerr << "PrivilegedClient: request failed\n";
         ExecutionResult result;
         result.execution_state = "failed";
         result.status = "error";
@@ -260,85 +291,118 @@ ExecutionResult PrivilegedClient::Execute(const CommandRequest &request) {
         return result;
     }
 
-    if (!response.is_object()) {
-        ExecutionResult result;
-        result.execution_state = "failed";
-        result.status = "error";
-        result.error_type = "ERR_SCHEMA_INVALID";
-        result.error_message = "Invalid daemon response";
-        result.result = nlohmann::json::object();
-        return result;
-    }
-    if (!response.contains("request_id") || response["request_id"] != payload["request_id"]) {
-        ExecutionResult result;
-        result.execution_state = "failed";
-        result.status = "error";
-        result.error_type = "ERR_SCHEMA_INVALID";
-        result.error_message = "Mismatched request_id";
-        result.result = nlohmann::json::object();
-        return result;
-    }
-
-    if (!response.contains("sig") || !response["sig"].is_object()) {
-        ExecutionResult result;
-        result.execution_state = "failed";
-        result.status = "error";
-        result.error_type = "ERR_SIG_INVALID";
-        result.error_message = "Missing response signature";
-        result.result = nlohmann::json::object();
-        return result;
-    }
-
-    std::string daemon_pub = GetEnvOrDefault("QUOODLE_DAEMON_PUBKEY_B64", "");
-    if (daemon_pub.empty()) {
-        ExecutionResult result;
-        result.execution_state = "failed";
-        result.status = "error";
-        result.error_type = "ERR_SIG_INVALID";
-        result.error_message = "Missing daemon public key";
-        result.result = nlohmann::json::object();
-        return result;
-    }
-
-    std::string resp_sig = response["sig"].value("sig", "");
-    nlohmann::json resp_copy = response;
-    resp_copy["sig"]["sig"] = "";
-    std::string resp_canonical;
     try {
-        resp_canonical = CanonicalizeJcs(resp_copy.dump());
+        if (!response.is_object()) {
+            ExecutionResult result;
+            result.execution_state = "failed";
+            result.status = "error";
+            result.error_type = "ERR_SCHEMA_INVALID";
+            result.error_message = "Invalid daemon response";
+            result.result = nlohmann::json::object();
+            return result;
+        }
+        if (!response.contains("request_id") || response["request_id"] != payload["request_id"]) {
+            ExecutionResult result;
+            result.execution_state = "failed";
+            result.status = "error";
+            result.error_type = "ERR_SCHEMA_INVALID";
+            result.error_message = "Mismatched request_id";
+            result.result = nlohmann::json::object();
+            return result;
+        }
+
+        if (!response.contains("sig") || !response["sig"].is_object()) {
+            ExecutionResult result;
+            result.execution_state = "failed";
+            result.status = "error";
+            result.error_type = "ERR_SIG_INVALID";
+            result.error_message = "Missing response signature";
+            result.result = nlohmann::json::object();
+            return result;
+        }
+
+        std::string daemon_pub = GetEnvOrDefault("QUOODLE_DAEMON_PUBKEY_B64", "");
+        if (daemon_pub.empty()) {
+            ExecutionResult result;
+            result.execution_state = "failed";
+            result.status = "error";
+            result.error_type = "ERR_SIG_INVALID";
+            result.error_message = "Missing daemon public key";
+            result.result = nlohmann::json::object();
+            return result;
+        }
+
+        std::string resp_sig;
+        if (response["sig"].contains("sig") && response["sig"]["sig"].is_string()) {
+            resp_sig = response["sig"]["sig"].get<std::string>();
+        }
+        nlohmann::json resp_copy = response;
+        resp_copy["sig"]["sig"] = "";
+        std::string resp_canonical;
+        try {
+            resp_canonical = CanonicalizeJcs(resp_copy.dump());
+        } catch (const std::exception &ex) {
+            ExecutionResult result;
+            result.execution_state = "failed";
+            result.status = "error";
+            result.error_type = "ERR_SCHEMA_INVALID";
+            result.error_message = ex.what();
+            result.result = nlohmann::json::object();
+            return result;
+        }
+        if (!VerifyEd25519(daemon_pub, resp_canonical, resp_sig)) {
+            ExecutionResult result;
+            result.execution_state = "failed";
+            result.status = "error";
+            result.error_type = "ERR_SIG_INVALID";
+            result.error_message = "Daemon signature verification failed";
+            result.result = nlohmann::json::object();
+            return result;
+        }
+
+        ExecutionResult result;
+        result.status = "error";
+        if (response.contains("status") && response["status"].is_string()) {
+            result.status = response["status"].get<std::string>();
+        }
+        if (response.contains("exec_id") && response["exec_id"].is_string()) {
+            result.exec_id = response["exec_id"].get<std::string>();
+        }
+        result.execution_state = (result.status == "ok") ? "completed" : "failed";
+        if (response.contains("error") && response["error"].is_object()) {
+            if (response["error"].contains("type") && response["error"]["type"].is_string()) {
+                result.error_type = response["error"]["type"].get<std::string>();
+            }
+            if (response["error"].contains("message") && response["error"]["message"].is_string()) {
+                result.error_message = response["error"]["message"].get<std::string>();
+            }
+        }
+        if (response.contains("result")) {
+            result.result = response["result"];
+        } else {
+            result.result = nlohmann::json::object();
+        }
+        return result;
     } catch (const std::exception &ex) {
+        std::cerr << "PrivilegedClient: response handling failed: " << ex.what() << "\n";
         ExecutionResult result;
         result.execution_state = "failed";
         result.status = "error";
-        result.error_type = "ERR_SCHEMA_INVALID";
+        result.error_type = "ERR_EXECUTION_FAILED";
         result.error_message = ex.what();
         result.result = nlohmann::json::object();
         return result;
     }
-    if (!VerifyEd25519(daemon_pub, resp_canonical, resp_sig)) {
+    } catch (const std::exception &ex) {
+        std::cerr << "PrivilegedClient: execute failed: " << ex.what() << "\n";
         ExecutionResult result;
         result.execution_state = "failed";
         result.status = "error";
-        result.error_type = "ERR_SIG_INVALID";
-        result.error_message = "Daemon signature verification failed";
+        result.error_type = "ERR_EXECUTION_FAILED";
+        result.error_message = ex.what();
         result.result = nlohmann::json::object();
         return result;
     }
-
-    ExecutionResult result;
-    result.status = response.value("status", "error");
-    result.exec_id = response.value("exec_id", "");
-    result.execution_state = (result.status == "ok") ? "completed" : "failed";
-    if (response.contains("error") && response["error"].is_object()) {
-        result.error_type = response["error"].value("type", "");
-        result.error_message = response["error"].value("message", "");
-    }
-    if (response.contains("result")) {
-        result.result = response["result"];
-    } else {
-        result.result = nlohmann::json::object();
-    }
-    return result;
 }
 
 }  // namespace quoodle

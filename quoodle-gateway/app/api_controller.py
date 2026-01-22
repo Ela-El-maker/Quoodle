@@ -66,7 +66,8 @@ def build_command_delivery(payload: Dict[str, Any], session_id: str) -> Dict[str
         "seq": payload.get("seq", 1),
         "sig": envelope.get("sig"),
     }
-    command_envelope["sig"] = command_envelope["sig"] or compute_sig(command_envelope)
+    # Always re-sign the command envelope with the gateway's WSS signing key.
+    command_envelope["sig"] = compute_sig(command_envelope)
 
     message = {
         "type": "COMMAND_DELIVERY",

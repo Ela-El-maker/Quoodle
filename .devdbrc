@@ -1,0 +1,10 @@
+[
+  {
+    "type": "sqlite",
+    "path": "/home/ela/Work-Force/Quoodle/quoodle-gateway/data/device_registry.db"
+  },
+  {
+    "type": "sqlite",
+    "path": "/home/ela/Work-Force/Quoodle/quoodle-gateway/data/webhook_outbox.db"
+  }
+]

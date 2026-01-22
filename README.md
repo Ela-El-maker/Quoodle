@@ -50,7 +50,9 @@ This will:
 **Access Points:**
 
 - **Control Plane:** [http://localhost:8080](http://localhost:8080)
+- **Control Plane (HTTPS):** [https://localhost:8444](https://localhost:8444)
 - **Gateway:** [http://localhost:8000](http://localhost:8000) (Health: `/health`)
+- **Gateway (HTTPS):** [https://localhost:8443](https://localhost:8443) (Health: `/health`)
 
 ### **Test the System**
 

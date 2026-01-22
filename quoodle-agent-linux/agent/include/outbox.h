@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include <vector>
+#include <deque>
 
 #include <nlohmann/json.hpp>
 
@@ -20,6 +20,8 @@ struct OutboxItem {
     std::string type;
     std::string command_id;
     std::string device_id;
+    std::string ack_status;
+    std::string ack_reason;
     ExecutionResult result;
 };
 
@@ -30,18 +32,22 @@ public:
     bool Load();
     bool Save() const;
 
-    void EnqueueAck(const std::string &command_id, const std::string &device_id);
+    void EnqueueAck(const std::string &command_id,
+                    const std::string &device_id,
+                    const std::string &status = "received",
+                    const std::string &reason = "");
     void EnqueueResult(const std::string &command_id, const std::string &device_id, const ExecutionResult &result);
 
-    std::vector<OutboxItem> Drain();
-    const std::vector<OutboxItem> &Pending() const;
+    const OutboxItem *Peek() const;
+    void PopFront();
+    const std::deque<OutboxItem> &Pending() const;
 
 private:
     bool EnsureDir() const;
     std::string OutboxPath() const;
 
     std::string state_dir_;
-    std::vector<OutboxItem> pending_;
+    std::deque<OutboxItem> pending_;
 };
 
 }  // namespace quoodle

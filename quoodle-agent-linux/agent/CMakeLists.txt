@@ -16,5 +16,7 @@ target_include_directories(quoodle-agent-linux PRIVATE third_party)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBSODIUM REQUIRED libsodium)
+pkg_check_modules(OPENSSL REQUIRED openssl)
 target_include_directories(quoodle-agent-linux PRIVATE ${LIBSODIUM_INCLUDE_DIRS})
-target_link_libraries(quoodle-agent-linux ${LIBSODIUM_LIBRARIES})
+target_include_directories(quoodle-agent-linux PRIVATE ${OPENSSL_INCLUDE_DIRS})
+target_link_libraries(quoodle-agent-linux ${LIBSODIUM_LIBRARIES} ${OPENSSL_LIBRARIES})

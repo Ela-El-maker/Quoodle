@@ -44,9 +44,10 @@ int main() {
         replay.Load();
 
         quoodle::PrivilegedClient privileged(replay);
+        quoodle::CommandProcessor processor(outbox, privileged, state);
 
         quoodle::WssClient client(
-            ws_url, device_id, agent_jwt, agent_kid, agent_priv_b64, policy, outbox, replay, privileged);
+            ws_url, device_id, agent_jwt, agent_kid, agent_priv_b64, policy, outbox, replay, state, processor);
         client.Run();
         return 0;
     } catch (const std::exception &ex) {
