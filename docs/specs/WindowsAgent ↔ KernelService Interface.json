@@ -9,6 +9,7 @@
         "linux": "privileged helper or ioctl-compatible bridge (to be implemented)",
         "macos": "tbd"
       },
+      "linux_canonical_spec": "LinuxAgent ↔ PrivilegedExecutor Interface.json",
       "os_specific_rules": "OS-specific opcodes are allowed only when versioned and optional; core opcodes remain OS-agnostic."
     },
 

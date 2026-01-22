@@ -844,6 +844,7 @@
 
     "linux_future_feature_contract": {
       "statement": "Linux support is achieved by implementing the same Agent<->FastAPI WSS protocol and the same local privileged boundary request/response schemas, while preserving device platform_family and capabilities in Laravel.",
+      "canonical_privileged_contract": "LinuxAgent ↔ PrivilegedExecutor Interface.json",
       "non_goals_now": [
         "No changes to Mobile, Laravel, or FastAPI when Linux endpoints are added later",
         "No OS-specific branching logic added to gateway routing; routing stays by device_id"

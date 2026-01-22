@@ -15,6 +15,7 @@ The Quoodle system is defined by strict, canonical JSON specifications. These fi
 | **Agent ↔ Gateway** | [WindowsAgent ↔ FastAPI (WSS control channel).json](./WindowsAgent%20↔%20FastAPI%20(WSS%20control%20channel).json) | Persistent WebSocket protocol for real-time control, heartbeat, and telemetry. |
 | **Mobile ↔ Control** | [Laravel ↔ Mobile App (REST + notifications).json](./Laravel%20↔%20Mobile%20App%20(REST%20+%20notifications).json) | REST API for user actions: Login, Pairing, Issuing Commands, Views. |
 | **Agent ↔ Kernel** | [WindowsAgent ↔ KernelService Interface.json](./WindowsAgent%20↔%20KernelService%20Interface.json) | Local IOCTL interface for privileged operations (User Mode to Kernel Mode). |
+| **Agent ↔ Privileged Executor (Linux)** | [LinuxAgent ↔ PrivilegedExecutor Interface.json](./LinuxAgent%20↔%20PrivilegedExecutor%20Interface.json) | Canonical Linux privileged execution contract (local-only). |
 | **Control ↔ Gateway** | [FastAPI ↔ Laravel (REST + Webhook Control Channel).json](./FastAPI%20↔%20Laravel%20(REST%20+%20Webhook%20Control%20Channel).json) | Backend signaling: Dispatching signed envelopes, syncing presence. |
 
 ---

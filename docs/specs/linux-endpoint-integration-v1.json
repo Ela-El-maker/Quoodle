@@ -2,9 +2,11 @@
   "system_name": "Quoodle",
   "flow_system_id": "linux-endpoint-integration-v1",
   "goal": "Add Linux endpoint support without changes to Mobile, Laravel Control Plane, or FastAPI Gateway by implementing a Linux Agent that speaks the exact Agent↔FastAPI WSS contract and a Linux Privileged Boundary that speaks the exact Agent↔KernelService request/response contract.",
+  "status": "deprecated",
+  "canonical_privileged_contract": "LinuxAgent ↔ PrivilegedExecutor Interface.json",
   "source_of_truth_specs": {
     "agent_fastapi_wss": "WindowsAgent ↔ FastAPI (WSS control channel).json",
-    "agent_kernel_boundary": "WindowsAgent ↔ KernelService Interface.json",
+    "agent_kernel_boundary": "LinuxAgent ↔ PrivilegedExecutor Interface.json",
     "notes": [
       "All WSS messages must use CommonEnvelope with Ed25519 signature over canonical JSON excluding 'sig'.",
       "All privileged boundary requests must use RequestSchema with Ed25519 signature over canonical JSON of full request."

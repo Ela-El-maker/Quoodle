@@ -1,5 +1,8 @@
 {
   "LinuxIntegration": {
+    "status": "deprecated",
+    "canonical_privileged_contract": "LinuxAgent ↔ PrivilegedExecutor Interface.json",
+    "deprecation_note": "This document is advisory only. Use the canonical privileged-execution contract above.",
     "meta": {
       "version": "1.0",
       "compatibility_goal": "No changes required to Mobile, Laravel Control Plane, or FastAPI Gateway. Linux endpoint behaves as a protocol-equal peer to Windows endpoints.",

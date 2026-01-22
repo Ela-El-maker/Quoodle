@@ -1,6 +1,9 @@
 {
   "system_name": "Quoodle (Linux Endpoint Integration - Defensive Architecture)",
   "version": "linux-integration-sketch-v1",
+  "status": "deprecated",
+  "canonical_privileged_contract": "LinuxAgent ↔ PrivilegedExecutor Interface.json",
+  "deprecation_note": "Use the canonical privileged-execution contract; this file is a high-level sketch.",
   "scope": {
     "intact_components": ["MobileApp", "LaravelControlPlane", "FastAPIGateway"],
     "new_components": ["LinuxAgent", "LinuxPrivilegedOpsService", "LinuxTelemetryCollector"],

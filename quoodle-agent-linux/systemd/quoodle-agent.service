@@ -1,0 +1,20 @@
+[Unit]
+Description=Quoodle Linux Agent
+After=network.target
+
+[Service]
+Type=simple
+User=quoodle-agent
+Group=quoodle-agent
+WorkingDirectory=/opt/quoodle-agent
+Environment=QUOODLE_WS_URL=wss://gateway.example.com/agent
+Environment=QUOODLE_DEVICE_ID=REPLACE_ME
+Environment=QUOODLE_AGENT_JWT=REPLACE_ME
+Environment=QUOODLE_AGENT_PRIVKEY_B64=REPLACE_ME
+Environment=QUOODLE_AGENT_KID=agent-key-1
+ExecStart=/opt/quoodle-agent/bin/quoodle-agent-linux
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
