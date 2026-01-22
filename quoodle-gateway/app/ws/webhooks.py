@@ -1,23 +1,13 @@
 import asyncio
 from typing import Any, Dict
 
-import httpx
-
 from app.config import settings
-from app.services.fastapi_service_signing import ServiceSigningError, sign_fastapi_to_laravel
+from app.state import webhook_outbox
 
 
-async def _post(path: str, payload: Dict[str, Any]) -> None:
+async def _post(path: str, payload: Dict[str, Any], event_type: str) -> None:
     url = f"{settings.laravel_webhook_base.rstrip('/')}/{path.lstrip('/')}"
-    headers = None
-    try:
-        headers = sign_fastapi_to_laravel(payload)
-    except ServiceSigningError:
-        if settings.sign_laravel_webhooks:
-            raise
-        headers = None
-    async with httpx.AsyncClient() as client:
-        await client.post(url, json=payload, headers=headers, timeout=5.0)
+    await webhook_outbox.enqueue_and_send(event_type, url, payload)
 
 
 async def notify_device_online(device_id: str, session_id: str, agent_info: Dict[str, Any]) -> None:
@@ -29,7 +19,7 @@ async def notify_device_online(device_id: str, session_id: str, agent_info: Dict
         "attestation_hash": agent_info.get("attestation_hash"),
         "connected_at": agent_info.get("connected_at"),
     }
-    await _post("device/online", payload)
+    await _post("device/online", payload, "device_online")
 
 
 async def notify_device_activated(device_id: str, session_id: str, activated_at: str, policy_hash: str | None) -> None:
@@ -39,7 +29,7 @@ async def notify_device_activated(device_id: str, session_id: str, activated_at:
         "activated_at": activated_at,
         "policy_hash": policy_hash,
     }
-    await _post("device/activated", payload)
+    await _post("device/activated", payload, "device_activated")
 
 
 async def notify_device_offline(device_id: str, session_id: str | None, last_seen: str, reason: str) -> None:
@@ -49,7 +39,7 @@ async def notify_device_offline(device_id: str, session_id: str | None, last_see
         "last_seen": last_seen,
         "reason": reason,
     }
-    await _post("device/offline", payload)
+    await _post("device/offline", payload, "device_offline")
 
 
 async def forward_command_ack(body: Dict[str, Any], device_id: str, timestamp: str) -> None:
@@ -60,7 +50,7 @@ async def forward_command_ack(body: Dict[str, Any], device_id: str, timestamp: s
         "reason": body.get("reason"),
         "timestamp": timestamp,
     }
-    await _post("command/ack", payload)
+    await _post("command/ack", payload, "command_ack")
 
 
 async def forward_telemetry_summary(
@@ -103,7 +93,7 @@ async def forward_telemetry_summary(
         "timestamp": timestamp,
         "rollup": rollup,
     }
-    await _post("telemetry/summary", payload)
+    await _post("telemetry/summary", payload, "telemetry_summary")
 
 
 async def forward_attestation(device_id: str, timestamp: str, attestation_hash: str | None) -> None:
@@ -117,7 +107,7 @@ async def forward_attestation(device_id: str, timestamp: str, attestation_hash: 
             "status": "pass" if attestation_hash else "unknown",
         },
     }
-    await _post("security/attestation", payload)
+    await _post("security/attestation", payload, "security_attestation")
 
 
 def fire_and_forget(coro: asyncio.Future) -> None:

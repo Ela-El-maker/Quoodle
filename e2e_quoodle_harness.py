@@ -884,17 +884,35 @@ def dispatch_direct(trace_id: str, command: Dict[str, Any], device_id: str, user
 def send_webhook_direct(trace_id: str, path: str, payload: Dict[str, Any]):
     if not FASTAPI_SERVICE_PRIVATE_KEY_B64:
         raise RuntimeError("FASTAPI_SERVICE_PRIVATE_KEY_B64 required for direct webhooks")
+    if "event_id" not in payload:
+        payload["event_id"] = hashlib.sha256(canonicalize(payload)).hexdigest()
     sig = sign_ed25519(FASTAPI_SERVICE_PRIVATE_KEY_B64, payload)
     resp = http_request(
         "POST",
         f"{LARAVEL_BASE_URL}/api/v1/webhook/{path}",
-        headers={"X-FastAPI-Signature": sig},
+        headers={"X-FastAPI-Signature": sig, "X-Event-Id": payload.get("event_id", "")},
         json_body=payload,
         trace_id=trace_id,
         stage=f"webhook.{path}",
         direction="fastapi->laravel",
     )
     return resp
+
+
+def set_fastapi_fault(trace_id: str, mode: str, count: int = 1) -> None:
+    if not FASTAPI_BASE_URL:
+        return
+    try:
+        http_request(
+            "POST",
+            f"{FASTAPI_BASE_URL}/api/v1/test/fault",
+            json_body={"mode": mode, "count": count},
+            trace_id=trace_id,
+            stage="fastapi.fault",
+            direction="harness->fastapi",
+        )
+    except Exception:
+        pass
 
 
 def run_once(run_idx: int) -> Dict[str, Any]:
@@ -933,6 +951,9 @@ def run_once(run_idx: int) -> Dict[str, Any]:
     agent = AgentSim(device_id, (agent_priv_b64, agent_pub_b64), agent_jwt, trace_id)
     ws_url = FASTAPI_BASE_URL.replace("http://", "ws://").replace("https://", "wss://") + "/agent"
     agent.connect(ws_url)
+
+    if "webhook_timeout" in FAULTS:
+        set_fastapi_fault(trace_id, "timeout", 1)
 
     command = send_command(trace_id, jwt, device_id)
     command_id = command.get("command_id")

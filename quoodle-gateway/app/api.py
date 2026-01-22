@@ -131,7 +131,7 @@ def create_router(manager: ConnectionManager) -> APIRouter:
 
         entry = await manager.get(device_id)
         if not entry:
-            offline_queue.enqueue(device_id, payload.dict())
+            await offline_queue.enqueue(device_id, payload.dict())
             return build_dispatch_response("queued_offline", device_id, payload.command_id, "device not connected")
 
         message = build_command_delivery(payload.dict(), entry.session_id)

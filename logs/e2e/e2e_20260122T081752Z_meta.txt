@@ -1,0 +1,13 @@
+timestamp=20260122T081752Z
+laravel=http://localhost:8080
+fastapi=http://localhost:8000
+runs=5
+seed=1337
+run_nonce=20260122T081752Z
+user_email=admin@quoodle.com
+user_password=***
+NAME                    IMAGE                   COMMAND                  SERVICE         CREATED          STATUS                   PORTS
+quoodle-control-plane   quoodle-control-plane   "/usr/local/bin/entr…"   control-plane   10 minutes ago   Up 9 minutes             9000/tcp, 0.0.0.0:8080->80/tcp, [::]:8080->80/tcp
+quoodle-db              mysql:8.0               "docker-entrypoint.s…"   db              22 hours ago     Up 9 minutes (healthy)   33060/tcp, 0.0.0.0:3307->3306/tcp, [::]:3307->3306/tcp
+quoodle-gateway         quoodle-gateway         "/app/entrypoint.sh"     gateway         10 minutes ago   Up 9 minutes             0.0.0.0:8000->8000/tcp, :::8000->8000/tcp
+quoodle-redis           redis:7-alpine          "docker-entrypoint.s…"   redis           22 hours ago     Up 9 minutes (healthy)   0.0.0.0:6380->6379/tcp, [::]:6380->6379/tcp

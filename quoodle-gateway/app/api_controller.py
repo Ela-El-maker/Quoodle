@@ -18,6 +18,7 @@ from app.state import (
     ota_manager,
     policy_resolver,
     quarantine_handler,
+    webhook_outbox,
 )
 from app.ws.connection_manager import ConnectionManager
 from app.ws.protocol import iso_timestamp, compute_sig
@@ -119,7 +120,7 @@ def create_router(manager: ConnectionManager) -> APIRouter:
 
         entry = await manager.get(device_id)
         if not entry:
-            offline_queue.enqueue(device_id, payload.dict())
+            await offline_queue.enqueue(device_id, payload.dict())
             return build_dispatch_response("queued_offline", device_id, payload.command_id, "device not connected")
 
         message = build_command_delivery(payload.dict(), entry.session_id)
@@ -177,6 +178,15 @@ def create_router(manager: ConnectionManager) -> APIRouter:
 
         await event_bus.publish("ota.release.announced.v1", manifest)
         return {"status": "broadcasted", "reason": None, "release_id": payload.release_id}
+
+    @router.post("/test/fault")
+    async def set_fault(payload: Dict[str, Any]):
+        if not settings.enable_test_endpoints:
+            raise HTTPException(status_code=404, detail="not_found")
+        mode = str(payload.get("mode", "")).strip().lower()
+        count = int(payload.get("count", 1))
+        webhook_outbox.set_fault_mode(mode, count)
+        return {"status": "ok", "mode": mode, "count": count}
 
     @router.post("/webhook/device/paired")
     async def device_paired(payload: DevicePairedRequest):

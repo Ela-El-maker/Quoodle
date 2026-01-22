@@ -8,7 +8,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 from app.api_controller import create_router, build_command_delivery
 from app.config import settings
-from app.state import manager, offline_queue, ota_manager, policy_resolver, risk_scorer, eventbus, presence
+from app.state import manager, offline_queue, ota_manager, policy_resolver, risk_scorer, eventbus, presence, webhook_outbox
 from app.ws.auth import validate_auth_jwt
 from app.services.device_registry import DeviceKeyRegistry, DeviceKeyRegistryConfig
 from app.services.redis_service import RedisConfig, init_redis, close_redis, get_redis_service
@@ -64,10 +64,17 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("Running without Redis - using in-memory fallback")
 
+    if settings.webhook_fault_mode:
+        webhook_outbox.set_fault_mode(settings.webhook_fault_mode, 1)
+
+    outbox_task = asyncio.create_task(webhook_outbox.run_worker())
+
     yield
 
     # Shutdown
     logger.info("Shutting down FastAPI gateway...")
+    webhook_outbox.stop()
+    outbox_task.cancel()
     await replay.close()
     await close_redis()
     logger.info("Cleanup complete")
