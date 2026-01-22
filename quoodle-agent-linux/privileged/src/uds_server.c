@@ -361,9 +361,15 @@ static char *handle_request(const char *json_in) {
     }
 
     const char *request_id = NULL;
+    char request_id_copy[128] = {0};
+    const char *request_id_safe = "unknown";
     cJSON *request_id_item = cJSON_GetObjectItem(root, "request_id");
     if (request_id_item && cJSON_IsString(request_id_item)) {
         request_id = request_id_item->valuestring;
+    }
+    if (request_id && *request_id) {
+        snprintf(request_id_copy, sizeof(request_id_copy), "%s", request_id);
+        request_id_safe = request_id_copy;
     }
 
     cJSON *timestamp = cJSON_GetObjectItem(root, "timestamp");
@@ -377,72 +383,72 @@ static char *handle_request(const char *json_in) {
     if (!request_id || !timestamp || !capability || !params || !agent_seq || !policy_hash ||
         !command_message_id || !sig) {
         cJSON_Delete(root);
-        return build_error_response(request_id ? request_id : "unknown", "error", "ERR_SCHEMA_INVALID", 1001,
-                                    "missing required fields");
+        return build_error_response(request_id_safe, "error", "ERR_SCHEMA_INVALID", 1001, "missing required fields");
     }
-    if (!is_safe_id(request_id)) {
+    if (!is_safe_id(request_id_safe)) {
         cJSON_Delete(root);
         return build_error_response("unknown", "error", "ERR_SCHEMA_INVALID", 1001, "invalid request_id");
     }
     if (!cJSON_IsString(timestamp) || !cJSON_IsString(capability) || !cJSON_IsObject(params) ||
         !cJSON_IsNumber(agent_seq) || !cJSON_IsString(policy_hash) || !cJSON_IsString(command_message_id)) {
         cJSON_Delete(root);
-        return build_error_response(request_id, "error", "ERR_SCHEMA_INVALID", 1001, "invalid field types");
+        return build_error_response(request_id_safe, "error", "ERR_SCHEMA_INVALID", 1001, "invalid field types");
     }
     if (parse_basic_timestamp(timestamp->valuestring) != 0) {
         cJSON_Delete(root);
-        return build_error_response(request_id, "error", "ERR_SCHEMA_INVALID", 1001, "invalid timestamp");
+        return build_error_response(request_id_safe, "error", "ERR_SCHEMA_INVALID", 1001, "invalid timestamp");
     }
 
     const char *sig_b64 = NULL;
     if (validate_sig_object(sig, &sig_b64) != 0) {
         cJSON_Delete(root);
-        return build_error_response(request_id, "denied", "ERR_SIG_INVALID", 1002, "invalid signature");
+        return build_error_response(request_id_safe, "denied", "ERR_SIG_INVALID", 1002, "invalid signature");
     }
 
     const char *agent_pub_b64 = getenv("QUOODLE_AGENT_PUBKEY_B64");
     if (!agent_pub_b64 || !*agent_pub_b64) {
         cJSON_Delete(root);
-        return build_error_response(request_id, "error", "ERR_SIG_INVALID", 1002, "missing agent public key");
+        return build_error_response(request_id_safe, "error", "ERR_SIG_INVALID", 1002, "missing agent public key");
     }
 
     char *canonical = canonicalize_without_sig(root);
     if (!canonical) {
         cJSON_Delete(root);
-        return build_error_response(request_id, "error", "ERR_SCHEMA_INVALID", 1001, "canonicalization failed");
+        return build_error_response(request_id_safe, "error", "ERR_SCHEMA_INVALID", 1001, "canonicalization failed");
     }
     if (quoodle_verify_ed25519(agent_pub_b64, canonical, sig_b64) != 0) {
         free(canonical);
         cJSON_Delete(root);
-        return build_error_response(request_id, "denied", "ERR_SIG_INVALID", 1002, "signature verification failed");
+        return build_error_response(request_id_safe, "denied", "ERR_SIG_INVALID", 1002,
+                                    "signature verification failed");
     }
     free(canonical);
 
     char *cached = NULL;
-    int cached_rc = state_store_get_response(request_id, &cached);
+    int cached_rc = state_store_get_response(request_id_safe, &cached);
     if (cached_rc == 1 && cached) {
         cJSON_Delete(root);
         return cached;
     } else if (cached_rc < 0) {
         cJSON_Delete(root);
-        return build_error_response(request_id, "error", "ERR_EXECUTION_FAILED", 2001, "idempotency cache error");
+        return build_error_response(request_id_safe, "error", "ERR_EXECUTION_FAILED", 2001, "idempotency cache error");
     }
 
     long last_seq = 0;
     if (state_store_load_sequence(NULL, &last_seq) != 0) {
         cJSON_Delete(root);
-        return build_error_response(request_id, "error", "ERR_EXECUTION_FAILED", 2001, "sequence load failed");
+        return build_error_response(request_id_safe, "error", "ERR_EXECUTION_FAILED", 2001, "sequence load failed");
     }
     long req_seq = (long)agent_seq->valuedouble;
     if (req_seq <= last_seq) {
         cJSON_Delete(root);
-        return build_error_response(request_id, "denied", "ERR_REPLAY_DETECTED", 1003, "sequence regression");
+        return build_error_response(request_id_safe, "denied", "ERR_REPLAY_DETECTED", 1003, "sequence regression");
     }
 
     char *exec_resp = NULL;
     if (executor_handle_request(json_in, &exec_resp) != 0 || !exec_resp) {
         cJSON_Delete(root);
-        return build_error_response(request_id, "error", "ERR_EXECUTION_FAILED", 2001, "executor failed");
+        return build_error_response(request_id_safe, "error", "ERR_EXECUTION_FAILED", 2001, "executor failed");
     }
 
     cJSON *exec_root = cJSON_Parse(exec_resp);
@@ -452,7 +458,8 @@ static char *handle_request(const char *json_in) {
             cJSON_Delete(exec_root);
         }
         cJSON_Delete(root);
-        return build_error_response(request_id, "error", "ERR_EXECUTION_FAILED", 2001, "executor invalid response");
+        return build_error_response(request_id_safe, "error", "ERR_EXECUTION_FAILED", 2001,
+                                    "executor invalid response");
     }
 
     const char *status = "ok";
@@ -461,11 +468,11 @@ static char *handle_request(const char *json_in) {
         status = exec_status->valuestring;
     }
 
-    cJSON *resp = build_base_response(request_id, status);
+    cJSON *resp = build_base_response(request_id_safe, status);
     if (!resp) {
         cJSON_Delete(exec_root);
         cJSON_Delete(root);
-        return build_error_response(request_id, "error", "ERR_EXECUTION_FAILED", 2001, "response build failed");
+        return build_error_response(request_id_safe, "error", "ERR_EXECUTION_FAILED", 2001, "response build failed");
     }
 
     cJSON *exec_err = cJSON_GetObjectItem(exec_root, "error");
@@ -486,16 +493,18 @@ static char *handle_request(const char *json_in) {
     cJSON_Delete(resp);
     cJSON_Delete(root);
     if (!out) {
-        return build_error_response(request_id, "error", "ERR_EXECUTION_FAILED", 2001, "signing failed");
+        return build_error_response(request_id_safe, "error", "ERR_EXECUTION_FAILED", 2001, "signing failed");
     }
 
-    if (state_store_save_response(request_id, out) != 0) {
+    if (state_store_save_response(request_id_safe, out) != 0) {
         free(out);
-        return build_error_response(request_id, "error", "ERR_EXECUTION_FAILED", 2001, "response persistence failed");
+        return build_error_response(request_id_safe, "error", "ERR_EXECUTION_FAILED", 2001,
+                                    "response persistence failed");
     }
     if (state_store_save_sequence(NULL, req_seq) != 0) {
         free(out);
-        return build_error_response(request_id, "error", "ERR_EXECUTION_FAILED", 2001, "sequence persistence failed");
+        return build_error_response(request_id_safe, "error", "ERR_EXECUTION_FAILED", 2001,
+                                    "sequence persistence failed");
     }
     return out;
 }

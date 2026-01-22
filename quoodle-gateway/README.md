@@ -36,6 +36,21 @@ pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
+### TLS (optional)
+
+The gateway can terminate TLS directly when these environment variables are set:
+
+- `GATEWAY_TLS_CERT_FILE`
+- `GATEWAY_TLS_KEY_FILE`
+- `GATEWAY_TLS_CA_FILE` (optional)
+- `GATEWAY_TLS_CERT_REQS` (optional; numeric OpenSSL verify mode)
+
+Example (docker-compose override):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
+```
+
 ## 🔐 Configuration
 
 Based on `docs/specs`, the following security settings are critical:

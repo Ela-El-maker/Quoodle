@@ -48,6 +48,19 @@ php artisan quoodle:keys:generate
 php artisan serve
 ```
 
+### TLS (Docker)
+
+For local TLS, use the compose override and provide certs:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d --build
+```
+
+Expected cert paths:
+
+- `certs/control-plane.crt`
+- `certs/control-plane.key`
+
 ## 🔐 Security Context
 
 - **Private Keys**: Stores the CA private key and the Command Signing private key. These must be protected via KMS/HSM in production.

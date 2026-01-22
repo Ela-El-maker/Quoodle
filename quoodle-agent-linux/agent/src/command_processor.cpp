@@ -10,7 +10,7 @@ ExecutionResult CommandProcessor::Handle(const CommandEnvelope &command) {
         state_.SetLastDeliveryId(command.delivery_id);
     }
     if (command.requires_ack) {
-        outbox_.EnqueueAck(command.command_id, command.device_id);
+        outbox_.EnqueueAck(command.command_id, command.device_id, "received", "");
     }
 
     CommandRequest request;
