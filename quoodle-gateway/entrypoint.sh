@@ -5,7 +5,7 @@ echo "Starting Gateway..."
 
 # Start the Telemetry Worker in background
 echo "Starting Telemetry Worker..."
-python3 app/workers/telemetry_worker.py &
+python3 -m app.workers.telemetry_worker &
 WORKER_PID=$!
 
 # Start FastAPI server

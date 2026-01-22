@@ -18,11 +18,14 @@ struct ExecutionResult {
 
 struct OutboxItem {
     std::string type;
+    std::string message_id;
+    std::string timestamp;
     std::string command_id;
     std::string device_id;
     std::string ack_status;
     std::string ack_reason;
     ExecutionResult result;
+    nlohmann::json payload;
 };
 
 class Outbox {
@@ -37,6 +40,8 @@ public:
                     const std::string &status = "received",
                     const std::string &reason = "");
     void EnqueueResult(const std::string &command_id, const std::string &device_id, const ExecutionResult &result);
+    void EnqueueTelemetry(const std::string &device_id, const nlohmann::json &body);
+    void EnqueueUpdateStatus(const std::string &device_id, const nlohmann::json &body);
 
     const OutboxItem *Peek() const;
     void PopFront();

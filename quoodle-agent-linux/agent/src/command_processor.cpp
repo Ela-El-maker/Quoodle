@@ -1,5 +1,22 @@
 #include "command_processor.h"
 
+#include <cstdlib>
+#include <cstring>
+
+namespace {
+
+bool EnvFlagEnabled(const char *name) {
+    const char *value = std::getenv(name);
+    if (!value || !*value) {
+        return false;
+    }
+    return std::strcmp(value, "1") == 0 ||
+           std::strcmp(value, "true") == 0 ||
+           std::strcmp(value, "yes") == 0;
+}
+
+}  // namespace
+
 namespace quoodle {
 
 CommandProcessor::CommandProcessor(Outbox &outbox, PrivilegedClient &privileged, AgentStateStore &state)
@@ -9,7 +26,8 @@ ExecutionResult CommandProcessor::Handle(const CommandEnvelope &command) {
     if (!command.delivery_id.empty()) {
         state_.SetLastDeliveryId(command.delivery_id);
     }
-    if (command.requires_ack) {
+    bool out_of_order = EnvFlagEnabled("QUOODLE_FAULT_OUT_OF_ORDER_RESULT");
+    if (command.requires_ack && !out_of_order) {
         outbox_.EnqueueAck(command.command_id, command.device_id, "received", "");
     }
 
@@ -21,6 +39,18 @@ ExecutionResult CommandProcessor::Handle(const CommandEnvelope &command) {
 
     ExecutionResult result = privileged_.Execute(request);
     outbox_.EnqueueResult(command.command_id, command.device_id, result);
+    if (command.requires_ack && out_of_order) {
+        outbox_.EnqueueAck(command.command_id, command.device_id, "received", "");
+    }
+    ProcessedCommand processed;
+    processed.command_id = command.command_id;
+    processed.requires_ack = command.requires_ack;
+    if (command.requires_ack) {
+        processed.ack_status = "received";
+        processed.ack_reason = "";
+    }
+    processed.result = result;
+    state_.RememberCommand(processed);
     return result;
 }
 

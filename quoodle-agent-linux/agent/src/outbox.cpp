@@ -5,10 +5,13 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <chrono>
+#include <ctime>
 #include <cstdlib>
 #include <cerrno>
 #include <fstream>
 #include <iostream>
+#include <random>
 
 namespace quoodle {
 namespace {
@@ -43,6 +46,40 @@ bool MkdirRecursive(const std::string &path) {
         return false;
     }
     return true;
+}
+
+std::string BuildIsoTimestamp() {
+    auto now = std::chrono::system_clock::now();
+    std::time_t tt = std::chrono::system_clock::to_time_t(now);
+    std::tm tm{};
+    gmtime_r(&tt, &tm);
+    char buf[32];
+    std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tm);
+    return buf;
+}
+
+std::string GenerateMessageId() {
+    std::ifstream in("/proc/sys/kernel/random/uuid");
+    if (in.good()) {
+        std::string uuid;
+        std::getline(in, uuid);
+        if (!uuid.empty()) {
+            return uuid;
+        }
+    }
+    std::random_device rd;
+    std::uniform_int_distribution<int> dist(0, 15);
+    std::string hex = "0123456789abcdef";
+    std::string uuid;
+    uuid.reserve(36);
+    for (int i = 0; i < 36; ++i) {
+        if (i == 8 || i == 13 || i == 18 || i == 23) {
+            uuid.push_back('-');
+        } else {
+            uuid.push_back(hex[dist(rd)]);
+        }
+    }
+    return uuid;
 }
 
 nlohmann::json ResultToJson(const ExecutionResult &result) {
@@ -115,6 +152,12 @@ bool Outbox::Load() {
         if (item.contains("type") && item["type"].is_string()) {
             entry.type = item["type"].get<std::string>();
         }
+        if (item.contains("message_id") && item["message_id"].is_string()) {
+            entry.message_id = item["message_id"].get<std::string>();
+        }
+        if (item.contains("timestamp") && item["timestamp"].is_string()) {
+            entry.timestamp = item["timestamp"].get<std::string>();
+        }
         if (item.contains("command_id") && item["command_id"].is_string()) {
             entry.command_id = item["command_id"].get<std::string>();
         }
@@ -130,6 +173,9 @@ bool Outbox::Load() {
         if (item.contains("result")) {
             entry.result = ResultFromJson(item["result"]);
         }
+        if (item.contains("payload")) {
+            entry.payload = item["payload"];
+        }
         pending_.push_back(std::move(entry));
     }
     return true;
@@ -143,11 +189,16 @@ bool Outbox::Save() const {
     for (const auto &item : pending_) {
         nlohmann::json entry;
         entry["type"] = item.type;
+        entry["message_id"] = item.message_id;
+        entry["timestamp"] = item.timestamp;
         entry["command_id"] = item.command_id;
         entry["device_id"] = item.device_id;
         entry["ack_status"] = item.ack_status;
         entry["ack_reason"] = item.ack_reason;
         entry["result"] = ResultToJson(item.result);
+        if (!item.payload.is_null()) {
+            entry["payload"] = item.payload;
+        }
         out.push_back(entry);
     }
     std::string tmp_path = OutboxPath() + ".tmp";
@@ -172,6 +223,8 @@ void Outbox::EnqueueAck(const std::string &command_id,
                         const std::string &reason) {
     OutboxItem item;
     item.type = "COMMAND_ACK";
+    item.message_id = GenerateMessageId();
+    item.timestamp = BuildIsoTimestamp();
     item.command_id = command_id;
     item.device_id = device_id;
     item.ack_status = status;
@@ -186,12 +239,47 @@ void Outbox::EnqueueResult(const std::string &command_id, const std::string &dev
                            const ExecutionResult &result) {
     OutboxItem item;
     item.type = "COMMAND_RESULT";
+    item.message_id = GenerateMessageId();
+    item.timestamp = BuildIsoTimestamp();
     item.command_id = command_id;
     item.device_id = device_id;
     item.result = result;
     pending_.push_back(std::move(item));
     if (!Save()) {
         std::cerr << "Warning: failed to persist outbox RESULT\n";
+    }
+}
+
+void Outbox::EnqueueTelemetry(const std::string &device_id, const nlohmann::json &body) {
+    for (auto it = pending_.begin(); it != pending_.end();) {
+        if (it->type == "TELEMETRY") {
+            it = pending_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    OutboxItem item;
+    item.type = "TELEMETRY";
+    item.message_id = GenerateMessageId();
+    item.timestamp = BuildIsoTimestamp();
+    item.device_id = device_id;
+    item.payload = body;
+    pending_.push_back(std::move(item));
+    if (!Save()) {
+        std::cerr << "Warning: failed to persist outbox TELEMETRY\n";
+    }
+}
+
+void Outbox::EnqueueUpdateStatus(const std::string &device_id, const nlohmann::json &body) {
+    OutboxItem item;
+    item.type = "UPDATE_STATUS";
+    item.message_id = GenerateMessageId();
+    item.timestamp = BuildIsoTimestamp();
+    item.device_id = device_id;
+    item.payload = body;
+    pending_.push_back(std::move(item));
+    if (!Save()) {
+        std::cerr << "Warning: failed to persist outbox UPDATE_STATUS\n";
     }
 }
 

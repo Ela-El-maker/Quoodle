@@ -1,0 +1,38 @@
+{
+  "runs": 3,
+  "command_ids": [
+    "01kfkq6sra39t2wbd6daa876nc",
+    "01kfkq6ycprrx3bxaw7hkswxvh",
+    "01kfkq72jr0sw244knnf9zk29p"
+  ],
+  "devices": [
+    "838390bb-2278-415d-a8df-ad42fdb421b4",
+    "ac958095-3a70-4d51-bf9b-c6825ad5f479",
+    "e21c81f6-6dc2-40ad-a0a0-7ef27897ceb2"
+  ],
+  "harness_summary": {
+    "runs": [
+      {
+        "status": "PASS",
+        "command_state": "completed",
+        "device_id": "838390bb-2278-415d-a8df-ad42fdb421b4",
+        "command_id": "01kfkq6sra39t2wbd6daa876nc"
+      },
+      {
+        "status": "PASS",
+        "command_state": "completed",
+        "device_id": "e21c81f6-6dc2-40ad-a0a0-7ef27897ceb2",
+        "command_id": "01kfkq6ycprrx3bxaw7hkswxvh"
+      },
+      {
+        "status": "PASS",
+        "command_state": "completed",
+        "device_id": "ac958095-3a70-4d51-bf9b-c6825ad5f479",
+        "command_id": "01kfkq72jr0sw244knnf9zk29p"
+      }
+    ],
+    "status": "PASS"
+  },
+  "trace_log": "/home/ela/Work-Force/Quoodle/logs/full_trace/full_trace_20260122T204416Z.jsonl",
+  "e2e_log": "/home/ela/Work-Force/Quoodle/logs/e2e/e2e_20260122T204416Z.jsonl"
+}

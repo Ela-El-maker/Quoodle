@@ -19,6 +19,7 @@
 #include <chrono>
 #include <algorithm>
 #include <cctype>
+#include <climits>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
@@ -27,6 +28,7 @@
 #include <iostream>
 #include <random>
 #include <sstream>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
@@ -437,6 +439,25 @@ bool ParseIsoTimestamp(const std::string &ts, std::time_t *out) {
     return true;
 }
 
+int GetIntEnvOrDefault(const char *name, int fallback) {
+    const char *value = std::getenv(name);
+    if (!value || !*value) {
+        return fallback;
+    }
+    char *end = nullptr;
+    long parsed = std::strtol(value, &end, 10);
+    if (end == value) {
+        return fallback;
+    }
+    if (parsed < 0) {
+        return 0;
+    }
+    if (parsed > INT_MAX) {
+        return INT_MAX;
+    }
+    return static_cast<int>(parsed);
+}
+
 bool IsTimestampFresh(const std::string &ts) {
     std::time_t parsed = 0;
     if (!ParseIsoTimestamp(ts, &parsed)) {
@@ -485,10 +506,35 @@ void StripSigRecursive(nlohmann::json &value) {
     }
 }
 
+nlohmann::json NormalizeCanonical(const nlohmann::json &value) {
+    if (value.is_object()) {
+        nlohmann::json out = nlohmann::json::object();
+        std::vector<std::string> keys;
+        keys.reserve(value.size());
+        for (const auto &item : value.items()) {
+            keys.push_back(item.key());
+        }
+        std::sort(keys.begin(), keys.end());
+        for (const auto &key : keys) {
+            out[key] = NormalizeCanonical(value.at(key));
+        }
+        return out;
+    }
+    if (value.is_array()) {
+        nlohmann::json out = nlohmann::json::array();
+        for (const auto &item : value) {
+            out.push_back(NormalizeCanonical(item));
+        }
+        return out;
+    }
+    return value;
+}
+
 std::string CanonicalizeWss(const nlohmann::json &payload) {
     nlohmann::json copy = payload;
     StripSigRecursive(copy);
-    return copy.dump();
+    nlohmann::json normalized = NormalizeCanonical(copy);
+    return normalized.dump();
 }
 
 std::string FormatPercent(int value) {
@@ -653,7 +699,10 @@ WssClient::WssClient(std::string ws_url,
       outbox_(outbox),
       replay_(replay),
       state_(state),
-      processor_(processor) {}
+      processor_(processor) {
+    duplicate_ack_remaining_ = GetIntEnvOrDefault("QUOODLE_FAULT_DUPLICATE_ACK", 0);
+    duplicate_result_remaining_ = GetIntEnvOrDefault("QUOODLE_FAULT_DUPLICATE_RESULT", 0);
+}
 
 bool WssClient::SendSigned(const nlohmann::json &payload) {
     nlohmann::json msg = payload;
@@ -755,6 +804,7 @@ bool WssClient::HandleAuthAck(const nlohmann::json &msg) {
         state_.SetPolicyHash(policy_hash);
     }
     authenticated_ = true;
+    std::cerr << "AUTH_ACK received\n";
     return true;
 }
 
@@ -801,6 +851,19 @@ bool WssClient::HandleCommandDelivery(const nlohmann::json &msg) {
     bool requires_ack = GetBoolOrDefault(header, "requires_ack", true);
     std::string policy_hash = GetStringOrDefault(meta, "policy_hash", policy_.PolicyHash());
 
+    ProcessedCommand cached;
+    if (!command_id.empty() && state_.GetProcessedCommand(command_id, &cached)) {
+        if (cached.requires_ack) {
+            std::string status = cached.ack_status.empty() ? "received" : cached.ack_status;
+            outbox_.EnqueueAck(command_id, device_id_, status, cached.ack_reason);
+        }
+        outbox_.EnqueueResult(command_id, device_id_, cached.result);
+        if (!delivery_id.empty()) {
+            state_.SetLastDeliveryId(delivery_id);
+        }
+        return true;
+    }
+
     std::string ts = GetStringOrDefault(header, "timestamp", "");
     int ttl = GetIntOrDefault(header, "ttl_seconds", 0);
     bool expired = false;
@@ -822,6 +885,15 @@ bool WssClient::HandleCommandDelivery(const nlohmann::json &msg) {
         result.error_message = "expired_ttl";
         result.result = nlohmann::json::object();
         outbox_.EnqueueResult(command_id, device_id_, result);
+        ProcessedCommand processed;
+        processed.command_id = command_id;
+        processed.requires_ack = requires_ack;
+        if (requires_ack) {
+            processed.ack_status = "rejected";
+            processed.ack_reason = "expired_ttl";
+        }
+        processed.result = result;
+        state_.RememberCommand(processed);
         return true;
     }
 
@@ -854,18 +926,8 @@ bool WssClient::HandleUpdateAnnounce(const nlohmann::json &msg) {
     status_body["error_code"] = 1001;
     status_body["error_message"] = "update_not_supported";
     status_body["rollback_snapshot_id"] = nullptr;
-
-    nlohmann::json msg_out;
-    msg_out["message_id"] = GenerateMessageId();
-    msg_out["timestamp"] = BuildIsoTimestamp();
-    msg_out["type"] = "UPDATE_STATUS";
-    msg_out["from"] = "agent";
-    msg_out["device_id"] = device_id_;
-    msg_out["session_id"] = session_id_;
-    msg_out["seq"] = replay_.NextSeq();
-    msg_out["body"] = status_body;
-    msg_out["sig"] = "";
-    return SendSigned(msg_out);
+    outbox_.EnqueueUpdateStatus(device_id_, status_body);
+    return true;
 }
 
 bool WssClient::FlushOutbox() {
@@ -909,6 +971,14 @@ bool WssClient::FlushOutbox() {
                 } else {
                     body["error_message"] = item->result.error_message;
                 }
+            } else if (item->type == "TELEMETRY" || item->type == "UPDATE_STATUS") {
+                if (!item->payload.is_object()) {
+                    std::cerr << "FlushOutbox invalid payload for " << item->type << "\n";
+                    outbox_.PopFront();
+                    continue;
+                }
+                type = item->type;
+                body = item->payload;
             } else {
                 outbox_.PopFront();
                 continue;
@@ -919,8 +989,8 @@ bool WssClient::FlushOutbox() {
         }
 
         nlohmann::json msg;
-        msg["message_id"] = GenerateMessageId();
-        msg["timestamp"] = BuildIsoTimestamp();
+        msg["message_id"] = item->message_id.empty() ? GenerateMessageId() : item->message_id;
+        msg["timestamp"] = item->timestamp.empty() ? BuildIsoTimestamp() : item->timestamp;
         msg["type"] = type;
         msg["from"] = "agent";
         msg["device_id"] = device_id_;
@@ -931,6 +1001,14 @@ bool WssClient::FlushOutbox() {
 
         if (!SendSigned(msg)) {
             return false;
+        }
+        if (item->type == "COMMAND_ACK" && duplicate_ack_remaining_ > 0) {
+            duplicate_ack_remaining_ -= 1;
+            continue;
+        }
+        if (item->type == "COMMAND_RESULT" && duplicate_result_remaining_ > 0) {
+            duplicate_result_remaining_ -= 1;
+            continue;
         }
         outbox_.PopFront();
     }
@@ -1013,18 +1091,13 @@ bool WssClient::SendTelemetry() {
     body["timestamp"] = BuildIsoTimestamp();
     body["metrics"] = metrics;
     body["telemetry_scope"] = "telemetry_basic";
+    std::string policy_hash = policy_.PolicyHash();
+    if (!policy_hash.empty()) {
+        body["policy_hash"] = policy_hash;
+    }
 
-    nlohmann::json msg;
-    msg["message_id"] = GenerateMessageId();
-    msg["timestamp"] = BuildIsoTimestamp();
-    msg["type"] = "TELEMETRY";
-    msg["from"] = "agent";
-    msg["device_id"] = device_id_;
-    msg["session_id"] = session_id_;
-    msg["seq"] = replay_.NextSeq();
-    msg["body"] = body;
-    msg["sig"] = "";
-    return SendSigned(msg);
+    outbox_.EnqueueTelemetry(device_id_, body);
+    return true;
 }
 
 bool WssClient::ProcessInbound(const std::string &payload) {
@@ -1080,7 +1153,14 @@ bool WssClient::ProcessInbound(const std::string &payload) {
         }
     }
     if (type == "AUTH_ERROR") {
-        std::cerr << "AUTH_ERROR from gateway\n";
+        auto body = GetObjectOrEmpty(msg, "body");
+        std::string code = GetStringOrDefault(body, "error_code", "");
+        std::string detail = GetStringOrDefault(body, "error_message", "");
+        std::cerr << "AUTH_ERROR from gateway: " << code;
+        if (!detail.empty()) {
+            std::cerr << " (" << detail << ")";
+        }
+        std::cerr << "\n";
         return false;
     }
     if (!authenticated_) {
@@ -1246,6 +1326,7 @@ void WssClient::Run() {
         CloseTransport();
         return;
     }
+    std::cerr << "WebSocket handshake ok\n";
 
     start_time_ = std::time(nullptr);
     if (!SendAuth()) {
@@ -1253,6 +1334,7 @@ void WssClient::Run() {
         CloseTransport();
         return;
     }
+    std::cerr << "AUTH sent\n";
 
     while (true) {
         fd_set readfds;
