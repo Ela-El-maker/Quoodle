@@ -1,0 +1,18 @@
+[Unit]
+Description=Quoodle Linux Privileged Executor
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/quoodle-agent
+Environment=QUOODLE_PRIV_SOCKET=/run/quoodle/privileged.sock
+Environment=QUOODLE_DAEMON_PRIVKEY_B64=REPLACE_ME
+Environment=QUOODLE_DAEMON_KID=daemon-key-1
+ExecStart=/opt/quoodle-agent/bin/quoodle-privileged-daemon
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
