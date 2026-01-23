@@ -5,14 +5,27 @@ After=network.target
 [Service]
 Type=simple
 User=root
-Group=root
-WorkingDirectory=/opt/quoodle-agent
+Group=quoodle-agent
+
 Environment=QUOODLE_PRIV_SOCKET=/run/quoodle/privileged.sock
-Environment=QUOODLE_DAEMON_PRIVKEY_B64=REPLACE_ME
-Environment=QUOODLE_DAEMON_KID=daemon-key-1
+
+EnvironmentFile=-/etc/quoodle/secrets.env
+
+# Create /run/quoodle safely
+RuntimeDirectory=quoodle
+RuntimeDirectoryMode=0750
+StateDirectory=quoodle
+StateDirectoryMode=0750
+
 ExecStart=/opt/quoodle-agent/bin/quoodle-privileged-daemon
 Restart=always
-RestartSec=5
+RestartSec=2
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/run/quoodle /var/lib/quoodle
 
 [Install]
 WantedBy=multi-user.target
