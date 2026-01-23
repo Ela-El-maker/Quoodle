@@ -1,20 +1,22 @@
 [Unit]
 Description=Quoodle Linux Agent
-After=network.target
+After=network.target quoodle-privileged.service
+Wants=quoodle-privileged.service
 
 [Service]
 Type=simple
 User=quoodle-agent
 Group=quoodle-agent
 WorkingDirectory=/opt/quoodle-agent
-Environment=QUOODLE_WS_URL=wss://gateway.example.com/agent
-Environment=QUOODLE_DEVICE_ID=REPLACE_ME
-Environment=QUOODLE_AGENT_JWT=REPLACE_ME
-Environment=QUOODLE_AGENT_PRIVKEY_B64=REPLACE_ME
-Environment=QUOODLE_AGENT_KID=agent-key-1
+
+Environment=QUOODLE_WS_URL=ws://localhost:8000/agent
+Environment=QUOODLE_PRIV_SOCKET=/run/quoodle/privileged.sock
+Environment=QUOODLE_AGENT_STATE_DIR=/var/lib/quoodle-agent/state
+EnvironmentFile=-/etc/quoodle/secrets.env
+
 ExecStart=/opt/quoodle-agent/bin/quoodle-agent-linux
 Restart=always
-RestartSec=5
+RestartSec=2
 
 [Install]
 WantedBy=multi-user.target
