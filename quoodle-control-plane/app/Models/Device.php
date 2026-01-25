@@ -34,4 +34,32 @@ class Device extends Model
         'last_seen' => 'datetime',
         'risk_score' => 'decimal:2',
     ];
+
+    // =========================================================================
+    // Relationships
+    // =========================================================================
+
+    /**
+     * Get the user that owns this device.
+     */
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id', 'id');
+    }
+
+    /**
+     * Get the commands for this device.
+     */
+    public function commands()
+    {
+        return $this->hasMany(Command::class, 'device_id', 'device_id');
+    }
+
+    /**
+     * Get the alerts for this device.
+     */
+    public function alerts()
+    {
+        return $this->hasMany(Alert::class, 'device_id', 'device_id');
+    }
 }

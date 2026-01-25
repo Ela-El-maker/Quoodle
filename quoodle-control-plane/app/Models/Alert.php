@@ -27,4 +27,16 @@ class Alert extends Model
         'timestamp' => 'datetime',
         'acknowledged' => 'boolean',
     ];
+
+    // =========================================================================
+    // Relationships
+    // =========================================================================
+
+    /**
+     * Get the device this alert is for.
+     */
+    public function device()
+    {
+        return $this->belongsTo(Device::class, 'device_id', 'device_id');
+    }
 }

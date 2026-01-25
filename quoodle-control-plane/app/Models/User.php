@@ -188,6 +188,26 @@ class User extends Authenticatable
     }
 
     // =========================================================================
+    // Relationships
+    // =========================================================================
+
+    /**
+     * Get the devices owned by this user.
+     */
+    public function devices()
+    {
+        return $this->hasMany(Device::class, 'user_id', 'id');
+    }
+
+    /**
+     * Get the commands issued by this user.
+     */
+    public function commands()
+    {
+        return $this->hasMany(Command::class, 'user_id', 'id');
+    }
+
+    // =========================================================================
     // Query Scopes
     // =========================================================================
 
