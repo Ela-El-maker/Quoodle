@@ -554,7 +554,12 @@ class KernelSim:
                 })
             }
         status = "ok"
-        result = {"status": "ok", "notes": "SIMULATED_BUT_PROTOCOL_VALID"}
+        if req.get("opcode") == "EXEC_LOCK_SESSION":
+            result = {"session_count_locked": 1}
+        elif req.get("opcode") == "EXEC_REBOOT_SYSTEM":
+            result = {"initiated": True}
+        else:
+            result = {"status": "ok", "notes": "SIMULATED_BUT_PROTOCOL_VALID"}
         resp = {
             "request_id": req.get("request_id"),
             "status": status,
@@ -723,12 +728,14 @@ def pair_device(trace_id: str, jwt: str, base_device_id: str) -> Dict[str, Any]:
     raise RuntimeError("pair_request_exhausted")
 
 
-def send_command(trace_id: str, jwt: str, device_id: str) -> Dict[str, Any]:
+def send_command(trace_id: str, jwt: str, device_id: str, method: str = "lock_screen", params: Dict[str, Any] = None) -> Dict[str, Any]:
+    if params is None:
+        params = {}
     client_message_id = str(uuid.uuid4())
     payload = {
         "device_id": device_id,
-        "method": "lock_screen",
-        "params": {},
+        "method": method,
+        "params": params,
         "sensitive": False,
         "client_message_id": client_message_id,
         "two_factor_code": None
@@ -854,8 +861,8 @@ def dispatch_direct(trace_id: str, command: Dict[str, Any], device_id: str, user
                 "long_running": False
             },
             "body": {
-                "method": "lock_screen",
-                "params": {},
+                "method": method,
+                "params": params,
                 "sensitive": False
             },
             "meta": {
@@ -955,7 +962,14 @@ def run_once(run_idx: int) -> Dict[str, Any]:
     if "webhook_timeout" in FAULTS:
         set_fastapi_fault(trace_id, "timeout", 1)
 
-    command = send_command(trace_id, jwt, device_id)
+    # Choose random command
+    import random
+    commands = [
+        {"method": "lock_screen", "params": {}},
+        {"method": "reboot_system", "params": {"delay_seconds": 10}}
+    ]
+    cmd = random.choice(commands)
+    command = send_command(trace_id, jwt, device_id, cmd["method"], cmd["params"])
     command_id = command.get("command_id")
 
     if DISPATCH_MODE == "direct":
@@ -992,18 +1006,32 @@ def run_once(run_idx: int) -> Dict[str, Any]:
     if "out_of_order" not in FAULTS:
         agent.send_ack(command_envelope.get("message_id"), duplicate="duplicate_ack" in FAULTS)
 
-    # KernelSim execution
-    kernel = KernelSim()
+    method = command_envelope.get("body", {}).get("method", "lock_screen")
+    params = command_envelope.get("body", {}).get("params", {})
+
+    # Map method to opcode
+    opcode_map = {
+        "lock_screen": "EXEC_LOCK_SESSION",
+        "reboot_system": "EXEC_REBOOT_SYSTEM"
+    }
+    opcode = opcode_map.get(method, "EXEC_LOCK_SESSION")
+
     ioctl_req = {
         "request_id": str(uuid.uuid4()),
         "timestamp": now_iso(),
-        "opcode": "EXEC_LOCK_SCREEN",
-        "params": {},
+        "opcode": opcode,
+        "params": params,
         "agent_sequence": 1,
         "policy_hash": POLICY_HASH,
         "command_message_id": command_envelope.get("message_id"),
     }
     ioctl_req["signature"] = sign_ed25519(agent_priv_b64, ioctl_req)
+
+    if "out_of_order" not in FAULTS:
+        agent.send_ack(command_envelope.get("message_id"), duplicate="duplicate_ack" in FAULTS)
+
+    # KernelSim execution
+    kernel = KernelSim()
     kernel_resp = kernel.handle(ioctl_req, agent_pub_b64)
 
     if "out_of_order" in FAULTS:

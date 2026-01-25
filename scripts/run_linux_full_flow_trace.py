@@ -417,13 +417,18 @@ def main() -> int:
         }
         if args.attestation_status:
             command_payload["attestation_status"] = args.attestation_status
-        elif args.method in ("kill_process", "list_processes"):
+        elif args.method in ("kill_process", "list_processes", "sysinfo", "netinfo"):
             command_payload["attestation_status"] = "pass"
         if user_role in ("user", "operator", "analyst", "admin"):
             command_payload["user_role"] = user_role
         cmd_resp = requests.post(f"{args.laravel_base_url}/api/commands", json=command_payload, headers=headers, timeout=10)
         log_request(trace_fp, "mobile.command.enqueue", "POST", f"{args.laravel_base_url}/api/commands", command_payload, cmd_resp)
-        cmd_resp.raise_for_status()
+        try:
+            cmd_resp.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            print(f"HTTP Error: {e}")
+            print(f"Response Body: {cmd_resp.text}")
+            raise
         cmd_data = cmd_resp.json()
         command_id = cmd_data.get("command_id")
         if not command_id:
