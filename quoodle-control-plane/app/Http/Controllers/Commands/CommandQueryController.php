@@ -44,6 +44,8 @@ class CommandQueryController extends Controller
     private function formatCommand(Command $cmd): array
     {
         $result = $cmd->result ?? [];
+        $standardKeys = ['status', 'notes', 'artifact_url', 'artifact_checksum'];
+        $extra = array_diff_key($result, array_flip($standardKeys));
 
         return [
             'command_id' => $cmd->id,
@@ -64,6 +66,7 @@ class CommandQueryController extends Controller
                 'notes' => $result['notes'] ?? null,
                 'artifact_url' => $result['artifact_url'] ?? null,
                 'artifact_checksum' => $result['artifact_checksum'] ?? null,
+                'data' => $extra,
             ],
             'error_code' => $cmd->error_code,
             'error_message' => $cmd->error_message,

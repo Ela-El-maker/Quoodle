@@ -33,6 +33,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fastapi-base-url", default=os.getenv("FASTAPI_BASE_URL", "http://localhost:8000"))
     parser.add_argument("--user-email", default=os.getenv("TEST_USER_EMAIL", "test@example.com"))
     parser.add_argument("--user-password", default=os.getenv("TEST_USER_PASSWORD", "password"))
+    parser.add_argument("--method", default="lock_screen")
+    parser.add_argument("--params", default=None)
+    parser.add_argument("--spawn-sleep-seconds", type=int, default=120)
+    parser.add_argument("--attestation-status", default=None)
     return parser.parse_args()
 
 
@@ -380,16 +384,42 @@ def main() -> int:
         if not online:
             raise RuntimeError("Device did not come online")
 
+        command_params = {}
+        spawned_proc = None
+        if args.params:
+            try:
+                command_params = json.loads(args.params)
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(f"Invalid --params JSON: {exc}") from exc
+        elif args.method == "kill_process":
+            spawned_proc = subprocess.Popen(["sleep", str(args.spawn_sleep_seconds)])
+            command_params = {"pid": spawned_proc.pid, "signal": 15}
+            write_jsonl(
+                trace_fp,
+                {
+                    "timestamp": iso_now(),
+                    "source": "runner",
+                    "event_type": "local.process.start",
+                    "pid": spawned_proc.pid,
+                    "command": "sleep",
+                    "seconds": args.spawn_sleep_seconds,
+                },
+            )
+
         # Send command
         command_payload = {
             "client_message_id": str(uuid.uuid4()),
             "device_id": device_id,
-            "method": "lock_screen",
-            "params": {},
+            "method": args.method,
+            "params": command_params,
             "sensitive": False,
             "user_id": user_id,
         }
-        if user_role in ("user", "analyst", "admin"):
+        if args.attestation_status:
+            command_payload["attestation_status"] = args.attestation_status
+        elif args.method in ("kill_process", "list_processes"):
+            command_payload["attestation_status"] = "pass"
+        if user_role in ("user", "operator", "analyst", "admin"):
             command_payload["user_role"] = user_role
         cmd_resp = requests.post(f"{args.laravel_base_url}/api/commands", json=command_payload, headers=headers, timeout=10)
         log_request(trace_fp, "mobile.command.enqueue", "POST", f"{args.laravel_base_url}/api/commands", command_payload, cmd_resp)
@@ -434,6 +464,29 @@ def main() -> int:
         docker_logs_since(trace_fp, start_iso, "quoodle-control-plane")
         docker_logs_since(trace_fp, start_iso, "quoodle-gateway")
 
+        if spawned_proc:
+            poll_rc = spawned_proc.poll()
+            if poll_rc is None:
+                try:
+                    spawned_proc.terminate()
+                    spawned_proc.wait(timeout=5)
+                    proc_status = "terminated"
+                except Exception:
+                    spawned_proc.kill()
+                    proc_status = "killed"
+            else:
+                proc_status = "exited"
+            write_jsonl(
+                trace_fp,
+                {
+                    "timestamp": iso_now(),
+                    "source": "runner",
+                    "event_type": "local.process.end",
+                    "pid": spawned_proc.pid,
+                    "status": proc_status,
+                },
+            )
+
         # Stop processes
         agent_proc.terminate()
         daemon_proc.terminate()
@@ -443,6 +496,8 @@ def main() -> int:
         summary = {
             "device_id": device_id,
             "command_id": command_id,
+            "method": args.method,
+            "params": command_params,
             "final_state": final_state,
             "trace_log": str(trace_path),
             "agent_log": str(log_dir / f"linux_agent_{ts}.log"),

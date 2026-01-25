@@ -1,0 +1,10 @@
+{
+  "device_id": "b7570321-3ac7-4ad2-822d-31837ae8de09",
+  "command_id": "01kfsxbv3tk3d0myg631d8kc35",
+  "method": "lock_screen",
+  "params": {},
+  "final_state": "completed",
+  "trace_log": "/home/ela/Work-Force/Quoodle/logs/full_trace/linux_full_flow_20260125T062719Z.jsonl",
+  "agent_log": "/home/ela/Work-Force/Quoodle/logs/full_trace/linux_agent_20260125T062719Z.log",
+  "daemon_log": "/home/ela/Work-Force/Quoodle/logs/full_trace/linux_daemon_20260125T062719Z.log"
+}

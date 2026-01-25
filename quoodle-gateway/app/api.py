@@ -75,7 +75,8 @@ def build_command_delivery(payload: Dict[str, Any], session_id: str) -> Dict[str
         "seq": payload.get("seq", 1),
         "sig": envelope.get("sig"),
     }
-    command_envelope["sig"] = command_envelope["sig"] or compute_sig(command_envelope)
+    # Force re-signing by Controller because Agent expects Controller Key for both Transport and Envelope
+    command_envelope["sig"] = compute_sig(command_envelope)
 
     message = {
         "type": "COMMAND_DELIVERY",

@@ -1,0 +1,13 @@
+{
+  "device_id": "0774a8c5-37b3-41fb-b1a5-391610e5560d",
+  "command_id": "01kfn6smfxcqhsh30qqda18y0x",
+  "method": "kill_process",
+  "params": {
+    "pid": 228701,
+    "signal": 15
+  },
+  "final_state": "completed",
+  "trace_log": "/home/ela/Work-Force/Quoodle/logs/full_trace/linux_full_flow_20260123T103557Z.jsonl",
+  "agent_log": "/home/ela/Work-Force/Quoodle/logs/full_trace/linux_agent_20260123T103557Z.log",
+  "daemon_log": "/home/ela/Work-Force/Quoodle/logs/full_trace/linux_daemon_20260123T103557Z.log"
+}
