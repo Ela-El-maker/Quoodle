@@ -52,4 +52,24 @@ class Command extends Model
         'envelope' => 'array',
         'ttl_seconds' => 'integer',
     ];
+
+    // =========================================================================
+    // Relationships
+    // =========================================================================
+
+    /**
+     * Get the user that issued this command.
+     */
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id', 'id');
+    }
+
+    /**
+     * Get the device this command is for.
+     */
+    public function device()
+    {
+        return $this->belongsTo(Device::class, 'device_id', 'device_id');
+    }
 }

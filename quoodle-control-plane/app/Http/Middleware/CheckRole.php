@@ -46,14 +46,22 @@ class CheckRole
 
         // Must be authenticated (should already be handled by jwt.auth)
         if (!$user) {
-            return $this->unauthorizedResponse('AUTHENTICATION_REQUIRED', 'Authentication required');
+            if ($request->expectsJson()) {
+                return $this->unauthorizedResponse('AUTHENTICATION_REQUIRED', 'Authentication required');
+            } else {
+                return redirect()->guest(route('login'));
+            }
         }
 
         // Validate the required role exists
         if (!isset(self::ROLE_HIERARCHY[$role])) {
             // Log invalid role configuration
             report(new \InvalidArgumentException("Invalid role configuration: {$role}"));
-            return $this->errorResponse('INVALID_ROLE_CONFIG', 'Server configuration error');
+            if ($request->expectsJson()) {
+                return $this->errorResponse('INVALID_ROLE_CONFIG', 'Server configuration error');
+            } else {
+                abort(500, 'Server configuration error');
+            }
         }
 
         // Check if user's role meets the minimum requirement
@@ -61,14 +69,18 @@ class CheckRole
         $requiredLevel = self::ROLE_HIERARCHY[$role];
 
         if ($userLevel < $requiredLevel) {
-            return $this->forbiddenResponse(
-                'INSUFFICIENT_PERMISSIONS',
-                "This action requires {$role} role or higher",
-                [
-                    'required_role' => $role,
-                    'user_role' => $user->role,
-                ]
-            );
+            if ($request->expectsJson()) {
+                return $this->forbiddenResponse(
+                    'INSUFFICIENT_PERMISSIONS',
+                    "This action requires {$role} role or higher",
+                    [
+                        'required_role' => $role,
+                        'user_role' => $user->role,
+                    ]
+                );
+            } else {
+                abort(403, "This action requires {$role} role or higher");
+            }
         }
 
         return $next($request);
