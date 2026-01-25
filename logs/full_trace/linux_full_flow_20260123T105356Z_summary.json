@@ -1,0 +1,12 @@
+{
+  "device_id": "39926c3e-b829-4a3a-8b0b-6144581422b1",
+  "command_id": "01kfn7tkrg5qqfsfjf1qb3kr7m",
+  "method": "list_processes",
+  "params": {
+    "limit": 5
+  },
+  "final_state": "completed",
+  "trace_log": "/home/ela/Work-Force/Quoodle/logs/full_trace/linux_full_flow_20260123T105356Z.jsonl",
+  "agent_log": "/home/ela/Work-Force/Quoodle/logs/full_trace/linux_agent_20260123T105356Z.log",
+  "daemon_log": "/home/ela/Work-Force/Quoodle/logs/full_trace/linux_daemon_20260123T105356Z.log"
+}

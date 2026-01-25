@@ -32,7 +32,7 @@ class CommandDefinition
 
     public function isRoleAllowed(string $role): bool
     {
-        $order = ['user' => 1, 'analyst' => 2, 'admin' => 3];
+        $order = ['user' => 1, 'operator' => 2, 'analyst' => 3, 'admin' => 4];
         $roleWeight = $order[strtolower($role)] ?? 0;
         $minWeight = $order[strtolower($this->minRole)] ?? PHP_INT_MAX;
 

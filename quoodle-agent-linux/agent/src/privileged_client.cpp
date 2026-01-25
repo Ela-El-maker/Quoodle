@@ -164,6 +164,7 @@ std::string PrivilegedClient::MapMethodToCapability(const std::string &method) c
     if (method == "reboot" || method == "reboot_device") return "CAP_REBOOT_SYSTEM";
     if (method == "shutdown" || method == "shutdown_device") return "CAP_SHUTDOWN_SYSTEM";
     if (method == "kill_process") return "CAP_TERMINATE_PROCESS";
+    if (method == "list_processes") return "CAP_LIST_PROCESSES";
     if (method == "quarantine") return "CAP_NETWORK_ISOLATION";
     if (method == "attest") return "CAP_ATTESTATION";
     if (method == "ping") return "AGENT_LOCAL";

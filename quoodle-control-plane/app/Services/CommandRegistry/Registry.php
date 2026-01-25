@@ -43,6 +43,29 @@ class Registry
                     'lines' => ['nullable', 'integer', 'min:10', 'max:5000'],
                 ]
             ),
+            'list_processes' => new CommandDefinition(
+                name: 'list_processes',
+                riskLevel: 'medium',
+                minRole: 'operator',
+                requires2fa: false,
+                allowedInQuarantine: false,
+                paramsRules: [
+                    'limit' => ['nullable', 'integer', 'min:1', 'max:500'],
+                    'user' => ['nullable', 'string', 'max:128'],
+                    'name' => ['nullable', 'string', 'max:128'],
+                ]
+            ),
+            'kill_process' => new CommandDefinition(
+                name: 'kill_process',
+                riskLevel: 'medium',
+                minRole: 'user',
+                requires2fa: false,
+                allowedInQuarantine: false,
+                paramsRules: [
+                    'pid' => ['required', 'integer', 'min:2'],
+                    'signal' => ['nullable', 'integer', 'min:1', 'max:64'],
+                ]
+            ),
             'update_agent' => new CommandDefinition(
                 name: 'update_agent',
                 riskLevel: 'high',
