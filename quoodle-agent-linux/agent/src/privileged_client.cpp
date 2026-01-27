@@ -13,6 +13,7 @@
 #include <fstream>
 #include <iostream>
 #include <random>
+#include <unordered_map>
 #include <string>
 
 #include "crypto.h"
@@ -160,16 +161,87 @@ ExecutionResult BuildUnsupportedResult(const std::string &method) {
 PrivilegedClient::PrivilegedClient(ReplayCache &replay) : replay_(replay) {}
 
 std::string PrivilegedClient::MapMethodToCapability(const std::string &method) const {
-    if (method == "lock_screen") return "CAP_LOCK_SESSION";
-    if (method == "reboot" || method == "reboot_device") return "CAP_REBOOT_SYSTEM";
-    if (method == "shutdown" || method == "shutdown_device") return "CAP_SHUTDOWN_SYSTEM";
-    if (method == "kill_process") return "CAP_TERMINATE_PROCESS";
-    if (method == "list_processes") return "CAP_LIST_PROCESSES";
-    if (method == "quarantine") return "CAP_NETWORK_ISOLATION";
-    if (method == "attest") return "CAP_ATTESTATION";
-    if (method == "ping") return "AGENT_LOCAL";
-    if (method == "update_agent" || method == "rotate_keys") return "AGENT_LOCAL";
-    if (method == "screenshot" || method == "collect_logs") return "UNSUPPORTED";
+    static const std::unordered_map<std::string, std::string> kMap = {
+        {"lock_screen", "CAP_LOCK_SESSION"},
+        {"logout_user", "CAP_LOGOUT_SESSION"},
+        {"logout", "CAP_LOGOUT_SESSION"},
+        {"reboot_device", "CAP_REBOOT_SYSTEM"},
+        {"reboot_system", "CAP_REBOOT_SYSTEM"},
+        {"reboot", "CAP_REBOOT_SYSTEM"},
+        {"shutdown_device", "CAP_SHUTDOWN_SYSTEM"},
+        {"shutdown", "CAP_SHUTDOWN_SYSTEM"},
+        {"disable_input", "CAP_INPUT_CONTROL"},
+        {"enable_input", "CAP_INPUT_CONTROL"},
+        {"set_wallpaper", "CAP_SET_WALLPAPER"},
+        {"show_message", "CAP_SHOW_MESSAGE"},
+        {"lock_and_capture", "CAP_LOCK_AND_CAPTURE"},
+        {"ping", "CAP_HEALTH_CHECK"},
+        {"sysinfo", "CAP_SYSINFO"},
+        {"collect_system_info", "CAP_SYSINFO"},
+        {"list_processes", "CAP_LIST_PROCESSES"},
+        {"get_process_list", "CAP_LIST_PROCESSES"},
+        {"get_users", "CAP_GET_USERS"},
+        {"get_sessions", "CAP_GET_SESSIONS"},
+        {"list_sessions", "CAP_GET_SESSIONS"},
+        {"list_services", "CAP_LIST_SERVICES"},
+        {"network_info", "CAP_NETWORK_INFO"},
+        {"netinfo", "CAP_NETWORK_INFO"},
+        {"list_mounts", "CAP_LIST_MOUNTS"},
+        {"get_env_fingerprint", "CAP_ENV_FINGERPRINT"},
+        {"list_files", "CAP_FS_LIST"},
+        {"stat_file", "CAP_FS_STAT"},
+        {"read_file", "CAP_FS_READ"},
+        {"search_files", "CAP_FS_SEARCH"},
+        {"hash_file", "CAP_FS_HASH"},
+        {"download_file", "CAP_FS_DOWNLOAD"},
+        {"upload_file", "CAP_FS_UPLOAD"},
+        {"delete_file", "CAP_FS_DELETE"},
+        {"move_file", "CAP_FS_MOVE"},
+        {"screenshot", "CAP_SCREENSHOT"},
+        {"get_active_window", "CAP_ACTIVE_WINDOW"},
+        {"get_idle_time", "CAP_IDLE_TIME"},
+        {"kill_process", "CAP_TERMINATE_PROCESS"},
+        {"pause_process", "CAP_PAUSE_PROCESS"},
+        {"resume_process", "CAP_RESUME_PROCESS"},
+        {"start_service", "CAP_SERVICE_START"},
+        {"stop_service", "CAP_SERVICE_STOP"},
+        {"restart_service", "CAP_SERVICE_RESTART"},
+        {"disconnect_network", "CAP_NETWORK_DISCONNECT"},
+        {"reconnect_network", "CAP_NETWORK_RECONNECT"},
+        {"list_connections", "CAP_LIST_CONNECTIONS"},
+        {"block_outbound", "CAP_BLOCK_OUTBOUND"},
+        {"allow_outbound", "CAP_ALLOW_OUTBOUND"},
+        {"rotate_agent_keys", "CAP_ROTATE_AGENT_KEYS"},
+        {"rotate_keys", "CAP_ROTATE_AGENT_KEYS"},
+        {"revoke_device", "CAP_REVOKE_DEVICE"},
+        {"force_repair", "CAP_FORCE_REPAIR"},
+        {"invalidate_sessions", "CAP_INVALIDATE_SESSIONS"},
+        {"re_attest", "CAP_ATTEST"},
+        {"attest_device", "CAP_ATTEST"},
+        {"attest", "CAP_ATTEST"},
+        {"fail_attestation", "CAP_FAIL_ATTESTATION"},
+        {"enter_quarantine", "CAP_ENTER_QUARANTINE"},
+        {"exit_quarantine", "CAP_EXIT_QUARANTINE"},
+        {"quarantine", "CAP_NETWORK_ISOLATION"},
+        {"policy_probe", "CAP_POLICY_PROBE"},
+        {"get_command_log", "CAP_GET_COMMAND_LOG"},
+        {"get_audit_trail", "CAP_GET_AUDIT_TRAIL"},
+        {"export_artifacts", "CAP_EXPORT_ARTIFACTS"},
+        {"verify_signature", "CAP_VERIFY_SIGNATURE"},
+        {"replay_request", "CAP_REPLAY_REQUEST"},
+        {"panic_disable_agent", "CAP_PANIC_DISABLE_AGENT"},
+        {"revoke_all_keys", "CAP_REVOKE_ALL_KEYS"},
+        {"restore_defaults", "CAP_RESTORE_DEFAULTS"},
+        {"unlock_all", "CAP_UNLOCK_ALL"},
+        {"health_check", "CAP_HEALTH_CHECK"},
+        {"collect_logs", "CAP_COLLECT_LOGS"},
+        {"update_agent", "CAP_UPDATE_AGENT"},
+    };
+
+    auto it = kMap.find(method);
+    if (it != kMap.end()) {
+        return it->second;
+    }
     return "UNSUPPORTED";
 }
 

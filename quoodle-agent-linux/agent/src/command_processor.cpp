@@ -1,17 +1,5 @@
 #include "command_processor.h"
 
-#include <sys/utsname.h>
-#include <unistd.h>
-#include <fstream>
-#include <sstream>
-#include <vector>
-#include <map>
-#include <ifaddrs.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <net/if.h>
-#include <netdb.h>
-
 #include <cstdlib>
 #include <cstring>
 
@@ -31,118 +19,6 @@ bool EnvFlagEnabled(const char *name) {
 
 namespace quoodle {
 
-namespace {
-
-nlohmann::json GetSysInfo() {
-    nlohmann::json info;
-    
-    // Hostname
-    char hostname[256] = {0};
-    if (gethostname(hostname, sizeof(hostname)) == 0) {
-        info["hostname"] = hostname;
-    } else {
-        info["hostname"] = "unknown";
-    }
-
-    // OS / Kernel
-    struct utsname uts{};
-    if (uname(&uts) == 0) {
-        info["kernel_sysname"] = uts.sysname;
-        info["kernel_release"] = uts.release;
-        info["kernel_version"] = uts.version;
-        info["machine"] = uts.machine;
-        info["nodename"] = uts.nodename; // usually same as hostname
-    }
-
-    // Uptime
-    std::ifstream upfile("/proc/uptime");
-    if (upfile.good()) {
-        double uptime_sec = 0.0;
-        upfile >> uptime_sec;
-        info["uptime_seconds"] = uptime_sec;
-    }
-
-    // Load Average
-    double load[3] = {0};
-    if (getloadavg(load, 3) >= 0) {
-        info["load_avg"] = {load[0], load[1], load[2]};
-    }
-
-    // Logged in user (simple env check for agent context, mostly for debug)
-    const char* user = std::getenv("USER");
-    if (user) info["agent_user"] = user;
-
-    return info;
-}
-
-nlohmann::json GetNetInfo() {
-    nlohmann::json info;
-    nlohmann::json ifaces = nlohmann::json::object();
-
-    struct ifaddrs *ifaddr, *ifa;
-    if (getifaddrs(&ifaddr) != -1) {
-        for (ifa = ifaddr; ifa != nullptr; ifa = ifa->ifa_next) {
-            if (ifa->ifa_addr == nullptr) continue;
-            std::string name = ifa->ifa_name;
-            int family = ifa->ifa_addr->sa_family;
-
-            if (!ifaces.contains(name)) {
-                ifaces[name] = nlohmann::json::array();
-            }
-
-            char host[NI_MAXHOST];
-            if (getnameinfo(ifa->ifa_addr,
-                            (family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
-                            host, NI_MAXHOST, nullptr, 0, NI_NUMERICHOST) == 0) {
-                
-                nlohmann::json addr_obj;
-                addr_obj["address"] = host;
-                if (family == AF_INET) addr_obj["family"] = "ipv4";
-                else if (family == AF_INET6) addr_obj["family"] = "ipv6";
-                else addr_obj["family"] = "unknown";
-                ifaces[name].push_back(addr_obj);
-            }
-        }
-        freeifaddrs(ifaddr);
-    }
-    info["interfaces"] = ifaces;
-
-    // Routes
-    nlohmann::json routes = nlohmann::json::array();
-    std::ifstream rfile("/proc/net/route");
-    if (rfile.good()) {
-        std::string line;
-        std::getline(rfile, line); // header
-        while (std::getline(rfile, line)) { // iface dest gw flags ...
-            std::istringstream iss(line);
-            std::string iface, dest_hex, gw_hex;
-            if (iss >> iface >> dest_hex >> gw_hex) {
-               unsigned int dest_val = 0;
-               unsigned int gw_val = 0;
-               std::stringstream ss; 
-               ss << std::hex << dest_hex; ss >> dest_val;
-               ss.clear(); ss.str("");
-               ss << std::hex << gw_hex; ss >> gw_val;
-               
-               struct in_addr dest_addr, gw_addr;
-               dest_addr.s_addr = dest_val;
-               gw_addr.s_addr = gw_val;
-
-               nlohmann::json route;
-               route["iface"] = iface;
-               route["destination"] = inet_ntoa(dest_addr);
-               route["gateway"] = inet_ntoa(gw_addr);
-               routes.push_back(route);
-            }
-        }
-    }
-    info["routes"] = routes;
-
-    return info;
-}
-
-}  // namespace
-
 CommandProcessor::CommandProcessor(Outbox &outbox, PrivilegedClient &privileged, AgentStateStore &state)
     : outbox_(outbox), privileged_(privileged), state_(state) {}
 
@@ -159,20 +35,14 @@ ExecutionResult CommandProcessor::Handle(const CommandEnvelope &command) {
     request.command_id = command.command_id;
     request.method = command.method;
     request.params = command.params;
+    if (command.method == "enable_input") {
+        request.params["enabled"] = true;
+    } else if (command.method == "disable_input") {
+        request.params["enabled"] = false;
+    }
     request.policy_hash = command.policy_hash;
 
-    ExecutionResult result;
-    if (command.method == "sysinfo") {
-        result.execution_state = "completed";
-        result.status = "ok";
-        result.result = GetSysInfo();
-    } else if (command.method == "netinfo") {
-        result.execution_state = "completed";
-        result.status = "ok";
-        result.result = GetNetInfo();
-    } else {
-        result = privileged_.Execute(request);
-    }
+    ExecutionResult result = privileged_.Execute(request);
 
     outbox_.EnqueueResult(command.command_id, command.device_id, result);
     if (command.requires_ack && out_of_order) {
