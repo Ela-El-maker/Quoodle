@@ -142,7 +142,7 @@
       "description": "Abstract mapping of Control Plane methods to Executor capabilities.",
       "lock_screen": "CAP_LOCK_SESSION",
       "ping": "AGENT_LOCAL",
-      "screenshot": "UNSUPPORTED",
+      "screenshot": "CAP_SCREENSHOT",
       "collect_logs": "UNSUPPORTED",
       "update_agent": "AGENT_LOCAL_OTA",
       "rotate_keys": "AGENT_LOCAL",

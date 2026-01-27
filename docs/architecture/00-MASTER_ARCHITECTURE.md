@@ -10,17 +10,18 @@ This document serves as the authoritative entry point for the Quoodle platform a
 
 ## 1. System Context
 
-Quoodle is a research-grade platform designed to demonstrate secure, cryptographically verified remote management of Windows devices. It simulates a high-security Enterprise Mobility Management (EMM) or Endpoint Detection and Response (EDR) system.
+Quoodle is a research-grade platform for secure, cryptographically verified remote management of Windows **and Linux** devices. It simulates a high-security Enterprise Mobility Management (EMM) or Endpoint Detection and Response (EDR) system, with all flows validated end-to-end and audit-by-default.
 
 The system is composed of five primary components with distinct trust boundaries:
 
 | Component | Role | Tech Stack | Responsibility |
-| :--- | :--- | :--- | :--- |
-| **`quoodle-mobile-client`** | Client / Intent | Flutter | User interface for device pairing, command issuance, and telemetry visualization. |
-| **`quoodle-control-plane`** | Control / Governance | Laravel (PHP) | Identity provider (IdP), Certificate Authority (CA), Policy Engine, and Audit Logging. **Root of Trust**. |
-| **`quoodle-gateway`** | Transport / Gateway | FastAPI (Python) | High-performance WebSocket (WSS) hub for real-time device communication and telemetry ingestion. |
-| **`quoodle-agent-windows`** | Execution (User Mode) | C++ | Persistent service on target devices. Manages WSS connection, verifies signatures, and relays commands to kernel. |
-| **`quoodle-kernel-guard`** | Execution (Kernel) | C/C++ Driver | Privileged kernel driver (sys/sys) executing sensitive operations (IOCTL) and ensuring tamper resistance. |
+| :-------- | :--- | :--------- | :------------- |
+
+| **`quoodle-mobile-client`** | Client / Intent | Flutter | User interface for device pairing, command issuance, telemetry visualization, and audit log review. |
+| **`quoodle-control-plane`** | Control / Governance | Laravel (PHP) | Identity provider (IdP), Certificate Authority (CA), Policy Engine, Audit Logging, and Root of Trust. |
+| **`quoodle-gateway`** | Transport / Gateway | FastAPI (Python) | High-performance WebSocket (WSS) hub for real-time device communication, command routing, telemetry ingestion, and compliance enforcement. |
+| **`quoodle-agent-windows` / `quoodle-agent-linux`** | Execution (User Mode) | C++ / Python | Persistent service on target devices (Windows/Linux). Manages WSS connection, verifies signatures, relays commands to kernel/privileged daemon, and streams telemetry/audit logs. |
+| **`quoodle-kernel-guard`** | Execution (Kernel/Privileged) | C/C++ Driver / Daemon | Privileged kernel driver (Windows) or privileged daemon (Linux) executing sensitive operations, enforcing policy, and ensuring tamper resistance. |
 
 ---
 
@@ -29,26 +30,27 @@ The system is composed of five primary components with distinct trust boundaries
 ```mermaid
 graph TD
     User((User)) -->|Interacts| Client[quoodle-mobile-client]
-    
+
     subgraph Cloud Infrastructure
         Client -->|REST API| Control[quoodle-control-plane]
         Client -->|WSS / Push| Gateway[quoodle-gateway]
-        
+
         Control <-->|Webhooks / Internal API| Gateway
-        
+
         db[(MySQL / Redis)]
         Control --- db
         Gateway --- db
     end
-    
-    subgraph Target Device [Windows Endpoint]
-        Agent[quoodle-agent-windows]
-        Kernel[quoodle-kernel-guard]
-        
+
+
+    subgraph Target Device [Endpoint]
+        Agent[quoodle-agent-windows / quoodle-agent-linux]
+        Kernel[quoodle-kernel-guard / privileged-daemon]
+
         Agent <-->|WSS (mTLS)| Gateway
-        Agent <-->|IOCTL| Kernel
+        Agent <-->|IOCTL / Privileged IPC| Kernel
     end
-    
+
     %% Styles
     style Control fill:#f9f,stroke:#333,stroke-width:2px
     style Gateway fill:#bbf,stroke:#333,stroke-width:2px
@@ -61,20 +63,28 @@ graph TD
 ## 3. Core Interactions
 
 ### 3.1 Trust & Pairing
+
 The system uses a strict trust model rooted in `quoodle-control-plane`.
+
 1. **Identity**: Devices are identified by certificates issued by the Control Plane CA.
-2. **Pairing**: `quoodle-agent-windows` displays a QR code containing a secure token. `quoodle-mobile-client` scans this to bind the device to a user account.
+2. **Pairing**: `quoodle-agent-windows` or `quoodle-agent-linux` displays a QR code containing a secure token. `quoodle-mobile-client` scans this to bind the device to a user account. Key binding and attestation are enforced.
 
 ### 3.2 Command Lifecycle
+
 All administrative actions follow a signed path:
+
 1. **Intent**: User issues command via `quoodle-mobile-client`.
 2. **Authorization**: `quoodle-control-plane` validates permissions, enforces policy, and **signs** the command envelope.
-3. **Dispatch**: `quoodle-gateway` routes the signed envelope to the specific `quoodle-agent-windows` via WSS.
-4. **Verification**: `quoodle-agent-windows` verifies the signature against the Control Plane's public key.
-5. **Execution**: Validated commands are passed to `quoodle-kernel-guard` via IOCTL for execution.
-6. **Result**: Execution results are signed by the kernel/agent and returned upstream to the user.
+3. **Dispatch**: `quoodle-gateway` routes the signed envelope to the specific `quoodle-agent-windows` or `quoodle-agent-linux` via WSS.
+4. **Verification**: Agent verifies the signature against the Control Plane's public key.
+5. **Execution**: Validated commands are passed to `quoodle-kernel-guard` (Windows) or privileged daemon (Linux) for execution.
+6. **Result**: Execution results are signed by the kernel/agent and returned upstream to the user. All actions are logged for audit.
 
 ---
+
+## 5. Audit & Compliance
+
+## All actions (commands, results, pairing, compliance) are logged and queryable for audit. Audit logs are immutable and append-only, supporting compliance and forensic review.
 
 ## 4. Documentation Index
 
