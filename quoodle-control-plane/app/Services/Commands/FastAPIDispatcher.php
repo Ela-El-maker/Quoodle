@@ -36,13 +36,14 @@ class FastAPIDispatcher
         $signer = new Ed25519Signer($serviceSkB64);
 
         $ttlSeconds = (int) ($command->ttl_seconds ?? config('security.command_ttl_seconds', 300));
+        $params = $this->normalizeParams($command->params ?? []);
         $payload = [
             'command_id' => $command->id,
             'device_id' => $command->device_id,
             'trace_id' => $command->trace_id,
             'seq' => $this->counter->next('fastapi_dispatch'),
             'method' => $command->method,
-            'params' => (object) ($command->params ?? []),
+            'params' => $params,
             'sensitive' => $command->sensitive,
             'policy' => $policyDecision,
             'compliance' => $compliance,
@@ -57,7 +58,7 @@ class FastAPIDispatcher
                 ],
                 'body' => [
                     'method' => $command->method,
-                    'params' => (object) ($command->params ?? []),
+                    'params' => $params,
                     'sensitive' => $command->sensitive,
                 ],
                 'meta' => [
@@ -104,5 +105,20 @@ class FastAPIDispatcher
         }
 
         return $response->json();
+    }
+
+    /**
+     * Ensure params are encoded as JSON objects when empty while keeping
+     * associative arrays so canonicalization sorts keys consistently.
+     */
+    private function normalizeParams(mixed $params): mixed
+    {
+        if (! is_array($params)) {
+            return $params;
+        }
+        if ($params === []) {
+            return (object) [];
+        }
+        return $params;
     }
 }
