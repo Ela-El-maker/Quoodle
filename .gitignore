@@ -61,3 +61,4 @@ scripts/ci_secrets_output.txt
 # Ignore system-specific agent/kernel artifacts
 quoodle-agent-windows/build/
 kernel-service/build/
+logs/
