@@ -285,9 +285,9 @@ class Registry
             ),
             'download_file' => new CommandDefinition(
                 name: 'download_file',
-                riskLevel: 'high',
-                minRole: 'admin',
-                requires2fa: true,
+                riskLevel: 'medium',
+                minRole: 'operator',
+                requires2fa: false,
                 allowedInQuarantine: false,
                 paramsRules: [
                     'path' => $relativePath,
@@ -333,9 +333,9 @@ class Registry
             // Screen & User Context
             'screenshot' => new CommandDefinition(
                 name: 'screenshot',
-                riskLevel: 'high',
-                minRole: 'analyst',
-                requires2fa: true,
+                riskLevel: 'medium',
+                minRole: 'operator',
+                requires2fa: false,
                 allowedInQuarantine: false,
                 paramsRules: [
                     'resolution' => ['nullable', 'string', 'in:original,1080p,720p'],
