@@ -14,14 +14,143 @@
 
 ### **Core Components**
 
-| Component                 | Role                                                                         | Tech Stack            |
-| ------------------------- | ---------------------------------------------------------------------------- | --------------------- |
-| **quoodle-mobile-client** | User UI: Pairing, Telemetry, Command Issuance                                | Flutter               |
-| **quoodle-control-plane** | Identity Provider (IdP), Policy Engine, Audit Log, Command Signing Authority | Laravel (PHP 8.4)     |
-| **quoodle-gateway**       | Real-time WSS Hub, Telemetry Ingestion, Command Routing                      | FastAPI (Python 3.11) |
-| **quoodle-agent-windows** | Device Agent: Connects to Gateway, Enforces Commands                         | C++23                 |
-| **quoodle-kernel-guard**  | Kernel Service: Privileged Execution, Anti-Tamper, IOCTL                     | C / C++               |
-| **quoodle-infra**         | Infrastructure: Docker, K8s, Terraform                                       | DevOps                |
+| Component                 | Role                                                                         | Tech Stack            | Status         |
+| ------------------------- | ---------------------------------------------------------------------------- | --------------------- | -------------- |
+| **quoodle-mobile-client** | User UI: Pairing, Telemetry, Command Issuance                                | Flutter               | Planned        |
+| **quoodle-control-plane** | Identity Provider (IdP), Policy Engine, Audit Log, Command Signing Authority | Laravel (PHP 8.4)     | ✅ Implemented |
+| **quoodle-gateway**       | Real-time WSS Hub, Telemetry Ingestion, Command Routing                      | FastAPI (Python 3.11) | ✅ Implemented |
+| **quoodle-agent-linux**   | Linux Endpoint Agent: WSS client, Privileged IPC, Command Execution          | C++17/C               | ✅ Implemented |
+| **quoodle-kernel-guard**  | Kernel Service: Privileged Execution, Anti-Tamper, IOCTL                     | C / C++               | Planned        |
+| **quoodle-agent-windows** | Windows Agent: WSS client, Telemetry producer, IOCTL bridge                  | C++23                 | Planned        |
+| **quoodle-infra**         | Infrastructure: Docker, K8s, Terraform                                       | DevOps                | Partial        |
+
+---
+
+┌───────────────────────────────────────────────────────────────┐
+│ HUMAN OPERATOR │
+│ │
+│ Mobile App / Web UI │
+│ - Login / MFA │
+│ - Device list │
+│ - Issue commands │
+│ - View results, audit, compliance │
+└───────────────▲───────────────────────────────────────────────┘
+│ REST / JWT / Notifications
+│
+┌───────────────┴───────────────────────────────────────────────┐
+│ CONTROL PLANE (Laravel) │
+│ │
+│ Responsibilities │
+│ - Identity & auth (users, roles) │
+│ - Device registry │
+│ - Policy evaluation │
+│ - Command lifecycle state machine │
+│ - Compliance & attestation decisions │
+│ - Audit trail (canonical, immutable) │
+│ │
+│ Key Concepts │
+│ - Commands are INTENT, not execution │
+│ - Signs every command │
+│ - Never talks to OS directly │
+│ │
+│ Data │
+│ - command_id, client_message_id │
+│ - policy_hash, ttl, requires_ack │
+└───────────────▲───────────────────────────────────────────────┘
+│ Signed HTTP (Canonical JSON)
+│
+┌───────────────┴───────────────────────────────────────────────┐
+│ GATEWAY / BROKER (FastAPI) │
+│ │
+│ Responsibilities │
+│ - Verify Laravel signatures │
+│ - Enforce replay + TTL │
+│ - Maintain agent connections (WSS) │
+│ - Queue offline commands │
+│ - Forward ACK / RESULT / telemetry │
+│ │
+│ Key Concepts │
+│ - Transport broker only │
+│ - OS-agnostic │
+│ - Zero business logic │
+│ │
+│ Channels │
+│ - HTTP: control → gateway │
+│ - WSS: gateway ↔ agents │
+└───────────────▲───────────────────────────────────────────────┘
+│ WSS (Signed Envelopes)
+│
+┌───────────────┴───────────────────────────────────────────────┐
+│ ENDPOINT AGENT (Linux / Windows) │
+│ │
+│ Responsibilities │
+│ - Authenticate to gateway │
+│ - Verify command signatures │
+│ - Enforce local policy hash │
+│ - Maintain monotonic sequence │
+│ - Translate command → capability │
+│ - Collect results + telemetry │
+│ │
+│ Key Concepts │
+│ - Unprivileged user-space │
+│ - No direct OS power │
+│ - Cryptographic authority gate │
+│ │
+│ Examples │
+│ - list_processes │
+│ - lock_screen │
+│ - screenshot │
+│ - sysinfo │
+└───────────────▲───────────────────────────────────────────────┘
+│ Local privileged boundary
+│ (UDS / IOCTL / RPC)
+┌───────────────┴───────────────────────────────────────────────┐
+│ PRIVILEGED EXECUTION LAYER (OS-SPECIFIC) │
+│ │
+│ Linux │
+│ - Root daemon (Unix Domain Socket) │
+│ - Capabilities: reboot, shutdown, list_processes, etc. │
+│ │
+│ Windows │
+│ - Kernel driver (IOCTL) │
+│ │
+│ Responsibilities │
+│ - Verify agent identity (UID / signature) │
+│ - Enforce monotonic sequence │
+│ - Execute privileged actions │
+│ - Sign execution result │
+│ │
+│ This is the "point of no return" │
+│ Everything above is permission; │
+│ everything here is consequence. │
+└───────────────▲───────────────────────────────────────────────┘
+│ Kernel / System Calls
+┌───────────────┴───────────────────────────────────────────────┐
+│ OPERATING SYSTEM │
+│ │
+│ - Kernel │
+│ - System services (systemd, loginctl, nftables) │
+│ - Filesystems │
+│ - Network stack │
+│ │
+│ This layer has NO idea Quoodle exists │
+└───────────────────────────────────────────────────────────────┘
+
+🔁 Evidence Flow (Reverse Direction)
+
+OS Result
+↓
+Privileged Executor
+↓ (signed response)
+Agent
+↓ (COMMAND_RESULT)
+Gateway
+↓ (Webhook)
+Control Plane
+↓
+UI / Audit / Compliance
+
+Every arrow upward adds context but never authority.
 
 ---
 
