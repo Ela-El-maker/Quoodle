@@ -2,7 +2,60 @@
 
 #include <cstdlib>
 #include <string>
+#include <fstream>
+#include <filesystem>
+#include <random>
+#include <sstream>
 #include "config.hpp"
+
+namespace detail
+{
+    inline std::string ReadFileTrim(const std::filesystem::path &path)
+    {
+        std::ifstream file(path);
+        if (!file)
+            return {};
+        std::string value;
+        std::getline(file, value);
+        while (!value.empty() && (value.back() == '\n' || value.back() == '\r' || value.back() == ' ' || value.back() == '\t'))
+        {
+            value.pop_back();
+        }
+        return value;
+    }
+
+    inline std::string GenerateUuid()
+    {
+        // Windows: use random_device for UUID-like string
+        std::random_device rd;
+        std::stringstream ss;
+        ss << std::hex;
+        for (int i = 0; i < 4; ++i)
+            ss << rd();
+        return ss.str();
+    }
+
+    inline std::string GetOrCreateIdentity(const char *env_name, const char *file_env_name, const std::filesystem::path &default_path)
+    {
+        if (const char *env_value = std::getenv(env_name))
+        {
+            if (*env_value)
+                return env_value;
+        }
+        const char *path_env = std::getenv(file_env_name);
+        std::filesystem::path path = (path_env && *path_env) ? std::filesystem::path(path_env) : default_path;
+        auto existing = ReadFileTrim(path);
+        if (!existing.empty())
+            return existing;
+        std::string generated = GenerateUuid();
+        std::filesystem::create_directories(path.parent_path());
+        std::ofstream out(path, std::ios::trunc);
+        if (!out)
+            throw std::runtime_error("Unable to write identity file: " + path.string());
+        out << generated << "\n";
+        return generated;
+    }
+} // namespace detail
 
 struct ConfigManager
 {
@@ -13,8 +66,11 @@ struct ConfigManager
         // Core settings
         if (const char *val = std::getenv("AGENT_ENDPOINT"))
             cfg.endpoint = val;
-        if (const char *val = std::getenv("AGENT_DEVICE_ID"))
-            cfg.device_id = val;
+        // Persistent device identity logic
+        cfg.device_id = detail::GetOrCreateIdentity(
+            "AGENT_DEVICE_ID",
+            "AGENT_DEVICE_ID_FILE",
+            "C:/ProgramData/Quoodle/device_id");
         if (const char *val = std::getenv("AGENT_JWT"))
             cfg.jwt = val;
 
