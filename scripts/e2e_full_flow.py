@@ -45,6 +45,7 @@ DEVICE_LABEL = os.getenv("DEVICE_LABEL", "Quoodle E2E Device")
 TEST_USER_EMAIL = os.getenv("TEST_USER_EMAIL", "test@example.com")
 TEST_USER_PASSWORD = os.getenv("TEST_USER_PASSWORD", "password")
 TEST_USER_ROLE = os.getenv("TEST_USER_ROLE", "operator")
+FIXED_HWID = os.getenv("FIXED_HWID", "")
 SCREENSHOT_USER_ROLE = os.getenv("SCREENSHOT_USER_ROLE", TEST_USER_ROLE)
 SCREENSHOT_TWO_FACTOR_CODE = os.getenv("SCREENSHOT_TWO_FACTOR_CODE", "")
 ALLOWED_ROOT = os.path.realpath(os.getenv("ALLOWED_ROOT", "/home/ela/Work-Force"))
@@ -746,6 +747,23 @@ class AgentEmulator:
             return False
 
 
+def load_or_create_agent_key(identity_path: Path | None) -> SigningKey:
+    if identity_path and identity_path.exists():
+        payload = json.loads(identity_path.read_text(encoding="utf-8"))
+        priv_b64 = payload.get("priv_b64")
+        if priv_b64:
+            raw = base64.b64decode(priv_b64)
+            return SigningKey(raw[:32])
+    key = SigningKey.generate()
+    if identity_path:
+        identity_path.parent.mkdir(parents=True, exist_ok=True)
+        identity_path.write_text(
+            json.dumps({"priv_b64": base64.b64encode(key.encode()).decode("ascii")}),
+            encoding="utf-8",
+        )
+    return key
+
+
 async def run_mobile_api_flow() -> tuple[str, str, str, str, SigningKey]:
     """
     Simulates Mobile Client:
@@ -787,13 +805,17 @@ async def run_mobile_api_flow() -> tuple[str, str, str, str, SigningKey]:
         pair_session_id = init_data.get("pair_session_id")
         logger.info(f"✅ Pairing initiated, session: {pair_session_id}")
 
-        agent_signing_key = SigningKey.generate()
+        identity_path = None
+        if FIXED_HWID:
+            identity_path = ROOT / "logs" / "e2e" / f"identity_{FIXED_HWID}.json"
+        agent_signing_key = load_or_create_agent_key(identity_path)
         agent_pubkey_b64 = agent_signing_key.verify_key.encode(encoder=Base64Encoder).decode("utf-8")
+        hwid = FIXED_HWID or f"HWID-{uuid.uuid4()}"
         pair_request = await client.post(
             f"{LARAVEL_URL}/pair/request",
             json={
                 "device_name": DEVICE_LABEL,
-                "hwid": f"HWID-{uuid.uuid4()}",
+                "hwid": hwid,
                 "pubkey": agent_pubkey_b64,
             },
         )
