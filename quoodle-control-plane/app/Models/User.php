@@ -200,6 +200,22 @@ class User extends Authenticatable
     }
 
     /**
+     * Mobile devices used by this user (app sessions).
+     */
+    public function mobileDevices()
+    {
+        return $this->hasMany(MobileDevice::class, 'user_id', 'id');
+    }
+
+    /**
+     * Links between user mobile devices and agent devices.
+     */
+    public function deviceLinks()
+    {
+        return $this->hasMany(DeviceLink::class, 'user_id', 'id');
+    }
+
+    /**
      * Get the commands issued by this user.
      */
     public function commands()
