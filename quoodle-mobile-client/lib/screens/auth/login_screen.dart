@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/api_service.dart';
 import '../../services/session_store.dart';
-import '../devices/device_list_screen.dart';
+import '../home/home_screen.dart';
 import '../../services/mobile_identity_service.dart';
 import 'register_screen.dart';
 import 'twofa_screen.dart';
@@ -51,21 +51,24 @@ class _LoginScreenState extends State<LoginScreen> {
     final sessionId = response['session_id'] as String?;
     final jwt = response['jwt'] as String?;
     final refresh = response['refresh_token'] as String?;
+    final userRole = response['user_role'] as String?;
     if (userId != null && sessionId != null) {
       await SessionStore.setAuth(
           userId: userId,
           sessionId: sessionId,
           jwt: jwt,
-          refreshToken: refresh);
+          refreshToken: refresh,
+          userRole: userRole);
     }
 
     if (mounted && response['two_factor_required'] == true) {
       Navigator.pushReplacementNamed(context, TwoFAScreen.route, arguments: {
         'user_id': response['user_id'],
-        'session_id': response['session_id']
+        'session_id': response['session_id'],
+        'user_role': userRole,
       });
     } else if (mounted) {
-      Navigator.pushReplacementNamed(context, DeviceListScreen.route);
+      Navigator.pushReplacementNamed(context, HomeScreen.route);
     }
     setState(() => _isLoading = false);
   }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/command.dart';
 import '../../services/api_service.dart';
-import 'command_detail_screen.dart';
+import 'command_timeline_screen.dart';
 
 class CommandHistoryScreen extends StatefulWidget {
   const CommandHistoryScreen({super.key, required this.deviceId});
@@ -70,7 +70,7 @@ class _CommandHistoryScreenState extends State<CommandHistoryScreen> {
                       : () => Navigator.push(
                             context,
                             MaterialPageRoute(
-                                builder: (_) => CommandDetailScreen(
+                                builder: (_) => CommandTimelineScreen(
                                     commandId: c.commandId!)),
                           ),
                 );

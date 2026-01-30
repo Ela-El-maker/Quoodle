@@ -3,15 +3,21 @@ import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../services/session_store.dart';
 import '../../utils/api_error_classifier.dart';
-import '../devices/device_list_screen.dart';
+import '../home/home_screen.dart';
 import 'twofa_enroll_screen.dart';
 
 class TwoFAScreen extends StatefulWidget {
-  const TwoFAScreen({super.key, required this.userId, required this.sessionId});
+  const TwoFAScreen({
+    super.key,
+    required this.userId,
+    required this.sessionId,
+    this.userRole,
+  });
 
   static const route = '/2fa';
   final String userId;
   final String sessionId;
+  final String? userRole;
 
   @override
   State<TwoFAScreen> createState() => _TwoFAScreenState();
@@ -47,9 +53,10 @@ class _TwoFAScreenState extends State<TwoFAScreen> {
         sessionId: widget.sessionId,
         jwt: resp['jwt'] as String?,
         refreshToken: resp['refresh_token'] as String?,
+        userRole: widget.userRole,
       );
       if (mounted) {
-        Navigator.pushReplacementNamed(context, DeviceListScreen.route);
+        Navigator.pushReplacementNamed(context, HomeScreen.route);
       }
     } catch (e) {
       final view = classifyApiError(e);

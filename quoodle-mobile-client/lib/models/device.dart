@@ -26,6 +26,14 @@ class Device {
   final bool? policyInSync;
 
   factory Device.fromJson(Map<String, dynamic> json) {
+    final compliance = json['compliance'] as Map<String, dynamic>?;
+    final riskRaw = json['risk_score'];
+    num? riskScore;
+    if (riskRaw is num) {
+      riskScore = riskRaw;
+    } else if (riskRaw is String) {
+      riskScore = num.tryParse(riskRaw);
+    }
     return Device(
       deviceId: json['device_id'] as String,
       deviceName: json['device_name'] as String?,
@@ -33,8 +41,9 @@ class Device {
       lastSeen: json['last_seen'] as String?,
       agentVersion: json['agent_version'] as String?,
       osBuild: json['os_build'] as String?,
-      complianceStatus: json['compliance_status'] as String?,
-      riskScore: json['risk_score'] as num?,
+      complianceStatus: json['compliance_status'] as String? ??
+          compliance?['status'] as String?,
+      riskScore: riskScore,
       policyHash: json['policy_hash'] as String?,
       reportedPolicyHash: json['reported_policy_hash'] as String?,
       policyInSync: json['policy_in_sync'] as bool?,

@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../services/api_service.dart';
 import '../../services/mobile_identity_service.dart';
-import '../devices/device_list_screen.dart';
+import '../../services/session_store.dart';
+import '../home/home_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -35,14 +36,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _loading = true);
     await _identity.ensureKeypair();
     final pub = await _identity.publicKeyBase64();
-    await _api.register(
+    final response = await _api.register(
       displayName: _displayName.text,
       email: _email.text,
       password: _password.text,
       pubkey: pub,
     );
+    final role = response['user_role'] as String?;
+    if (role != null && role.isNotEmpty) {
+      await SessionStore.setRole(role);
+    }
     if (mounted) {
-      Navigator.pushReplacementNamed(context, DeviceListScreen.route);
+      Navigator.pushReplacementNamed(context, HomeScreen.route);
     }
     setState(() => _loading = false);
   }
