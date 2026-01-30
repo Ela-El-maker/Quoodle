@@ -280,6 +280,20 @@ DPAPI at rest
 
 ## 🛠️ Build & Run
 
+## Device Identity (Persistence)
+
+By default, the Windows agent persists its device identity:
+
+- `C:/ProgramData/Quoodle/device_id` — Device ID (UUID, generated once and reused)
+
+**Override order:**
+
+1. `AGENT_DEVICE_ID` (env)
+2. `AGENT_DEVICE_ID_FILE` (env, path to file)
+3. `C:/ProgramData/Quoodle/device_id` (auto-generated if missing)
+
+The agent will always use the first available value in this order.
+
 ### Prerequisites
 
 - CMake 3.20+
