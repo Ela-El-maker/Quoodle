@@ -36,7 +36,7 @@ return [
     ],
 
     'fastapi' => [
-        'base_url' => env('FASTAPI_BASE_URL', 'http://localhost:8001/api/v1'),
+        'base_url' => env('FASTAPI_BASE_URL', 'http://localhost:8000/api/v1'),
         // Laravel → FastAPI service-to-service signing
         'service_private_key_b64' => env('LARAVEL_SERVICE_PRIVATE_KEY_B64'),
 

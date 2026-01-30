@@ -58,6 +58,7 @@
                         <th>Device</th>
                         <th>User</th>
                         <th>Status</th>
+                        <th>Result</th>
                         <th>Queued</th>
                         <th>Completed</th>
                         <th></th>
@@ -88,10 +89,42 @@
                                     {{ ucfirst($state) }}
                                 </span>
                             </td>
+                            @php
+                                $result = is_array($command->result) ? $command->result : [];
+                                $details = $result['details'] ?? null;
+                                $redact = function ($value) use (&$redact) {
+                                    if (is_array($value)) {
+                                        $out = [];
+                                        foreach ($value as $k => $v) {
+                                            if (is_string($k) && $k === 'data_b64') {
+                                                $out[$k] = '[omitted]';
+                                                continue;
+                                            }
+                                            if (is_string($k) && in_array($k, ['entries', 'processes', 'services', 'mounts', 'routes', 'users', 'sessions'], true)) {
+                                                $out[$k] = is_array($v) ? ['count' => count($v)] : $v;
+                                                continue;
+                                            }
+                                            $out[$k] = $redact($v);
+                                        }
+                                        return $out;
+                                    }
+                                    return $value;
+                                };
+                                $summary = $details ?? ($result['notes'] ?? null);
+                                if (is_array($summary) && array_key_exists('data_b64', $summary)) {
+                                    $summary['data_b64'] = '[omitted]';
+                                }
+                                $summaryView = $redact($summary);
+                                $summaryText = $summaryView ? json_encode($summaryView, JSON_UNESCAPED_SLASHES) : '—';
+                            @endphp
+                            <td class="text-truncate" style="max-width: 240px;">
+                                <span class="text-muted small">{{ \Illuminate\Support\Str::limit($summaryText, 140) }}</span>
+                            </td>
                             <td>{{ optional($command->queued_at ?? $command->created_at)->format('M d, H:i') }}</td>
                             <td>{{ $command->completed_at ? $command->completed_at->format('M d, H:i') : '-' }}</td>
-                            <td class="text-end">
-                                <a href="{{ route('admin.commands.show', $command) }}" class="btn btn-sm btn-outline-info">View Timeline</a>
+                            <td class="text-end d-flex gap-2 justify-content-end">
+                                <a href="{{ route('admin.commands.result', $command) }}" class="btn btn-sm btn-outline-light">View Result</a>
+                                <a href="{{ route('admin.commands.show', $command) }}" class="btn btn-sm btn-outline-info">Timeline</a>
                             </td>
                         </tr>
                     @endforeach

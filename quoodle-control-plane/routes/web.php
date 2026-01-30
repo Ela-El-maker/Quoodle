@@ -29,6 +29,7 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::get('/commands/export', [DashboardController::class, 'exportCommands'])->name('commands.export');
     Route::post('/commands/execute', [DashboardController::class, 'commandExecute'])->name('commands.execute');
     Route::get('/commands/{command}', [DashboardController::class, 'commandShow'])->name('commands.show');
+    Route::get('/commands/{command}/result', [DashboardController::class, 'commandResult'])->name('commands.result');
     Route::get('/alerts', [DashboardController::class, 'alerts'])->name('alerts');
     Route::get('/alerts/{alert}', [DashboardController::class, 'alertShow'])->name('alerts.show');
     Route::post('/alerts/{alert}/ack', [DashboardController::class, 'ackAlert'])->name('alerts.ack');
