@@ -62,4 +62,9 @@ class Device extends Model
     {
         return $this->hasMany(Alert::class, 'device_id', 'device_id');
     }
+
+    public function links()
+    {
+        return $this->hasMany(DeviceLink::class, 'device_id', 'device_id');
+    }
 }
