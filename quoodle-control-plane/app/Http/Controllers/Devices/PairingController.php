@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\Devices;
 
 use App\Http\Controllers\Controller;
+use App\Models\AuthToken;
 use App\Models\Device;
+use App\Models\DeviceLink;
 use App\Services\Devices\FastApiDeviceKeySync;
 use App\Services\Devices\FastApiDevicePairedWebhook;
 use App\Services\JWT\JWTSigner;
+use App\Services\Mobile\MobileDeviceTracker;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Illuminate\Support\Facades\Auth;
@@ -24,6 +27,7 @@ class PairingController extends Controller
         private readonly JWTSigner $jwtSigner,
         private readonly FastApiDeviceKeySync $keySync,
         private readonly FastApiDevicePairedWebhook $pairedWebhook,
+        private readonly MobileDeviceTracker $mobileTracker,
     ) {
     }
 
@@ -162,7 +166,7 @@ class PairingController extends Controller
                 'device_id' => $deviceId,
                 'device_name' => $claims['device_name'] ?? 'New Device',
                 'hwid' => $claims['hwid'] ?? null,
-                'lifecycle_state' => 'active',
+                'lifecycle_state' => 'offline',
                 'compliance_status' => 'unknown',
                 'policy_hash' => $policyHash,
                 'ed25519_pubkey_b64' => $claims['ed25519_pubkey_b64'] ?? null,
@@ -181,9 +185,38 @@ class PairingController extends Controller
         $device->update([
             'user_id' => $user->id,
             'device_name' => $deviceName,
-            'lifecycle_state' => 'active',
+            'lifecycle_state' => in_array($device->lifecycle_state, ['online', 'active'], true) ? $device->lifecycle_state : 'offline',
             'ed25519_pubkey_b64' => $claims['ed25519_pubkey_b64'] ?? $device->ed25519_pubkey_b64,
         ]);
+
+        $sessionId = $request->attributes->get('jwt_session_id');
+        if ($sessionId) {
+            $authToken = AuthToken::where('session_id', $sessionId)
+                ->where('user_id', $user->id)
+                ->whereNull('revoked_at')
+                ->first();
+
+            if ($authToken && $authToken->device_fingerprint) {
+                $mobileDevice = $this->mobileTracker->touch($user, [
+                    'device_fingerprint' => $authToken->device_fingerprint,
+                    'push_token' => $authToken->push_token,
+                ]);
+
+                if ($mobileDevice) {
+                    DeviceLink::firstOrCreate(
+                        [
+                            'mobile_device_id' => $mobileDevice->id,
+                            'device_id' => $device->device_id,
+                        ],
+                        [
+                            'user_id' => $user->id,
+                            'linked_via' => 'pair_confirm',
+                            'linked_at' => now(),
+                        ],
+                    );
+                }
+            }
+        }
 
         $agentJwtTtl = (int) config('jwt.ttl', 900);
         $agentJwtExpiresAt = now()->addSeconds($agentJwtTtl)->toIso8601String();

@@ -1,0 +1,24 @@
+{
+  "command_id": "cmd-001",
+  "device_id": "device-001",
+  "method": "lock_screen",
+  "params": {},
+  "state": "ack_received",
+  "queued_at": "2026-01-29T12:00:00Z",
+  "completed_at": null,
+  "audit": {
+    "server_seq": 42,
+    "request_sig": "sig-request",
+    "envelope_sig": "sig-envelope",
+    "envelope": {}
+  },
+  "result": {
+    "status": null,
+    "notes": null,
+    "artifact_url": null,
+    "artifact_checksum": null,
+    "data": {}
+  },
+  "error_code": null,
+  "error_message": null
+}

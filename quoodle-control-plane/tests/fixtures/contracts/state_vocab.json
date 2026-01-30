@@ -1,0 +1,5 @@
+{
+  "device_states": ["online", "offline", "pending_pairing", "quarantined"],
+  "command_states": ["queued", "dispatched", "ack_received", "completed", "failed", "expired", "rejected"],
+  "compliance_states": ["compliant", "degraded", "non_compliant", "quarantined", "unknown"]
+}

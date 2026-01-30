@@ -1,0 +1,13 @@
+{
+  "alerts": [
+    {
+      "alert_id": "alert-001",
+      "device_id": "device-001",
+      "severity": "high",
+      "category": "policy",
+      "message": "Policy mismatch",
+      "timestamp": "2026-01-29T12:00:00Z",
+      "acknowledged": false
+    }
+  ]
+}

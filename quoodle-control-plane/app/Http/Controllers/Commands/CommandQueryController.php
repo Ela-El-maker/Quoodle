@@ -32,10 +32,15 @@ class CommandQueryController extends Controller
         return response()->json([
             'commands' => $commands->map(fn (Command $cmd) => [
                 'command_id' => $cmd->id,
+                'device_id' => $cmd->device_id,
                 'method' => $cmd->method,
+                'params' => $cmd->params ?? [],
                 'state' => $cmd->state,
                 'queued_at' => optional($cmd->queued_at)?->toIso8601String(),
                 'completed_at' => optional($cmd->completed_at)?->toIso8601String(),
+                'result_status' => is_array($cmd->result) ? ($cmd->result['status'] ?? null) : null,
+                'error_code' => $cmd->error_code,
+                'error_message' => $cmd->error_message,
             ]),
             'next_before' => null,
         ]);

@@ -6,6 +6,6 @@ class DeviceRules
 {
     public function lifecycleAllows(string $state): bool
     {
-        return $state !== 'quarantine';
+        return ! in_array($state, ['quarantine', 'quarantined'], true);
     }
 }

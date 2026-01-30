@@ -56,7 +56,11 @@ class CommandController extends Controller
 
         return response()->json([
             'command_id' => $command->id,
+            'device_id' => $command->device_id,
+            'method' => $command->method,
+            'params' => $command->params ?? [],
             'queued_at' => $command->queued_at?->toIso8601String(),
+            'completed_at' => $command->completed_at?->toIso8601String(),
             'reason' => $command->reason,
             'state' => $command->state,
             'status' => 'accepted',

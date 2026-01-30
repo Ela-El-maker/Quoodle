@@ -50,7 +50,7 @@ class CommandAckWebhookController extends Controller
 
         if ($data['status'] === 'received') {
             $updated = Command::where('id', $command->id)
-                ->whereIn('state', ['queued', 'sent'])
+                ->whereIn('state', ['queued', 'dispatched', 'sent'])
                 ->whereNotIn('execution_state', ['completed', 'failed', 'expired'])
                 ->update([
                     'state' => 'ack_received',

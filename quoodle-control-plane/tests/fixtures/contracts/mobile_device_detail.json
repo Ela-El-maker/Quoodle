@@ -1,0 +1,25 @@
+{
+  "device_id": "device-001",
+  "device_name": "Alpha Laptop",
+  "hwid": "HWID-123",
+  "lifecycle_state": "online",
+  "last_seen": "2026-01-29T12:00:00Z",
+  "agent_version": "1.2.3",
+  "os_build": "win-11",
+  "policy_hash": "sha256:policy",
+  "reported_policy_hash": "sha256:policy",
+  "policy_in_sync": true,
+  "compliance": {
+    "status": "compliant",
+    "last_evaluated_at": "2026-01-29T12:00:00Z",
+    "reasons": []
+  },
+  "telemetry_latest": {
+    "cpu": "12%",
+    "ram": "58%",
+    "disk_usage": "70%",
+    "risk_score": 12.5,
+    "policy_hash": "sha256:policy",
+    "timestamp": "2026-01-29T12:00:00Z"
+  }
+}

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AuthToken;
 use App\Models\User;
 use App\Services\JWT\JWTSigner;
+use App\Services\Mobile\MobileDeviceTracker;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -14,7 +15,10 @@ use Illuminate\Support\Str;
 
 class LoginController extends Controller
 {
-    public function __construct(private readonly JWTSigner $jwtSigner)
+    public function __construct(
+        private readonly JWTSigner $jwtSigner,
+        private readonly MobileDeviceTracker $mobileTracker,
+    )
     {
     }
 
@@ -26,6 +30,10 @@ class LoginController extends Controller
             'device_fingerprint' => ['required', 'string', 'max:255'],
             'push_token' => ['nullable', 'string', 'max:512'],
             'two_factor_code' => ['nullable', 'string', 'max:64'],
+            'platform' => ['nullable', 'string', 'max:64'],
+            'os_version' => ['nullable', 'string', 'max:64'],
+            'device_model' => ['nullable', 'string', 'max:128'],
+            'app_version' => ['nullable', 'string', 'max:64'],
         ]);
 
         if ($validator->fails()) {
@@ -59,6 +67,15 @@ class LoginController extends Controller
             'push_token' => $data['push_token'] ?? null,
             'refresh_token_hash' => hash('sha256', $refreshToken),
             'expires_at' => $refreshExpiresAt,
+        ]);
+
+        $this->mobileTracker->touch($user, [
+            'device_fingerprint' => $data['device_fingerprint'] ?? null,
+            'push_token' => $data['push_token'] ?? null,
+            'platform' => $data['platform'] ?? null,
+            'os_version' => $data['os_version'] ?? null,
+            'device_model' => $data['device_model'] ?? null,
+            'app_version' => $data['app_version'] ?? null,
         ]);
 
         $jwt = $this->jwtSigner->issueForUser($user, $sessionId);

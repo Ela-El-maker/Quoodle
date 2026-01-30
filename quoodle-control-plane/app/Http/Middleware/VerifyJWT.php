@@ -143,6 +143,7 @@ final class VerifyJWT
     private function unauthorized(string $message, string $code = 'UNAUTHORIZED'): Response
     {
         return response()->json([
+            'status' => 'invalid_session',
             'message' => 'Unauthorized',
             'error' => $message,
             'code' => $code,
