@@ -41,9 +41,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--screenshot-user-role", default=os.getenv("SCREENSHOT_USER_ROLE", ""))
     parser.add_argument("--screenshot-2fa", default=os.getenv("SCREENSHOT_TWO_FACTOR_CODE", ""))
     parser.add_argument("--allowed-root", default=os.getenv("QUOODLE_ALLOWED_ROOT", "/home/ela/Work-Force"))
+    parser.add_argument("--fixed-hwid", default=os.getenv("FIXED_HWID", ""), help="Stable HWID to reuse device_id across runs.")
     parser.add_argument("--poll-timeout", type=int, default=40)
     parser.add_argument("--poll-interval", type=float, default=2.0)
     return parser.parse_args()
+
+
+def load_or_create_agent_key(identity_path: Path | None) -> SigningKey:
+    if identity_path and identity_path.exists():
+        payload = json.loads(identity_path.read_text(encoding="utf-8"))
+        priv_b64 = payload.get("priv_b64")
+        if priv_b64:
+            raw = base64.b64decode(priv_b64)
+            return SigningKey(raw[:32])
+    key = SigningKey.generate()
+    if identity_path:
+        identity_path.parent.mkdir(parents=True, exist_ok=True)
+        identity_path.write_text(
+            json.dumps({"priv_b64": base64.b64encode(key.encode()).decode("ascii")}),
+            encoding="utf-8",
+        )
+    return key
 
 
 def canonical_json(payload: dict) -> bytes:
@@ -232,13 +250,16 @@ def main() -> int:
         init_data = init_resp.json()
         pair_session_id = init_data.get("pair_session_id")
 
-        # Agent keypair
-        agent_sk = SigningKey.generate()
+        # Agent keypair (stable when fixed HWID provided)
+        identity_path = None
+        if args.fixed_hwid:
+            identity_path = ROOT / "logs" / "command_suite" / "identities" / f"{args.fixed_hwid}.json"
+        agent_sk = load_or_create_agent_key(identity_path)
         agent_priv_b64 = base64.b64encode(agent_sk.encode()).decode("ascii")
         agent_pub_b64 = base64.b64encode(agent_sk.verify_key.encode()).decode("ascii")
 
         # Pair request (device)
-        hwid = f"LINUX-{uuid.uuid4()}"
+        hwid = args.fixed_hwid or f"LINUX-{uuid.uuid4()}"
         pair_request_payload = {
             "device_name": "Linux Agent",
             "hwid": hwid,
