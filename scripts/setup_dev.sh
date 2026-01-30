@@ -30,7 +30,7 @@ else
     DOCKER_COMPOSE="docker-compose"
 fi
 
-echo -e "${YELLOW}[1/4] Checking configuration files...${NC}"
+echo -e "${YELLOW}[1/5] Checking configuration files...${NC}"
 
 # Laravel .env
 if [ ! -f "quoodle-control-plane/.env" ]; then
@@ -45,18 +45,74 @@ if [ ! -f "quoodle-gateway/.env" ]; then
     touch quoodle-gateway/.env
 fi
 
-echo -e "${YELLOW}[2/4] Generating Development Keys (Ed25519)...${NC}"
+echo -e "${YELLOW}[2/5] Generating Development Keys (Ed25519)...${NC}"
 # In a real setup, we'd generate keys here.
 # For now, we'll placeholder this or rely on defaults.
 echo "Skipping key generation (using defaults or placeholders for now)."
 
-echo -e "${YELLOW}[3/4] Building and Starting Containers...${NC}"
+echo -e "${YELLOW}[3/5] Building and Starting Containers...${NC}"
 $DOCKER_COMPOSE up -d --build
 
-echo -e "${YELLOW}[4/4] Verifying Health...${NC}"
+echo -e "${YELLOW}[4/5] Verifying Health...${NC}"
 echo "Waiting for services to become healthy..."
 sleep 10
 $DOCKER_COMPOSE ps
+
+echo -e "${YELLOW}[5/5] Configuring Linux agent services (optional)...${NC}"
+if command -v sudo &> /dev/null; then
+    sudo -v >/dev/null 2>&1 || true
+
+    if ! getent group quoodle-agent >/dev/null 2>&1; then
+        sudo groupadd --system quoodle-agent || true
+    fi
+    if ! id -u quoodle-agent >/dev/null 2>&1; then
+        sudo useradd --system --no-create-home --shell /usr/sbin/nologin --gid quoodle-agent quoodle-agent || true
+    fi
+
+    sudo mkdir -p /opt/quoodle-agent/bin /etc/quoodle /var/lib/quoodle-agent/state /run/quoodle
+    sudo chown -R quoodle-agent:quoodle-agent /var/lib/quoodle-agent/state /run/quoodle || true
+
+    if [ -f "quoodle-agent-linux/systemd/quoodle-agent.service" ]; then
+        sudo cp quoodle-agent-linux/systemd/quoodle-agent.service /etc/systemd/system/quoodle-agent.service
+    fi
+    if [ -f "quoodle-agent-linux/systemd/quoodle-privileged.service" ]; then
+        sudo cp quoodle-agent-linux/systemd/quoodle-privileged.service /etc/systemd/system/quoodle-privileged.service
+    fi
+
+    if [ -f "quoodle-agent-linux/systemd/secrets.env.example" ] && [ ! -f "/etc/quoodle/secrets.env" ]; then
+        sudo cp quoodle-agent-linux/systemd/secrets.env.example /etc/quoodle/secrets.env
+    fi
+
+    if [ -f "/etc/systemd/system/quoodle-agent.service" ]; then
+        sudo sed -i 's|Environment=QUOODLE_WS_URL=.*|Environment=QUOODLE_WS_URL=ws://localhost:8000/agent|' /etc/systemd/system/quoodle-agent.service || true
+    fi
+
+    if systemctl is-active --quiet quoodle-agent 2>/dev/null; then
+        sudo systemctl stop quoodle-agent || true
+    fi
+    if systemctl is-active --quiet quoodle-privileged 2>/dev/null; then
+        sudo systemctl stop quoodle-privileged || true
+    fi
+
+    if [ -f "quoodle-agent-linux/build/agent/quoodle-agent-linux" ]; then
+        sudo cp quoodle-agent-linux/build/agent/quoodle-agent-linux /opt/quoodle-agent/bin/
+    fi
+    if [ -f "quoodle-agent-linux/build/privileged/quoodle-privileged-daemon" ]; then
+        sudo cp quoodle-agent-linux/build/privileged/quoodle-privileged-daemon /opt/quoodle-agent/bin/
+    fi
+
+    if [ -f "/opt/quoodle-agent/bin/quoodle-agent-linux" ] && [ -f "/opt/quoodle-agent/bin/quoodle-privileged-daemon" ]; then
+        sudo systemctl daemon-reload
+        sudo systemctl reset-failed quoodle-agent || true
+        sudo systemctl reset-failed quoodle-privileged || true
+        echo -e \"${YELLOW}Linux agent services installed but not started.${NC}\"
+        echo -e \"${YELLOW}Start manually with: sudo systemctl start quoodle-privileged && sudo systemctl start quoodle-agent${NC}\"
+    else
+        echo -e "${YELLOW}Agent binaries not found; build quoodle-agent-linux first to enable services.${NC}"
+    fi
+else
+    echo -e "${YELLOW}sudo not available; skipping Linux agent service setup.${NC}"
+fi
 
 echo -e "${GREEN}==========================================${NC}"
 echo -e "${GREEN}   Setup Complete!                        ${NC}"

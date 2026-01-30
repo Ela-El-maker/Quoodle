@@ -7,7 +7,6 @@ services:
     container_name: quoodle-db
     ports:
       - "3307:3306"
-    command: --sort_buffer_size=4194304
     environment:
       MYSQL_DATABASE: secure_device
       MYSQL_ROOT_PASSWORD: devpassword
@@ -68,6 +67,7 @@ services:
       REDIS_HOST: redis
       REDIS_PASSWORD: null
       REDIS_PORT: 6379
+      REDIS_CLIENT: predis
 
       # Integration
       FASTAPI_BASE_URL: http://gateway:8000/api/v1
@@ -76,6 +76,7 @@ services:
       REQUIRE_FASTAPI_SIGNATURE: "true"
       POLICY_HASH: "sha256:4058fa9b252a07e03ee6ac2585e6424973427f953b6763b48679b61acafe49d2"
       POLICY_VERSION: "2026-01-21"
+      ALLOW_DEVICE_REPAIR_WITH_HWID: "true"
     depends_on:
       db:
         condition: service_healthy

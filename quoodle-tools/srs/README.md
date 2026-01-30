@@ -13,7 +13,7 @@ It prints an **SRS report** with PASS/FAIL/SKIP per hop.
 Prereqs:
 
 - Laravel API running (default assumes `http://localhost:8000/api`)
-- FastAPI running (default assumes `http://localhost:8001/api/v1`)
+- FastAPI running (default assumes `http://localhost:8000/api/v1`)
 
 Quick start (common local defaults):
 
@@ -24,7 +24,7 @@ php artisan serve --host 127.0.0.1 --port 8000
 
 # FastAPI (in another terminal)
 cd quoodle-gateway
-uvicorn app.main:app --host 127.0.0.1 --port 8001
+uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 From repo root:
@@ -44,13 +44,13 @@ python tools/srs/system_validation_trace.py
 Required for the full user journey:
 
 - `SRS_LARAVEL_API_BASE` (default: `http://localhost:8000/api`)
-- `SRS_FASTAPI_API_BASE` (default: `http://localhost:8001/api/v1`)
+- `SRS_FASTAPI_API_BASE` (default: `http://localhost:8000/api/v1`)
 
 Tip (Windows/MSYS): if `localhost` is flaky, use `127.0.0.1`.
 
 Optional (websocket discovery probe):
 
-- `SRS_FASTAPI_WS` (default: `ws://localhost:8001/agent`)
+- `SRS_FASTAPI_WS` (default: `ws://localhost:8000/agent`)
 - Install websocket client: `pip install websockets`
 
 Optional:
