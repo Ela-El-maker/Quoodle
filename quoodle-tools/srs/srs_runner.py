@@ -89,7 +89,7 @@ def _print_report(rows: List[CheckResult]) -> None:
 
 def main() -> int:
     laravel_base = os.getenv("SRS_LARAVEL_API_BASE", "http://localhost:8000/api").rstrip("/")
-    fastapi_base = os.getenv("SRS_FASTAPI_API_BASE", "http://localhost:8001/api/v1").rstrip("/")
+    fastapi_base = os.getenv("SRS_FASTAPI_API_BASE", "http://localhost:8000/api/v1").rstrip("/")
 
     email = os.getenv("SRS_EMAIL", "srs@example.com")
     password = os.getenv("SRS_PASSWORD", "Password123!")
@@ -106,7 +106,7 @@ def main() -> int:
         return (
             "Connection refused. Start Laravel/FastAPI and/or set base URLs: "
             "SRS_LARAVEL_API_BASE (e.g. http://127.0.0.1:8000/api) and "
-            "SRS_FASTAPI_API_BASE (e.g. http://127.0.0.1:8001/api/v1)."
+            "SRS_FASTAPI_API_BASE (e.g. http://127.0.0.1:8000/api/v1)."
         )
 
     def post(url: str, json_body: Dict[str, Any], headers: Optional[Dict[str, str]] = None) -> Tuple[int, Any, str]:

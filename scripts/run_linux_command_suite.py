@@ -355,6 +355,8 @@ def main() -> int:
             {
                 "QUOODLE_WS_URL": f"ws://localhost:8000/agent",
                 "QUOODLE_DEVICE_ID": device_id,
+                "QUOODLE_DEVICE_ID_FILE": str(ROOT / "logs" / "command_suite" / "identities" / "device_id"),
+                "QUOODLE_HWID_FILE": str(ROOT / "logs" / "command_suite" / "identities" / "hwid"),
                 "QUOODLE_AGENT_JWT": agent_jwt,
                 "QUOODLE_AGENT_KID": "agent-dev",
                 "QUOODLE_AGENT_PRIVKEY_B64": agent_priv_b64,

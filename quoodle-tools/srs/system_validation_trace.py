@@ -112,8 +112,8 @@ async def ws_unpaired_probe(fastapi_ws_url: str, device_id: str) -> bool:
 
 def main() -> int:
     laravel_base = os.getenv("SRS_LARAVEL_API_BASE", "http://localhost:8000/api").rstrip("/")
-    fastapi_api = os.getenv("SRS_FASTAPI_API_BASE", "http://localhost:8001/api/v1").rstrip("/")
-    fastapi_ws = os.getenv("SRS_FASTAPI_WS", "ws://localhost:8001/agent")
+    fastapi_api = os.getenv("SRS_FASTAPI_API_BASE", "http://localhost:8000/api/v1").rstrip("/")
+    fastapi_ws = os.getenv("SRS_FASTAPI_WS", "ws://localhost:8000/agent")
 
     email = os.getenv("SRS_EMAIL", "trace@example.com")
     password = os.getenv("SRS_PASSWORD", "Password123!")
@@ -131,7 +131,7 @@ def main() -> int:
         return (
             "Connection refused. Ensure services are running and the base URLs are correct. "
             "Set SRS_LARAVEL_API_BASE (e.g. http://127.0.0.1:8000/api) and SRS_FASTAPI_API_BASE "
-            "(e.g. http://127.0.0.1:8001/api/v1)."
+            "(e.g. http://127.0.0.1:8000/api/v1)."
         )
 
     def post(url: str, body: Dict[str, Any], headers: Optional[Dict[str, str]] = None) -> Tuple[int, Any, str]:
