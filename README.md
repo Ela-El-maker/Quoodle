@@ -27,16 +27,16 @@
 ---
 
 ┌───────────────────────────────────────────────────────────────┐
-│ HUMAN OPERATOR │
-│ │
-│ Mobile App / Web UI │
-│ - Login / MFA │
-│ - Device list │
-│ - Issue commands │
-│ - View results, audit, compliance │
+│ HUMAN OPERATOR                                                │
+│                                                               │
+│ Mobile App / Web UI                                           │
+│ - Login / MFA                                                 │
+│ - Device list                                                 │
+│ - Issue commands                                              │
+│ - View results, audit, compliance                             │
 └───────────────▲───────────────────────────────────────────────┘
-│ REST / JWT / Notifications
-│
+   REST / JWT / | Notifications
+                │
 ┌───────────────┴───────────────────────────────────────────────┐
 │ CONTROL PLANE (Laravel) │
 │ │
