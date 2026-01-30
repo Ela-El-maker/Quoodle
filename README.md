@@ -90,8 +90,13 @@
 │ - Maintain monotonic sequence │
 │ - Translate command → capability │
 │ - Collect results + telemetry │
+│ - Persist device identity (see below) │
 │ │
 │ Key Concepts │
+│ Device Identity (Persistence) │
+│ - Linux: `/var/lib/quoodle/device_id` (auto-generated UUID, reused) │
+│ - Windows: `C:/ProgramData/Quoodle/device_id` (auto-generated, reused) │
+│ - Overridable by env: `QUOODLE_DEVICE_ID`/`AGENT_DEVICE_ID` or file path env │
 │ - Unprivileged user-space │
 │ - No direct OS power │
 │ - Cryptographic authority gate │

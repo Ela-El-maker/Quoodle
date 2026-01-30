@@ -58,6 +58,7 @@ Pairing without QR (requires a user JWT):
 ```
 
 Notes:
+
 - Reads `/etc/quoodle/secrets.env` by default (override with `--secrets-file`).
 - Uses `/etc/machine-id` for HWID if not provided.
 
@@ -82,6 +83,7 @@ Launch tray icon (requires `pystray` + `pillow`):
 ```
 
 Notes:
+
 - Tray mode is optional and will print instructions if dependencies are missing.
 - Pairing can be invoked from the UI tabs or via `--pair` (CLI-based).
 
@@ -98,10 +100,26 @@ systemctl --user enable --now quoodle-agent-tray.service
 
 ## Environment
 
+## Device Identity (Persistence)
+
+By default, the Linux agent persists its device identity:
+
+- `/var/lib/quoodle/device_id` — Device ID (UUID, generated once and reused)
+- `/var/lib/quoodle/hwid` — Hardware ID (future-proof, generated once)
+
+**Override order:**
+
+1. `QUOODLE_DEVICE_ID` (env)
+2. `QUOODLE_DEVICE_ID_FILE` (env, path to file)
+3. `/var/lib/quoodle/device_id` (auto-generated if missing)
+
+Same logic for HWID with `QUOODLE_HWID` and `QUOODLE_HWID_FILE`.
+
 Agent:
 
 - `QUOODLE_WS_URL` (e.g., `wss://gateway.example.com/agent`)
-- `QUOODLE_DEVICE_ID`
+- `QUOODLE_DEVICE_ID` (optional, overrides file)
+- `QUOODLE_DEVICE_ID_FILE` (optional, path to device_id file)
 - `QUOODLE_AGENT_JWT`
 - `QUOODLE_AGENT_PRIVKEY_B64`
 - `QUOODLE_AGENT_KID`
