@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+case "${1:-}" in
+  --tui)
+    exec python3 "${SCRIPT_DIR}/tui.py"
+    ;;
+  --tray)
+    exec python3 "${SCRIPT_DIR}/tray.py"
+    ;;
+  --desktop|"")
+    exec python3 "${SCRIPT_DIR}/desktop_app.py"
+    ;;
+  --pair)
+    exec "${SCRIPT_DIR}/../cli/quoodle-agent" pair --update-secrets
+    ;;
+  *)
+    echo "Usage: quoodle-agent-ui [--desktop|--tui|--tray|--pair]" >&2
+    exit 1
+    ;;
+esac
