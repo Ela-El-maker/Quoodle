@@ -1,13 +1,20 @@
-import 'package:flutter/material.dart';
 import 'dart:async';
+
+import 'package:flutter/material.dart';
 
 import '../../models/device.dart';
 import '../../models/telemetry.dart';
 import '../../services/api_service.dart';
+import '../../theme/app_colors.dart';
+import '../../widgets/capability_matrix.dart';
+import '../../widgets/compliance_badge.dart';
+import '../../widgets/glass_card.dart';
+import '../../widgets/live_telemetry_card.dart';
+import '../../widgets/risk_gauge.dart';
 import '../alerts/alerts_screen.dart';
-import '../commands/send_command_screen.dart';
 import '../commands/command_history_screen.dart';
-import '../devices/device_list_screen.dart';
+import '../commands/send_command_screen.dart';
+import '../compliance/device_compliance_screen.dart';
 import '../telemetry/telemetry_view.dart';
 import '../updates/update_list_screen.dart';
 
@@ -34,7 +41,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
     _deviceFuture = _api.fetchDevice(widget.deviceId);
     _refreshTelemetry();
     _timer =
-        Timer.periodic(const Duration(seconds: 1), (_) => _refreshTelemetry());
+        Timer.periodic(const Duration(seconds: 3), (_) => _refreshTelemetry());
   }
 
   @override
@@ -57,128 +64,314 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
     }
   }
 
+  List<CapabilityRow> _capabilityRows(Device device) {
+    return const [
+      CapabilityRow(
+        capability: 'lock_screen',
+        supported: true,
+        privilege: 'Privileged',
+        riskTier: 'Medium',
+      ),
+      CapabilityRow(
+        capability: 'collect_sysinfo',
+        supported: true,
+        privilege: 'Standard',
+        riskTier: 'Low',
+      ),
+      CapabilityRow(
+        capability: 'download_artifact',
+        supported: true,
+        privilege: 'Standard',
+        riskTier: 'Low',
+      ),
+      CapabilityRow(
+        capability: 'wipe_device',
+        supported: false,
+        privilege: 'Privileged',
+        riskTier: 'Critical',
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Device Detail'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => AlertsScreen(deviceId: widget.deviceId)),
+    return DefaultTabController(
+      length: 4,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Device Detail'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.notifications),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => AlertsScreen(deviceId: widget.deviceId)),
+              ),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.history),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => UpdateListScreen(deviceId: widget.deviceId)),
+            IconButton(
+              icon: const Icon(Icons.history),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => UpdateListScreen(deviceId: widget.deviceId)),
+              ),
             ),
+          ],
+          bottom: const TabBar(
+            isScrollable: true,
+            tabs: [
+              Tab(text: 'Overview'),
+              Tab(text: 'Capabilities'),
+              Tab(text: 'Telemetry'),
+              Tab(text: 'History'),
+            ],
           ),
-        ],
-      ),
-      body: FutureBuilder<Device>(
-        future: _deviceFuture,
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final device = snapshot.data!;
-          final expected = device.policyHash;
-          final reported = device.reportedPolicyHash ?? _telemetry?.policyHash;
-          final outOfSync = (device.policyInSync == false) ||
-              (expected != null &&
-                  expected.isNotEmpty &&
-                  reported != null &&
-                  reported.isNotEmpty &&
-                  expected != reported);
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Text(device.deviceName ?? device.deviceId,
-                  style: Theme.of(context).textTheme.headlineSmall),
-              if (outOfSync)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8, bottom: 8),
-                  child: Material(
-                    color: Theme.of(context).colorScheme.errorContainer,
-                    borderRadius: BorderRadius.circular(8),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Text(
-                        'Policy Out of Sync: device is reporting a different policy hash than the server expects.',
-                        style: TextStyle(
-                            color:
-                                Theme.of(context).colorScheme.onErrorContainer),
-                      ),
+        ),
+        body: Container(
+          decoration: BoxDecoration(gradient: AppColors.backgroundGradient),
+          child: FutureBuilder<Device>(
+            future: _deviceFuture,
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final device = snapshot.data!;
+              final expected = device.policyHash;
+              final reported = device.reportedPolicyHash ?? _telemetry?.policyHash;
+              final outOfSync = (device.policyInSync == false) ||
+                  (expected != null &&
+                      expected.isNotEmpty &&
+                      reported != null &&
+                      reported.isNotEmpty &&
+                      expected != reported);
+              return TabBarView(
+                children: [
+                  _OverviewTab(
+                    device: device,
+                    telemetry: _telemetry,
+                    outOfSync: outOfSync,
+                  ),
+                  SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: CapabilityMatrix(rows: _capabilityRows(device)),
+                  ),
+                  SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        if (_telemetry != null)
+                          LiveTelemetryCard(snapshot: _telemetry!),
+                        const SizedBox(height: 16),
+                        GlassCard(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Telemetry history',
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Review hourly trends and anomalies from the last 24 hours.',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(color: AppColors.textSecondary),
+                              ),
+                              const SizedBox(height: 12),
+                              ElevatedButton.icon(
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => TelemetryViewScreen(
+                                        deviceId: device.deviceId),
+                                  ),
+                                ),
+                                icon: const Icon(Icons.monitor_heart),
+                                label: const Text('Open telemetry history'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                  SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        GlassCard(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Command activity',
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'View command intents, acknowledgements, and results for this device.',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(color: AppColors.textSecondary),
+                              ),
+                              const SizedBox(height: 12),
+                              ElevatedButton.icon(
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => CommandHistoryScreen(
+                                        deviceId: device.deviceId),
+                                  ),
+                                ),
+                                icon: const Icon(Icons.list_alt),
+                                label: const Text('Open command history'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => SendCommandScreen(deviceId: widget.deviceId),
+            ),
+          ),
+          icon: const Icon(Icons.play_arrow),
+          label: const Text('Send Command'),
+        ),
+      ),
+    );
+  }
+}
+
+class _OverviewTab extends StatelessWidget {
+  const _OverviewTab({
+    required this.device,
+    required this.telemetry,
+    required this.outOfSync,
+  });
+
+  final Device device;
+  final TelemetrySnapshot? telemetry;
+  final bool outOfSync;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          GlassCard(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  device.deviceName ?? device.deviceId,
+                  style: Theme.of(context).textTheme.headlineSmall,
                 ),
-              Text('State: ${device.lifecycleState}'),
-              Text('Agent: ${device.agentVersion ?? 'n/a'}'),
-              Text('OS: ${device.osBuild ?? 'n/a'}'),
-              Text('Compliance: ${device.complianceStatus ?? 'unknown'}'),
-              Text('Risk: ${device.riskScore ?? '-'}'),
-              const SizedBox(height: 16),
-              if (_telemetry != null)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Live Telemetry @ ${_telemetry!.timestamp ?? '-'}'),
-                    Text(
-                        'CPU: ${_telemetry!.cpu ?? '-'} | RAM: ${_telemetry!.ram ?? '-'}'),
-                    Text('Disk: ${_telemetry!.diskUsage ?? '-'}'),
-                    Text(
-                        'Network TX/RX: ${_telemetry!.networkTx ?? '-'} / ${_telemetry!.networkRx ?? '-'}'),
-                  ],
-                ),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.play_arrow),
-                label: const Text('Send Command'),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        SendCommandScreen(deviceId: device.deviceId),
+                const SizedBox(height: 8),
+                ComplianceBadge(status: device.complianceStatus),
+                const SizedBox(height: 12),
+                if (outOfSync)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.nonCompliant.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppColors.nonCompliant.withOpacity(0.4),
+                      ),
+                    ),
+                    child: Text(
+                      'Policy out of sync. Device reports a different policy hash than the control plane.',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(color: AppColors.nonCompliant),
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                _DetailRow(label: 'Lifecycle', value: device.lifecycleState),
+                _DetailRow(label: 'Agent', value: device.agentVersion ?? 'n/a'),
+                _DetailRow(label: 'OS build', value: device.osBuild ?? 'n/a'),
+                _DetailRow(
+                    label: 'Risk',
+                    value: device.riskScore?.toStringAsFixed(0) ?? '-'),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            DeviceComplianceScreen(device: device),
+                      ),
+                    ),
+                    icon: const Icon(Icons.shield),
+                    label: const Text('View compliance'),
                   ),
                 ),
-              ),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.list_alt),
-                label: const Text('Command History'),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        CommandHistoryScreen(deviceId: device.deviceId),
-                  ),
-                ),
-              ),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.monitor_heart),
-                label: const Text('Telemetry History'),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        TelemetryViewScreen(deviceId: device.deviceId),
-                  ),
-                ),
-              ),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.home),
-                label: const Text('Back to devices'),
-                onPressed: () => Navigator.pushReplacementNamed(
-                    context, DeviceListScreen.route),
-              ),
-            ],
-          );
-        },
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          GlassCard(
+            padding: const EdgeInsets.all(16),
+            child: RiskGauge(score: device.riskScore),
+          ),
+          if (telemetry != null) ...[
+            const SizedBox(height: 16),
+            LiveTelemetryCard(snapshot: telemetry!),
+          ]
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context)
+                .textTheme
+                .labelLarge
+                ?.copyWith(color: AppColors.textSecondary),
+          ),
+          Text(
+            value,
+            style: Theme.of(context)
+                .textTheme
+                .bodyLarge
+                ?.copyWith(color: AppColors.textPrimary),
+          ),
+        ],
       ),
     );
   }

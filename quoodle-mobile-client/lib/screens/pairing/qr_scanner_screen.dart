@@ -6,8 +6,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../models/qr_pairing_data.dart';
-import '../../services/api_service.dart';
-import '../devices/device_list_screen.dart';
+import 'pairing_flow_screen.dart';
 
 /// QR code scanning screen for device pairing.
 ///
@@ -28,7 +27,6 @@ class QrScanScreen extends StatefulWidget {
 
 class _QrScanScreenState extends State<QrScanScreen>
     with WidgetsBindingObserver {
-  final ApiService _api = ApiService();
 
   // Scanner controller
   MobileScannerController? _scannerController;
@@ -157,19 +155,18 @@ class _QrScanScreenState extends State<QrScanScreen>
       // Pause scanner while confirming
       _scannerController?.stop();
 
-      // Show confirmation dialog
       if (mounted) {
-        final confirm = await _showConfirmDialog(pairingData);
-        if (confirm == true) {
-          await _confirmPairing(pairingData);
-        } else {
-          // User cancelled, resume scanning
-          setState(() {
-            _scannedData = null;
-            _isProcessing = false;
-          });
-          _scannerController?.start();
-        }
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PairingFlowScreen(qrData: pairingData),
+          ),
+        );
+        setState(() {
+          _scannedData = null;
+          _isProcessing = false;
+        });
+        _scannerController?.start();
       }
     } on QrParseException catch (e) {
       setState(() {
@@ -184,89 +181,6 @@ class _QrScanScreenState extends State<QrScanScreen>
     }
   }
 
-  Future<bool?> _showConfirmDialog(QrPairingData data) {
-    return showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Pair Device?'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Device ID: ${data.deviceId}'),
-            if (data.deviceLabel != null) Text('Label: ${data.deviceLabel}'),
-            const SizedBox(height: 8),
-            const Text(
-              'This will link the device to your account.',
-              style: TextStyle(color: Colors.grey),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Pair'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _confirmPairing(QrPairingData data) async {
-    setState(() {
-      _isProcessing = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final result = await _api.confirmPairing(
-        pairToken: data.pairToken,
-        pairSessionId: data.pairSessionId,
-      );
-
-      final status = result['status'] as String?;
-      if (status == 'ok' || status == 'paired') {
-        setState(() {
-          _successMessage = 'Device paired successfully!';
-          _isProcessing = false;
-        });
-
-        // Navigate to device list after short delay
-        await Future.delayed(const Duration(milliseconds: 800));
-        if (mounted) {
-          Navigator.pushReplacementNamed(context, DeviceListScreen.route);
-        }
-      } else {
-        final reason = result['reason'] as String? ?? 'Unknown error';
-        setState(() {
-          _errorMessage = 'Pairing failed: $reason';
-          _scannedData = null;
-          _isProcessing = false;
-        });
-        _scannerController?.start();
-      }
-    } on ApiException catch (e) {
-      setState(() {
-        _errorMessage = 'Pairing failed: ${e.reason ?? e.body}';
-        _scannedData = null;
-        _isProcessing = false;
-      });
-      _scannerController?.start();
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Pairing failed: $e';
-        _scannedData = null;
-        _isProcessing = false;
-      });
-      _scannerController?.start();
-    }
-  }
-
   Future<void> _confirmManualPairing() async {
     final token = _manualTokenController.text.trim();
     final sessionId = _manualSessionController.text.trim();
@@ -276,46 +190,15 @@ class _QrScanScreenState extends State<QrScanScreen>
       return;
     }
 
-    setState(() {
-      _isProcessing = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final result = await _api.confirmPairing(
-        pairToken: token,
-        pairSessionId: sessionId.isEmpty ? null : sessionId,
-      );
-
-      final status = result['status'] as String?;
-      if (status == 'ok' || status == 'paired') {
-        setState(() {
-          _successMessage = 'Device paired successfully!';
-          _isProcessing = false;
-        });
-
-        await Future.delayed(const Duration(milliseconds: 800));
-        if (mounted) {
-          Navigator.pushReplacementNamed(context, DeviceListScreen.route);
-        }
-      } else {
-        final reason = result['reason'] as String? ?? 'Unknown error';
-        setState(() {
-          _errorMessage = 'Pairing failed: $reason';
-          _isProcessing = false;
-        });
-      }
-    } on ApiException catch (e) {
-      setState(() {
-        _errorMessage = 'Pairing failed: ${e.reason ?? e.body}';
-        _isProcessing = false;
-      });
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Pairing failed: $e';
-        _isProcessing = false;
-      });
-    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PairingFlowScreen(
+          manualToken: token,
+          manualSessionId: sessionId.isEmpty ? null : sessionId,
+        ),
+      ),
+    );
   }
 
   void _toggleFlash() {

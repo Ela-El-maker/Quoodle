@@ -9,9 +9,11 @@ import 'screens/auth/twofa_screen.dart';
 import 'screens/commands/send_command_screen.dart';
 import 'screens/devices/device_detail_screen.dart';
 import 'screens/devices/device_list_screen.dart';
+import 'screens/home/home_screen.dart';
 import 'screens/pairing/qr_scan_screen.dart';
 import 'screens/telemetry/telemetry_view.dart';
 import 'screens/updates/update_list_screen.dart';
+import 'theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,16 +28,16 @@ class SecureDeviceApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Secure Device Control',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-        useMaterial3: true,
-      ),
+      title: 'Quoodle',
+      theme: AppTheme.darkTheme,
+      themeMode: ThemeMode.dark,
+      debugShowCheckedModeBanner: false,
       initialRoute:
-          SessionStore.isLoggedIn ? DeviceListScreen.route : LoginScreen.route,
+          SessionStore.isLoggedIn ? HomeScreen.route : LoginScreen.route,
       routes: {
         LoginScreen.route: (_) => const LoginScreen(),
         RegisterScreen.route: (_) => const RegisterScreen(),
+        HomeScreen.route: (_) => const HomeScreen(),
         DeviceListScreen.route: (_) => const DeviceListScreen(),
         QrScanScreen.route: (_) => const QrScanScreen(),
       },
@@ -47,6 +49,7 @@ class SecureDeviceApp extends StatelessWidget {
               builder: (_) => TwoFAScreen(
                 userId: args['user_id'] as String? ?? '',
                 sessionId: args['session_id'] as String? ?? '',
+                userRole: args['user_role'] as String?,
               ),
             );
           case DeviceDetailScreen.route:

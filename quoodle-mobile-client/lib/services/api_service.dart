@@ -6,6 +6,8 @@ import '../config/environment.dart';
 import '../models/alert.dart';
 import '../models/command.dart';
 import '../models/device.dart';
+import '../models/audit_entry.dart';
+import '../models/compliance_profile.dart';
 import '../models/telemetry.dart';
 import '../models/update_status.dart';
 import 'session_store.dart';
@@ -251,6 +253,47 @@ class ApiService {
 
   Future<void> acknowledgeAlert(String alertId) async {
     await _post('/alerts/$alertId/ack', {});
+  }
+
+  Future<Map<String, dynamic>> evaluatePolicy({
+    required String deviceId,
+    required String deviceLifecycleState,
+    required String method,
+    required Map<String, dynamic> params,
+    required String policyHash,
+    required String userId,
+    required String userRole,
+    String? expectedPolicyHash,
+    bool twoFactorVerified = false,
+  }) async {
+    return _post('/policy/evaluate', {
+      'device_id': deviceId,
+      'device_lifecycle_state': deviceLifecycleState,
+      'method': method,
+      'params': params,
+      'policy_hash': policyHash,
+      'expected_policy_hash': expectedPolicyHash,
+      'timestamp': DateTime.now().toUtc().toIso8601String(),
+      'user_id': userId,
+      'user_role': userRole,
+      'two_factor_verified': twoFactorVerified,
+    });
+  }
+
+  Future<List<AuditEntry>> fetchAuditChain(String deviceId) async {
+    final json = await _get('/audit/device/$deviceId');
+    final entries = (json['entries'] as List<dynamic>? ?? []);
+    return entries
+        .map((e) => AuditEntry.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<ComplianceProfile>> fetchComplianceProfiles() async {
+    final json = await _get('/compliance/profiles');
+    final profiles = (json['profiles'] as List<dynamic>? ?? []);
+    return profiles
+        .map((e) => ComplianceProfile.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   String get apiBaseUrl => Environment.apiBaseUrl;
