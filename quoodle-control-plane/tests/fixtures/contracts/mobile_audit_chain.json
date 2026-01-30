@@ -1,0 +1,15 @@
+{
+  "entries": [
+    {
+      "id": "audit-001",
+      "timestamp": "2026-01-29T12:00:00Z",
+      "event_type": "command.executed",
+      "summary": "command.executed event",
+      "details": {
+        "hash": "hash-001",
+        "prev_hash": "hash-000",
+        "signature": "sig-001"
+      }
+    }
+  ]
+}

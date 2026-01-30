@@ -1,0 +1,15 @@
+{
+  "command_id": "cmd-001",
+  "device_id": "device-001",
+  "trace_id": "trace-001",
+  "execution_state": "completed",
+  "result": {
+    "status": "success",
+    "notes": "ok",
+    "artifact_url": null,
+    "artifact_checksum": null
+  },
+  "error_code": null,
+  "error_message": null,
+  "timestamp": "2026-01-29T12:00:00Z"
+}

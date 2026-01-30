@@ -37,17 +37,19 @@ final class DispatchCommandToFastApi implements ShouldQueue
 
         $result = $dispatcher->dispatch($command, $this->policy, $this->compliance);
 
-        $state = match ($result['status'] ?? 'queued') {
-            'dispatched', 'queued' => 'sent',
-            'device_offline' => 'queued',
+        $status = $result['status'] ?? 'queued';
+        $state = match ($status) {
+            'dispatched' => 'dispatched',
+            'queued', 'queued_offline' => 'queued',
+            'blocked' => 'rejected',
             default => 'queued',
         };
 
         $command->update([
             'state' => $state,
             'execution_state' => $state,
-            'dispatched_at' => $state === 'sent' ? now() : null,
-            'reason' => $result['reason'] ?? null,
+            'dispatched_at' => $state === 'dispatched' ? now() : null,
+            'reason' => $result['reason'] ?? ($status === 'blocked' ? 'device_quarantined' : null),
         ]);
     }
 }

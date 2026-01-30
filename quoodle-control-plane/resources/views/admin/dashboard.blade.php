@@ -279,24 +279,24 @@ $deviceStatuses = $deviceStatuses ?? [
             <div class="stat-subtext">Active users in system</div>
         </div>
 
-        <!-- Active Devices -->
+        <!-- Online Devices -->
         <div class="stat-card">
             <div class="stat-icon success">
                 <i class="fas fa-mobile-alt"></i>
             </div>
-            <div class="stat-label">Active Devices</div>
+            <div class="stat-label">Online Devices</div>
             <div class="stat-value">{{ $stats['active_devices'] ?? 0 }}</div>
             <div class="stat-subtext">of {{ $stats['total_devices'] ?? 0 }} devices</div>
         </div>
 
-        <!-- System Uptime -->
+        <!-- Total Commands -->
         <div class="stat-card">
             <div class="stat-icon info">
-                <i class="fas fa-server"></i>
+                <i class="fas fa-terminal"></i>
             </div>
-            <div class="stat-label">System Uptime</div>
-            <div class="stat-value">{{ $stats['uptime'] ?? '99.9' }}%</div>
-            <div class="stat-subtext">No downtime today</div>
+            <div class="stat-label">Total Commands</div>
+            <div class="stat-value">{{ $stats['total_commands'] ?? 0 }}</div>
+            <div class="stat-subtext">{{ $stats['pending_commands'] ?? 0 }} pending</div>
         </div>
 
         <!-- Pending Alerts -->
@@ -304,8 +304,8 @@ $deviceStatuses = $deviceStatuses ?? [
             <div class="stat-icon warning">
                 <i class="fas fa-exclamation-circle"></i>
             </div>
-            <div class="stat-label">Pending Alerts</div>
-            <div class="stat-value">{{ $stats['pending_alerts'] ?? 0 }}</div>
+            <div class="stat-label">Total Alerts</div>
+            <div class="stat-value">{{ $stats['total_alerts'] ?? 0 }}</div>
             <div class="stat-subtext">{{ $stats['unacknowledged_alerts'] ?? 0 }} unacknowledged</div>
         </div>
     </div>
@@ -375,15 +375,15 @@ $deviceStatuses = $deviceStatuses ?? [
                         @forelse($recentAlerts ?? [] as $alert)
                             <tr>
                                 <td>{{ $alert->created_at->format('M d, H:i') ?? 'N/A' }}</td>
-                                <td>{{ $alert->device->name ?? $alert->device_id ?? 'N/A' }}</td>
+                                <td>{{ $alert->device->device_name ?? $alert->device_id ?? 'N/A' }}</td>
                                 <td>
-                                    <span class="badge {{ strtolower($alert->type ?? 'info') }}">
-                                        {{ $alert->type ?? 'Info' }}
+                                    <span class="badge {{ strtolower($alert->severity ?? 'info') }}">
+                                        {{ ucfirst($alert->severity ?? 'info') }}
                                     </span>
                                 </td>
                                 <td>{{ $alert->message ?? 'N/A' }}</td>
                                 <td>
-                                    @if($alert->acknowledged_at ?? false)
+                                    @if($alert->acknowledged ?? false)
                                         <span class="badge success">
                                             <i class="fas fa-check-circle"></i> Acknowledged
                                         </span>
@@ -453,4 +453,3 @@ $deviceStatuses = $deviceStatuses ?? [
         }
     </script>
 @endsection
-

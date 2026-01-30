@@ -1,0 +1,12 @@
+{
+  "device_id": "device-001",
+  "updates": [
+    {
+      "release_id": "rel-001",
+      "version": "1.2.3",
+      "status": "ready",
+      "last_update_at": "2026-01-29T12:00:00Z",
+      "rollback_available": false
+    }
+  ]
+}

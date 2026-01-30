@@ -1,0 +1,8 @@
+{
+  "device_id": "device-001",
+  "session_id": "session-1",
+  "agent_version": "1.2.3",
+  "os_build": "win-11",
+  "attestation_hash": "hash",
+  "connected_at": "2026-01-29T12:00:00Z"
+}

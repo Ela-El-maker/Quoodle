@@ -56,7 +56,7 @@ class CommandResultWebhookController extends Controller
         $state = match ($executionState) {
             'completed' => 'completed',
             'failed' => 'failed',
-            'executing', 'partial' => 'executing',
+            'executing', 'partial' => 'ack_received',
             default => $command->state,
         };
 

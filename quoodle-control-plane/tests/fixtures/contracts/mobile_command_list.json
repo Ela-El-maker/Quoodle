@@ -1,0 +1,17 @@
+{
+  "commands": [
+    {
+      "command_id": "cmd-001",
+      "device_id": "device-001",
+      "method": "lock_screen",
+      "params": {},
+      "state": "queued",
+      "queued_at": "2026-01-29T12:00:00Z",
+      "completed_at": null,
+      "result_status": null,
+      "error_code": null,
+      "error_message": null
+    }
+  ],
+  "next_before": null
+}

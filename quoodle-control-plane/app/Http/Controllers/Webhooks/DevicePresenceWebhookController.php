@@ -41,7 +41,7 @@ class DevicePresenceWebhookController extends Controller
             'agent_version' => $data['agent_version'],
             'os_build' => $data['os_build'],
             'policy_hash' => $device->policy_hash ?: $policyHash,
-            'lifecycle_state' => $data['session_id'] === 'unpaired' ? 'pending_pairing' : 'active',
+            'lifecycle_state' => $data['session_id'] === 'unpaired' ? 'pending_pairing' : 'online',
         ]);
 
         return response()->json(['status' => 'ack']);
@@ -68,7 +68,7 @@ class DevicePresenceWebhookController extends Controller
         $device->update([
             'last_seen' => $data['activated_at'],
             'policy_hash' => $data['policy_hash'] ?: $device->policy_hash,
-            'lifecycle_state' => 'active',
+            'lifecycle_state' => 'online',
         ]);
 
         return response()->json(['status' => 'ack']);
@@ -90,9 +90,14 @@ class DevicePresenceWebhookController extends Controller
         $data = $validator->validated();
         $device = Device::find($data['device_id']);
         if ($device) {
+            $reason = strtolower((string) $data['reason']);
+            $state = match (true) {
+                str_contains($reason, 'quarantine') || str_contains($reason, 'quarantined') => 'quarantined',
+                default => 'offline',
+            };
             $device->update([
                 'last_seen' => $data['last_seen'],
-                'lifecycle_state' => $data['reason'] === 'disconnect' ? 'active' : 'quarantine',
+                'lifecycle_state' => $state,
             ]);
         }
 

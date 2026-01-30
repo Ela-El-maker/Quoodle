@@ -1,0 +1,14 @@
+{
+  "devices": [
+    {
+      "device_id": "device-001",
+      "device_name": "Alpha Laptop",
+      "lifecycle_state": "online",
+      "last_seen": "2026-01-29T12:00:00Z",
+      "agent_version": "1.2.3",
+      "os_build": "win-11",
+      "compliance_status": "compliant",
+      "risk_score": 12.5
+    }
+  ]
+}

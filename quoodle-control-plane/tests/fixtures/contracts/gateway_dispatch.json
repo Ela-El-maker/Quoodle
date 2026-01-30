@@ -1,0 +1,42 @@
+{
+  "command_id": "cmd-001",
+  "device_id": "device-001",
+  "trace_id": "trace-001",
+  "seq": 1,
+  "method": "lock_screen",
+  "params": {},
+  "sensitive": false,
+  "policy": {
+    "decision": "allow",
+    "reason": "ok",
+    "policy_version": "policy-2026-01-29",
+    "policy_hash": "sha256:policy"
+  },
+  "compliance": {
+    "status": "compliant"
+  },
+  "envelope": {
+    "header": {
+      "version": "1.1",
+      "timestamp": "2026-01-29T12:00:00Z",
+      "ttl_seconds": 300,
+      "priority": "normal",
+      "requires_ack": true,
+      "long_running": false
+    },
+    "body": {
+      "method": "lock_screen",
+      "params": {},
+      "sensitive": false
+    },
+    "meta": {
+      "origin_user_id": "user-001",
+      "enc": "none",
+      "enc_key_id": null,
+      "policy_version": "policy-2026-01-29",
+      "policy_hash": "sha256:policy",
+      "device_id": "device-001"
+    },
+    "sig": "laravel-sig"
+  }
+}

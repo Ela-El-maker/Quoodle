@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
+use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\Auth\TokenController;
 use App\Http\Controllers\Auth\TwoFactorController;
 use App\Http\Controllers\Alerts\AlertsController;
@@ -9,6 +10,7 @@ use App\Http\Controllers\Commands\CommandController;
 use App\Http\Controllers\Commands\CommandQueryController;
 use App\Http\Controllers\Commands\ArtifactController;
 use App\Http\Controllers\Devices\DeviceController;
+use App\Http\Controllers\Devices\MobileDeviceController;
 use App\Http\Controllers\Devices\PairingController;
 use App\Http\Controllers\Policy\PolicyController;
 use App\Http\Controllers\Compliance\ComplianceController;
@@ -70,6 +72,9 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
         Route::get('/devices/unpaired', [DeviceController::class, 'unpaired']);
         Route::get('/devices/{device_id}', [DeviceController::class, 'show']);
 
+        // Mobile devices (read-only)
+        Route::get('/mobile-devices', [MobileDeviceController::class, 'index']);
+
         // Telemetry (read-only)
         Route::get('/devices/{device_id}/telemetry/latest', [TelemetryController::class, 'latest']);
         Route::get('/devices/{device_id}/telemetry/history', [TelemetryController::class, 'history']);
@@ -93,6 +98,9 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
 
         // Compliance profiles (read-only)
         Route::get('/compliance/profiles', [ComplianceController::class, 'profiles']);
+
+        // Session update (push notifications)
+        Route::post('/session/push-token', [SessionController::class, 'updatePushToken']);
 
         // Pairing (viewer can pair their own device)
         Route::post('/pair/init', [PairingController::class, 'init']);
@@ -124,6 +132,9 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
         // Compliance evaluation
         Route::post('/compliance/evaluate', [ComplianceController::class, 'evaluate']);
 
+        // Policy evaluation (command preflight)
+        Route::post('/policy/evaluate', [PolicyController::class, 'evaluate']);
+
         // Audit Trail append
         Route::post('/audit/append', [AuditTrailController::class, 'append']);
     });
@@ -136,7 +147,6 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
     */
     Route::middleware('role:admin')->group(function (): void {
         // Policy Engine management
-        Route::post('/policy/evaluate', [PolicyController::class, 'evaluate']);
         Route::post('/policy/validate_bundle', [PolicyController::class, 'validateBundle']);
     });
 });

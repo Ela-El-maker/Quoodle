@@ -37,6 +37,11 @@ class FastAPIDispatcher
 
         $ttlSeconds = (int) ($command->ttl_seconds ?? config('security.command_ttl_seconds', 300));
         $params = $this->normalizeParams($command->params ?? []);
+        $policyPayload = array_merge($policyDecision, [
+            'policy_version' => $policyVersion,
+            'policy_hash' => $policyHash,
+        ]);
+
         $payload = [
             'command_id' => $command->id,
             'device_id' => $command->device_id,
@@ -45,7 +50,7 @@ class FastAPIDispatcher
             'method' => $command->method,
             'params' => $params,
             'sensitive' => $command->sensitive,
-            'policy' => $policyDecision,
+            'policy' => $policyPayload,
             'compliance' => $compliance,
             'envelope' => [
                 'header' => [

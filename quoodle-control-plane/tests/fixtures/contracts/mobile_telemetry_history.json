@@ -1,0 +1,13 @@
+{
+  "device_id": "device-001",
+  "bucket": "hour",
+  "points": [
+    {
+      "timestamp": "2026-01-29T11:00:00Z",
+      "avg_cpu": 12.5,
+      "avg_ram": 58.2,
+      "avg_disk_usage": 70.1,
+      "risk_score_avg": 11.0
+    }
+  ]
+}
