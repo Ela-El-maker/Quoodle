@@ -1,0 +1,13 @@
+[Unit]
+Description=Quoodle Agent Tray UI
+After=default.target
+
+[Service]
+Type=simple
+ExecStart={{EXEC_START}} --tray
+Restart=on-failure
+RestartSec=2
+Environment=QUOODLE_UI_MODE=tray
+
+[Install]
+WantedBy=default.target
