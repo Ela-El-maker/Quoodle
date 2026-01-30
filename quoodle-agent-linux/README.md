@@ -39,6 +39,63 @@ Dependencies:
 sudo ./build/quoodle-privileged-daemon
 ```
 
+## Linux Agent CLI (Headless UI)
+
+Use the bundled CLI for status, diagnostics, logs, pairing, and attestation:
+
+```bash
+./cli/quoodle-agent status
+./cli/quoodle-agent doctor
+./cli/quoodle-agent logs --tail 200
+./cli/quoodle-agent logs --follow
+./cli/quoodle-agent attest
+```
+
+Pairing without QR (requires a user JWT):
+
+```bash
+./cli/quoodle-agent pair --api-base http://localhost:8080 --user-jwt "$USER_JWT" --update-secrets
+```
+
+Notes:
+- Reads `/etc/quoodle/secrets.env` by default (override with `--secrets-file`).
+- Uses `/etc/machine-id` for HWID if not provided.
+
+## Linux Agent UI (Desktop + TUI + Tray)
+
+Launch the desktop UI (Tkinter):
+
+```bash
+./ui/quoodle-agent-ui --desktop
+```
+
+Launch the terminal UI (curses):
+
+```bash
+./ui/quoodle-agent-ui --tui
+```
+
+Launch tray icon (requires `pystray` + `pillow`):
+
+```bash
+./ui/quoodle-agent-ui --tray
+```
+
+Notes:
+- Tray mode is optional and will print instructions if dependencies are missing.
+- Pairing can be invoked from the UI tabs or via `--pair` (CLI-based).
+
+## Systemd User Auto-Start
+
+Install user services that auto-start the desktop or tray UI:
+
+```bash
+./ui/install_user_service.sh
+systemctl --user enable --now quoodle-agent-ui.service
+# or:
+systemctl --user enable --now quoodle-agent-tray.service
+```
+
 ## Environment
 
 Agent:
