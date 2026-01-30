@@ -77,6 +77,48 @@ class PairingController extends Controller
         $device = Device::where('hwid', $data['hwid'])->first();
 
         if ($device && ! empty($device->user_id)) {
+            if (! empty($device->ed25519_pubkey_b64) && hash_equals((string) $device->ed25519_pubkey_b64, (string) $data['pubkey'])) {
+                $pairToken = $this->jwtSigner->issueForDevice(
+                    $device->device_id,
+                    [
+                        'scope' => 'pair_token',
+                        'device_name' => $device->device_name,
+                        'ed25519_pubkey_b64' => $device->ed25519_pubkey_b64,
+                        'hwid' => $device->hwid,
+                    ],
+                    (int) config('jwt.pair_token_ttl', 300),
+                );
+
+                return response()->json([
+                    'pair_token' => $pairToken,
+                    'expires_at' => now()->addSeconds((int) config('jwt.pair_token_ttl', 300))->toIso8601String(),
+                    'device_id' => $device->device_id,
+                ]);
+            }
+
+            if (filter_var(env('ALLOW_DEVICE_REPAIR_WITH_HWID', false), FILTER_VALIDATE_BOOL)) {
+                $device->update([
+                    'device_name' => $data['device_name'],
+                    'ed25519_pubkey_b64' => $data['pubkey'],
+                ]);
+                $pairToken = $this->jwtSigner->issueForDevice(
+                    $device->device_id,
+                    [
+                        'scope' => 'pair_token',
+                        'device_name' => $device->device_name,
+                        'ed25519_pubkey_b64' => $device->ed25519_pubkey_b64,
+                        'hwid' => $device->hwid,
+                    ],
+                    (int) config('jwt.pair_token_ttl', 300),
+                );
+
+                return response()->json([
+                    'pair_token' => $pairToken,
+                    'expires_at' => now()->addSeconds((int) config('jwt.pair_token_ttl', 300))->toIso8601String(),
+                    'device_id' => $device->device_id,
+                ]);
+            }
+
             return response()->json(['status' => 'conflict', 'reason' => 'already_claimed'], 409);
         }
 

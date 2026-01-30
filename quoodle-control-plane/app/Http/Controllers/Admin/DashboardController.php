@@ -162,6 +162,12 @@ class DashboardController extends Controller
         return view('admin.commands.show', compact('command', 'timeline'));
     }
 
+    public function commandResult(Command $command)
+    {
+        $command->load(['device', 'user']);
+        return view('admin.commands.result', compact('command'));
+    }
+
     public function commandExecute(Request $request, CommandService $service)
     {
         $validated = $request->validate([

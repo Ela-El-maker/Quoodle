@@ -342,6 +342,34 @@ $deviceStatuses = $deviceStatuses ?? [
                                     <strong>{{ $command->device->device_name ?? $command->device_id ?? 'N/A' }}</strong></div>
                                 <div>User: <strong>{{ $command->user->display_name ?? $command->user_id ?? 'N/A' }}</strong>
                                 </div>
+                                @php
+                                    $result = is_array($command->result) ? $command->result : [];
+                                    $details = $result['details'] ?? null;
+                                    $redact = function ($value) use (&$redact) {
+                                        if (is_array($value)) {
+                                            $out = [];
+                                            foreach ($value as $k => $v) {
+                                                if (is_string($k) && $k === 'data_b64') {
+                                                    $out[$k] = '[omitted]';
+                                                    continue;
+                                                }
+                                                if (is_string($k) && in_array($k, ['entries', 'processes', 'services', 'mounts', 'routes', 'users', 'sessions'], true)) {
+                                                    $out[$k] = is_array($v) ? ['count' => count($v)] : $v;
+                                                    continue;
+                                                }
+                                                $out[$k] = $redact($v);
+                                            }
+                                            return $out;
+                                        }
+                                        return $value;
+                                    };
+                                    $summary = $details ?? ($result['notes'] ?? null);
+                                    $summaryView = $redact($summary);
+                                    $summaryText = $summaryView ? json_encode($summaryView, JSON_UNESCAPED_SLASHES) : null;
+                                @endphp
+                                @if($summaryText)
+                                    <div class="text-muted small">Result: {{ \Illuminate\Support\Str::limit($summaryText, 120) }}</div>
+                                @endif
                             </div>
                         </li>
                     @empty
