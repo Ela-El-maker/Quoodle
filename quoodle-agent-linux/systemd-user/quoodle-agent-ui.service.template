@@ -1,0 +1,13 @@
+[Unit]
+Description=Quoodle Agent Desktop UI
+After=default.target
+
+[Service]
+Type=simple
+ExecStart={{EXEC_START}} --desktop
+Restart=on-failure
+RestartSec=2
+Environment=QUOODLE_UI_MODE=desktop
+
+[Install]
+WantedBy=default.target
