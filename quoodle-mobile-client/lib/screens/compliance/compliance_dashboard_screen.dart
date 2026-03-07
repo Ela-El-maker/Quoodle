@@ -35,10 +35,10 @@ class _ComplianceDashboardScreenState extends State<ComplianceDashboardScreen> {
           }
           final profiles = snapshot.data!;
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
             children: [
               GlassCard(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -71,14 +71,12 @@ class _ComplianceDashboardScreenState extends State<ComplianceDashboardScreen> {
                 ...profiles.map((profile) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: GlassCard(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(20),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(profile.profileId,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleLarge),
+                                style: Theme.of(context).textTheme.titleLarge),
                             const SizedBox(height: 6),
                             Text(
                               profile.description,
@@ -101,7 +99,7 @@ class _ComplianceDashboardScreenState extends State<ComplianceDashboardScreen> {
                     )),
               const SizedBox(height: 8),
               GlassCard(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

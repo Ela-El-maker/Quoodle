@@ -7,9 +7,10 @@ import '../../widgets/glass_card.dart';
 import '../../widgets/offline_banner.dart';
 
 class AlertsInboxScreen extends StatefulWidget {
-  const AlertsInboxScreen({super.key});
+  const AlertsInboxScreen({super.key, this.embedded = false});
 
   static const route = '/alerts/inbox';
+  final bool embedded;
 
   @override
   State<AlertsInboxScreen> createState() => _AlertsInboxScreenState();
@@ -40,137 +41,162 @@ class _AlertsInboxScreenState extends State<AlertsInboxScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Alerts Inbox'),
-      ),
-      body: Container(
-        decoration: BoxDecoration(gradient: AppColors.backgroundGradient),
-        child: RefreshIndicator(
-          onRefresh: _refresh,
-          child: FutureBuilder<List<AlertItem>>(
-            future: _future,
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return ListView(
-                  children: const [
-                    SizedBox(
-                        height: 320,
-                        child: Center(child: CircularProgressIndicator()))
-                  ],
-                );
-              }
-              final alerts = snapshot.data!;
+    final content = Container(
+      decoration: BoxDecoration(gradient: AppColors.backgroundGradient),
+      child: RefreshIndicator(
+        onRefresh: _refresh,
+        child: FutureBuilder<List<AlertItem>>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
               return ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  const OfflineBanner(),
-                  GlassCard(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Alert filters',
-                            style: Theme.of(context).textTheme.titleLarge),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          children: [
-                            _FilterChip(
-                              label: 'All',
-                              selected: _filter == null,
-                              onTap: () => setState(() {
-                                _filter = null;
-                                _future = _api.fetchAlerts();
-                              }),
-                            ),
-                            _FilterChip(
-                              label: 'Critical',
-                              selected: _filter == 'critical',
-                              onTap: () => setState(() {
-                                _filter = 'critical';
-                                _future = _api.fetchAlerts(severity: 'critical');
-                              }),
-                            ),
-                            _FilterChip(
-                              label: 'High',
-                              selected: _filter == 'high',
-                              onTap: () => setState(() {
-                                _filter = 'high';
-                                _future = _api.fetchAlerts(severity: 'high');
-                              }),
-                            ),
-                            _FilterChip(
-                              label: 'Medium',
-                              selected: _filter == 'medium',
-                              onTap: () => setState(() {
-                                _filter = 'medium';
-                                _future = _api.fetchAlerts(severity: 'medium');
-                              }),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (alerts.isEmpty)
-                    Text(
-                      'No alerts available.',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: AppColors.textMuted),
-                    )
-                  else
-                    ...alerts.map((alert) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: GlassCard(
-                            padding: const EdgeInsets.all(14),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Icon(
-                                  Icons.warning_amber,
-                                  color: _severityColor(alert.severity),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(alert.message ?? '-',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyLarge),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        '${alert.category ?? ''} • ${alert.timestamp ?? ''}',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(color: AppColors.textMuted),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (alert.acknowledged)
-                                  const Icon(Icons.check, color: AppColors.accentMint)
-                                else
-                                  IconButton(
-                                    icon: const Icon(Icons.done),
-                                    onPressed: () => _ack(alert.alertId ?? ''),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        )),
+                children: const [
+                  SizedBox(
+                      height: 320,
+                      child: Center(child: CircularProgressIndicator()))
                 ],
               );
-            },
-          ),
+            }
+            final alerts = snapshot.data!;
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+              children: [
+                const OfflineBanner(),
+                GlassCard(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Alerts',
+                          style: Theme.of(context).textTheme.titleLarge),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Clear, readable notices from across the fleet.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          _FilterChip(
+                            label: 'All',
+                            selected: _filter == null,
+                            onTap: () => setState(() {
+                              _filter = null;
+                              _future = _api.fetchAlerts();
+                            }),
+                          ),
+                          _FilterChip(
+                            label: 'Critical',
+                            selected: _filter == 'critical',
+                            onTap: () => setState(() {
+                              _filter = 'critical';
+                              _future = _api.fetchAlerts(severity: 'critical');
+                            }),
+                          ),
+                          _FilterChip(
+                            label: 'High',
+                            selected: _filter == 'high',
+                            onTap: () => setState(() {
+                              _filter = 'high';
+                              _future = _api.fetchAlerts(severity: 'high');
+                            }),
+                          ),
+                          _FilterChip(
+                            label: 'Medium',
+                            selected: _filter == 'medium',
+                            onTap: () => setState(() {
+                              _filter = 'medium';
+                              _future = _api.fetchAlerts(severity: 'medium');
+                            }),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (alerts.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 40),
+                    child: Text(
+                      'No alerts right now. Your devices look stable.',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyLarge
+                          ?.copyWith(color: AppColors.textSecondary),
+                    ),
+                  )
+                else
+                  ...alerts.map((alert) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: GlassCard(
+                          padding: const EdgeInsets.all(18),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 10,
+                                    height: 10,
+                                    decoration: BoxDecoration(
+                                      color: _severityColor(alert.severity),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      alert.message ?? '-',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium,
+                                    ),
+                                  ),
+                                  if (alert.acknowledged)
+                                    const Icon(Icons.check_circle_outline,
+                                        color: AppColors.accentMint, size: 18),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                '${alert.category ?? 'Notice'} • ${alert.deviceId ?? 'Fleet'}',
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                alert.timestamp ?? '-',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              if (!alert.acknowledged) ...[
+                                const SizedBox(height: 12),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: OutlinedButton(
+                                    onPressed: () => _ack(alert.alertId ?? ''),
+                                    child: const Text('Acknowledge'),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      )),
+              ],
+            );
+          },
         ),
       ),
+    );
+
+    if (widget.embedded) return content;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Alerts')),
+      body: content,
     );
   }
 
@@ -204,12 +230,12 @@ class _FilterChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: selected
-              ? AppColors.accentBlue.withValues(alpha: 0.25)
+              ? AppColors.accentBlue.withValues(alpha: 0.12)
               : AppColors.surfaceRaised,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(999),
           border: Border.all(
             color: selected ? AppColors.accentBlue : AppColors.glassBorder,
           ),

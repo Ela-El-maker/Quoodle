@@ -6,7 +6,6 @@ import '../../models/device.dart';
 import '../../models/telemetry.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_colors.dart';
-import '../../widgets/capability_matrix.dart';
 import '../../widgets/compliance_badge.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/live_telemetry_card.dart';
@@ -64,67 +63,21 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
     }
   }
 
-  List<CapabilityRow> _capabilityRows(Device device) {
-    return const [
-      CapabilityRow(
-        capability: 'lock_screen',
-        supported: true,
-        privilege: 'Privileged',
-        riskTier: 'Medium',
-      ),
-      CapabilityRow(
-        capability: 'collect_sysinfo',
-        supported: true,
-        privilege: 'Standard',
-        riskTier: 'Low',
-      ),
-      CapabilityRow(
-        capability: 'download_artifact',
-        supported: true,
-        privilege: 'Standard',
-        riskTier: 'Low',
-      ),
-      CapabilityRow(
-        capability: 'wipe_device',
-        supported: false,
-        privilege: 'Privileged',
-        riskTier: 'Critical',
-      ),
-    ];
-  }
-
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Device Detail'),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.notifications),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => AlertsScreen(deviceId: widget.deviceId)),
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.history),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => UpdateListScreen(deviceId: widget.deviceId)),
-              ),
-            ),
-          ],
+          title: const Text('Device'),
           bottom: const TabBar(
             isScrollable: true,
             tabs: [
               Tab(text: 'Overview'),
-              Tab(text: 'Capabilities'),
               Tab(text: 'Telemetry'),
-              Tab(text: 'History'),
+              Tab(text: 'Commands'),
+              Tab(text: 'Alerts'),
+              Tab(text: 'Updates'),
             ],
           ),
         ),
@@ -138,7 +91,8 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
               }
               final device = snapshot.data!;
               final expected = device.policyHash;
-              final reported = device.reportedPolicyHash ?? _telemetry?.policyHash;
+              final reported =
+                  device.reportedPolicyHash ?? _telemetry?.policyHash;
               final outOfSync = (device.policyInSync == false) ||
                   (expected != null &&
                       expected.isNotEmpty &&
@@ -152,91 +106,11 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                     telemetry: _telemetry,
                     outOfSync: outOfSync,
                   ),
-                  SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: CapabilityMatrix(rows: _capabilityRows(device)),
-                  ),
-                  SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        if (_telemetry != null)
-                          LiveTelemetryCard(snapshot: _telemetry!),
-                        const SizedBox(height: 16),
-                        GlassCard(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Telemetry history',
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Review hourly trends and anomalies from the last 24 hours.',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(color: AppColors.textSecondary),
-                              ),
-                              const SizedBox(height: 12),
-                              ElevatedButton.icon(
-                                onPressed: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => TelemetryViewScreen(
-                                        deviceId: device.deviceId),
-                                  ),
-                                ),
-                                icon: const Icon(Icons.monitor_heart),
-                                label: const Text('Open telemetry history'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        GlassCard(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Command activity',
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'View command intents, acknowledgements, and results for this device.',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(color: AppColors.textSecondary),
-                              ),
-                              const SizedBox(height: 12),
-                              ElevatedButton.icon(
-                                onPressed: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => CommandHistoryScreen(
-                                        deviceId: device.deviceId),
-                                  ),
-                                ),
-                                icon: const Icon(Icons.list_alt),
-                                label: const Text('Open command history'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  _TelemetryTab(
+                      deviceId: device.deviceId, telemetry: _telemetry),
+                  _CommandsTab(deviceId: device.deviceId),
+                  _AlertsTab(deviceId: device.deviceId),
+                  _UpdatesTab(deviceId: device.deviceId),
                 ],
               );
             },
@@ -270,76 +144,306 @@ class _OverviewTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          GlassCard(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  device.deviceName ?? device.deviceId,
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 8),
-                ComplianceBadge(status: device.complianceStatus),
-                const SizedBox(height: 12),
-                if (outOfSync)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.nonCompliant.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppColors.nonCompliant.withValues(alpha: 0.4),
-                      ),
-                    ),
-                    child: Text(
-                      'Policy out of sync. Device reports a different policy hash than the control plane.',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: AppColors.nonCompliant),
-                    ),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 120),
+      children: [
+        GlassCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                device.deviceName ?? device.deviceId,
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ComplianceBadge(status: device.complianceStatus),
+                  _SoftPill(label: device.lifecycleState),
+                ],
+              ),
+              const SizedBox(height: 20),
+              RiskGauge(score: device.riskScore),
+              if (outOfSync)
+                Container(
+                  margin: const EdgeInsets.only(top: 16),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.accentAmber.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                const SizedBox(height: 12),
-                _DetailRow(label: 'Lifecycle', value: device.lifecycleState),
-                _DetailRow(label: 'Agent', value: device.agentVersion ?? 'n/a'),
-                _DetailRow(label: 'OS build', value: device.osBuild ?? 'n/a'),
-                _DetailRow(
-                    label: 'Risk',
-                    value: device.riskScore?.toStringAsFixed(0) ?? '-'),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            DeviceComplianceScreen(device: device),
-                      ),
-                    ),
-                    icon: const Icon(Icons.shield),
-                    label: const Text('View compliance'),
+                  child: Text(
+                    'Policy needs review. The device is reporting a different policy hash than the control plane.',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(color: AppColors.textPrimary),
                   ),
                 ),
-              ],
-            ),
+            ],
           ),
+        ),
+        const SizedBox(height: 16),
+        GlassCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Device health',
+                  style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 16),
+              _DetailRow(label: 'Last seen', value: device.lastSeen ?? '-'),
+              _DetailRow(
+                  label: 'Agent version', value: device.agentVersion ?? 'n/a'),
+              _DetailRow(label: 'OS build', value: device.osBuild ?? 'n/a'),
+              _DetailRow(label: 'Verification', value: 'Intact'),
+            ],
+          ),
+        ),
+        if (telemetry != null) ...[
           const SizedBox(height: 16),
-          GlassCard(
-            padding: const EdgeInsets.all(16),
-            child: RiskGauge(score: device.riskScore),
-          ),
-          if (telemetry != null) ...[
-            const SizedBox(height: 16),
-            LiveTelemetryCard(snapshot: telemetry!),
-          ]
+          LiveTelemetryCard(snapshot: telemetry!),
         ],
-      ),
+        const SizedBox(height: 16),
+        GlassCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Security state',
+                  style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 12),
+              Text(
+                'Capabilities are available from the control plane, and command execution is verified on the endpoint before anything runs.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyLarge
+                    ?.copyWith(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => DeviceComplianceScreen(device: device),
+                  ),
+                ),
+                child: const Text('Review compliance'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TelemetryTab extends StatelessWidget {
+  const _TelemetryTab({required this.deviceId, required this.telemetry});
+
+  final String deviceId;
+  final TelemetrySnapshot? telemetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 120),
+      children: [
+        if (telemetry != null) LiveTelemetryCard(snapshot: telemetry!),
+        if (telemetry == null)
+          GlassCard(
+            padding: const EdgeInsets.all(20),
+            child: Text('Waiting for live telemetry.',
+                style: Theme.of(context).textTheme.bodyLarge),
+          ),
+        const SizedBox(height: 16),
+        GlassCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('History', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text(
+                'Open the recent telemetry timeline to review calm, high-level trends.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyLarge
+                    ?.copyWith(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => TelemetryViewScreen(deviceId: deviceId),
+                  ),
+                ),
+                child: const Text('Open telemetry history'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CommandsTab extends StatelessWidget {
+  const _CommandsTab({required this.deviceId});
+
+  final String deviceId;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 120),
+      children: [
+        GlassCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Command flow',
+                  style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text(
+                'Choose a command, review its risk, and confirm execution in a single calm flow.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyLarge
+                    ?.copyWith(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SendCommandScreen(deviceId: deviceId),
+                  ),
+                ),
+                child: const Text('Send command'),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        GlassCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Recent activity',
+                  style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text(
+                'Command acknowledgements and results stay attached to the device timeline.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyLarge
+                    ?.copyWith(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CommandHistoryScreen(deviceId: deviceId),
+                  ),
+                ),
+                child: const Text('Open command history'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AlertsTab extends StatelessWidget {
+  const _AlertsTab({required this.deviceId});
+
+  final String deviceId;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 120),
+      children: [
+        GlassCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Alerts', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text(
+                'Review only the alerts connected to this device and acknowledge them once understood.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyLarge
+                    ?.copyWith(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AlertsScreen(deviceId: deviceId),
+                  ),
+                ),
+                child: const Text('Open alerts'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _UpdatesTab extends StatelessWidget {
+  const _UpdatesTab({required this.deviceId});
+
+  final String deviceId;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 120),
+      children: [
+        GlassCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Updates', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text(
+                'Keep software rollouts readable and predictable with a single quiet timeline.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyLarge
+                    ?.copyWith(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => UpdateListScreen(deviceId: deviceId),
+                  ),
+                ),
+                child: const Text('Open update history'),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -355,23 +459,51 @@ class _DetailRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: Theme.of(context)
-                .textTheme
-                .labelLarge
-                ?.copyWith(color: AppColors.textSecondary),
+          SizedBox(
+            width: 112,
+            child: Text(
+              label,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: AppColors.textMuted),
+            ),
           ),
-          Text(
-            value,
-            style: Theme.of(context)
-                .textTheme
-                .bodyLarge
-                ?.copyWith(color: AppColors.textPrimary),
+          Expanded(
+            child: Text(
+              value,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyLarge
+                  ?.copyWith(color: AppColors.textPrimary),
+            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SoftPill extends StatelessWidget {
+  const _SoftPill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context)
+            .textTheme
+            .labelLarge
+            ?.copyWith(color: AppColors.textSecondary),
       ),
     );
   }

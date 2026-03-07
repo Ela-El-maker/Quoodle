@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../services/mobile_identity_service.dart';
 import '../../services/session_store.dart';
+import '../../theme/app_colors.dart';
+import '../../widgets/glass_card.dart';
 import '../home/home_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -22,6 +24,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final ApiService _api = ApiService();
   final MobileIdentityService _identity = MobileIdentityService();
   bool _loading = false;
+  String? _error;
 
   @override
   void dispose() {
@@ -33,59 +36,115 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _loading = true);
-    await _identity.ensureKeypair();
-    final pub = await _identity.publicKeyBase64();
-    final response = await _api.register(
-      displayName: _displayName.text,
-      email: _email.text,
-      password: _password.text,
-      pubkey: pub,
-    );
-    final role = response['user_role'] as String?;
-    if (role != null && role.isNotEmpty) {
-      await SessionStore.setRole(role);
-    }
-    if (mounted) {
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      await _identity.ensureKeypair();
+      final pub = await _identity.publicKeyBase64();
+      final response = await _api.register(
+        displayName: _displayName.text.trim(),
+        email: _email.text.trim(),
+        password: _password.text,
+        pubkey: pub,
+      );
+      final role = response['user_role'] as String?;
+      if (role != null && role.isNotEmpty) {
+        await SessionStore.setRole(role);
+      }
+      if (!mounted) return;
       Navigator.pushReplacementNamed(context, HomeScreen.route);
+    } catch (error) {
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-    setState(() => _loading = false);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Account')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              TextFormField(
-                controller: _displayName,
-                decoration: const InputDecoration(labelText: 'Display Name'),
-                validator: (v) => v != null && v.isNotEmpty ? null : 'Required',
+      body: Container(
+        decoration: BoxDecoration(gradient: AppColors.backgroundGradient),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: GlassCard(
+                  padding: const EdgeInsets.all(24),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Create account',
+                            style: Theme.of(context).textTheme.headlineSmall),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Your signing identity stays on this phone. We only register the public key.',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyLarge
+                              ?.copyWith(color: AppColors.textSecondary),
+                        ),
+                        const SizedBox(height: 24),
+                        TextFormField(
+                          controller: _displayName,
+                          decoration:
+                              const InputDecoration(labelText: 'Display name'),
+                          validator: (value) =>
+                              value != null && value.trim().isNotEmpty
+                                  ? null
+                                  : 'Enter a name.',
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _email,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: const InputDecoration(labelText: 'Email'),
+                          validator: (value) =>
+                              value != null && value.contains('@')
+                                  ? null
+                                  : 'Enter a valid email address.',
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _password,
+                          obscureText: true,
+                          decoration:
+                              const InputDecoration(labelText: 'Password'),
+                          validator: (value) =>
+                              value != null && value.length >= 8
+                                  ? null
+                                  : 'Use at least 8 characters.',
+                        ),
+                        if (_error != null) ...[
+                          const SizedBox(height: 16),
+                          Text(
+                            _error!,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(color: AppColors.nonCompliant),
+                          ),
+                        ],
+                        const SizedBox(height: 24),
+                        ElevatedButton(
+                          onPressed: _loading ? null : _submit,
+                          child:
+                              Text(_loading ? 'Creating...' : 'Create account'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
-              TextFormField(
-                controller: _email,
-                decoration: const InputDecoration(labelText: 'Email'),
-                validator: (v) =>
-                    v != null && v.contains('@') ? null : 'Enter valid email',
-              ),
-              TextFormField(
-                controller: _password,
-                decoration: const InputDecoration(labelText: 'Password'),
-                obscureText: true,
-                validator: (v) =>
-                    v != null && v.length >= 8 ? null : 'Min 8 chars',
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _loading ? null : _submit,
-                child: Text(_loading ? 'Creating...' : 'Register'),
-              ),
-            ],
+            ),
           ),
         ),
       ),

@@ -19,16 +19,28 @@ class SessionStatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final expiresText = _formatDuration(sessionExpiresIn);
     return GlassCard(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.shield, color: AppColors.accentMint),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceRaised,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.verified_user_outlined,
+                  color: AppColors.accentBlue,
+                  size: 18,
+                ),
+              ),
               const SizedBox(width: 8),
               Text(
-                'Session status',
+                'Session',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
             ],

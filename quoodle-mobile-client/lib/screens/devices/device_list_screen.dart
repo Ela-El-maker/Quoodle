@@ -7,12 +7,9 @@ import '../../theme/app_colors.dart';
 import '../../widgets/device_card.dart';
 import '../../widgets/fleet_stats_header.dart';
 import '../../widgets/offline_banner.dart';
-import '../alerts/alerts_inbox_screen.dart';
 import '../auth/login_screen.dart';
 import '../pairing/qr_scan_screen.dart';
-import '../system/system_status_screen.dart';
 import 'device_detail_screen.dart';
-import 'unpaired_devices_screen.dart';
 
 class DeviceListScreen extends StatefulWidget {
   const DeviceListScreen({super.key});
@@ -31,7 +28,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   bool _filterCompliant = false;
   bool _filterQuarantined = false;
   bool _filterAtRisk = false;
-  String? _osFilter;
+  String _query = '';
 
   @override
   void initState() {
@@ -61,14 +58,33 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   }
 
   List<Device> _applyFilters(List<Device> devices) {
-    return devices.where((device) {
+    final filtered = devices.where((device) {
       if (_filterOnline && !_isOnline(device)) return false;
       if (_filterCompliant && !_isCompliant(device)) return false;
       if (_filterQuarantined && !_isQuarantined(device)) return false;
       if (_filterAtRisk && !_isAtRisk(device)) return false;
-      if (_osFilter != null && !_matchesOs(device, _osFilter!)) return false;
+      if (_query.isNotEmpty) {
+        final haystack =
+            '${device.deviceName ?? ''} ${device.deviceId} ${device.osBuild ?? ''}'
+                .toLowerCase();
+        if (!haystack.contains(_query.trim().toLowerCase())) return false;
+      }
       return true;
     }).toList();
+
+    filtered.sort((a, b) {
+      final onlineCompare = _onlineRank(b).compareTo(_onlineRank(a));
+      if (onlineCompare != 0) return onlineCompare;
+
+      final seenCompare = _lastSeenValue(b).compareTo(_lastSeenValue(a));
+      if (seenCompare != 0) return seenCompare;
+
+      return (a.deviceName ?? a.deviceId)
+          .toLowerCase()
+          .compareTo((b.deviceName ?? b.deviceId).toLowerCase());
+    });
+
+    return filtered;
   }
 
   bool _isOnline(Device device) {
@@ -88,43 +104,30 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
 
   bool _isAtRisk(Device device) => (device.riskScore ?? 0) >= 60;
 
-  bool _matchesOs(Device device, String os) {
-    final build = (device.osBuild ?? '').toLowerCase();
-    return build.contains(os.toLowerCase());
+  int _onlineRank(Device device) => _isOnline(device) ? 1 : 0;
+
+  int _lastSeenValue(Device device) {
+    final seen = device.lastSeen;
+    if (seen == null || seen.isEmpty) return 0;
+    return DateTime.tryParse(seen)?.millisecondsSinceEpoch ?? 0;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Fleet Overview'),
+        title: const Text('Devices'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AlertsInboxScreen()),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.monitor_heart),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SystemStatusScreen()),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.link),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const UnpairedDevicesScreen()),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.qr_code_scanner),
+            icon: const Icon(Icons.qr_code_scanner_rounded),
             onPressed: () => Navigator.pushNamed(context, QrScanScreen.route),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => Navigator.pushNamed(context, QrScanScreen.route),
+        icon: const Icon(Icons.add),
+        label: const Text('Pair'),
       ),
       body: Container(
         decoration: BoxDecoration(gradient: AppColors.backgroundGradient),
@@ -140,173 +143,152 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                     _handleUnauthorized();
                     return const Center(child: CircularProgressIndicator());
                   }
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('Failed to load devices'),
-                        const SizedBox(height: 12),
-                        Text(
-                          error?.toString() ?? 'Unknown error',
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: Colors.white70),
+                  return ListView(
+                    children: [
+                      const SizedBox(height: 180),
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('Unable to load devices',
+                                  style:
+                                      Theme.of(context).textTheme.titleLarge),
+                              const SizedBox(height: 8),
+                              Text(
+                                error?.toString() ?? 'Unknown error',
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 16),
+                              OutlinedButton(
+                                  onPressed: _refresh,
+                                  child: const Text('Try again')),
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 16),
-                        OutlinedButton(
-                          onPressed: _refresh,
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   );
                 }
                 return const Center(child: CircularProgressIndicator());
               }
               final devices = snapshot.data!;
-              if (devices.isEmpty) {
-                return const Center(child: Text('No devices paired yet'));
-              }
               final filtered = _applyFilters(devices);
-              return LayoutBuilder(
-                builder: (context, constraints) {
-                  final columns = constraints.maxWidth > 720 ? 2 : 1;
-                  return CustomScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    slivers: [
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                        sliver: SliverToBoxAdapter(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const OfflineBanner(),
-                              Text(
-                                'Secure fleet status',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .headlineSmall,
-                              ),
-                              const SizedBox(height: 12),
-                              FleetStatsHeader(devices: devices),
-                            ],
-                          ),
-                        ),
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 100),
+                children: [
+                  const OfflineBanner(),
+                  Text(
+                    'A clear view of every paired device.',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyLarge
+                        ?.copyWith(color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 20),
+                  FleetStatsHeader(devices: devices),
+                  const SizedBox(height: 20),
+                  TextField(
+                    onChanged: (value) => setState(() => _query = value),
+                    decoration: const InputDecoration(
+                      hintText: 'Search by name, device ID, or platform',
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilterChip(
+                        label: const Text('Active'),
+                        selected: _filterOnline,
+                        onSelected: (value) =>
+                            setState(() => _filterOnline = value),
                       ),
-                      SliverPadding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        sliver: SliverToBoxAdapter(
-                          child: Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              FilterChip(
-                                label: const Text('Online'),
-                                selected: _filterOnline,
-                                onSelected: (value) =>
-                                    setState(() => _filterOnline = value),
-                              ),
-                              FilterChip(
-                                label: const Text('Compliant'),
-                                selected: _filterCompliant,
-                                onSelected: (value) =>
-                                    setState(() => _filterCompliant = value),
-                              ),
-                              FilterChip(
-                                label: const Text('Quarantined'),
-                                selected: _filterQuarantined,
-                                onSelected: (value) => setState(
-                                    () => _filterQuarantined = value),
-                              ),
-                              FilterChip(
-                                label: const Text('At risk'),
-                                selected: _filterAtRisk,
-                                onSelected: (value) =>
-                                    setState(() => _filterAtRisk = value),
-                              ),
-                              Container(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 8),
-                                decoration: BoxDecoration(
-                                  color: AppColors.surfaceRaised,
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: DropdownButton<String>(
-                                  value: _osFilter,
-                                  hint: const Text('OS filter'),
-                                  underline: const SizedBox.shrink(),
-                                  dropdownColor: AppColors.surface,
-                                  items: const [
-                                    DropdownMenuItem(
-                                      value: 'Windows',
-                                      child: Text('Windows'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'Linux',
-                                      child: Text('Linux'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'macOS',
-                                      child: Text('macOS'),
-                                    ),
-                                  ],
-                                  onChanged: (value) =>
-                                      setState(() => _osFilter = value),
-                                ),
-                              ),
-                              if (_osFilter != null)
-                                TextButton(
-                                  onPressed: () =>
-                                      setState(() => _osFilter = null),
-                                  child: const Text('Clear OS'),
-                                ),
-                            ],
-                          ),
-                        ),
+                      FilterChip(
+                        label: const Text('Compliant'),
+                        selected: _filterCompliant,
+                        onSelected: (value) =>
+                            setState(() => _filterCompliant = value),
                       ),
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                        sliver: SliverGrid(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              final device = filtered[index];
-                              return DeviceCard(
-                                device: device,
-                                onTap: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        DeviceDetailScreen(deviceId: device.deviceId),
-                                  ),
-                                ),
-                              );
-                            },
-                            childCount: filtered.length,
-                          ),
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: columns,
-                            crossAxisSpacing: 16,
-                            mainAxisSpacing: 16,
-                            childAspectRatio: columns == 1 ? 1.35 : 1.1,
-                          ),
-                        ),
+                      FilterChip(
+                        label: const Text('Quarantined'),
+                        selected: _filterQuarantined,
+                        onSelected: (value) =>
+                            setState(() => _filterQuarantined = value),
                       ),
-                      if (filtered.isEmpty)
-                        const SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: Center(child: Text('No devices match filters')),
-                        ),
+                      FilterChip(
+                        label: const Text('Needs attention'),
+                        selected: _filterAtRisk,
+                        onSelected: (value) =>
+                            setState(() => _filterAtRisk = value),
+                      ),
                     ],
-                  );
-                },
+                  ),
+                  const SizedBox(height: 20),
+                  if (devices.isEmpty)
+                    const _EmptyState(
+                      title: 'No devices yet',
+                      message:
+                          'When you pair your first device, it will appear here.',
+                    )
+                  else if (filtered.isEmpty)
+                    const _EmptyState(
+                      title: 'No matching devices',
+                      message: 'Try relaxing the filters or search terms.',
+                    )
+                  else
+                    ...filtered.map(
+                      (device) => Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: DeviceCard(
+                          device: device,
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  DeviceDetailScreen(deviceId: device.deviceId),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               );
             },
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.title, required this.message});
+
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      child: Column(
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: Theme.of(context)
+                .textTheme
+                .bodyLarge
+                ?.copyWith(color: AppColors.textSecondary),
+          ),
+        ],
       ),
     );
   }

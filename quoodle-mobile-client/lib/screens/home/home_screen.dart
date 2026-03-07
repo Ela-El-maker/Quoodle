@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../utils/rbac.dart';
 import '../audit/audit_ledger_screen.dart';
-import '../commands/command_center_screen.dart';
 import '../devices/device_list_screen.dart';
+import 'dashboard_screen.dart';
 import '../settings/settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -31,33 +30,39 @@ class _HomeScreenState extends State<HomeScreen> {
         currentIndex: clampedIndex,
         onTap: (value) => setState(() => _index = value),
         items: tabs
-            .map((t) => BottomNavigationBarItem(icon: t.icon, label: t.label))
+            .map((t) => BottomNavigationBarItem(
+                  icon: t.icon,
+                  activeIcon: t.activeIcon,
+                  label: t.label,
+                ))
             .toList(),
       ),
     );
   }
 
   List<_TabItem> _tabs() {
-    final role = Rbac.currentRole();
     final tabs = <_TabItem>[
       const _TabItem(
-        icon: Icon(Icons.devices),
-        label: 'Fleet',
+        icon: Icon(Icons.home_outlined),
+        activeIcon: Icon(Icons.home_rounded),
+        label: 'Home',
+        screen: DashboardScreen(),
+      ),
+      const _TabItem(
+        icon: Icon(Icons.devices_outlined),
+        activeIcon: Icon(Icons.devices_rounded),
+        label: 'Devices',
         screen: DeviceListScreen(),
       ),
-      if (Rbac.hasAtLeast(UserRole.operator, role: role))
-        const _TabItem(
-          icon: Icon(Icons.bolt),
-          label: 'Commands',
-          screen: CommandCenterScreen(),
-        ),
       const _TabItem(
-        icon: Icon(Icons.shield),
-        label: 'Audit',
+        icon: Icon(Icons.timeline_outlined),
+        activeIcon: Icon(Icons.timeline_rounded),
+        label: 'Activity',
         screen: AuditLedgerScreen(),
       ),
       const _TabItem(
-        icon: Icon(Icons.settings),
+        icon: Icon(Icons.settings_outlined),
+        activeIcon: Icon(Icons.settings_rounded),
         label: 'Settings',
         screen: SettingsScreen(),
       ),
@@ -69,11 +74,13 @@ class _HomeScreenState extends State<HomeScreen> {
 class _TabItem {
   const _TabItem({
     required this.icon,
+    required this.activeIcon,
     required this.label,
     required this.screen,
   });
 
   final Icon icon;
+  final Icon activeIcon;
   final String label;
   final Widget screen;
 }

@@ -8,10 +8,13 @@ import '../../services/api_service.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/api_error_classifier.dart';
 import '../../utils/rbac.dart';
+import '../../models/command.dart';
+import '../../widgets/command_status_stepper.dart';
 import '../../widgets/glass_card.dart';
-import '../../widgets/permission_gate.dart';
 import '../../services/session_store.dart';
 import '../../widgets/offline_banner.dart';
+import '../../widgets/permission_gate.dart';
+import 'command_timeline_screen.dart';
 
 class SendCommandScreen extends StatefulWidget {
   const SendCommandScreen({super.key, required this.deviceId});
@@ -39,6 +42,9 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
   bool _policyLoading = false;
   Timer? _poll;
   String? _lastCommandId;
+  String? _commandState;
+  String? _commandError;
+  CommandState? _lastCommand;
 
   @override
   void dispose() {
@@ -52,7 +58,15 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
   @override
   void initState() {
     super.initState();
-    _deviceFuture = _api.fetchDevice(widget.deviceId);
+    _deviceFuture = _loadDevice();
+  }
+
+  Future<Device> _loadDevice() async {
+    final device = await _api.fetchDevice(widget.deviceId);
+    if (mounted) {
+      setState(() => _device = device);
+    }
+    return device;
   }
 
   void _startPolling(String commandId) {
@@ -68,6 +82,9 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
 
         setState(() {
           _status = '${cmd.state ?? '-'} (${cmd.commandId ?? commandId})';
+          _commandState = cmd.state;
+          _commandError = cmd.errorMessage;
+          _lastCommand = cmd;
         });
 
         if (done) {
@@ -80,7 +97,7 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_formKey.currentState?.validate() != true) return;
 
     if (_sensitive && _twoFactor.text.isEmpty) {
       final code = await showModalBottomSheet<String>(
@@ -147,6 +164,9 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
       );
       setState(() {
         _status = '${result.state} (${result.commandId})';
+        _commandState = result.state;
+        _commandError = result.errorMessage;
+        _lastCommand = result;
         _loading = false;
       });
       if (result.commandId != null && result.commandId!.isNotEmpty) {
@@ -156,6 +176,8 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
       final view = classifyApiError(e);
       setState(() {
         _status = '${view.title}: ${view.message}';
+        _commandError = view.message;
+        _lastCommand = null;
         _loading = false;
       });
 
@@ -216,9 +238,27 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
 
   String _riskTier() {
     final method = _method.text.toLowerCase();
-    if (method.contains('wipe') || method.contains('shutdown')) return 'Critical';
-    if (method.contains('lock') || method.contains('isolate')) return 'High';
-    if (method.contains('download') || method.contains('update')) {
+    if (method == 'lock_screen' ||
+        method == 'show_message' ||
+        method == 'set_wallpaper' ||
+        method == 'sysinfo') {
+      return 'Low';
+    }
+    if (method.contains('wipe') || method.contains('shutdown')) {
+      return 'Critical';
+    }
+    if (method.contains('reboot') ||
+        method.contains('disable_input') ||
+        method.contains('quarantine') ||
+        method.contains('isolate')) {
+      return 'High';
+    }
+    if (method.contains('download') ||
+        method.contains('update') ||
+        method.contains('logout') ||
+        method.contains('sessions') ||
+        method.contains('process') ||
+        method.contains('network')) {
       return 'Medium';
     }
     return 'Low';
@@ -234,31 +274,120 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
     final riskTier = _riskTier();
     final riskColor = _riskColor(riskTier);
     return Scaffold(
-      appBar: AppBar(title: const Text('Command Composer')),
+      appBar: AppBar(title: const Text('Send command')),
       body: Container(
         decoration: BoxDecoration(gradient: AppColors.backgroundGradient),
         child: FutureBuilder<Device>(
           future: _deviceFuture,
           builder: (context, snapshot) {
-            _device = snapshot.data;
+            final device = snapshot.data ?? _device;
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                device == null) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (snapshot.hasError && device == null) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: GlassCard(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Unable to load device',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${snapshot.error}',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(color: AppColors.textSecondary),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              _deviceFuture = _loadDevice();
+                            });
+                          },
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
+
             return PermissionGate(
               requiredRole: UserRole.operator,
               reason:
                   'Command execution is restricted to Operator or Admin roles.',
               child: Form(
                 key: _formKey,
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
                     const OfflineBanner(),
                     GlassCard(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Risk preview',
+                          Text('1. Choose the command',
                               style: Theme.of(context).textTheme.titleLarge),
                           const SizedBox(height: 8),
+                          Text(
+                            'Configure one action carefully, then review its risk before sending.',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyLarge
+                                ?.copyWith(color: AppColors.textSecondary),
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _method,
+                            decoration: const InputDecoration(
+                                labelText: 'Command method'),
+                            validator: (v) =>
+                                v == null || v.isEmpty ? 'Required' : null,
+                            onChanged: (_) => setState(() {}),
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _params,
+                            decoration: const InputDecoration(
+                                labelText: 'Parameters (JSON)'),
+                            maxLines: 4,
+                          ),
+                          const SizedBox(height: 12),
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Sensitive command'),
+                            subtitle: const Text(
+                                'Requires a second confirmation and may require 2FA.'),
+                            value: _sensitive,
+                            onChanged: (v) => setState(() => _sensitive = v),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    GlassCard(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('2. Review risk',
+                              style: Theme.of(context).textTheme.titleLarge),
+                          const SizedBox(height: 12),
                           Row(
                             children: [
                               Container(
@@ -271,7 +400,7 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                'Tier: $riskTier',
+                                'Risk: $riskTier',
                                 style: Theme.of(context)
                                     .textTheme
                                     .labelLarge
@@ -288,9 +417,10 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
                             ],
                           ),
                           const SizedBox(height: 10),
-                          if (_device != null) ...[
+                          if (device != null) ...[
+                            const SizedBox(height: 12),
                             Text(
-                              'Compliance: ${_device?.complianceStatus ?? 'unknown'}',
+                              'Compliance: ${device.complianceStatus ?? 'unknown'}',
                               style: Theme.of(context)
                                   .textTheme
                                   .labelLarge
@@ -298,7 +428,7 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              'Lifecycle: ${_device?.lifecycleState ?? '-'}',
+                              'Lifecycle: ${device.lifecycleState}',
                               style: Theme.of(context)
                                   .textTheme
                                   .labelLarge
@@ -314,7 +444,10 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
                                 ?.copyWith(color: AppColors.textSecondary),
                           ),
                           const SizedBox(height: 10),
-                          Row(
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               ElevatedButton.icon(
                                 onPressed:
@@ -324,15 +457,13 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
                                     ? 'Checking...'
                                     : 'Run policy preview'),
                               ),
-                              const SizedBox(width: 8),
                               if (_policyDecisionText != null)
                                 Text(
                                   _policyDecisionText!,
                                   style: Theme.of(context)
                                       .textTheme
                                       .labelLarge
-                                      ?.copyWith(
-                                          color: AppColors.textPrimary),
+                                      ?.copyWith(color: AppColors.textPrimary),
                                 ),
                             ],
                           ),
@@ -351,62 +482,11 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
                     ),
                     const SizedBox(height: 16),
                     GlassCard(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          TextFormField(
-                            controller: _method,
-                            decoration:
-                                const InputDecoration(labelText: 'Method'),
-                            validator: (v) =>
-                                v == null || v.isEmpty ? 'Required' : null,
-                            onChanged: (_) => setState(() {}),
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _params,
-                            decoration: const InputDecoration(
-                                labelText: 'Params (JSON)'),
-                            maxLines: 3,
-                          ),
-                          const SizedBox(height: 12),
-                          SwitchListTile(
-                            title: const Text('Sensitive command'),
-                            value: _sensitive,
-                            onChanged: (v) => setState(() => _sensitive = v),
-                          ),
-                          if (_sensitive)
-                            Row(
-                              children: [
-                                const Icon(Icons.shield),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    _twoFactor.text.isEmpty
-                                        ? '2FA required (will prompt)'
-                                        : '2FA code entered',
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: _loading
-                                      ? null
-                                      : () {
-                                          setState(() => _twoFactor.clear());
-                                        },
-                                  child: const Text('Clear'),
-                                )
-                              ],
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    GlassCard(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Command JSON preview',
+                          Text('3. Review the payload',
                               style: Theme.of(context).textTheme.titleLarge),
                           const SizedBox(height: 8),
                           Container(
@@ -427,9 +507,50 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
+                    if (_commandState != null)
+                      GlassCard(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Execution status',
+                                style: Theme.of(context).textTheme.titleLarge),
+                            const SizedBox(height: 16),
+                            CommandStatusStepper(
+                              currentState: _commandState,
+                              errorMessage: _commandError,
+                            ),
+                            if (_lastCommand != null) ...[
+                              const SizedBox(height: 16),
+                              _CommandResultView(command: _lastCommand!),
+                              if (_lastCommand!.commandId != null &&
+                                  _lastCommand!.commandId!.isNotEmpty) ...[
+                                const SizedBox(height: 12),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: TextButton.icon(
+                                    onPressed: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => CommandTimelineScreen(
+                                          commandId: _lastCommand!.commandId!,
+                                        ),
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.timeline),
+                                    label: const Text('View full timeline'),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ],
+                        ),
+                      ),
+                    if (_commandState != null) const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: _loading ? null : _submit,
-                      child: Text(_loading ? 'Sending...' : 'Dispatch'),
+                      child:
+                          Text(_loading ? 'Sending...' : '4. Confirm and send'),
                     ),
                     if (_status != null)
                       Padding(
@@ -445,7 +566,8 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
                               },
                         child: const Text('Refresh status'),
                       ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             );
@@ -484,5 +606,101 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
       default:
         return AppColors.riskLow;
     }
+  }
+}
+
+class _CommandResultView extends StatelessWidget {
+  const _CommandResultView({required this.command});
+
+  final CommandState command;
+
+  @override
+  Widget build(BuildContext context) {
+    final resultData = command.resultData;
+    final hasResultData = resultData != null && resultData.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Returned result',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 12),
+        _ResultRow(label: 'Command', value: command.method ?? '-'),
+        _ResultRow(label: 'State', value: command.state ?? '-'),
+        _ResultRow(label: 'Result', value: command.resultStatus ?? '-'),
+        if (command.completedAt != null && command.completedAt!.isNotEmpty)
+          _ResultRow(label: 'Completed', value: command.completedAt!),
+        if (command.resultNotes != null && command.resultNotes!.isNotEmpty)
+          _ResultRow(label: 'Notes', value: command.resultNotes!),
+        if (command.errorMessage != null && command.errorMessage!.isNotEmpty)
+          _ResultRow(label: 'Error', value: command.errorMessage!),
+        if (hasResultData) ...[
+          const SizedBox(height: 12),
+          Text(
+            'Payload',
+            style: Theme.of(context)
+                .textTheme
+                .labelLarge
+                ?.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceRaised,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: SelectableText(
+              const JsonEncoder.withIndent('  ').convert(resultData),
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: AppColors.textPrimary),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ResultRow extends StatelessWidget {
+  const _ResultRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 92,
+            child: Text(
+              label,
+              style: Theme.of(context)
+                  .textTheme
+                  .labelLarge
+                  ?.copyWith(color: AppColors.textSecondary),
+            ),
+          ),
+          Expanded(
+            child: SelectableText(
+              value,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: AppColors.textPrimary),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

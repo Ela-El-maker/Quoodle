@@ -12,12 +12,12 @@ class LiveTelemetryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GlassCard(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Live Telemetry',
+            'Live telemetry',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
@@ -28,16 +28,49 @@ class LiveTelemetryCard extends StatelessWidget {
                 .labelLarge
                 ?.copyWith(color: AppColors.textMuted),
           ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: _TelemetryMeter(
+                  label: 'CPU',
+                  valueLabel: snapshot.cpu ?? '-',
+                  progress: _parsePercent(snapshot.cpu),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _TelemetryMeter(
+                  label: 'RAM',
+                  valueLabel: snapshot.ram ?? '-',
+                  progress: _parsePercent(snapshot.ram),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 12),
-          _MetricRow(label: 'CPU', value: snapshot.cpu ?? '-'),
-          _MetricRow(label: 'RAM', value: snapshot.ram ?? '-'),
-          _MetricRow(label: 'Disk', value: snapshot.diskUsage ?? '-'),
-          _MetricRow(
-            label: 'Network',
-            value: '${snapshot.networkTx ?? '-'} / ${snapshot.networkRx ?? '-'}',
+          Row(
+            children: [
+              Expanded(
+                child: _TelemetryMeter(
+                  label: 'Disk',
+                  valueLabel: snapshot.diskUsage ?? '-',
+                  progress: _parsePercent(snapshot.diskUsage),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _TelemetryMeter(
+                  label: 'Network',
+                  valueLabel:
+                      '${snapshot.networkTx ?? '-'} / ${snapshot.networkRx ?? '-'}',
+                  progress: null,
+                ),
+              ),
+            ],
           ),
           if (snapshot.riskScore != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -61,20 +94,37 @@ class LiveTelemetryCard extends StatelessWidget {
       ),
     );
   }
+
+  double? _parsePercent(String? raw) {
+    if (raw == null) return null;
+    final cleaned = raw.replaceAll('%', '').trim();
+    final parsed = double.tryParse(cleaned);
+    if (parsed == null) return null;
+    return (parsed / 100).clamp(0, 1);
+  }
 }
 
-class _MetricRow extends StatelessWidget {
-  const _MetricRow({required this.label, required this.value});
+class _TelemetryMeter extends StatelessWidget {
+  const _TelemetryMeter({
+    required this.label,
+    required this.valueLabel,
+    this.progress,
+  });
 
   final String label;
-  final String value;
+  final String valueLabel;
+  final double? progress;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
@@ -83,13 +133,21 @@ class _MetricRow extends StatelessWidget {
                 .labelLarge
                 ?.copyWith(color: AppColors.textSecondary),
           ),
+          const SizedBox(height: 8),
           Text(
-            value,
+            valueLabel,
             style: Theme.of(context)
                 .textTheme
-                .bodyLarge
+                .titleMedium
                 ?.copyWith(color: AppColors.textPrimary),
           ),
+          if (progress != null) ...[
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(value: progress, minHeight: 8),
+            ),
+          ],
         ],
       ),
     );

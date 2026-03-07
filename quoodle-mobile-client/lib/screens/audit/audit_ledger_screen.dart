@@ -4,8 +4,10 @@ import '../../models/audit_entry.dart';
 import '../../models/device.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/audit_entry_tile.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/offline_banner.dart';
+import '../alerts/alerts_inbox_screen.dart';
 import '../compliance/compliance_dashboard_screen.dart';
 
 class AuditLedgerScreen extends StatefulWidget {
@@ -37,12 +39,13 @@ class _AuditLedgerScreenState extends State<AuditLedgerScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Audit & Compliance'),
+          title: const Text('Activity'),
           bottom: const TabBar(
             tabs: [
+              Tab(text: 'Alerts'),
               Tab(text: 'Ledger'),
               Tab(text: 'Compliance'),
             ],
@@ -50,6 +53,7 @@ class _AuditLedgerScreenState extends State<AuditLedgerScreen> {
         ),
         body: TabBarView(
           children: [
+            const AlertsInboxScreen(embedded: true),
             Container(
               decoration: BoxDecoration(gradient: AppColors.backgroundGradient),
               child: FutureBuilder<List<Device>>(
@@ -65,19 +69,19 @@ class _AuditLedgerScreenState extends State<AuditLedgerScreen> {
                   _deviceId ??= devices.first.deviceId;
                   _entries ??= _api.fetchAuditChain(_deviceId!);
                   return ListView(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
                     children: [
                       const OfflineBanner(),
                       GlassCard(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(20),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Immutable ledger',
+                            Text('Ledger',
                                 style: Theme.of(context).textTheme.titleLarge),
                             const SizedBox(height: 8),
                             Text(
-                              'Every command and policy decision is recorded here. This view is read-only.',
+                              'Every command and policy decision is recorded here in a tamper-evident timeline.',
                               style: Theme.of(context)
                                   .textTheme
                                   .bodyMedium
@@ -99,8 +103,8 @@ class _AuditLedgerScreenState extends State<AuditLedgerScreen> {
                                 items: devices
                                     .map((device) => DropdownMenuItem(
                                           value: device.deviceId,
-                                          child: Text(
-                                              device.deviceName ?? device.deviceId),
+                                          child: Text(device.deviceName ??
+                                              device.deviceId),
                                         ))
                                     .toList(),
                                 onChanged: (value) {
@@ -136,42 +140,7 @@ class _AuditLedgerScreenState extends State<AuditLedgerScreen> {
                                 .map((entry) => Padding(
                                       padding:
                                           const EdgeInsets.only(bottom: 12),
-                                      child: GlassCard(
-                                        padding: const EdgeInsets.all(14),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(entry.summary,
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .bodyLarge),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              entry.timestamp ?? '-',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall
-                                                  ?.copyWith(
-                                                      color:
-                                                          AppColors.textMuted),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            _DetailRow(
-                                                label: 'Type',
-                                                value: entry.eventType),
-                                            _DetailRow(
-                                                label: 'Hash',
-                                                value: entry.hash ?? '-'),
-                                            _DetailRow(
-                                                label: 'Prev',
-                                                value: entry.prevHash ?? '-'),
-                                            _DetailRow(
-                                                label: 'Signature',
-                                                value: entry.signature ?? '-'),
-                                          ],
-                                        ),
-                                      ),
+                                      child: AuditEntryTile(entry: entry),
                                     ))
                                 .toList(),
                           );
@@ -185,44 +154,6 @@ class _AuditLedgerScreenState extends State<AuditLedgerScreen> {
             const ComplianceDashboardScreen(),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _DetailRow extends StatelessWidget {
-  const _DetailRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              label,
-              style: Theme.of(context)
-                  .textTheme
-                  .labelLarge
-                  ?.copyWith(color: AppColors.textSecondary),
-            ),
-          ),
-          Expanded(
-            child: SelectableText(
-              value,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: AppColors.textPrimary),
-            ),
-          )
-        ],
       ),
     );
   }
