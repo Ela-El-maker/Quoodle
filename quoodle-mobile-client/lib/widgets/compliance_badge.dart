@@ -74,12 +74,12 @@ class _ComplianceBadgeState extends State<ComplianceBadge>
           vertical: widget.compact ? 4 : 6,
         ),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.16),
+          color: color.withValues(alpha: 0.16),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: color.withOpacity(0.6)),
+          border: Border.all(color: color.withValues(alpha: 0.6)),
           boxShadow: [
             BoxShadow(
-              color: color.withOpacity(0.35),
+              color: color.withValues(alpha: 0.35),
               blurRadius: 12,
               offset: const Offset(0, 6),
             ),

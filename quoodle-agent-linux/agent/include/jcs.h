@@ -4,7 +4,7 @@
 
 namespace quoodle {
 
-// JCS canonicalization placeholder. Implement RFC 8785 before production use.
+// Canonicalize JSON according to JCS (RFC 8785).
 std::string CanonicalizeJcs(const std::string &json);
 
 }  // namespace quoodle

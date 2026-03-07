@@ -3,11 +3,6 @@ set -e
 
 echo "Starting Gateway..."
 
-# Start the Telemetry Worker in background
-echo "Starting Telemetry Worker..."
-python3 -m app.workers.telemetry_worker &
-WORKER_PID=$!
-
 # Start FastAPI server
 echo "Starting Uvicorn Server..."
 # exec replaces the shell process so signals propagate correctly

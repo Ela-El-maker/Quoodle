@@ -6,8 +6,8 @@
 struct AgentInfo
 {
     std::string agent_version{"0.0.1"};
-    std::string attestation_hash{"sha256:placeholder"};
-    std::string hwid_hash{"sha256:placeholder-hwid"};
+    std::string attestation_hash;
+    std::string hwid_hash;
     std::string os_build{"19045"};
 };
 
@@ -35,7 +35,7 @@ AuthEnvelope build_auth_envelope(const std::string &device_id, const std::string
 
 std::string canonical_auth_without_sig(const AuthEnvelope &envelope);
 
-std::string sign_placeholder(const std::string &canonical_json);
+std::string sign_canonical(const std::string &canonical_json);
 
 std::string build_signed_auth_json(AuthEnvelope envelope);
 

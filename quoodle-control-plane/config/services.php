@@ -41,7 +41,7 @@ return [
         'service_private_key_b64' => env('LARAVEL_SERVICE_PRIVATE_KEY_B64'),
 
         // FastAPI → Laravel webhook verification
-        'require_webhook_signature' => env('REQUIRE_FASTAPI_SIGNATURE', false),
+        'require_webhook_signature' => env('REQUIRE_FASTAPI_SIGNATURE', true),
         'service_public_key_b64' => env('FASTAPI_SERVICE_PUBLIC_KEY_B64'),
     ],
 

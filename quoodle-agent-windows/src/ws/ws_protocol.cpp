@@ -137,7 +137,7 @@ std::string canonical_auth_without_sig(const AuthEnvelope &env)
     });
 }
 
-std::string sign_placeholder(const std::string &canonical_json)
+std::string sign_canonical(const std::string &canonical_json)
 {
     return ed25519_sign_payload(canonical_json);
 }
@@ -176,7 +176,7 @@ std::string build_signed_auth_json(AuthEnvelope envelope)
     });
 
     // Generate Signature on the data WITHOUT the signature field
-    envelope.sig = sign_placeholder(canonical_auth_without_sig(envelope));
+    envelope.sig = sign_canonical(canonical_auth_without_sig(envelope));
     if (envelope.sig.empty())
     {
         return {};
@@ -231,7 +231,7 @@ std::string build_signed_heartbeat_json(const std::string &device_id,
         {"type", "\"" + escape_json(env.type) + "\""},
     });
 
-    env.sig = sign_placeholder(canonical);
+    env.sig = sign_canonical(canonical);
     if (env.sig.empty())
     {
         return {};
@@ -298,7 +298,7 @@ std::string build_update_status_json(const std::string &device_id,
         {"type", "\"" + escape_json(env.type) + "\""},
     });
 
-    env.sig = sign_placeholder(canonical);
+    env.sig = sign_canonical(canonical);
     if (env.sig.empty())
     {
         return {};
@@ -360,7 +360,7 @@ std::string build_signed_telemetry_json(const std::string &device_id,
         {"type", "\"" + escape_json(env.type) + "\""},
     });
 
-    env.sig = sign_placeholder(canonical);
+    env.sig = sign_canonical(canonical);
     if (env.sig.empty())
     {
         return {};
@@ -414,7 +414,7 @@ std::string build_command_ack_json(const std::string &device_id,
         {"type", "\"" + escape_json(env.type) + "\""},
     });
 
-    env.sig = sign_placeholder(canonical);
+    env.sig = sign_canonical(canonical);
     if (env.sig.empty())
     {
         return {};
@@ -488,7 +488,7 @@ std::string build_command_result_json(const std::string &device_id,
         {"type", "\"" + escape_json(env.type) + "\""},
     });
 
-    env.sig = sign_placeholder(canonical);
+    env.sig = sign_canonical(canonical);
     if (env.sig.empty())
     {
         return {};

@@ -1,7 +1,0 @@
-{
-  "LinuxPrivilegedInterface": {
-    "status": "deprecated",
-    "deprecated_reason": "Replaced by canonical Linux privileged executor contract.",
-    "canonical_spec": "LinuxAgent ↔ PrivilegedExecutor Interface.json"
-  }
-}

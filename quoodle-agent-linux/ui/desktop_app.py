@@ -166,8 +166,14 @@ class AgentDesktopApp(tk.Tk):
         if not api_base or not user_jwt:
             messagebox.showerror("Pairing", "Missing API base or user JWT.")
             return
-        cmd = f"{os.path.dirname(__file__)}/../cli/quoodle-agent pair --api-base {api_base} --user-jwt {user_jwt} --update-secrets --device-name \"{device_name}\""
-        rc = os.system(cmd)
+        import subprocess
+        cli_path = os.path.join(os.path.dirname(__file__), "..", "cli", "quoodle-agent")
+        result = subprocess.run(
+            [cli_path, "pair", "--api-base", api_base, "--user-jwt", user_jwt,
+             "--update-secrets", "--device-name", device_name],
+            capture_output=True, text=True
+        )
+        rc = result.returncode
         if rc != 0:
             messagebox.showerror("Pairing", "Pairing failed. Check terminal output.")
         else:

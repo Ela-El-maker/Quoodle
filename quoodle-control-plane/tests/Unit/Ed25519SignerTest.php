@@ -67,6 +67,6 @@ final class Ed25519SignerTest extends TestCase
         $sig = base64_decode($sigB64, true);
 
         $this->assertNotFalse($sig);
-        $this->assertSame(1, sodium_crypto_sign_verify_detached($sig, $canonical, $pk));
+        $this->assertTrue(sodium_crypto_sign_verify_detached($sig, $canonical, $pk));
     }
 }

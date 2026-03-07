@@ -290,10 +290,10 @@ class _OverviewTab extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.nonCompliant.withOpacity(0.15),
+                      color: AppColors.nonCompliant.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: AppColors.nonCompliant.withOpacity(0.4),
+                        color: AppColors.nonCompliant.withValues(alpha: 0.4),
                       ),
                     ),
                     child: Text(

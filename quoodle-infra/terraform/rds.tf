@@ -3,8 +3,14 @@ resource "aws_db_instance" "mysql" {
   engine               = "mysql"
   engine_version       = "8.0"
   instance_class       = "db.t3.micro"
-  name                 = "secure_device"
+  db_name              = "secure_device"
   username             = "admin"
-  password             = "changeme123"
+  password             = var.db_password
   skip_final_snapshot  = true
+}
+
+variable "db_password" {
+  description = "RDS master password"
+  type        = string
+  sensitive   = true
 }

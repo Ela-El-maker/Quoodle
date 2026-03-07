@@ -91,6 +91,6 @@ All administrative actions follow a signed path:
 For deeper dives into specific areas:
 
 - **[System Diagrams](./system_diagrams.md)**: Detailed visual flows for Pairing, Commands, and Updates.
-- **[Sequence Flows](./sequence_flows.md)**: Step-by-step interaction logic.
 - **[Security & Trust Model](../security/trust_model.md)**: Cryptographic details, key management, and threat models.
-- **[API & Protocol Specs](../specs/README.md)**: Human-readable summaries of the JSON specifications.
+- **[Key Management](./key_management.md)**: Key lifecycle, storage, and rotation.
+- **[Protocols](../protocols/)**: API endpoints, WebSocket protocol, command envelopes, IOCTL spec.

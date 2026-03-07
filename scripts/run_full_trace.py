@@ -200,7 +200,7 @@ def fetch_command_states(command_ids: list[str]) -> list[dict]:
             "mysql",
             "-u",
             "quoodle",
-            "-pquoodle_pass",
+            "-p" + os.getenv("MYSQL_PASSWORD", "quoodle_pass"),
             "-D",
             "secure_device",
             "-N",

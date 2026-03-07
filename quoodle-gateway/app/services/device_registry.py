@@ -33,6 +33,12 @@ class DeviceKeyRegistry:
         conn.execute("PRAGMA journal_mode=WAL")
         return conn
 
+    @staticmethod
+    def _normalize_pubkey(pub_b64: str) -> str:
+        value = pub_b64.strip()
+        padding = (-len(value)) % 4
+        return value + ("=" * padding)
+
     def _ensure_schema(self) -> None:
         os.makedirs(os.path.dirname(self._db_path) or ".", exist_ok=True)
         with self._connect() as conn:
@@ -64,7 +70,7 @@ class DeviceKeyRegistry:
                     continue
                 conn.execute(
                     "INSERT OR REPLACE INTO device_keys(device_id, ed25519_pub_b64, updated_at) VALUES (?, ?, datetime('now'))",
-                    (device_id, pub_b64.strip()),
+                    (device_id, self._normalize_pubkey(pub_b64)),
                 )
 
     def get_pubkey_b64(self, device_id: str) -> Optional[str]:
@@ -80,5 +86,5 @@ class DeviceKeyRegistry:
         with self._connect() as conn:
             conn.execute(
                 "INSERT OR REPLACE INTO device_keys(device_id, ed25519_pub_b64, updated_at) VALUES (?, ?, datetime('now'))",
-                (device_id, pubkey_b64.strip()),
+                (device_id, self._normalize_pubkey(pubkey_b64)),
             )

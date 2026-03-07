@@ -165,10 +165,36 @@ bool execute_validate_update_package(const std::string &path_str)
       return false;
     }
 
-    // NOTE:
-    // In production, expected_hash should come from a SIGNED MANIFEST,
-    // not be hardcoded.
-    const std::string expected_hash = "REPLACE_WITH_REAL_HASH";
+    // 3b. Load expected hash from manifest file (<package>.manifest)
+    fs::path manifest_path = pkg;
+    manifest_path += ".manifest";
+
+    if (!fs::exists(manifest_path))
+    {
+      utils::log_error("validate_update_package: missing manifest file: " +
+                       manifest_path.string());
+      return false;
+    }
+
+    std::ifstream manifest(manifest_path);
+    if (!manifest)
+    {
+      utils::log_error("validate_update_package: cannot read manifest: " +
+                       manifest_path.string());
+      return false;
+    }
+
+    std::string expected_hash;
+    std::getline(manifest, expected_hash);
+    // Trim whitespace
+    while (!expected_hash.empty() && (expected_hash.back() == '\r' || expected_hash.back() == '\n' || expected_hash.back() == ' '))
+      expected_hash.pop_back();
+
+    if (expected_hash.empty())
+    {
+      utils::log_error("validate_update_package: manifest is empty");
+      return false;
+    }
 
     if (actual_hash != expected_hash)
     {
@@ -180,7 +206,7 @@ bool execute_validate_update_package(const std::string &path_str)
       return false;
     }
 
-    // 4. Signature presence check (verification hook)
+    // 4. Signature presence check
     fs::path sig_path = pkg;
     sig_path += ".sig";
 
@@ -191,14 +217,10 @@ bool execute_validate_update_package(const std::string &path_str)
       return false;
     }
 
-    // TODO:
-    // Verify detached signature:
-    // - Load public key
-    // - Verify signature against pkg hash
-    // - Fail if verification fails
-
-    utils::log_info("validate_update_package: SUCCESS (" + actual_hash + ")");
-    return true;
+    // Signature verification requires Ed25519 public key from trusted store.
+    // Until implemented, reject packages to prevent unsigned code execution.
+    utils::log_error("validate_update_package: signature verification not yet implemented — rejecting package");
+    return false;
   }
   catch (const std::exception &e)
   {

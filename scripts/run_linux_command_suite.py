@@ -40,7 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--user-role", default=os.getenv("TEST_USER_ROLE", "operator"))
     parser.add_argument("--screenshot-user-role", default=os.getenv("SCREENSHOT_USER_ROLE", ""))
     parser.add_argument("--screenshot-2fa", default=os.getenv("SCREENSHOT_TWO_FACTOR_CODE", ""))
-    parser.add_argument("--allowed-root", default=os.getenv("QUOODLE_ALLOWED_ROOT", "/home/ela/Work-Force"))
+    parser.add_argument("--allowed-root", default=os.getenv("QUOODLE_ALLOWED_ROOT", str(ROOT)))
     parser.add_argument("--fixed-hwid", default=os.getenv("FIXED_HWID", ""), help="Stable HWID to reuse device_id across runs.")
     parser.add_argument("--poll-timeout", type=int, default=40)
     parser.add_argument("--poll-interval", type=float, default=2.0)

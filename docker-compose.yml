@@ -6,17 +6,23 @@ services:
     image: mysql:8.0
     container_name: quoodle-db
     ports:
-      - "3307:3306"
+      - "${QUOODLE_DB_PORT:-3308}:3306"
     environment:
       MYSQL_DATABASE: secure_device
-      MYSQL_ROOT_PASSWORD: devpassword
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD}
       MYSQL_USER: quoodle
-      MYSQL_PASSWORD: quoodle_pass
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD}
     volumes:
       - db_data:/var/lib/mysql
     healthcheck:
-      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent",
+        ]
+      interval: 10s
       timeout: 20s
+      start_period: 30s
       retries: 10
     networks:
       - quoodle-net
@@ -48,21 +54,24 @@ services:
       dockerfile: Dockerfile
     container_name: quoodle-control-plane
     ports:
-      - "8080:80"
+      - "${QUOODLE_CONTROL_PLANE_PORT:-8088}:80"
     environment:
       APP_NAME: "Quoodle Control Plane"
       APP_ENV: local
       APP_KEY: "base64:QxkzZLJ3rLZLy960pyF2CN1TRfB2glfQOh4vZBI0pHY="
       APP_DEBUG: "true"
-      APP_URL: http://localhost:8080
+      APP_URL: http://localhost:${QUOODLE_CONTROL_PLANE_PORT:-8088}
       DEFAULT_USER_ROLE: "operator"
+      DEV_ADMIN_EMAIL: ${DEV_ADMIN_EMAIL:-admin@quoodle.com}
+      DEV_ADMIN_PASSWORD: ${DEV_ADMIN_PASSWORD:-password}
+      DEV_ADMIN_NAME: ${DEV_ADMIN_NAME:-Quoodle Admin}
 
       DB_CONNECTION: mysql
       DB_HOST: quoodle-db
       DB_PORT: 3306
       DB_DATABASE: secure_device
       DB_USERNAME: root
-      DB_PASSWORD: devpassword
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD}
 
       REDIS_HOST: redis
       REDIS_PASSWORD: null
@@ -76,7 +85,7 @@ services:
       REQUIRE_FASTAPI_SIGNATURE: "true"
       POLICY_HASH: "sha256:4058fa9b252a07e03ee6ac2585e6424973427f953b6763b48679b61acafe49d2"
       POLICY_VERSION: "2026-01-21"
-      ALLOW_DEVICE_REPAIR_WITH_HWID: "true"
+      ALLOW_DEVICE_REPAIR_WITH_HWID: "false"
     depends_on:
       db:
         condition: service_healthy
@@ -116,7 +125,7 @@ services:
       ALLOW_DEV_SIG_FALLBACK: "false"
       REQUIRE_AGENT_SEQ: "true"
       REQUIRE_LARAVEL_SIGNATURE: "true"
-      ENABLE_TEST_ENDPOINTS: "true"
+      ENABLE_TEST_ENDPOINTS: "false"
       LARAVEL_SERVICE_PUBKEY_B64: "Eadf0kWYLECnS6HPaDqK0k2XMaPHTENU9J60mAqtQ5I="
       SIGN_LARAVEL_WEBHOOKS: "true"
       FASTAPI_SERVICE_PRIVATE_KEY_B64: "QwY6n5+wq5TzRIgH1sg+QTqJcHOvq46IcAHsmgeQXLl10Zkc2BJ0M48PzwOdyE4pCNi2BR4SkoCLW3r4xLzJGA=="

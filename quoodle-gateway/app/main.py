@@ -277,7 +277,8 @@ async def agent_ws(websocket: WebSocket):
                     continue
             except WebSocketDisconnect:
                 break
-            except Exception:
+            except Exception as exc:
+                logger.warning("ws message processing error for %s: %s", device_id, exc)
                 continue
     finally:
         entry = await manager.unregister(device_id)

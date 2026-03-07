@@ -58,8 +58,9 @@ def compute_sig(payload: Dict[str, Any]) -> str:
                     signed = signer.sign(canonical)
                     sig = signed.signature
                     return base64.b64encode(sig).decode()
-            except Exception:
-                pass
+            except Exception as exc:
+                import logging
+                logging.getLogger("quoodle.ws.protocol").warning("Ed25519 signing failed: %s", exc)
 
     if settings.require_ed25519 and not settings.allow_dev_sig_fallback:
         raise RuntimeError("Ed25519 signing required but PyNaCl/key not available")

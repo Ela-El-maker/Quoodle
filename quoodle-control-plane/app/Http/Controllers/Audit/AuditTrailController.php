@@ -58,10 +58,12 @@ class AuditTrailController extends Controller
         ]);
     }
 
-    public function chain(string $device_id): JsonResponse
+    public function chain(Request $request, string $device_id): JsonResponse
     {
+        $limit = min((int) ($request->query('limit') ?? 500), 1000);
         $entries = AuditTrail::where('device_id', $device_id)
             ->orderBy('timestamp')
+            ->limit($limit)
             ->get();
 
         return response()->json([

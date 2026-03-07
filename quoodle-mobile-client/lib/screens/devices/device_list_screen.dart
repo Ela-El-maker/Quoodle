@@ -26,6 +26,7 @@ class DeviceListScreen extends StatefulWidget {
 class _DeviceListScreenState extends State<DeviceListScreen> {
   final ApiService _api = ApiService();
   late Future<List<Device>> _devices;
+  bool _redirectingToLogin = false;
   bool _filterOnline = false;
   bool _filterCompliant = false;
   bool _filterQuarantined = false;
@@ -43,6 +44,20 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
       _devices = _api.fetchDevices();
     });
     await _devices;
+  }
+
+  Future<void> _handleUnauthorized() async {
+    if (_redirectingToLogin) return;
+    _redirectingToLogin = true;
+
+    await SessionStore.clear();
+    if (!mounted) return;
+
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      LoginScreen.route,
+      (_) => false,
+    );
   }
 
   List<Device> _applyFilters(List<Device> devices) {
@@ -122,15 +137,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                 if (snapshot.hasError) {
                   final error = snapshot.error;
                   if (error is ApiException && error.statusCode == 401) {
-                    SessionStore.clear().then((_) {
-                      if (mounted) {
-                        Navigator.pushNamedAndRemoveUntil(
-                          context,
-                          LoginScreen.route,
-                          (_) => false,
-                        );
-                      }
-                    });
+                    _handleUnauthorized();
                     return const Center(child: CircularProgressIndicator());
                   }
                   return Center(

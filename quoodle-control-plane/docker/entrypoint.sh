@@ -9,6 +9,11 @@ sleep 5
 echo "Running migrations..."
 php artisan migrate --force
 
+if [ "${APP_ENV:-local}" = "local" ]; then
+    echo "Seeding local admin account..."
+    php artisan db:seed --class=Database\\Seeders\\LocalDevAdminSeeder --force
+fi
+
 # Clear old config and cache fresh (picks up runtime env from docker-compose)
 echo "Caching configuration..."
 php artisan config:clear

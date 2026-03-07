@@ -45,6 +45,7 @@ class TelemetryController extends Controller
         $points = TelemetrySnapshot::where('device_id', $device_id)
             ->whereBetween('timestamp', [$data['from'], $data['to']])
             ->orderBy('timestamp')
+            ->limit(1000)
             ->get()
             ->map(function (TelemetrySnapshot $snap) {
                 $metrics = $snap->metrics ?? [];
