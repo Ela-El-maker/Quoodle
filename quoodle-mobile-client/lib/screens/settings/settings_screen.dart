@@ -25,11 +25,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final userId = SessionStore.userId ?? 'unknown';
     final roleLabel = Rbac.label(Rbac.currentRole());
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings & Trust')),
+      appBar: AppBar(title: const Text('Settings')),
       body: Container(
         decoration: BoxDecoration(gradient: AppColors.backgroundGradient),
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
           children: [
             const OfflineBanner(),
             SessionStatusCard(
@@ -39,12 +39,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 16),
             GlassCard(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Profile',
+                    'Account',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 8),
@@ -57,7 +57,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             if (Rbac.hasAtLeast(UserRole.admin)) ...[
               const SizedBox(height: 16),
               GlassCard(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -79,7 +79,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
             const SizedBox(height: 16),
             GlassCard(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -105,24 +105,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 16),
             GlassCard(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Session controls',
+                    'Security identity',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Revoke sessions and rotate keys from the control plane.',
+                    'This phone holds your private signing identity. Advanced rotation still happens in the control plane.',
                     style: Theme.of(context)
                         .textTheme
                         .bodyMedium
                         ?.copyWith(color: AppColors.textSecondary),
                   ),
                   const SizedBox(height: 12),
-                  ElevatedButton.icon(
+                  OutlinedButton.icon(
                     onPressed: () => Navigator.push(
                       context,
                       MaterialPageRoute(

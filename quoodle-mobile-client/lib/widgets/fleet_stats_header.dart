@@ -13,30 +13,38 @@ class FleetStatsHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final total = devices.length;
     final online = devices
-        .where((d) => d.lifecycleState.toLowerCase().contains('online'))
+        .where((d) =>
+            d.lifecycleState.toLowerCase().contains('online') ||
+            d.lifecycleState.toLowerCase().contains('active'))
         .length;
     final atRisk = devices.where((d) => (d.riskScore ?? 0) >= 60).length;
+    final compliant = devices
+        .where((d) =>
+            (d.complianceStatus ?? '').toLowerCase().contains('compliant'))
+        .length;
 
     return GlassCard(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      padding: const EdgeInsets.all(20),
+      child: Wrap(
+        spacing: 16,
+        runSpacing: 16,
         children: [
           _StatBlock(
-            label: 'Total',
-            value: total.toString(),
-            accent: AppColors.accentCyan,
-          ),
+              label: 'Devices',
+              value: total.toString(),
+              accent: AppColors.accentBlue),
           _StatBlock(
-            label: 'Online',
-            value: online.toString(),
-            accent: AppColors.accentMint,
-          ),
+              label: 'Active',
+              value: online.toString(),
+              accent: AppColors.accentMint),
           _StatBlock(
-            label: 'At risk',
-            value: atRisk.toString(),
-            accent: AppColors.riskHigh,
-          ),
+              label: 'Compliant',
+              value: compliant.toString(),
+              accent: AppColors.compliant),
+          _StatBlock(
+              label: 'Attention',
+              value: atRisk.toString(),
+              accent: AppColors.riskHigh),
         ],
       ),
     );
@@ -56,28 +64,31 @@ class _StatBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: Theme.of(context)
-              .textTheme
-              .labelLarge
-              ?.copyWith(color: AppColors.textSecondary),
-        ),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 250),
-          child: Text(
-            value,
-            key: ValueKey<String>(value),
+    return SizedBox(
+      width: 120,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
             style: Theme.of(context)
                 .textTheme
-                .headlineSmall
-                ?.copyWith(color: accent),
+                .labelLarge
+                ?.copyWith(color: AppColors.textSecondary),
           ),
-        ),
-      ],
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            child: Text(
+              value,
+              key: ValueKey<String>(value),
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(color: accent),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

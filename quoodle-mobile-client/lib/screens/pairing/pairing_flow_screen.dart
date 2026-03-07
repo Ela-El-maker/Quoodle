@@ -105,10 +105,10 @@ class _PairingFlowScreenState extends State<PairingFlowScreen> {
       body: Container(
         decoration: BoxDecoration(gradient: AppColors.backgroundGradient),
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
           children: [
             GlassCard(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -141,13 +141,12 @@ class _PairingFlowScreenState extends State<PairingFlowScreen> {
                           : '${_expiresIn!.inMinutes}m ${_expiresIn!.inSeconds.remainder(60)}s',
                     ),
                   ],
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   ElevatedButton.icon(
                     onPressed:
                         _confirming || _completed ? null : _confirmPairing,
-                    icon: const Icon(Icons.verified_user),
-                    label: Text(
-                        _confirming ? 'Pairing...' : 'Confirm & Pair Device'),
+                    icon: const Icon(Icons.verified_user_outlined),
+                    label: Text(_confirming ? 'Pairing...' : 'Confirm pairing'),
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 12),
@@ -164,30 +163,30 @@ class _PairingFlowScreenState extends State<PairingFlowScreen> {
             ),
             const SizedBox(height: 16),
             GlassCard(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Pairing lifecycle',
+                  Text('Pairing progress',
                       style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 12),
                   _StepRow(
-                    label: 'Pairing confirmed',
+                    label: 'Pairing',
                     active: _progressIndex >= 1,
                     inProgress: _confirming && _progressIndex == 0,
                   ),
                   _StepRow(
-                    label: 'Waiting for device online',
+                    label: 'Connecting',
                     active: _progressIndex >= 2,
                     inProgress: _confirming && _progressIndex == 1,
                   ),
                   _StepRow(
-                    label: 'Attestation running',
+                    label: 'Attesting',
                     active: _progressIndex >= 3,
                     inProgress: _confirming && _progressIndex == 2,
                   ),
                   _StepRow(
-                    label: 'Pairing complete',
+                    label: 'Complete',
                     active: _completed,
                     inProgress: false,
                   ),
@@ -197,7 +196,7 @@ class _PairingFlowScreenState extends State<PairingFlowScreen> {
                       onPressed: () => Navigator.pushNamedAndRemoveUntil(
                           context, HomeScreen.route, (_) => false),
                       icon: const Icon(Icons.check_circle),
-                      label: const Text('Go to Fleet'),
+                      label: const Text('Open devices'),
                     ),
                   ]
                 ],
@@ -286,7 +285,7 @@ class _StepRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = active
-        ? AppColors.accentMint
+        ? AppColors.accentBlue
         : (inProgress ? AppColors.accentAmber : AppColors.textMuted);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -303,17 +302,17 @@ class _StepRow extends StatelessWidget {
             )
           else
             Icon(
-              active ? Icons.check_circle : Icons.radio_button_unchecked,
+              active
+                  ? Icons.check_circle_outline
+                  : Icons.radio_button_unchecked,
               color: color,
               size: 16,
             ),
           const SizedBox(width: 10),
           Text(
             label,
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(color: color),
+            style:
+                Theme.of(context).textTheme.bodyMedium?.copyWith(color: color),
           ),
         ],
       ),

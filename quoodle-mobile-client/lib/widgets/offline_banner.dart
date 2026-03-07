@@ -51,17 +51,18 @@ class _OfflineBannerState extends State<OfflineBanner> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.nonCompliant.withValues(alpha: 0.18),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.nonCompliant.withValues(alpha: 0.5)),
+        border: Border.all(color: AppColors.glassBorder),
       ),
       child: Row(
         children: [
-          const Icon(Icons.wifi_off, color: AppColors.nonCompliant),
+          const Icon(Icons.wifi_off_rounded,
+              color: AppColors.textSecondary, size: 18),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Offline mode: showing cached data where available.',
+              'Offline - showing cached data where available.',
               style: Theme.of(context)
                   .textTheme
                   .bodyMedium

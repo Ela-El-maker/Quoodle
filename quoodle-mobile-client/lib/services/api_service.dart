@@ -142,9 +142,25 @@ class ApiService {
   }
 
   Future<List<Device>> fetchDevices() async {
-    final json = await _get('/devices');
-    final list = (json['devices'] as List<dynamic>? ?? []);
-    return list.map((e) => Device.fromJson(e as Map<String, dynamic>)).toList();
+    final devices = <Device>[];
+    var page = 1;
+    var lastPage = 1;
+
+    do {
+      final json = await _get('/devices?page=$page');
+      final list = (json['devices'] as List<dynamic>? ?? []);
+      devices.addAll(
+        list.map((e) => Device.fromJson(e as Map<String, dynamic>)),
+      );
+
+      final meta = json['meta'] as Map<String, dynamic>?;
+      final currentPage = meta?['current_page'];
+      final reportedLastPage = meta?['last_page'];
+      page = (currentPage is num ? currentPage.toInt() : page) + 1;
+      lastPage = reportedLastPage is num ? reportedLastPage.toInt() : 1;
+    } while (page <= lastPage);
+
+    return devices;
   }
 
   Future<List<Device>> fetchUnpairedDevices(

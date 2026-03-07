@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../services/api_service.dart';
 import '../../services/session_store.dart';
+import '../../theme/app_colors.dart';
 import '../../utils/api_error_classifier.dart';
+import '../../widgets/glass_card.dart';
 import '../home/home_screen.dart';
 import 'twofa_enroll_screen.dart';
 
@@ -69,42 +71,72 @@ class _TwoFAScreenState extends State<TwoFAScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Two-Factor Authentication')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            if (_error != null) ...[
-              Text(_error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
-              const SizedBox(height: 12),
-            ],
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                onPressed: _loading
-                    ? null
-                    : () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => TwoFAEnrollScreen(
-                                userId: widget.userId,
-                                sessionId: widget.sessionId),
-                          ),
+      body: Container(
+        decoration: BoxDecoration(gradient: AppColors.backgroundGradient),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: GlassCard(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Verification',
+                          style: Theme.of(context).textTheme.headlineSmall),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Enter the 6-digit code from your authenticator app.',
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodyLarge
+                            ?.copyWith(color: AppColors.textSecondary),
+                      ),
+                      const SizedBox(height: 24),
+                      TextField(
+                        controller: _codeController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'Verification code'),
+                      ),
+                      if (_error != null) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          _error!,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(color: AppColors.nonCompliant),
                         ),
-                child: const Text('Set up 2FA (QR code)'),
+                      ],
+                      const SizedBox(height: 24),
+                      ElevatedButton(
+                        onPressed: _loading ? null : _submit,
+                        child: Text(_loading ? 'Verifying...' : 'Continue'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextButton(
+                        onPressed: _loading
+                            ? null
+                            : () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => TwoFAEnrollScreen(
+                                      userId: widget.userId,
+                                      sessionId: widget.sessionId,
+                                    ),
+                                  ),
+                                ),
+                        child: const Text('Set up 2FA'),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-            TextField(
-              controller: _codeController,
-              decoration: const InputDecoration(labelText: 'Code'),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _loading ? null : _submit,
-              child: Text(_loading ? 'Verifying...' : 'Verify'),
-            ),
-          ],
+          ),
         ),
       ),
     );

@@ -29,8 +29,8 @@ class SecureDeviceApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Quoodle',
-      theme: AppTheme.darkTheme,
-      themeMode: ThemeMode.dark,
+      theme: AppTheme.lightTheme,
+      themeMode: ThemeMode.light,
       debugShowCheckedModeBanner: false,
       initialRoute:
           SessionStore.isLoggedIn ? HomeScreen.route : LoginScreen.route,
