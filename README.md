@@ -19,6 +19,7 @@ Mobile App ──▶ Control Plane ──▶ Gateway ──▶ Agent ──▶ K
 
 All commands are Ed25519-signed with nonce + TTL replay protection. Agents verify signatures locally before executing anything. Audit receipts flow back through the same chain.
 
+![alt text](photo_1_2026-03-07_23-13-31.jpg) ![alt text](photo_2_2026-03-07_23-13-31.jpg) ![alt text](photo_3_2026-03-07_23-13-31.jpg) ![alt text](photo_4_2026-03-07_23-13-31.jpg) ![alt text](photo_5_2026-03-07_23-13-31.jpg) ![alt text](photo_6_2026-03-07_23-13-31.jpg) ![alt text](photo_7_2026-03-07_23-13-31.jpg)
 ## Components
 
 | Directory               | Stack                    | Role                                                                    |
