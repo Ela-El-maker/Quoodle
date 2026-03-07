@@ -46,7 +46,7 @@ class DeviceCard extends StatelessWidget {
                         color: (_online
                                 ? AppColors.accentMint
                                 : AppColors.textMuted)
-                            .withOpacity(0.5),
+                            .withValues(alpha: 0.5),
                         blurRadius: 8,
                       )
                     ],

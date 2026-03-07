@@ -114,7 +114,13 @@ def run_pairing(stdscr) -> None:
     if not api_base or not user_jwt:
         stdscr.addstr(curses.LINES - 2, 2, "Missing QUOODLE_API_BASE or QUOODLE_USER_JWT.")
         return
-    os.system(f"{os.path.dirname(__file__)}/../cli/quoodle-agent pair --api-base {api_base} --user-jwt {user_jwt} --update-secrets")
+    import subprocess
+    cli_path = os.path.join(os.path.dirname(__file__), "..", "cli", "quoodle-agent")
+    subprocess.run(
+        [cli_path, "pair", "--api-base", api_base, "--user-jwt", user_jwt,
+         "--update-secrets"],
+        check=False
+    )
 
 
 def main(stdscr) -> None:

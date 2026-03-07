@@ -19,6 +19,9 @@ spec:
             - name: MYSQL_DATABASE
               value: secure_device
             - name: MYSQL_ROOT_PASSWORD
-              value: devpassword
+              valueFrom:
+                secretKeyRef:
+                  name: quoodle-db-secrets
+                  key: mysql-root-password
           ports:
             - containerPort: 3306

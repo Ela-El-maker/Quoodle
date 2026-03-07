@@ -26,7 +26,7 @@ from nacl.signing import SigningKey, VerifyKey
 
 # Configuration
 SOCKET_PATH = os.getenv("QUOODLE_PRIV_SOCKET", "/run/quoodle/privileged.sock")
-ALLOWED_ROOT = os.path.realpath(os.getenv("QUOODLE_ALLOWED_ROOT", "/home/ela/Work-Force"))
+ALLOWED_ROOT = os.path.realpath(os.getenv("QUOODLE_ALLOWED_ROOT", "/var/lib/quoodle/data"))
 STATE_DIR = os.getenv("QUOODLE_PRIV_STATE_DIR", "/var/lib/quoodle/privileged")
 ARTIFACT_DIR = os.path.realpath(os.getenv("QUOODLE_ARTIFACT_DIR", os.path.join(ALLOWED_ROOT, "artifacts")))
 AUDIT_LOG_PATH = os.path.join(STATE_DIR, "audit.log")

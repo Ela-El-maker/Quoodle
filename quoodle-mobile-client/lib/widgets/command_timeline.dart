@@ -94,7 +94,7 @@ class _TimelineRow extends StatelessWidget {
               Container(
                 width: 2,
                 height: 28,
-                color: color.withOpacity(0.4),
+                color: color.withValues(alpha: 0.4),
               ),
             ],
           ),
@@ -135,7 +135,6 @@ class _TimelineRow extends StatelessWidget {
       case _StepStatus.failed:
         return AppColors.nonCompliant;
       case _StepStatus.pending:
-      default:
         return AppColors.textMuted;
     }
   }

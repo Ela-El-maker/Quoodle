@@ -121,10 +121,10 @@ def create_router(manager: ConnectionManager) -> APIRouter:
 
         entry = await manager.get(device_id)
         if not entry:
-            await offline_queue.enqueue(device_id, payload.dict())
+            await offline_queue.enqueue(device_id, payload.model_dump())
             return build_dispatch_response("queued_offline", device_id, payload.command_id, "device not connected")
 
-        message = build_command_delivery(payload.dict(), entry.session_id)
+        message = build_command_delivery(payload.model_dump(), entry.session_id)
         await entry.websocket.send_json(message)
         await event_bus.publish("commands.dispatched.v1", {"command_id": payload.command_id, "device_id": device_id})
         return build_dispatch_response("dispatched", device_id, payload.command_id, None)
@@ -195,7 +195,7 @@ def create_router(manager: ConnectionManager) -> APIRouter:
         from app.main import device_registry
 
         device_registry.upsert_pubkey_b64(payload.device_id, payload.ed25519_pubkey_b64)
-        await event_bus.publish("device.paired.v1", payload.dict())
+        await event_bus.publish("device.paired.v1", payload.model_dump())
         return {"status": "ack", "device_id": payload.device_id}
 
     @router.post("/admin/quarantine/{device_id}")

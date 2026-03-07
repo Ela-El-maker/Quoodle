@@ -23,10 +23,11 @@ class DeviceController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $devices = Device::all(['device_id', 'device_name', 'lifecycle_state', 'last_seen', 'agent_version', 'os_build', 'compliance_status', 'risk_score']);
+        $perPage = min((int) $request->query('per_page', 50), 200);
+        $devices = Device::paginate($perPage, ['device_id', 'device_name', 'lifecycle_state', 'last_seen', 'agent_version', 'os_build', 'compliance_status', 'risk_score']);
 
         return response()->json([
-            'devices' => $devices->map(function (Device $device) {
+            'devices' => $devices->getCollection()->map(function (Device $device) {
                 return [
                     'device_id' => $device->device_id,
                     'device_name' => $device->device_name,
@@ -38,6 +39,12 @@ class DeviceController extends Controller
                     'risk_score' => $device->risk_score,
                 ];
             }),
+            'meta' => [
+                'current_page' => $devices->currentPage(),
+                'last_page' => $devices->lastPage(),
+                'per_page' => $devices->perPage(),
+                'total' => $devices->total(),
+            ],
         ]);
     }
 

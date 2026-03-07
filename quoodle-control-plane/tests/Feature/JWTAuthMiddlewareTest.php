@@ -6,8 +6,10 @@ use App\Models\AuthToken;
 use App\Models\User;
 use App\Services\JWT\JWTSigner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use Tests\TestCase;
 
+#[RequiresPhpExtension('pdo_sqlite')]
 class JWTAuthMiddlewareTest extends TestCase
 {
     use RefreshDatabase;

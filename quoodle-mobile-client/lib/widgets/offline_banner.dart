@@ -51,9 +51,9 @@ class _OfflineBannerState extends State<OfflineBanner> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.nonCompliant.withOpacity(0.18),
+        color: AppColors.nonCompliant.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.nonCompliant.withOpacity(0.5)),
+        border: Border.all(color: AppColors.nonCompliant.withValues(alpha: 0.5)),
       ),
       child: Row(
         children: [

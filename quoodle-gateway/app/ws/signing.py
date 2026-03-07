@@ -18,6 +18,17 @@ class SignatureError(ValueError):
     pass
 
 
+def _decode_base64_padded(value: str, field_name: str) -> bytes:
+    try:
+        return base64.b64decode(value)
+    except Exception:
+        padding = (-len(value)) % 4
+        try:
+            return base64.b64decode(value + ("=" * padding))
+        except Exception as exc:
+            raise SignatureError(f"{field_name} is not valid base64") from exc
+
+
 def verify_ed25519_detached(message: bytes, signature_b64: str, pubkey_b64: str) -> None:
     if not HAVE_PYNACL_VERIFY or VerifyKey is None:
         raise SignatureError("PyNaCl not installed; cannot verify Ed25519 signatures")
@@ -25,15 +36,8 @@ def verify_ed25519_detached(message: bytes, signature_b64: str, pubkey_b64: str)
     if not isinstance(signature_b64, str) or not signature_b64:
         raise SignatureError("Missing signature")
 
-    try:
-        sig = base64.b64decode(signature_b64)
-    except Exception as exc:
-        raise SignatureError("signature is not valid base64") from exc
-
-    try:
-        pub = base64.b64decode(pubkey_b64)
-    except Exception as exc:
-        raise SignatureError("pubkey is not valid base64") from exc
+    sig = _decode_base64_padded(signature_b64, "signature")
+    pub = _decode_base64_padded(pubkey_b64, "pubkey")
 
     try:
         VerifyKey(pub).verify(message, sig)
@@ -49,15 +53,8 @@ def verify_ed25519_signature(payload: Dict[str, Any], pubkey_b64: str) -> None:
     if not isinstance(sig_b64, str) or not sig_b64:
         raise SignatureError("Missing sig")
 
-    try:
-        sig = base64.b64decode(sig_b64)
-    except Exception as exc:
-        raise SignatureError("sig is not valid base64") from exc
-
-    try:
-        pub = base64.b64decode(pubkey_b64)
-    except Exception as exc:
-        raise SignatureError("pubkey is not valid base64") from exc
+    sig = _decode_base64_padded(sig_b64, "sig")
+    pub = _decode_base64_padded(pubkey_b64, "pubkey")
 
     # Canonical bytes of full message excluding sig
     msg = canonicalize_json(strip_sig(payload))

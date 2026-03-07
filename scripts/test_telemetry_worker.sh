@@ -1,8 +1,11 @@
 #!/bin/bash
 # test_telemetry_worker.sh - Verify Telemetry Worker Logic
 
-export PYTHONPATH=/home/ela/Work-Force/Quoodle/quoodle-gateway
-WORKER_SCRIPT="/home/ela/Work-Force/Quoodle/quoodle-gateway/app/workers/telemetry_worker.py"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+export PYTHONPATH="$PROJECT_ROOT/quoodle-gateway"
+WORKER_SCRIPT="$PROJECT_ROOT/quoodle-gateway/app/workers/telemetry_worker.py"
 LOG_FILE="worker_test.log"
 
 echo "---------------------------------------------------"

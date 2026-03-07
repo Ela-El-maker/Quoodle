@@ -23,7 +23,7 @@ class CommandQueryController extends Controller
 
     public function deviceCommands(Request $request, string $device_id): JsonResponse
     {
-        $limit = (int) $request->query('limit', 20);
+        $limit = min((int) $request->query('limit', 20), 100);
         $commands = Command::where('device_id', $device_id)
             ->orderByDesc('queued_at')
             ->limit($limit)

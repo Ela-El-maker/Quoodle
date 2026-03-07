@@ -53,7 +53,15 @@ ci_secrets.env
 # Local dev artifacts
 *.log
 .env
+.devdbrc
 .venv/
+__pycache__/
+.pytest_cache/
+*.db
+*.sqlite
+*.sqlite3
+quoodle-agent-linux/systemd/secrets.env
+quoodle-agent-linux/systemd/secrets.env.generated
 
 # CI helper output
 scripts/ci_secrets_output.txt

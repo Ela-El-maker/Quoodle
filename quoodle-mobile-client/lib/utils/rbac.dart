@@ -32,7 +32,6 @@ class Rbac {
       case UserRole.operator:
         return 2;
       case UserRole.viewer:
-      default:
         return 1;
     }
   }
@@ -44,7 +43,6 @@ class Rbac {
       case UserRole.operator:
         return 'Operator';
       case UserRole.viewer:
-      default:
         return 'Viewer';
     }
   }

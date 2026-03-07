@@ -68,7 +68,7 @@ class AppTheme {
       ),
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.surfaceRaised,
-        selectedColor: AppColors.accentBlue.withOpacity(0.25),
+        selectedColor: AppColors.accentBlue.withValues(alpha: 0.25),
         labelStyle: textTheme.labelLarge,
         secondaryLabelStyle: textTheme.labelLarge,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -103,7 +103,7 @@ class AppTheme {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: AppColors.glassBorder.withOpacity(0.6)),
+          borderSide: BorderSide(color: AppColors.glassBorder.withValues(alpha: 0.6)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),

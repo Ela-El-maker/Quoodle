@@ -26,7 +26,7 @@ class AlertsController extends Controller
         if (! empty($filters['severity'])) {
             $query->where('severity', $filters['severity']);
         }
-        $alerts = $query->limit($filters['limit'] ?? 20)->get();
+        $alerts = $query->limit(min($filters['limit'] ?? 20, 200))->get();
 
         return response()->json([
             'alerts' => $alerts->map(function (Alert $alert) {

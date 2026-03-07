@@ -25,10 +25,12 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 Route::middleware('api')->group(function (): void {
-    // Authentication endpoints
-    Route::post('/register', [RegisterController::class, 'register']);
-    Route::post('/login', [LoginController::class, 'login']);
-    Route::post('/token/refresh', [TokenController::class, 'refresh']);
+    // Authentication endpoints (rate-limited to prevent brute force)
+    Route::middleware('throttle:10,1')->group(function (): void {
+        Route::post('/register', [RegisterController::class, 'register']);
+        Route::post('/login', [LoginController::class, 'login']);
+        Route::post('/token/refresh', [TokenController::class, 'refresh']);
+    });
     Route::post('/pair/request', [PairingController::class, 'request']);
     Route::post('/agent/token', [PairingController::class, 'agentToken']);
     // Agent artifact upload (device-scoped JWT)

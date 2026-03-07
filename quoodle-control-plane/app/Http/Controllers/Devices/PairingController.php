@@ -69,6 +69,7 @@ class PairingController extends Controller
         }
 
         $data = $validator->validated();
+        $normalizedPubkey = $this->normalizePubkey((string) $data['pubkey']);
         $policyHash = (string) config('policy.master_hash');
         if ($policyHash === '') {
             return response()->json(['status' => 'invalid', 'reason' => 'policy_hash_not_configured'], 500);
@@ -77,13 +78,13 @@ class PairingController extends Controller
         $device = Device::where('hwid', $data['hwid'])->first();
 
         if ($device && ! empty($device->user_id)) {
-            if (! empty($device->ed25519_pubkey_b64) && hash_equals((string) $device->ed25519_pubkey_b64, (string) $data['pubkey'])) {
+            if (! empty($device->ed25519_pubkey_b64) && $this->pubkeysMatch((string) $device->ed25519_pubkey_b64, $normalizedPubkey)) {
                 $pairToken = $this->jwtSigner->issueForDevice(
                     $device->device_id,
                     [
                         'scope' => 'pair_token',
                         'device_name' => $device->device_name,
-                        'ed25519_pubkey_b64' => $device->ed25519_pubkey_b64,
+                        'ed25519_pubkey_b64' => $normalizedPubkey,
                         'hwid' => $device->hwid,
                     ],
                     (int) config('jwt.pair_token_ttl', 300),
@@ -99,7 +100,7 @@ class PairingController extends Controller
             if (filter_var(env('ALLOW_DEVICE_REPAIR_WITH_HWID', false), FILTER_VALIDATE_BOOL)) {
                 $device->update([
                     'device_name' => $data['device_name'],
-                    'ed25519_pubkey_b64' => $data['pubkey'],
+                    'ed25519_pubkey_b64' => $normalizedPubkey,
                 ]);
                 $pairToken = $this->jwtSigner->issueForDevice(
                     $device->device_id,
@@ -130,12 +131,12 @@ class PairingController extends Controller
                 'lifecycle_state' => 'pending_pairing',
                 'compliance_status' => 'unknown',
                 'policy_hash' => $policyHash,
-                'ed25519_pubkey_b64' => $data['pubkey'],
+                'ed25519_pubkey_b64' => $normalizedPubkey,
             ]);
         } else {
             $device->update([
                 'device_name' => $data['device_name'],
-                'ed25519_pubkey_b64' => $data['pubkey'],
+                'ed25519_pubkey_b64' => $normalizedPubkey,
             ]);
         }
 
@@ -228,7 +229,9 @@ class PairingController extends Controller
             'user_id' => $user->id,
             'device_name' => $deviceName,
             'lifecycle_state' => in_array($device->lifecycle_state, ['online', 'active'], true) ? $device->lifecycle_state : 'offline',
-            'ed25519_pubkey_b64' => $claims['ed25519_pubkey_b64'] ?? $device->ed25519_pubkey_b64,
+            'ed25519_pubkey_b64' => isset($claims['ed25519_pubkey_b64'])
+                ? $this->normalizePubkey((string) $claims['ed25519_pubkey_b64'])
+                : $device->ed25519_pubkey_b64,
         ]);
 
         $sessionId = $request->attributes->get('jwt_session_id');
@@ -357,5 +360,30 @@ class PairingController extends Controller
         }
 
         return json_decode(json_encode($decoded), true);
+    }
+
+    private function normalizePubkey(string $pubkey): string
+    {
+        $trimmed = trim($pubkey);
+        if ($trimmed === '') {
+            return $trimmed;
+        }
+
+        $decoded = base64_decode($trimmed, true);
+        if ($decoded === false) {
+            $padding = (4 - (strlen($trimmed) % 4)) % 4;
+            $decoded = base64_decode($trimmed.str_repeat('=', $padding), true);
+        }
+
+        if ($decoded === false) {
+            return rtrim($trimmed, '=');
+        }
+
+        return base64_encode($decoded);
+    }
+
+    private function pubkeysMatch(string $stored, string $incoming): bool
+    {
+        return hash_equals($this->normalizePubkey($stored), $this->normalizePubkey($incoming));
     }
 }
