@@ -1,6 +1,12 @@
 # Quoodle
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Platform: Linux](https://img.shields.io/badge/Platform-Linux-yellow.svg)]()
+[![Platform: Windows](https://img.shields.io/badge/Platform-Windows-blue.svg)]()
+[![Backend: Laravel](https://img.shields.io/badge/Backend-Laravel%2012-red.svg)]()
+[![Gateway: FastAPI](https://img.shields.io/badge/Gateway-FastAPI-009688.svg)]()
+[![Mobile: Flutter](https://img.shields.io/badge/Mobile-Flutter-02569B.svg)]()
+[![Crypto: Ed25519](https://img.shields.io/badge/Crypto-Ed25519-black.svg)]()
 
 Zero-trust remote device management platform. Cryptographically signed commands flow from an operator's mobile app through a centralized control plane and real-time gateway down to hardened endpoint agents — every action verified, every result audited.
 
