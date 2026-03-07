@@ -20,12 +20,11 @@ Mobile App ──▶ Control Plane ──▶ Gateway ──▶ Agent ──▶ K
 All commands are Ed25519-signed with nonce + TTL replay protection. Agents verify signatures locally before executing anything. Audit receipts flow back through the same chain.
 
 <div align="center">
-   <img src="assets/photo_1_2026-03-07_23-13-31.jpg" alt="Screenshot 1" width="220" style="margin:8px; border-radius:8px;"/>
+   <img src="assets/photo_6_2026-03-07_23-13-31.jpg" alt="Screenshot 6" width="220" style="margin:8px; border-radius:8px;"/>
    <img src="assets/photo_2_2026-03-07_23-13-31.jpg" alt="Screenshot 2" width="220" style="margin:8px; border-radius:8px;"/>
    <img src="assets/photo_3_2026-03-07_23-13-31.jpg" alt="Screenshot 3" width="220" style="margin:8px; border-radius:8px;"/>
    <img src="assets/photo_4_2026-03-07_23-13-31.jpg" alt="Screenshot 4" width="220" style="margin:8px; border-radius:8px;"/>
    <img src="assets/photo_5_2026-03-07_23-13-31.jpg" alt="Screenshot 5" width="220" style="margin:8px; border-radius:8px;"/>
-   <img src="assets/photo_6_2026-03-07_23-13-31.jpg" alt="Screenshot 6" width="220" style="margin:8px; border-radius:8px;"/>
    <img src="assets/photo_7_2026-03-07_23-13-31.jpg" alt="Screenshot 7" width="220" style="margin:8px; border-radius:8px;"/>
 </div>
 ## Components
