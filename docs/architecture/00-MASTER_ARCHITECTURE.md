@@ -93,4 +93,5 @@ For deeper dives into specific areas:
 - **[System Diagrams](./system_diagrams.md)**: Detailed visual flows for Pairing, Commands, and Updates.
 - **[Security & Trust Model](../security/trust_model.md)**: Cryptographic details, key management, and threat models.
 - **[Key Management](./key_management.md)**: Key lifecycle, storage, and rotation.
+- **[AI Agent Strategy](./ai-agent-strategy.md)**: Conservative AI copilot architecture for Quoodle with zero-trust boundaries and approval-gated actions.
 - **[Protocols](../protocols/)**: API endpoints, WebSocket protocol, command envelopes, IOCTL spec.
