@@ -49,4 +49,11 @@ return [
         'base_url' => env('LARAVEL_WEBHOOK_BASE', 'http://localhost/api/v1/webhook'),
     ],
 
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'token_url' => env('GOOGLE_TOKEN_URL', 'https://oauth2.googleapis.com/token'),
+        'userinfo_url' => env('GOOGLE_USERINFO_URL', 'https://openidconnect.googleapis.com/v1/userinfo'),
+    ],
+
 ];

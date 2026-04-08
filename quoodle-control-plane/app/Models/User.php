@@ -48,8 +48,6 @@ class User extends Authenticatable
     protected $fillable = [
         'display_name',
         'email',
-        'password',
-        'public_key',
         'role',
         'two_factor_enabled',
         'two_factor_secret',
@@ -61,7 +59,6 @@ class User extends Authenticatable
      * @var list<string>
      */
     protected $hidden = [
-        'password',
         'remember_token',
     ];
 
@@ -74,7 +71,6 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed',
             'two_factor_enabled' => 'boolean',
             'two_factor_secret' => 'encrypted',
         ];

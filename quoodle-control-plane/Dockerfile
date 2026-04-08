@@ -30,8 +30,8 @@ COPY . /var/www
 # Copy existing application directory permissions
 COPY --chown=www-data:www-data . /var/www
 
-# Install composer dependencies
-RUN composer install --no-interaction --optimize-autoloader
+# Install production composer dependencies only (faster and more reliable in CI/docker)
+RUN composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader --classmap-authoritative
 
 # Copy docker config
 COPY docker/nginx.conf /etc/nginx/sites-available/default
