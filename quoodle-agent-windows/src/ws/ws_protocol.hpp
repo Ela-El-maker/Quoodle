@@ -48,6 +48,13 @@ std::string build_signed_heartbeat_json(const std::string &device_id,
 std::string build_signed_telemetry_json(const std::string &device_id,
                                         const std::string &session_id);
 
+std::string build_signed_kernel_event_telemetry_json(const std::string &device_id,
+                                                     const std::string &session_id,
+                                                     std::uint64_t event_id,
+                                                     std::uint32_t event_type,
+                                                     std::uint64_t event_timestamp_unix,
+                                                     const std::string &payload_json);
+
 std::string build_command_ack_json(const std::string &device_id,
                                    const std::string &session_id,
                                    const std::string &command_message_id,

@@ -1,14 +1,20 @@
 #include <atomic>
 #include <csignal>
 #include <cstdlib>
-#include <iostream>
 #include <string>
+#include <thread>
+#include <memory>
+#include <algorithm>
+#include <cctype>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #include "ws/ws_client.hpp"
-#include "ws/ws_protocol.hpp"
 #include "config/config_manager.hpp"
 #include "comm/communicator.hpp"
-#include "command/dispatcher.hpp"
+#include "crypto/ed25519_sign.hpp"
 #include "logging/logger.hpp"
 
 // Global communicator pointer for signal handler
@@ -23,32 +29,42 @@ static void signal_handler(int signal)
     }
 }
 
-int main()
+static std::unique_ptr<Communicator> build_communicator()
 {
-    Logger::log(LogLevel::Info, "Quoodle Agent starting...");
-
     AgentConfig cfg = ConfigManager::load_from_env();
 
     if (cfg.jwt.empty())
     {
         Logger::log(LogLevel::Error, "Missing AGENT_JWT environment variable; cannot build AUTH message.");
-        return 1;
+        return nullptr;
     }
 
-    auto envelope = build_auth_envelope(cfg.device_id, cfg.jwt);
-    std::string auth_json = build_signed_auth_json(envelope);
+    const auto activePubkey = ed25519_active_public_key_b64();
+    if (activePubkey.empty())
+    {
+        Logger::log(LogLevel::Error, "Unable to derive Ed25519 signing public key from runtime private key.");
+        return nullptr;
+    }
+    Logger::log(LogLevel::Info, "Agent signing pubkey: " + activePubkey);
 
-    // Create communicator with full config (enables reconnection settings)
-    Communicator comm(cfg);
-    comm.set_initial_message(auth_json);
+    if (const char *expected = std::getenv("AGENT_EXPECTED_PUBKEY_B64"); expected && *expected)
+    {
+        std::string expectedPubkey(expected);
+        expectedPubkey.erase(
+            std::remove_if(expectedPubkey.begin(), expectedPubkey.end(),
+                           [](unsigned char ch) { return std::isspace(ch) != 0; }),
+            expectedPubkey.end());
+        if (expectedPubkey != activePubkey)
+        {
+            Logger::log(LogLevel::Error, "Agent signing pubkey mismatch. expected=" + expectedPubkey + " actual=" + activePubkey);
+            return nullptr;
+        }
+        Logger::log(LogLevel::Info, "Agent signing pubkey matches expected paired key.");
+    }
 
-    // Set up signal handlers for graceful shutdown
-    g_communicator.store(&comm, std::memory_order_release);
-    std::signal(SIGINT, signal_handler);
-    std::signal(SIGTERM, signal_handler);
+    auto comm = std::make_unique<Communicator>(cfg);
 
-    // Optional: Log connection state changes
-    comm.on_state_change([](ConnectionState state, const std::string &reason)
+    comm->on_state_change([](ConnectionState state, const std::string &reason)
                          {
         std::string state_str;
         switch (state) {
@@ -67,19 +83,208 @@ int main()
         Logger::log(LogLevel::Info, "Connection: " + state_str + 
                     (reason.empty() ? "" : " - " + reason)); });
 
-    // CommandDispatcher is instantiated here so other modules can use it when integrating.
-    CommandDispatcher dispatcher;
-
-    Logger::log(LogLevel::Info, "Starting WebSocket client with reconnection support");
     Logger::log(LogLevel::Info, "Endpoint: " + cfg.endpoint);
     Logger::log(LogLevel::Info, "Device ID: " + cfg.device_id);
+    return comm;
+}
 
-    // Blocking run with automatic reconnection
-    comm.start();
+static int run_console_mode()
+{
+    Logger::log(LogLevel::Info, "Quoodle Agent starting in console mode...");
+    auto comm = build_communicator();
+    if (!comm)
+    {
+        return 1;
+    }
 
-    // Cleanup
+    g_communicator.store(comm.get(), std::memory_order_release);
+    std::signal(SIGINT, signal_handler);
+    std::signal(SIGTERM, signal_handler);
+
+    Logger::log(LogLevel::Info, "Starting WebSocket client with reconnection support");
+    comm->start();
+
     g_communicator.store(nullptr, std::memory_order_release);
-    Logger::log(LogLevel::Info, "Quoodle Agent stopped");
-
+    Logger::log(LogLevel::Info, "Quoodle Agent stopped (console mode)");
     return 0;
+}
+
+#ifdef _WIN32
+static constexpr DWORD kServiceAcceptMask = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN;
+static constexpr DWORD kServiceRestartDelayMs = 5000;
+static constexpr DWORD kServiceConfigRetryDelayMs = 15000;
+static constexpr const char* kServiceName = "QuoodleAgent";
+static SERVICE_STATUS_HANDLE g_service_status_handle = nullptr;
+static SERVICE_STATUS g_service_status{};
+static HANDLE g_service_stop_event = nullptr;
+static std::atomic<bool> g_service_stop_requested{false};
+static std::thread g_service_worker;
+
+static void set_service_status(DWORD state, DWORD win32_exit_code, DWORD wait_hint)
+{
+    g_service_status.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
+    g_service_status.dwCurrentState = state;
+    g_service_status.dwWin32ExitCode = win32_exit_code;
+    g_service_status.dwWaitHint = wait_hint;
+    g_service_status.dwControlsAccepted =
+        (state == SERVICE_RUNNING) ? kServiceAcceptMask : 0;
+    g_service_status.dwCheckPoint =
+        (state == SERVICE_START_PENDING || state == SERVICE_STOP_PENDING) ? 1 : 0;
+
+    if (g_service_status_handle)
+    {
+        SetServiceStatus(g_service_status_handle, &g_service_status);
+    }
+}
+
+static DWORD WINAPI service_ctrl_handler(DWORD control, DWORD, LPVOID, LPVOID)
+{
+    switch (control)
+    {
+    case SERVICE_CONTROL_STOP:
+    case SERVICE_CONTROL_SHUTDOWN:
+        Logger::log(LogLevel::Info, "Service stop control received");
+        set_service_status(SERVICE_STOP_PENDING, NO_ERROR, 15000);
+        g_service_stop_requested.store(true, std::memory_order_release);
+        if (auto *comm = g_communicator.load(std::memory_order_acquire))
+        {
+            comm->shutdown();
+        }
+        if (g_service_stop_event)
+        {
+            SetEvent(g_service_stop_event);
+        }
+        return NO_ERROR;
+    default:
+        return ERROR_CALL_NOT_IMPLEMENTED;
+    }
+}
+
+static VOID WINAPI service_main(DWORD, LPSTR *)
+{
+    g_service_status_handle = RegisterServiceCtrlHandlerExA(kServiceName, service_ctrl_handler, nullptr);
+    if (!g_service_status_handle)
+    {
+        return;
+    }
+
+    g_service_stop_requested.store(false, std::memory_order_release);
+    set_service_status(SERVICE_START_PENDING, NO_ERROR, 10000);
+    g_service_stop_event = CreateEventA(nullptr, TRUE, FALSE, nullptr);
+    if (!g_service_stop_event)
+    {
+        set_service_status(SERVICE_STOPPED, GetLastError(), 0);
+        return;
+    }
+
+    Logger::log(LogLevel::Info, "Quoodle Agent starting in Windows service mode...");
+    g_service_worker = std::thread([]()
+                                   {
+        while (!g_service_stop_requested.load(std::memory_order_acquire)) {
+            auto comm = build_communicator();
+            if (!comm) {
+                Logger::log(LogLevel::Error, "Service communicator init failed; retrying");
+                if (WaitForSingleObject(g_service_stop_event, kServiceConfigRetryDelayMs) == WAIT_OBJECT_0) {
+                    break;
+                }
+                continue;
+            }
+
+            g_communicator.store(comm.get(), std::memory_order_release);
+            Logger::log(LogLevel::Info, "Service communicator loop started");
+            comm->start();
+            g_communicator.store(nullptr, std::memory_order_release);
+
+            if (g_service_stop_requested.load(std::memory_order_acquire)) {
+                break;
+            }
+
+            Logger::log(LogLevel::Warn, "Communicator loop exited unexpectedly; restarting");
+            if (WaitForSingleObject(g_service_stop_event, kServiceRestartDelayMs) == WAIT_OBJECT_0) {
+                break;
+            }
+        } });
+
+    set_service_status(SERVICE_RUNNING, NO_ERROR, 0);
+    WaitForSingleObject(g_service_stop_event, INFINITE);
+
+    if (auto *comm = g_communicator.load(std::memory_order_acquire))
+    {
+        comm->shutdown();
+    }
+    if (g_service_worker.joinable())
+    {
+        g_service_worker.join();
+    }
+
+    g_service_stop_requested.store(false, std::memory_order_release);
+    g_communicator.store(nullptr, std::memory_order_release);
+
+    CloseHandle(g_service_stop_event);
+    g_service_stop_event = nullptr;
+    set_service_status(SERVICE_STOPPED, NO_ERROR, 0);
+    Logger::log(LogLevel::Info, "Quoodle Agent stopped (service mode)");
+}
+
+static bool try_run_service_dispatcher()
+{
+    SERVICE_TABLE_ENTRYA table[] = {
+        {const_cast<LPSTR>(kServiceName), service_main},
+        {nullptr, nullptr}};
+
+    if (!StartServiceCtrlDispatcherA(table))
+    {
+        DWORD err = GetLastError();
+        if (err == ERROR_FAILED_SERVICE_CONTROLLER_CONNECT)
+        {
+            return false;
+        }
+
+        Logger::log(LogLevel::Error, "StartServiceCtrlDispatcher failed: " + std::to_string(err));
+        return false;
+    }
+    return true;
+}
+#endif
+
+int main(int argc, char **argv)
+{
+#ifdef _WIN32
+    bool force_console = false;
+    bool force_service = false;
+
+    for (int i = 1; i < argc; ++i)
+    {
+        std::string arg = argv[i] ? argv[i] : "";
+        if (arg == "--console")
+        {
+            force_console = true;
+        }
+        else if (arg == "--service")
+        {
+            force_service = true;
+        }
+    }
+
+    if (force_console)
+    {
+        return run_console_mode();
+    }
+
+    if (force_service)
+    {
+        if (try_run_service_dispatcher())
+        {
+            return 0;
+        }
+        return 1;
+    }
+
+    if (try_run_service_dispatcher())
+    {
+        return 0;
+    }
+#endif
+
+    return run_console_mode();
 }

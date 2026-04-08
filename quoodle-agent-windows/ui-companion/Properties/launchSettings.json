@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Quoodle.Agent.UiCompanion (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "Quoodle.Agent.UiCompanion (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

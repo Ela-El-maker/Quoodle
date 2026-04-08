@@ -1,0 +1,55 @@
+﻿<UserControl
+    x:Class="Quoodle.Agent.UiCompanion.Controls.MetricCard"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Border x:ConnectionId='2'
+        x:Name="CardBorder"
+        Style="{StaticResource CardBorderStyle}"
+        MinWidth="180">
+        <StackPanel Spacing="10">
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border x:ConnectionId='5'
+                    x:Name="IconHost"
+                    Width="28"
+                    Height="28"
+                    CornerRadius="8"
+                    Background="{ThemeResource SurfaceAltBrush}">
+                    <FontIcon x:ConnectionId='7'
+                        x:Name="GlyphIcon"
+                        Glyph="&#xE946;"
+                        Foreground="{ThemeResource BrandBrush}"
+                        FontSize="14"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center" />
+                </Border>
+
+                <TextBlock x:ConnectionId='6'
+                    x:Name="TitleText"
+                    Grid.Column="1"
+                    Style="{StaticResource MutedTextStyle}"
+                    VerticalAlignment="Center" />
+            </Grid>
+
+            <TextBlock x:ConnectionId='3'
+                x:Name="ValueText"
+                FontSize="44"
+                FontWeight="SemiBold"
+                Foreground="{ThemeResource TextPrimaryBrush}" />
+
+            <TextBlock x:ConnectionId='4'
+                x:Name="SubtitleText"
+                Style="{StaticResource MutedTextStyle}"
+                TextWrapping="Wrap" />
+        </StackPanel>
+    </Border>
+</UserControl>
+

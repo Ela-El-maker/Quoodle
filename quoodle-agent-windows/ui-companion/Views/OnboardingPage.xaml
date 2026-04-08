@@ -1,0 +1,67 @@
+<Page
+    x:Class="Quoodle.Agent.UiCompanion.Views.OnboardingPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:controls="using:Quoodle.Agent.UiCompanion.Controls"
+    mc:Ignorable="d"
+    Background="{ThemeResource AppBackgroundBrush}">
+
+    <ScrollViewer>
+        <Grid Padding="28" MaxWidth="1140">
+            <StackPanel Spacing="20">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Device Onboarding" Style="{StaticResource PageTitleTextStyle}" />
+                    <TextBlock Text="Enroll this device with the QuoodleAgent service." Style="{StaticResource PageSubtitleTextStyle}" />
+                </StackPanel>
+
+                <Grid ColumnSpacing="18">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                        <Border x:Name="Step1Chip" Width="36" Height="36" CornerRadius="18" Background="{ThemeResource SurfaceAltBrush}" BorderBrush="{ThemeResource BorderBrush}" BorderThickness="1">
+                            <TextBlock Text="1" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" />
+                        </Border>
+                        <TextBlock Text="Detect" FontWeight="SemiBold" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                        <Border x:Name="Step2Chip" Width="36" Height="36" CornerRadius="18" Background="{ThemeResource SurfaceAltBrush}" BorderBrush="{ThemeResource BorderBrush}" BorderThickness="1">
+                            <TextBlock Text="2" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" />
+                        </Border>
+                        <TextBlock Text="Pair" FontWeight="SemiBold" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                        <Border x:Name="Step3Chip" Width="36" Height="36" CornerRadius="18" Background="{ThemeResource SurfaceAltBrush}" BorderBrush="{ThemeResource BorderBrush}" BorderThickness="1">
+                            <TextBlock Text="3" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" />
+                        </Border>
+                        <TextBlock Text="Confirm" FontWeight="SemiBold" />
+                    </StackPanel>
+                </Grid>
+
+                <Border Style="{StaticResource CardBorderStyle}" Padding="24">
+                    <StackPanel Spacing="14">
+                        <TextBlock x:Name="StepTitleText" Style="{StaticResource SectionTitleTextStyle}" />
+                        <ProgressBar x:Name="StepProgress" Height="8" Minimum="0" Maximum="100" Foreground="{ThemeResource SuccessBrush}" />
+                        <TextBlock x:Name="StepHintText" TextWrapping="Wrap" Style="{StaticResource PageSubtitleTextStyle}" />
+
+                        <TextBox
+                            x:Name="PairTokenBox"
+                            Header="Pairing token / device id"
+                            PlaceholderText="auto-generated if blank"
+                            TextChanged="OnPairingTokenChanged" />
+
+                        <controls:ActionButtonBar x:Name="Actions" PrimaryText="Next" SecondaryText="Back" />
+                        <Button x:Name="CompleteButton" Content="Complete Pairing" HorizontalAlignment="Left" Style="{StaticResource AccentButtonStyle}" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</Page>

@@ -5,21 +5,22 @@
 #include "../crypto/kernel_response_verifier.hpp"
 #include "../logging/logger.hpp"
 #include "../utils/time_utils.hpp"
+#include "../utils/sha256.hpp"
 
-#include <random>
 #include <sstream>
 #include <string>
 #include <array>
-#include <memory>
 #include <cstdio>
 #include <cstdlib>
-#include <iostream>
+#include <cstring>
 #ifdef _WIN32
 #include <windows.h>
 #endif
-#include <thread>
-#include <chrono>
 #include <mutex>
+#include <ctime>
+#include <vector>
+#include <algorithm>
+#include <cctype>
 
 // Thread-safe sequence counter
 static std::mutex s_sequence_mutex;
@@ -29,10 +30,289 @@ static std::uint64_t s_sequence_counter{0};
 static bool is_kernel_response_verification_required()
 {
   const char *env = std::getenv("AGENT_REQUIRE_KERNEL_SIGNATURE");
-  // Default to enabled (1) unless explicitly disabled
-  if (!env)
-    return true;
+  // Default to enabled (1) unless explicitly disabled.
+  if (!env) return true;
   return std::string(env) != "0";
+}
+
+static bool is_pipe_fallback_allowed()
+{
+  const char *env = std::getenv("QUOODLE_ALLOW_PIPE_FALLBACK");
+  return env && std::string(env) == "1";
+}
+
+static std::string get_driver_hmac_key()
+{
+  const char *env = std::getenv("QUOODLE_DRIVER_HMAC_KEY");
+  return (env && *env) ? std::string(env) : std::string();
+}
+
+static bool is_hex_char(char c)
+{
+  return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+}
+
+static unsigned char hex_val(char c)
+{
+  if (c >= '0' && c <= '9') return static_cast<unsigned char>(c - '0');
+  if (c >= 'a' && c <= 'f') return static_cast<unsigned char>(10 + (c - 'a'));
+  return static_cast<unsigned char>(10 + (c - 'A'));
+}
+
+static std::string hex_to_bytes(const std::string &hex)
+{
+  if (hex.size() % 2 != 0) return {};
+  std::string out;
+  out.reserve(hex.size() / 2);
+  for (size_t i = 0; i < hex.size(); i += 2)
+  {
+    if (!is_hex_char(hex[i]) || !is_hex_char(hex[i + 1])) return {};
+    out.push_back(static_cast<char>((hex_val(hex[i]) << 4) | hex_val(hex[i + 1])));
+  }
+  return out;
+}
+
+static std::string sha256_raw(const std::string &input)
+{
+  return hex_to_bytes(sha256_hex(input));
+}
+
+static std::string hmac_sha256_raw(const std::string &key, const std::string &message)
+{
+  constexpr size_t block_size = 64;
+  std::string k = key;
+  if (k.size() > block_size)
+  {
+    k = sha256_raw(k);
+  }
+  if (k.size() < block_size)
+  {
+    k.resize(block_size, '\0');
+  }
+
+  std::string o_key_pad(block_size, '\0');
+  std::string i_key_pad(block_size, '\0');
+  for (size_t i = 0; i < block_size; ++i)
+  {
+    unsigned char b = static_cast<unsigned char>(k[i]);
+    o_key_pad[i] = static_cast<char>(b ^ 0x5c);
+    i_key_pad[i] = static_cast<char>(b ^ 0x36);
+  }
+
+  std::string inner = sha256_raw(i_key_pad + message);
+  return sha256_raw(o_key_pad + inner);
+}
+
+static const char s_b64_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+static std::string base64_encode_binary(const std::string &input)
+{
+  std::string output;
+  int val = 0, valb = -6;
+  for (unsigned char c : input)
+  {
+    val = (val << 8) + c;
+    valb += 8;
+    while (valb >= 0)
+    {
+      output.push_back(s_b64_table[(val >> valb) & 0x3F]);
+      valb -= 6;
+    }
+  }
+  if (valb > -6) output.push_back(s_b64_table[((val << 8) >> (valb + 8)) & 0x3F]);
+  while (output.size() % 4) output.push_back('=');
+  return output;
+}
+
+static int b64_index(char c)
+{
+  if (c >= 'A' && c <= 'Z') return c - 'A';
+  if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+  if (c >= '0' && c <= '9') return c - '0' + 52;
+  if (c == '+') return 62;
+  if (c == '/') return 63;
+  return -1;
+}
+
+static bool base64_decode_binary(const std::string &in, std::string &out)
+{
+  out.clear();
+  int val = 0, valb = -8;
+  for (char c : in)
+  {
+    if (c == '=') break;
+    int d = b64_index(c);
+    if (d < 0) return false;
+    val = (val << 6) + d;
+    valb += 6;
+    if (valb >= 0)
+    {
+      out.push_back(static_cast<char>((val >> valb) & 0xFF));
+      valb -= 8;
+    }
+  }
+  return true;
+}
+
+static std::string build_driver_request_canonical(const QuoodleIoctlRequest &req)
+{
+  std::ostringstream oss;
+  auto bounded_len = [](const char *s, size_t cap) -> size_t
+  {
+    size_t n = 0;
+    while (n < cap && s[n] != '\0') ++n;
+    return n;
+  };
+  size_t cmd_len = bounded_len(req.command_message_id, sizeof(req.command_message_id));
+  size_t policy_len = bounded_len(req.policy_hash, sizeof(req.policy_hash));
+  size_t req_len = bounded_len(req.request_id, sizeof(req.request_id));
+
+  oss << "v1\n";
+  oss << "seq=" << req.agent_sequence << "\n";
+  oss << "cmd=" << cmd_len << ":" << std::string(req.command_message_id, cmd_len) << "\n";
+  oss << "op=" << req.opcode << "\n";
+  oss << "params=" << req.params_length << ":" << std::string(req.params_json, req.params_length) << "\n";
+  oss << "policy=" << policy_len << ":" << std::string(req.policy_hash, policy_len) << "\n";
+  oss << "req=" << req_len << ":" << std::string(req.request_id, req_len) << "\n";
+  oss << "ts=" << req.timestamp_unix << "\n";
+  return oss.str();
+}
+
+static std::string build_driver_response_canonical(const QuoodleIoctlResponse &resp)
+{
+  std::ostringstream oss;
+  auto bounded_len = [](const char *s, size_t cap) -> size_t
+  {
+    size_t n = 0;
+    while (n < cap && s[n] != '\0') ++n;
+    return n;
+  };
+  size_t req_len = bounded_len(resp.request_id, sizeof(resp.request_id));
+  size_t kexec_len = bounded_len(resp.kernel_exec_id, sizeof(resp.kernel_exec_id));
+  size_t err_len = bounded_len(resp.error_message, sizeof(resp.error_message));
+  size_t result_len = std::min(static_cast<size_t>(resp.result_length), sizeof(resp.result_json) - 1);
+
+  oss << "v1\n";
+  oss << "status=" << resp.status << "\n";
+  oss << "error=" << resp.error_code << "\n";
+  oss << "kexec=" << kexec_len << ":" << std::string(resp.kernel_exec_id, kexec_len) << "\n";
+  oss << "req=" << req_len << ":" << std::string(resp.request_id, req_len) << "\n";
+  oss << "result=" << result_len << ":" << std::string(resp.result_json, result_len) << "\n";
+  oss << "msg=" << err_len << ":" << std::string(resp.error_message, err_len) << "\n";
+  oss << "ts=" << resp.timestamp_unix << "\n";
+  return oss.str();
+}
+
+static bool constant_time_equals(const std::string &a, const std::string &b)
+{
+  if (a.size() != b.size()) return false;
+  unsigned char diff = 0;
+  for (size_t i = 0; i < a.size(); ++i) diff |= static_cast<unsigned char>(a[i] ^ b[i]);
+  return diff == 0;
+}
+
+#ifdef _WIN32
+static HANDLE open_quoodle_device_handle()
+{
+  const char *devicePaths[] = {
+      QUOODLE_DEVICE_PATH,
+      QUOODLE_DEVICE_PATH_GLOBAL,
+      QUOODLE_DEVICE_PATH_NATIVE};
+
+  for (const char *path : devicePaths)
+  {
+    HANDLE h = CreateFileA(
+        path,
+        GENERIC_READ | GENERIC_WRITE,
+        0,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL);
+    if (h != INVALID_HANDLE_VALUE)
+    {
+      return h;
+    }
+  }
+  return INVALID_HANDLE_VALUE;
+}
+#endif
+
+static bool sign_driver_request(QuoodleIoctlRequest &req, std::string &error_out)
+{
+  std::string key = get_driver_hmac_key();
+  if (key.empty())
+  {
+    error_out = "hmac_key_missing";
+    return false;
+  }
+
+  std::string canonical = build_driver_request_canonical(req);
+  std::string mac_raw = hmac_sha256_raw(key, canonical);
+  if (mac_raw.size() != QUOODLE_HMAC_SHA256_BYTES)
+  {
+    error_out = "hmac_compute_failed";
+    return false;
+  }
+
+  std::string sig_b64 = base64_encode_binary(mac_raw);
+  if (sig_b64.size() >= sizeof(req.signature_b64))
+  {
+    error_out = "signature_too_long";
+    return false;
+  }
+
+  std::memset(req.signature_b64, 0, sizeof(req.signature_b64));
+  std::memcpy(req.signature_b64, sig_b64.data(), sig_b64.size());
+  req.signature_length = static_cast<uint32_t>(sig_b64.size());
+  return true;
+}
+
+static bool verify_driver_response_signature(const QuoodleIoctlResponse &resp, std::string &error_out)
+{
+  if (!is_kernel_response_verification_required())
+  {
+    return true;
+  }
+
+  if (resp.signature_length == 0 || resp.signature_length >= QUOODLE_MAX_SIG_B64)
+  {
+    error_out = "signature_missing";
+    return false;
+  }
+  if (resp.signature_b64[resp.signature_length] != '\0')
+  {
+    error_out = "signature_bad_payload";
+    return false;
+  }
+
+  std::string key = get_driver_hmac_key();
+  if (key.empty())
+  {
+    error_out = "hmac_key_missing";
+    return false;
+  }
+
+  std::string provided;
+  if (!base64_decode_binary(std::string(resp.signature_b64, resp.signature_length), provided))
+  {
+    error_out = "signature_decode_failed";
+    return false;
+  }
+  if (provided.size() != QUOODLE_HMAC_SHA256_BYTES)
+  {
+    error_out = "signature_invalid_length";
+    return false;
+  }
+
+  std::string canonical = build_driver_response_canonical(resp);
+  std::string expected = hmac_sha256_raw(key, canonical);
+  if (!constant_time_equals(expected, provided))
+  {
+    error_out = "signature_invalid";
+    return false;
+  }
+  return true;
 }
 
 /*
@@ -129,12 +409,49 @@ void IoctlClient::disconnect()
     CloseHandle(hPipe);
     hPipe = INVALID_HANDLE_VALUE;
   }
+  if (hDevice != INVALID_HANDLE_VALUE)
+  {
+    CloseHandle(hDevice);
+    hDevice = INVALID_HANDLE_VALUE;
+  }
+  useDevice = false;
 #endif
 }
 
 bool IoctlClient::ensure_connection()
 {
 #ifdef _WIN32
+  last_transport_error_code_ = -1;
+  last_transport_error_message_ = "ipc_failure";
+
+  // Prefer kernel driver if enabled and available.
+  const char *preferDriver = std::getenv("QUOODLE_USE_KERNEL_DRIVER");
+  bool allowDriver = preferDriver && std::string(preferDriver) != "0";
+  if (allowDriver)
+  {
+    if (hDevice != INVALID_HANDLE_VALUE)
+    {
+      useDevice = true;
+      return true;
+    }
+    hDevice = open_quoodle_device_handle();
+    if (hDevice != INVALID_HANDLE_VALUE)
+    {
+      useDevice = true;
+      return true;
+    }
+
+    if (!is_pipe_fallback_allowed())
+    {
+      useDevice = true;
+      last_transport_error_code_ = 4101;
+      last_transport_error_message_ = "driver_unavailable_fail_closed";
+      Logger::log(LogLevel::Error, "Kernel driver unavailable and fallback disabled");
+      return false;
+    }
+    Logger::log(LogLevel::Warn, "Kernel driver unavailable; using explicit pipe fallback override");
+  }
+
   // 1. Check if already connected
   if (hPipe != INVALID_HANDLE_VALUE)
   {
@@ -158,8 +475,15 @@ bool IoctlClient::ensure_connection()
       // Set pipe to message mode if your service supports it
       DWORD mode = PIPE_READMODE_BYTE;
       SetNamedPipeHandleState(hPipe, &mode, NULL, NULL);
+      useDevice = false;
       return true;
     }
+  }
+
+  if (allowDriver && is_pipe_fallback_allowed())
+  {
+    last_transport_error_code_ = 4102;
+    last_transport_error_message_ = "driver_and_pipe_unavailable";
   }
 #endif
   return false;
@@ -240,6 +564,53 @@ std::string IoctlClient::build_canonical_payload(const std::string &request_id, 
   return crypto::canonical_object(fields);
 }
 
+static QuoodleOpcode map_opcode_to_code(const std::string &opcode)
+{
+  if (opcode == "EXEC_LOCK_SCREEN")
+    return QOP_EXEC_LOCK_SCREEN;
+  if (opcode == "EXEC_REBOOT")
+    return QOP_EXEC_REBOOT;
+  if (opcode == "EXEC_SHUTDOWN")
+    return QOP_EXEC_SHUTDOWN;
+  if (opcode == "EXEC_LOGOUT")
+    return QOP_EXEC_LOGOUT;
+  if (opcode == "EXEC_PING_KERNEL" || opcode == "ping")
+    return QOP_EXEC_PING;
+  if (opcode == "EXEC_COLLECT_SYSTEM_INFO" || opcode == "COLLECT_SYSTEM_INFO")
+    return QOP_EXEC_COLLECT_SYSTEM_INFO;
+  if (opcode == "EXEC_GET_PROCESS_LIST" || opcode == "GET_PROCESS_LIST")
+    return QOP_EXEC_GET_PROCESS_LIST;
+  if (opcode == "EXEC_VALIDATE_UPDATE_PACKAGE" || opcode == "VALIDATE_UPDATE_PACKAGE")
+    return QOP_EXEC_VALIDATE_UPDATE_PACKAGE;
+  if (opcode == "STAGE_UPDATE")
+    return QOP_STAGE_UPDATE;
+  if (opcode == "COMMIT_UPDATE")
+    return QOP_COMMIT_UPDATE;
+  if (opcode == "ROLLBACK_UPDATE")
+    return QOP_ROLLBACK_UPDATE;
+  if (opcode == "EXEC_RUN_ATTESTATION" || opcode == "RUN_ATTESTATION")
+    return QOP_EXEC_RUN_ATTESTATION;
+  if (opcode == "EXEC_RUN_TAMPER_CHECK" || opcode == "RUN_TAMPER_CHECK")
+    return QOP_EXEC_RUN_TAMPER_CHECK;
+  if (opcode == "EXEC_SELF_REPAIR" || opcode == "SELF_REPAIR")
+    return QOP_EXEC_SELF_REPAIR;
+  return QOP_UNKNOWN;
+}
+
+static KernelExecResult parse_device_response(const QuoodleIoctlResponse &resp)
+{
+  KernelExecResult result;
+  result.request_id = resp.request_id;
+  result.status = resp.status == 0 ? "ok" : "error";
+  result.kernel_exec_id = resp.kernel_exec_id;
+  result.timestamp = std::to_string(resp.timestamp_unix);
+  result.result = resp.result_json;
+  result.error_code = static_cast<int>(resp.error_code);
+  result.error_message = resp.error_message;
+  result.sig = resp.signature_b64;
+  return result;
+}
+
 /**
  * PRIVATE CORE: execute_request
  * Logic for "Pipe First, Process Fallback"
@@ -249,13 +620,95 @@ std::string IoctlClient::execute_request(const std::string &opcode, const std::s
                                          const std::string &params_json, const AgentState &state,
                                          const std::string &command_message_id)
 {
+  last_transport_error_code_ = -1;
+  last_transport_error_message_ = "ipc_failure";
+
   if (!ensure_connection())
   {
     // Fallback logic remains the same...
 #ifdef ENABLE_EXEC_FALLBACK
+    if (last_transport_error_code_ == 4101)
+      return {};
     return run_kernel_service_once(opcode, request_id);
 #endif
     return "";
+  }
+
+  if (useDevice && hDevice != INVALID_HANDLE_VALUE)
+  {
+    QuoodleIoctlRequest req{};
+    req.version = QUOODLE_IOCTL_VERSION;
+    req.opcode = static_cast<uint32_t>(map_opcode_to_code(opcode));
+    req.flags = 0;
+    req.agent_sequence = next_sequence();
+    req.timestamp_unix = static_cast<uint64_t>(std::time(nullptr));
+    std::strncpy(req.request_id, request_id.c_str(), sizeof(req.request_id) - 1);
+    std::string policy_hash = state.policy_hash();
+    std::strncpy(req.policy_hash, policy_hash.c_str(), sizeof(req.policy_hash) - 1);
+    std::strncpy(req.command_message_id, command_message_id.c_str(), sizeof(req.command_message_id) - 1);
+    if (!params_json.empty())
+    {
+      req.params_length = static_cast<uint32_t>(std::min(params_json.size(), sizeof(req.params_json) - 1));
+      std::memcpy(req.params_json, params_json.data(), req.params_length);
+      req.params_json[req.params_length] = '\0';
+    }
+    else
+    {
+      req.params_length = 0;
+      req.params_json[0] = '\0';
+    }
+
+    std::string sign_error;
+    if (!sign_driver_request(req, sign_error))
+    {
+      last_transport_error_code_ = QERR_SIGNATURE_INVALID;
+      last_transport_error_message_ = "driver_request_" + sign_error;
+      Logger::log(LogLevel::Error, "Failed to sign driver request: " + sign_error);
+      return "";
+    }
+
+    QuoodleIoctlResponse resp{};
+    DWORD bytesReturned = 0;
+    BOOL ok = DeviceIoControl(
+        hDevice,
+        IOCTL_QUOODLE_EXECUTE,
+        &req,
+        sizeof(req),
+        &resp,
+        sizeof(resp),
+        &bytesReturned,
+        NULL);
+    if (!ok || bytesReturned < sizeof(QuoodleIoctlResponse))
+    {
+      last_transport_error_code_ = 4103;
+      last_transport_error_message_ = "driver_ioctl_failure";
+      disconnect();
+      return "";
+    }
+
+    std::string verify_error;
+    if (!verify_driver_response_signature(resp, verify_error))
+    {
+      last_transport_error_code_ = QERR_SIGNATURE_INVALID;
+      last_transport_error_message_ = "kernel_signature_" + verify_error;
+      Logger::log(LogLevel::Warn, "Kernel driver response signature verification failed: " + verify_error);
+      return "";
+    }
+
+    KernelExecResult result = parse_device_response(resp);
+    // Serialize minimal JSON so existing parsing path can be reused.
+    std::ostringstream oss;
+    oss << "{";
+    oss << "\"request_id\":\"" << crypto::escape_json(result.request_id) << "\",";
+    oss << "\"status\":\"" << crypto::escape_json(result.status) << "\",";
+    oss << "\"kernel_exec_id\":\"" << crypto::escape_json(result.kernel_exec_id) << "\",";
+    oss << "\"timestamp\":\"" << crypto::escape_json(result.timestamp) << "\",";
+    oss << "\"result\":\"" << crypto::escape_json(result.result) << "\",";
+    oss << "\"error_code\":" << result.error_code << ",";
+    oss << "\"error_message\":\"" << crypto::escape_json(result.error_message) << "\",";
+    oss << "\"sig\":\"" << crypto::escape_json(result.sig) << "\"";
+    oss << "}";
+    return oss.str();
   }
 
   // Generate timestamp and sequence
@@ -312,6 +765,8 @@ std::string IoctlClient::execute_request(const std::string &opcode, const std::s
     }
   }
   // If we reach here, the communication failed or timed out
+  last_transport_error_code_ = -1;
+  last_transport_error_message_ = "pipe_timeout_or_failure";
   disconnect();
 #endif
   return "";
@@ -331,7 +786,13 @@ KernelExecResult IoctlClient::parse_and_verify_response(const std::string &json,
 {
   KernelExecResult resp = parse_result_from_json(json);
 
-  // Verify signature if enabled
+  // Driver-mode responses are already verified at IOCTL boundary using HMAC.
+  if (useDevice)
+  {
+    return resp;
+  }
+
+  // Pipe-mode responses continue using existing Ed25519 verifier.
   if (!verify_kernel_response_signature(json, resp))
   {
     // resp has already been modified by verify_kernel_response_signature
@@ -351,7 +812,7 @@ KernelExecResult IoctlClient::lock_screen(const std::string &request_id, const A
 {
   std::string json = execute_request("EXEC_LOCK_SCREEN", request_id, "{}", state, command_message_id);
   if (json.empty())
-    return make_error(request_id, -1, "ipc_failure");
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
   return parse_and_verify_response(json, request_id);
 }
 
@@ -363,7 +824,7 @@ KernelExecResult IoctlClient::ping(const std::string &request_id, const AgentSta
 {
   std::string json = execute_request("ping", request_id, "{}", state, command_message_id);
   if (json.empty())
-    return make_error(request_id, -1, "ipc_failure");
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
   return parse_and_verify_response(json, request_id);
 }
 
@@ -375,7 +836,7 @@ KernelExecResult IoctlClient::reboot(const std::string &request_id, const AgentS
 {
   std::string json = execute_request("EXEC_REBOOT", request_id, "{}", state, command_message_id);
   if (json.empty())
-    return make_error(request_id, -1, "ipc_failure");
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
   return parse_and_verify_response(json, request_id);
 }
 
@@ -387,7 +848,7 @@ KernelExecResult IoctlClient::shutdown(const std::string &request_id, const Agen
 {
   std::string json = execute_request("EXEC_SHUTDOWN", request_id, "{}", state, command_message_id);
   if (json.empty())
-    return make_error(request_id, -1, "ipc_failure");
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
   return parse_and_verify_response(json, request_id);
 }
 
@@ -399,7 +860,7 @@ KernelExecResult IoctlClient::logout(const std::string &request_id, const AgentS
 {
   std::string json = execute_request("EXEC_LOGOUT", request_id, "{}", state, command_message_id);
   if (json.empty())
-    return make_error(request_id, -1, "ipc_failure");
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
   return parse_and_verify_response(json, request_id);
 }
 
@@ -411,7 +872,7 @@ KernelExecResult IoctlClient::collect_system_info(const std::string &request_id,
 {
   std::string json = execute_request("COLLECT_SYSTEM_INFO", request_id, "{}", state, command_message_id);
   if (json.empty())
-    return make_error(request_id, -1, "ipc_failure");
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
   return parse_and_verify_response(json, request_id);
 }
 
@@ -423,7 +884,7 @@ KernelExecResult IoctlClient::get_process_list(const std::string &request_id, co
 {
   std::string json = execute_request("GET_PROCESS_LIST", request_id, "{}", state, command_message_id);
   if (json.empty())
-    return make_error(request_id, -1, "ipc_failure");
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
   return parse_and_verify_response(json, request_id);
 }
 
@@ -437,7 +898,7 @@ KernelExecResult IoctlClient::validate_update_package(const std::string &request
   std::string params = "{\"package_path\":\"" + crypto::escape_json(package_path) + "\"}";
   std::string json = execute_request("VALIDATE_UPDATE_PACKAGE", request_id, params, state, command_message_id);
   if (json.empty())
-    return make_error(request_id, -1, "ipc_failure");
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
   return parse_and_verify_response(json, request_id);
 }
 
@@ -452,7 +913,7 @@ KernelExecResult IoctlClient::stage_update(const std::string &request_id, const 
                        "\",\"package_path\":\"" + crypto::escape_json(package_path) + "\"}";
   std::string json = execute_request("STAGE_UPDATE", request_id, params, state, command_message_id);
   if (json.empty())
-    return make_error(request_id, -1, "ipc_failure");
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
   return parse_and_verify_response(json, request_id);
 }
 
@@ -464,7 +925,7 @@ KernelExecResult IoctlClient::commit_update(const std::string &request_id, const
 {
   std::string json = execute_request("COMMIT_UPDATE", request_id, "{}", state, command_message_id);
   if (json.empty())
-    return make_error(request_id, -1, "ipc_failure");
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
   return parse_and_verify_response(json, request_id);
 }
 
@@ -478,7 +939,7 @@ KernelExecResult IoctlClient::rollback_update(const std::string &request_id, con
   std::string params = reason.empty() ? "{}" : "{\"reason\":\"" + crypto::escape_json(reason) + "\"}";
   std::string json = execute_request("ROLLBACK_UPDATE", request_id, params, state, command_message_id);
   if (json.empty())
-    return make_error(request_id, -1, "ipc_failure");
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
   return parse_and_verify_response(json, request_id);
 }
 
@@ -490,7 +951,7 @@ KernelExecResult IoctlClient::run_attestation(const std::string &request_id, con
 {
   std::string json = execute_request("RUN_ATTESTATION", request_id, "{}", state, command_message_id);
   if (json.empty())
-    return make_error(request_id, -1, "ipc_failure");
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
   return parse_and_verify_response(json, request_id);
 }
 
@@ -502,7 +963,7 @@ KernelExecResult IoctlClient::run_tamper_check(const std::string &request_id, co
 {
   std::string json = execute_request("RUN_TAMPER_CHECK", request_id, "{}", state, command_message_id);
   if (json.empty())
-    return make_error(request_id, -1, "ipc_failure");
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
   return parse_and_verify_response(json, request_id);
 }
 
@@ -516,6 +977,6 @@ KernelExecResult IoctlClient::self_repair(const std::string &request_id, const A
   std::string params = component.empty() ? "{}" : "{\"component\":\"" + crypto::escape_json(component) + "\"}";
   std::string json = execute_request("SELF_REPAIR", request_id, params, state, command_message_id);
   if (json.empty())
-    return make_error(request_id, -1, "ipc_failure");
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
   return parse_and_verify_response(json, request_id);
 }
