@@ -1,7 +1,8 @@
 <?php
 
-use App\Http\Controllers\Auth\LoginController;
-use App\Http\Controllers\Auth\RegisterController;
+use App\Http\Controllers\Auth\MeController;
+use App\Http\Controllers\Auth\GoogleAuthController;
+use App\Http\Controllers\Auth\OtpAuthController;
 use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\Auth\TokenController;
 use App\Http\Controllers\Auth\TwoFactorController;
@@ -27,8 +28,9 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('api')->group(function (): void {
     // Authentication endpoints (rate-limited to prevent brute force)
     Route::middleware('throttle:10,1')->group(function (): void {
-        Route::post('/register', [RegisterController::class, 'register']);
-        Route::post('/login', [LoginController::class, 'login']);
+        Route::post('/auth/request-otp', [OtpAuthController::class, 'requestOtp']);
+        Route::post('/auth/verify-otp', [OtpAuthController::class, 'verifyOtp']);
+        Route::post('/auth/google/exchange', [GoogleAuthController::class, 'exchange']);
         Route::post('/token/refresh', [TokenController::class, 'refresh']);
     });
     Route::post('/pair/request', [PairingController::class, 'request']);
@@ -55,6 +57,8 @@ Route::middleware('api')->group(function (): void {
 |
 */
 Route::middleware(['api', 'jwt.auth'])->group(function (): void {
+    Route::get('/me', MeController::class);
+
     // Session management (all authenticated users)
     Route::post('/logout', [TokenController::class, 'logout']);
 

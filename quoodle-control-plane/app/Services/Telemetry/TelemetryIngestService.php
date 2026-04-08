@@ -21,6 +21,7 @@ class TelemetryIngestService
                 'network_rx' => $rollup['avg_rx'] ?? null,
                 'risk_score' => $rollup['risk_score_avg'] ?? null,
                 'policy_hash' => $rollup['policy_hash'] ?? null,
+                'kernel_event' => $rollup['kernel_event'] ?? null,
             ],
         ]);
 

@@ -39,7 +39,14 @@ return [
 
         'smtp' => [
             'transport' => 'smtp',
-            'scheme' => env('MAIL_SCHEME'),
+            // Symfony Mailer accepts only: smtp | smtps.
+            // Map common legacy values to valid schemes.
+            'scheme' => match (strtolower((string) env('MAIL_SCHEME', ''))) {
+                'tls' => 'smtp',
+                'ssl' => 'smtps',
+                'smtp', 'smtps' => strtolower((string) env('MAIL_SCHEME')),
+                default => null,
+            },
             'url' => env('MAIL_URL'),
             'host' => env('MAIL_HOST', '127.0.0.1'),
             'port' => env('MAIL_PORT', 2525),

@@ -31,7 +31,6 @@ class JWTAuthMiddlewareTest extends TestCase
 
         $this->user = User::factory()->create([
             'email' => 'test@example.com',
-            'password' => bcrypt('password123'),
         ]);
 
         $this->sessionId = 'test-session-' . uniqid();
@@ -156,32 +155,25 @@ class JWTAuthMiddlewareTest extends TestCase
     }
 
     /** @test */
-    public function it_allows_public_routes_without_jwt(): void
+    public function it_allows_passwordless_otp_request_without_jwt(): void
     {
-        // Login endpoint should be accessible without JWT
-        $response = $this->postJson('/api/login', [
+        $response = $this->postJson('/api/auth/request-otp', [
             'email' => 'test@example.com',
-            'password' => 'password123',
-            'device_fingerprint' => 'test-device',
         ]);
 
-        // Should not be 401 for missing JWT
-        $this->assertNotEquals(401, $response->status(), 'Login should not require JWT');
+        $this->assertNotEquals(401, $response->status(), 'OTP request should not require JWT');
     }
 
     /** @test */
-    public function it_allows_register_without_jwt(): void
+    public function it_allows_otp_verify_endpoint_without_jwt(): void
     {
-        $response = $this->postJson('/api/register', [
-            'email' => 'newuser@example.com',
-            'password' => 'securepassword123',
-            'password_confirmation' => 'securepassword123',
-            'display_name' => 'New User',
-            'device_fingerprint' => 'test-device',
+        $response = $this->postJson('/api/auth/verify-otp', [
+            'email' => 'test@example.com',
+            'challenge_id' => 'missing-challenge',
+            'otp' => '000000',
         ]);
 
-        // Should not be 401 for missing JWT
-        $this->assertNotEquals(401, $response->status(), 'Register should not require JWT');
+        $this->assertNotEquals(401, $response->status(), 'OTP verification should not require JWT');
     }
 
     /** @test */
