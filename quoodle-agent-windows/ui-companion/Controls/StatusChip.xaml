@@ -1,0 +1,29 @@
+<UserControl
+    x:Class="Quoodle.Agent.UiCompanion.Controls.StatusChip"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+    <Border
+        x:Name="ChipBorder"
+        Padding="10,5"
+        CornerRadius="16"
+        BorderThickness="1"
+        Background="{ThemeResource ChipNeutralBackgroundBrush}"
+        BorderBrush="{ThemeResource BorderBrush}">
+        <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+            <Ellipse
+                x:Name="ToneDot"
+                Width="8"
+                Height="8"
+                Fill="{ThemeResource ChipNeutralForegroundBrush}" />
+            <TextBlock
+                x:Name="ChipText"
+                FontWeight="SemiBold"
+                Foreground="{ThemeResource ChipNeutralForegroundBrush}"
+                FontSize="12"
+                Text="Unknown" />
+        </StackPanel>
+    </Border>
+</UserControl>

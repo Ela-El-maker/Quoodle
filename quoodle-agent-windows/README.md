@@ -1,12 +1,10 @@
 # quoodle-agent-windows
 
-Windows endpoint agent. Runs as a Windows service, connects to the gateway over WSS, verifies Ed25519 signatures, and forwards validated commands to the kernel driver via IOCTL.
+Windows endpoint agent. It can run in console mode or as a Windows Service, connects to the gateway over WSS, verifies signatures, and forwards privileged commands to the kernel driver via IOCTL.
 
-**Stack:** C++23 (WinAPI, Boost.Asio)
+## Build
 
-## Build & Run
-
-**Prerequisites:** CMake 3.20+, Visual Studio 2022, Boost, OpenSSL
+**Prerequisites:** CMake 3.20+, Visual Studio 2022
 
 ```bash
 mkdir build && cd build
@@ -14,31 +12,71 @@ cmake ..
 cmake --build . --config Release
 ```
 
+## Run Modes
+
+Console mode:
 ```bash
-./quoodle-agent-windows.exe --config config.json
+agent.exe --console
 ```
+
+Service mode (for SCM):
+```bash
+agent.exe --service
+```
+
+Auto-detect mode (default):
+- If started by SCM, runs as service.
+- Otherwise falls back to console mode.
+
+## Install Service
+
+```powershell
+.\scripts\install_agent_service.ps1 -ExePath "C:\path\to\agent.exe"
+```
+
+Default service name: `QuoodleAgent`
+
+Optional flags:
+- `-DelayedAutoStart`
+- `-RestartDelayMs 5000`
+
+Uninstall:
+```powershell
+.\scripts\uninstall_agent_service.ps1
+```
+
+## Background Runtime Guarantee
+
+- The service runs in the background (Session 0) independently of any UI process.
+- Closing UI windows does not stop the service.
+- Service recovery is configured to auto-restart on failures.
+- The service worker loop auto-restarts communicator sessions if the WSS loop exits unexpectedly.
 
 ## Device Identity
 
 Persists to `C:/ProgramData/Quoodle/device_id` (auto-generated on first run).
 
-**Override order:** `AGENT_DEVICE_ID` env → `AGENT_DEVICE_ID_FILE` env → default path.
-
-## Project Structure
-
-```
-src/         # Agent source (WSS client, crypto, command state machine)
-include/     # Headers
-attestation/ # TPM attestation module
-quarantine/  # Network isolation module
-recovery/    # Self-recovery and rollback
-ota/         # Over-the-air update handling
-logging/     # Structured logging (ETW)
-tests/       # Unit tests
-```
+Override order:
+- `AGENT_DEVICE_ID`
+- `AGENT_DEVICE_ID_FILE`
+- default path
 
 ## Security
 
-- Generates Ed25519 keypair on first run, stores private key via Windows DPAPI
-- Only trusts commands signed by the Control Plane's public key
-- Forwards privileged operations to `quoodle-kernel-guard` via IOCTL — never executes directly
+- Verifies signed command envelopes from control plane.
+- Forwards privileged operations to `quoodle-kernel-guard` via IOCTL (no direct privileged execution in agent process).
+- Driver transport is fail-closed by default when `QUOODLE_USE_KERNEL_DRIVER=1`.
+- Explicit pipe fallback is dev/lab only: `QUOODLE_ALLOW_PIPE_FALLBACK=1`.
+
+## UI Companion (Milestone 1)
+
+Interactive Windows UI shell lives in `ui-companion/` and is intentionally decoupled from ring0 and backend runtime during this phase.
+
+```powershell
+cd ui-companion
+dotnet build .\Quoodle.Agent.UiCompanion.csproj -c Release -p:Platform=x64
+```
+
+Current provider:
+- `MockAgentStateProvider` (local interactive state)
+- `UiBridgeProvider` is included as the future seam for named-pipe integration

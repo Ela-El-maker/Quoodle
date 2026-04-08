@@ -5,14 +5,15 @@
 #include <thread>
 #include <unordered_map>
 #include <algorithm>
-#include <cmath>
+#include <cstdlib>
 
 #include <ixwebsocket/IXNetSystem.h>
 #include <ixwebsocket/IXWebSocket.h>
 #include <nlohmann/json.hpp>
 
-#include "../kernel/ioctl_client.hpp"
+#include "../kernel/kernel_event_listener.hpp"
 #include "../crypto/command_verifier.hpp"
+#include "../command/dispatcher.hpp"
 #include "ws_protocol.hpp"
 
 // Environment variable to control signature verification (default: enabled)
@@ -36,6 +37,12 @@ static bool is_signature_verification_required()
         logged = true;
     }
   return required;
+}
+
+static bool is_kernel_driver_enabled()
+{
+  const char *env = std::getenv("QUOODLE_USE_KERNEL_DRIVER");
+  return env && std::string(env) != "0";
 }
 
 WsClient::WsClient(const AgentConfig &config)
@@ -229,6 +236,9 @@ bool WsClient::try_connect()
   heartbeat_sent_ = false;
   telemetry_sent_ = false;
 
+  KernelEventListener kernel_listener;
+  std::atomic<bool> kernel_listener_started{false};
+
   socket.setOnMessageCallback([&](const ix::WebSocketMessagePtr &msg)
                               {
         if (msg->type == ix::WebSocketMessageType::Open) {
@@ -241,7 +251,28 @@ bool WsClient::try_connect()
             }
             
             Logger::log(LogLevel::Info, "connected, sending AUTH");
-            socket.sendText(initial_message_);
+            std::string auth_message;
+            if (!config_.jwt.empty()) {
+                auto envelope = build_auth_envelope(config_.device_id, config_.jwt);
+                auth_message = build_signed_auth_json(std::move(envelope));
+                if (auth_message.empty()) {
+                    close_reason = "failed to build AUTH payload";
+                    connection_error.store(true, std::memory_order_release);
+                    Logger::log(LogLevel::Error, close_reason);
+                    return;
+                }
+            } else if (!initial_message_.empty()) {
+                // Legacy fallback for older call sites that pre-build AUTH once.
+                Logger::log(LogLevel::Warn, "AGENT_JWT not set; reusing legacy initial AUTH payload");
+                auth_message = initial_message_;
+            } else {
+                close_reason = "missing AGENT_JWT and initial AUTH payload";
+                connection_error.store(true, std::memory_order_release);
+                Logger::log(LogLevel::Error, close_reason);
+                return;
+            }
+
+            socket.sendText(auth_message);
             
         } else if (msg->type == ix::WebSocketMessageType::Message) {
             Logger::log(LogLevel::Debug, std::string("received: ") + msg->str);
@@ -262,6 +293,25 @@ bool WsClient::try_connect()
                             auto tel = build_signed_telemetry_json(config_.device_id, session_id);
                             socket.sendText(tel);
                             telemetry_sent_ = true;
+                        }
+                        if (is_kernel_driver_enabled() && !kernel_listener_started.load()) {
+                            const std::string session_id_copy = session_id;
+                            bool started = kernel_listener.start([&, session_id_copy](const KernelEvent &evt) {
+                                auto tel = build_signed_kernel_event_telemetry_json(
+                                    config_.device_id,
+                                    session_id_copy,
+                                    evt.event_id,
+                                    evt.event_type,
+                                    evt.timestamp_unix,
+                                    evt.payload_json);
+                                if (!tel.empty()) {
+                                    socket.sendText(tel);
+                                }
+                            });
+                            if (started) {
+                                kernel_listener_started.store(true);
+                                Logger::log(LogLevel::Info, "kernel event listener started");
+                            }
                         }
                     }
                 } else if (mtype == "POLICY_UPDATE") {
@@ -334,24 +384,33 @@ bool WsClient::try_connect()
                             return;
                         }
 
-                        IoctlClient ioctl;
-                        if (method == "lock_screen") {
-                            auto res = ioctl.lock_screen(command_message_id, state_impl_, command_message_id);
-                            auto result_msg = build_command_result_json(config_.device_id, session_id, command_message_id,
-                                                                        trace_id, "completed", "ok", "lock_screen done",
-                                                                        "", "", res.error_code, res.error_message);
-                            socket.sendText(result_msg);
-                        } else if (method == "ping") {
-                            auto res = ioctl.ping(command_message_id, state_impl_, command_message_id);
-                            auto result_msg = build_command_result_json(config_.device_id, session_id, command_message_id,
-                                                                        trace_id, "completed", "ok", res.result,
-                                                                        "", "", res.error_code, res.error_message);
+                        nlohmann::json params_obj = envelope["body"].value("params", nlohmann::json::object());
+                        CommandDispatcher dispatcher;
+                        auto res = dispatcher.dispatch(
+                            method,
+                            command_message_id,
+                            state_impl_,
+                            params_obj.dump(),
+                            command_message_id);
+
+                        if (res.status == "ok") {
+                            auto result_payload = res.result.empty() ? "command completed" : res.result;
+                            auto result_msg = build_command_result_json(
+                                config_.device_id, session_id, command_message_id, trace_id,
+                                "completed", "ok", result_payload, "", "",
+                                res.error_code, res.error_message);
                             socket.sendText(result_msg);
                         } else {
-                            auto not_supported = build_command_result_json(config_.device_id, session_id, command_message_id,
-                                                                           trace_id, "failed", "unsupported",
-                                                                           "command not supported", "", "", 4004, "");
-                            socket.sendText(not_supported);
+                            const bool unsupported = (res.status == "invalid_opcode" || res.error_code == 4004 || res.error_code == 4002);
+                            auto result_msg = build_command_result_json(
+                                config_.device_id, session_id, command_message_id, trace_id,
+                                "failed",
+                                unsupported ? "unsupported" : "kernel_transport_error",
+                                res.error_message.empty() ? "command execution failed" : res.error_message,
+                                "", "",
+                                res.error_code,
+                                res.error_message);
+                            socket.sendText(result_msg);
                         }
                     }
                 } else if (mtype == "UPDATE_ANNOUNCE") {
@@ -428,6 +487,7 @@ bool WsClient::try_connect()
   }
 
   socket.stop();
+  kernel_listener.stop();
 
   if (shutdown_requested_.load(std::memory_order_acquire))
   {
@@ -443,153 +503,8 @@ bool WsClient::try_connect()
 void WsClient::connect_and_run()
 {
   ix::initNetSystem();
-  ix::WebSocket socket;
-  socket.setUrl(config_.endpoint);
-
-  socket.setOnMessageCallback([&](const ix::WebSocketMessagePtr &msg)
-                              {
-        if (msg->type == ix::WebSocketMessageType::Open) {
-            Logger::log(LogLevel::Info, "connected, sending AUTH");
-            socket.sendText(initial_message_);
-        } else if (msg->type == ix::WebSocketMessageType::Message) {
-            Logger::log(LogLevel::Debug, std::string("received: ") + msg->str);
-            try {
-                auto parsed = nlohmann::json::parse(msg->str);
-                std::string mtype = parsed.value("type", "");
-                if (mtype == "AUTH_ACK") {
-                    std::string session_id = parsed["body"].value("session_id", "");
-                    if (!session_id.empty()) {
-                        last_session_id_ = session_id;
-                        state_impl_.set_session_id(session_id);
-                        if (!heartbeat_sent_) {
-                            auto hb = build_signed_heartbeat_json(config_.device_id, session_id, "alive", 120, "ok");
-                            socket.sendText(hb);
-                            heartbeat_sent_ = true;
-                        }
-                        if (!telemetry_sent_) {
-                            auto tel = build_signed_telemetry_json(config_.device_id, session_id);
-                            socket.sendText(tel);
-                            telemetry_sent_ = true;
-                        }
-                    }
-                } else if (mtype == "POLICY_UPDATE") {
-                    auto body = parsed["body"];
-                    std::string policy_hash = body.value("policy_hash", "");
-                    state_impl_.set_policy_hash(policy_hash);
-                    Logger::log(LogLevel::Info, "policy updated: " + policy_hash);
-                } else if (mtype == "COMMAND_DELIVERY") {
-                    std::string session_id = parsed.value("session_id", "");
-                    auto body = parsed["body"];
-                    auto envelope = body["command_envelope"];
-                    std::string command_message_id = envelope.value("message_id", "");
-                    std::string trace_id = envelope.value("trace_id", "");
-                    std::string method = envelope["body"].value("method", "");
-                    std::string policy_hash = envelope["meta"].value("policy_hash", "");
-
-                    if (!session_id.empty() && !command_message_id.empty()) {
-                        // Verify command envelope signature before processing
-                        if (is_signature_verification_required()) {
-                            std::string envelope_str = envelope.dump();
-                            auto verify_result = crypto::verify_command_envelope(envelope_str, last_command_seq_, "");
-                            
-                            if (!verify_result.valid) {
-                                Logger::log(LogLevel::Warn, "COMMAND_DELIVERY signature verification failed: " + 
-                                           verify_result.error_code + " - " + verify_result.error_message);
-                                
-                                // Send rejection ACK with reason
-                                auto rejected_ack = build_command_ack_json(config_.device_id, session_id, command_message_id, 
-                                                                           "rejected", verify_result.error_code);
-                                socket.sendText(rejected_ack);
-                                
-                                // Send error result
-                                int error_code = 4003;
-                                if (verify_result.error_code == "TTL_EXPIRED") error_code = 4005;
-                                else if (verify_result.error_code == "SEQ_REPLAY") error_code = 4006;
-                                
-                                auto denied = build_command_result_json(config_.device_id, session_id, command_message_id,
-                                                                        trace_id, "failed", verify_result.error_code,
-                                                                        verify_result.error_message, "", "", error_code, "");
-                                socket.sendText(denied);
-                                return;
-                            }
-                            
-                            // Update last sequence on successful verification
-                            std::uint64_t new_seq = envelope.value("seq", static_cast<std::uint64_t>(0));
-                            if (new_seq > last_command_seq_) {
-                                last_command_seq_ = new_seq;
-                            }
-                            
-                            Logger::log(LogLevel::Debug, "COMMAND_DELIVERY signature verified successfully");
-                        }
-                        
-                        auto ack = build_command_ack_json(config_.device_id, session_id, command_message_id, "received", "");
-                        socket.sendText(ack);
-
-                        if (quarantine_.is_quarantined() && !quarantine_.is_allowed(method)) {
-                            auto denied = build_command_result_json(config_.device_id, session_id, command_message_id,
-                                                                    trace_id, "failed", "denied",
-                                                                    "quarantined", "", "", 4001,
-                                                                    quarantine_.reason());
-                            socket.sendText(denied);
-                            return;
-                        }
-
-                        if (!policy_hash.empty() && !state_impl_.policy_hash().empty() && policy_hash != state_impl_.policy_hash()) {
-                            auto denied = build_command_result_json(config_.device_id, session_id, command_message_id,
-                                                                    trace_id, "failed", "policy_mismatch",
-                                                                    "policy hash mismatch", "", "", 4002, "");
-                            socket.sendText(denied);
-                            return;
-                        }
-
-                        IoctlClient ioctl;
-                        if (method == "lock_screen") {
-                            auto res = ioctl.lock_screen(command_message_id, state_impl_, command_message_id);
-                            auto result_msg = build_command_result_json(config_.device_id, session_id, command_message_id,
-                                                                        trace_id, "completed", "ok", "lock_screen done",
-                                                                        "", "", res.error_code, res.error_message);
-                            socket.sendText(result_msg);
-                        } else if (method == "ping") {
-                            auto res = ioctl.ping(command_message_id, state_impl_, command_message_id);
-                            auto result_msg = build_command_result_json(config_.device_id, session_id, command_message_id,
-                                                                        trace_id, "completed", "ok", res.result,
-                                                                        "", "", res.error_code, res.error_message);
-                            socket.sendText(result_msg);
-                        } else {
-                            auto not_supported = build_command_result_json(config_.device_id, session_id, command_message_id,
-                                                                           trace_id, "failed", "unsupported",
-                                                                           "command not supported", "", "", 4004, "");
-                            socket.sendText(not_supported);
-                        }
-                    }
-                } else if (mtype == "UPDATE_ANNOUNCE") {
-                    std::string session_id = parsed.value("session_id", "");
-                    auto body = parsed["body"];
-                    std::string release_id = body.value("release_id", "");
-                    std::string version = body.value("version", "");
-                    if (!session_id.empty() && !release_id.empty()) {
-                        std::unordered_map<std::string, std::string> manifest;
-                        manifest["release_id"] = release_id;
-                        manifest["version"] = version;
-                        ota_.set_manifest(manifest);
-                        state_impl_.set_release(release_id);
-                        auto status_msg = build_update_status_json(
-                            config_.device_id, session_id, release_id, "precheck", version, 0, "acknowledged", 0, "", "");
-                        socket.sendText(status_msg);
-                    }
-                }
-            } catch (const std::exception& e) {
-                Logger::log(LogLevel::Error, std::string("parse error: ") + e.what());
-            }
-        } else if (msg->type == ix::WebSocketMessageType::Error) {
-            Logger::log(LogLevel::Error, std::string("ws error: ") + msg->errorInfo.reason);
-        } else if (msg->type == ix::WebSocketMessageType::Close) {
-            Logger::log(LogLevel::Info, "ws closed");
-        } });
-
-  socket.start();
-
-  std::this_thread::sleep_for(std::chrono::seconds(5));
-
-  socket.stop();
+  shutdown_requested_.store(false, std::memory_order_release);
+  reconnect_attempts_.store(0, std::memory_order_release);
+  current_delay_ms_ = config_.reconnection.initial_delay_ms;
+  (void)try_connect();
 }

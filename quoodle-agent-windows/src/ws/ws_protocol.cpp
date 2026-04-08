@@ -379,6 +379,72 @@ std::string build_signed_telemetry_json(const std::string &device_id,
     });
 }
 
+std::string build_signed_kernel_event_telemetry_json(const std::string &device_id,
+                                                     const std::string &session_id,
+                                                     std::uint64_t event_id,
+                                                     std::uint32_t event_type,
+                                                     std::uint64_t event_timestamp_unix,
+                                                     const std::string &payload_json)
+{
+    using utils::canonical_object;
+    using utils::escape_json;
+
+    AuthEnvelope env;
+    env.type = "TELEMETRY";
+    env.device_id = device_id;
+    env.session_id = session_id;
+    env.from = "agent";
+    env.message_id = generate_uuid();
+    env.seq = next_seq();
+    env.timestamp = iso_timestamp();
+
+    std::string kernel_event = canonical_object({
+        {"event_id", std::to_string(event_id)},
+        {"event_timestamp_unix", std::to_string(event_timestamp_unix)},
+        {"event_type", std::to_string(event_type)},
+        {"payload_json", "\"" + escape_json(payload_json) + "\""},
+    });
+
+    std::string metrics = canonical_object({
+        {"kernel_event", kernel_event},
+    });
+
+    std::string body = canonical_object({
+        {"metrics", metrics},
+        {"telemetry_scope", "\"kernel_event\""},
+        {"timestamp", "\"" + escape_json(env.timestamp) + "\""},
+    });
+
+    std::string canonical = canonical_object({
+        {"body", body},
+        {"device_id", "\"" + escape_json(env.device_id) + "\""},
+        {"from", "\"" + escape_json(env.from) + "\""},
+        {"message_id", "\"" + escape_json(env.message_id) + "\""},
+        {"seq", std::to_string(env.seq)},
+        {"session_id", "\"" + escape_json(env.session_id) + "\""},
+        {"timestamp", "\"" + escape_json(env.timestamp) + "\""},
+        {"type", "\"" + escape_json(env.type) + "\""},
+    });
+
+    env.sig = sign_canonical(canonical);
+    if (env.sig.empty())
+    {
+        return {};
+    }
+
+    return canonical_object({
+        {"body", body},
+        {"device_id", "\"" + escape_json(env.device_id) + "\""},
+        {"from", "\"" + escape_json(env.from) + "\""},
+        {"message_id", "\"" + escape_json(env.message_id) + "\""},
+        {"seq", std::to_string(env.seq)},
+        {"session_id", "\"" + escape_json(env.session_id) + "\""},
+        {"sig", "\"" + escape_json(env.sig) + "\""},
+        {"timestamp", "\"" + escape_json(env.timestamp) + "\""},
+        {"type", "\"" + escape_json(env.type) + "\""},
+    });
+}
+
 std::string build_command_ack_json(const std::string &device_id,
                                    const std::string &session_id,
                                    const std::string &command_message_id,

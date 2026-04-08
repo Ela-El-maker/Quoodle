@@ -1,0 +1,15 @@
+App.xbf
+Controls\ActionButtonBar.xbf
+Controls\MetricCard.xbf
+Controls\StatusChip.xbf
+Controls\TimelineRow.xbf
+MainWindow.xbf
+Theme\Tokens.xbf
+Views\ActivityDiagnosticsPage.xbf
+Views\CommandHistoryPage.xbf
+Views\DashboardPage.xbf
+Views\DeviceDetailsPage.xbf
+Views\OnboardingPage.xbf
+Views\PairingRecoveryPage.xbf
+Views\QuickStatusPage.xbf
+Views\SettingsPage.xbf

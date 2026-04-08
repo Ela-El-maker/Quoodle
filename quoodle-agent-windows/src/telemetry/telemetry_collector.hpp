@@ -7,7 +7,7 @@
 #include <ws2tcpip.h>
 #include <windows.h>
 #include <pdh.h>
-#include <netioapi.h>
+#include <iphlpapi.h>
 #include <chrono>
 
 #pragma comment(lib, "pdh.lib")

@@ -5,6 +5,7 @@
 #ifdef _WIN32
 #include <windows.h>
 #endif
+#include "driver_ioctl.hpp"
 
 class AgentState; // Forward declaration
 
@@ -107,6 +108,9 @@ private:
 
 #ifdef _WIN32
   HANDLE hPipe = INVALID_HANDLE_VALUE;
+  HANDLE hDevice = INVALID_HANDLE_VALUE;
+  bool useDevice = false;
 #endif
-  std::uint64_t sequence_{0};
+  int last_transport_error_code_{-1};
+  std::string last_transport_error_message_{"ipc_failure"};
 };
