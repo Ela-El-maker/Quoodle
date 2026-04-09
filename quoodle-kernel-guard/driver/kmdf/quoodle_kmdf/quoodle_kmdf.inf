@@ -1,0 +1,70 @@
+;
+; quoodle_kmdf.inf
+;
+
+[Version]
+Signature="$WINDOWS NT$"
+Class=USBDevice
+ClassGuid={88BAE032-5A81-49f0-BC3D-A4FF138216D6}
+Provider=%ManufacturerName%
+CatalogFile=quoodle_kmdf.cat
+DriverVer=
+PnpLockDown=1
+
+[DestinationDirs]
+DefaultDestDir = 13
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+quoodle_kmdf.sys  = 1,,
+
+;*****************************************
+; Install Section
+;*****************************************
+
+[Manufacturer]
+%ManufacturerName%=Standard,NT$ARCH$.10.0...16299 ; %13% support introduced in build 16299
+
+[Standard.NT$ARCH$.10.0...16299]
+%quoodle_kmdf.DeviceDesc%=quoodle_kmdf_Device, USB\VID_vvvv&PID_pppp
+
+[quoodle_kmdf_Device.NT]
+CopyFiles=File_Copy
+
+[File_Copy]
+quoodle_kmdf.sys
+
+[quoodle_kmdf_Device.NT.HW]
+AddReg=quoodle_kmdf_AddReg
+
+[quoodle_kmdf_AddReg]
+; By default, USBDevice class uses iProduct descriptor to name the device
+; Uncomment for this device to use %quoodle_kmdf.DeviceDesc%
+;HKR,,FriendlyName,,%quoodle_kmdf.DeviceDesc%
+
+;-------------- Service installation
+[quoodle_kmdf_Device.NT.Services]
+AddService = quoodle_kmdf,%SPSVCINST_ASSOCSERVICE%, quoodle_kmdf_Service_Inst
+
+; -------------- quoodle_kmdf driver install sections
+[quoodle_kmdf_Service_Inst]
+DisplayName    = %quoodle_kmdf.SVCDESC%
+ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
+StartType      = 3               ; SERVICE_DEMAND_START
+ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %13%\quoodle_kmdf.sys
+
+[quoodle_kmdf_Device.NT.Wdf]
+KmdfService =  quoodle_kmdf, quoodle_kmdf_wdfsect
+
+[quoodle_kmdf_wdfsect]
+KmdfLibraryVersion = $KMDFVERSION$
+
+[Strings]
+SPSVCINST_ASSOCSERVICE= 0x00000002
+ManufacturerName="<Your manufacturer name>" ;TODO: Replace with your manufacturer name
+DiskName = "quoodle_kmdf Installation Disk"
+quoodle_kmdf.DeviceDesc = "quoodle_kmdf Device"
+quoodle_kmdf.SVCDESC = "quoodle_kmdf Service"
