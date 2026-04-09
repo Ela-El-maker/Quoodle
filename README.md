@@ -19,19 +19,12 @@ Mobile App ──▶ Control Plane ──▶ Gateway ──▶ Agent ──▶ K
 
 All commands are Ed25519-signed with nonce + TTL replay protection. Agents verify signatures locally before executing anything. Audit receipts flow back through the same chain.
 
-<div align="center">
-   <img src="assets/photo_6_2026-03-07_23-13-31.jpg" alt="Screenshot 6" width="220" style="margin:8px; border-radius:8px;"/>
-   <img src="assets/photo_2_2026-03-07_23-13-31.jpg" alt="Screenshot 2" width="220" style="margin:8px; border-radius:8px;"/>
-   <img src="assets/photo_3_2026-03-07_23-13-31.jpg" alt="Screenshot 3" width="220" style="margin:8px; border-radius:8px;"/>
-   <img src="assets/photo_4_2026-03-07_23-13-31.jpg" alt="Screenshot 4" width="220" style="margin:8px; border-radius:8px;"/>
-   <img src="assets/photo_5_2026-03-07_23-13-31.jpg" alt="Screenshot 5" width="220" style="margin:8px; border-radius:8px;"/>
-   <img src="assets/photo_7_2026-03-07_23-13-31.jpg" alt="Screenshot 7" width="220" style="margin:8px; border-radius:8px;"/>
-</div>
 ## Components
 
 | Directory               | Stack                    | Role                                                                    |
 | ----------------------- | ------------------------ | ----------------------------------------------------------------------- |
 | `quoodle-control-plane` | Laravel / PHP 8.4        | Identity, certificate authority, policy engine, command auth, audit log |
+| `quoodle-control-plane-ui` | Next.js / React / TypeScript | Control plane frontend (replaces Laravel Blade UI)                       |
 | `quoodle-gateway`       | FastAPI / Python 3.11    | WebSocket broker, signature verification, command routing               |
 | `quoodle-agent-linux`   | C++17 / Python           | Endpoint agent + privileged daemon (Unix Domain Socket)                 |
 | `quoodle-agent-windows` | C++23 / MSVC             | Endpoint agent + kernel driver communication (IOCTL)                    |
@@ -42,6 +35,9 @@ All commands are Ed25519-signed with nonce + TTL replay protection. Agents verif
 ## Quick Start
 
 ```bash
+# Create centralized local env from template
+cp .env.example .env
+
 # Clone and set up the dev environment
 ./scripts/setup_dev.sh
 
@@ -51,26 +47,24 @@ docker compose up -d --build
 
 | Service       | URL                   |
 | ------------- | --------------------- |
-| Control Plane | http://localhost:8088 |
-| Gateway       | http://localhost:8000 |
+| Control Plane UI | <http://localhost:3000> |
+| Control Plane | <http://localhost:8088> |
+| Gateway       | <http://localhost:8000> |
 | MySQL         | localhost:3307        |
 | Redis         | localhost:6379        |
 
 ### Pair a Device
 
 ```bash
-# Register + pair the Linux agent
-python3 scripts/setup_linux_agent_secrets.py
-
-# Install and start the agent service
-./scripts/install_linux_agent_systemd.sh
+# Windows ring0 end-to-end pairing + command path
+pwsh ./scripts/run_windows_ring0_e2e.ps1 -KeepAgentRunning
 ```
 
 ## Testing
 
 ```bash
-# End-to-end protocol validation
-./scripts/run_e2e_full.sh
+# Windows ring0 end-to-end protocol validation
+pwsh ./scripts/run_windows_ring0_e2e.ps1
 
 # Control Plane unit tests
 cd quoodle-control-plane && php artisan test
