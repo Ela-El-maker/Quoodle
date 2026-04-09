@@ -1,6 +1,7 @@
 #include "ws_protocol.hpp"
 #include "../telemetry/telemetry_collector.hpp"
 #include <chrono>
+#include <cstdlib>
 #include <random>
 #include <sstream>
 
@@ -96,6 +97,18 @@ AuthEnvelope build_auth_envelope(const std::string &device_id, const std::string
     env.timestamp = iso_timestamp();
     env.body.jwt = jwt_token;
     env.body.nonce = random_nonce();
+    if (const char *hwid_hash = std::getenv("AGENT_HWID_HASH"))
+    {
+        env.body.agent_info.hwid_hash = hwid_hash;
+    }
+    if (const char *attestation_hash = std::getenv("AGENT_ATTESTATION_HASH"))
+    {
+        env.body.agent_info.attestation_hash = attestation_hash;
+    }
+    if (const char *os_build = std::getenv("AGENT_OS_BUILD"))
+    {
+        env.body.agent_info.os_build = os_build;
+    }
     env.sig = "";
     return env;
 }
