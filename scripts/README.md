@@ -23,37 +23,33 @@ Creates `.env` files, builds containers (Laravel, FastAPI, MySQL, Redis), runs m
 
 ## Testing
 
-### run_e2e_full.sh
+### run_windows_ring0_e2e.ps1
 
-End-to-end test runner validating the complete protocol loop.
+Primary Windows ring0 end-to-end runner validating control plane -> gateway -> agent -> kernel.
 
 ```bash
-./scripts/run_e2e_full.sh [runs] [seed]
+pwsh ./scripts/run_windows_ring0_e2e.ps1 -KeepAgentRunning
 ```
 
-Validates: registration, pairing, WebSocket auth, command signing/delivery, telemetry, and audit integrity.
+Validates: pairing, WebSocket auth, command signing/delivery, kernel response verification, and telemetry/audit loop.
 
 Logs output to `logs/e2e/`.
 
-### setup_linux_agent_secrets.py
+### install_linux_agent_systemd.sh
 
-Pair the real Linux host agent and generate its secrets file.
+Install and run the Linux agent services.
 
 ```bash
-python3 ./scripts/setup_linux_agent_secrets.py
-
-# Deploy to the installed service
-sudo cp ~/.config/quoodle/secrets.env /etc/quoodle/secrets.env
+./scripts/install_linux_agent_systemd.sh
 sudo systemctl daemon-reload
 sudo systemctl restart quoodle-privileged quoodle-agent
 ```
 
-### test_api_auth.sh / test_telemetry_worker.sh
+### test_telemetry_worker.sh
 
 Individual endpoint tests.
 
 ```bash
-./scripts/test_api_auth.sh
 ./scripts/test_telemetry_worker.sh
 ```
 
