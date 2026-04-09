@@ -16,12 +16,20 @@ function decodeState(state: string): { nonce?: string; next?: string } | null {
   }
 }
 
+function publicOrigin(request: NextRequest): string {
+  const forwardedProto = request.headers.get('x-forwarded-proto');
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  const host = forwardedHost ?? request.headers.get('host') ?? request.nextUrl.host;
+  const proto = forwardedProto ?? request.nextUrl.protocol.replace(':', '');
+  return `${proto}://${host}`;
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const code = request.nextUrl.searchParams.get('code') ?? '';
   const state = request.nextUrl.searchParams.get('state') ?? '';
   const storedState = request.cookies.get('quoodle_google_oauth_state')?.value ?? '';
 
-  const loginUrl = new URL('/sign-up-login-screen', request.url);
+  const loginUrl = new URL('/sign-up-login-screen', publicOrigin(request));
   if (!code || !state || !storedState || state !== storedState) {
     loginUrl.searchParams.set('error', 'google_state_invalid');
     const response = NextResponse.redirect(loginUrl);
@@ -29,7 +37,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return response;
   }
 
-  const origin = request.nextUrl.origin;
+  const origin = publicOrigin(request);
   const redirectUri = `${origin}/api/auth/google/callback`;
 
   const exchangeResponse = await fetch(controlPlaneApiUrl('/auth/google/exchange'), {
@@ -63,9 +71,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const nextFromState = typeof parsedState?.next === 'string' ? parsedState.next : '';
   const redirectPath = nextFromState && nextFromState.startsWith('/') ? nextFromState : roleHomePath(cookieValues.role);
 
-  const response = NextResponse.redirect(new URL(redirectPath, request.url));
-  attachAuthCookies(response, cookieValues);
+  const response = NextResponse.redirect(new URL(redirectPath, publicOrigin(request)));
+  attachAuthCookies(response, cookieValues, request);
   response.cookies.delete('quoodle_google_oauth_state');
   return response;
 }
-

@@ -14,18 +14,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ message: 'email_required' }, { status: 422 });
   }
 
-  const upstreamResponse = await fetch(controlPlaneApiUrl('/auth/request-otp'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email }),
-    cache: 'no-store',
-  });
+  let upstreamResponse: Response;
+  try {
+    upstreamResponse = await fetch(controlPlaneApiUrl('/auth/request-otp'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+      cache: 'no-store',
+    });
+  } catch {
+    return NextResponse.json({ message: 'control_plane_unreachable' }, { status: 503 });
+  }
 
   const upstreamJson = (await upstreamResponse.json().catch(() => ({}))) as Record<string, unknown>;
   if (!upstreamResponse.ok) {
+    const fallbackMessage = upstreamResponse.status >= 500 ? 'auth_service_unavailable' : 'otp_request_failed';
     return NextResponse.json(
       {
-        message: String(upstreamJson.message ?? 'otp_request_failed'),
+        message: String(upstreamJson.message ?? fallbackMessage),
         errors: upstreamJson.errors ?? null,
       },
       { status: upstreamResponse.status },
@@ -41,4 +47,3 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     { status: 200 },
   );
 }
-

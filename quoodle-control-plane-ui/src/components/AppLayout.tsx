@@ -13,7 +13,7 @@ interface AppLayoutProps {
 export default function AppLayout({ children, currentPath = '', userRole = 'viewer' }: AppLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
 
   const effectiveRole = user?.role ?? userRole;
   const effectiveEmail =
@@ -26,6 +26,10 @@ export default function AppLayout({ children, currentPath = '', userRole = 'view
   const effectiveName =
     user?.name ??
     (effectiveRole === 'admin' ? 'Admin' : effectiveRole === 'operator' ? 'Operator' : 'Viewer');
+  const handleLogout = async () => {
+    await logout();
+    window.location.href = '/sign-up-login-screen';
+  };
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
@@ -47,6 +51,7 @@ export default function AppLayout({ children, currentPath = '', userRole = 'view
         userRole={effectiveRole}
         userName={effectiveName}
         userEmail={effectiveEmail}
+        onLogout={handleLogout}
       />
 
       {/* Main content */}

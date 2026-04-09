@@ -4,6 +4,7 @@ import {
   attachTokenCookies,
   clearAuthCookies,
   controlPlaneApiUrl,
+  shouldUseSecureCookies,
   type MePayload,
   mapMePayload,
 } from '../_shared';
@@ -79,14 +80,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       refreshToken: activeRefreshToken,
       sessionId,
       role: normalizeRole(user.role) ?? roleCookie,
-    });
+    }, request);
   } else {
+    const secure = shouldUseSecureCookies(request);
     response.cookies.set({
       name: AUTH_COOKIE.role,
       value: user.role,
       httpOnly: false,
       sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      secure,
       path: '/',
     });
   }

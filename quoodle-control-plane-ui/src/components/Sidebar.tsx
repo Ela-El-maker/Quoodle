@@ -2,7 +2,7 @@
 import React from 'react';
 import Link from 'next/link';
 import AppLogo from '@/components/ui/AppLogo';
-import { LayoutDashboard, Monitor, Terminal, Bell, Activity, ShieldCheck, ScrollText, HeartPulse, ChevronLeft, ChevronRight, X, Settings, Eye, BarChart2, Webhook, Calendar, History,  } from 'lucide-react';
+import { LayoutDashboard, Monitor, Terminal, Bell, Activity, ShieldCheck, ScrollText, HeartPulse, ChevronLeft, ChevronRight, X, Settings, Eye, BarChart2, Webhook, Calendar, History, LogOut } from 'lucide-react';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -13,6 +13,7 @@ interface SidebarProps {
   userRole?: 'admin' | 'operator' | 'viewer';
   userName?: string;
   userEmail?: string;
+  onLogout?: () => void | Promise<void>;
 }
 
 // ─── Nav groups by role ───────────────────────────────────────────────────────
@@ -113,6 +114,7 @@ export default function Sidebar({
   userRole = 'operator',
   userName,
   userEmail,
+  onLogout,
 }: SidebarProps) {
   const isActive = (path: string) => currentPath === path || currentPath.startsWith(path + '/');
 
@@ -132,6 +134,7 @@ export default function Sidebar({
           userRole={userRole}
           userName={userName}
           userEmail={userEmail}
+          onLogout={onLogout}
         />
       </aside>
 
@@ -158,6 +161,7 @@ export default function Sidebar({
           userRole={userRole}
           userName={userName}
           userEmail={userEmail}
+          onLogout={onLogout}
         />
       </aside>
     </>
@@ -172,6 +176,7 @@ function SidebarContent({
   userRole,
   userName,
   userEmail,
+  onLogout,
 }: {
   collapsed: boolean;
   onToggle: () => void;
@@ -180,6 +185,7 @@ function SidebarContent({
   userRole: 'admin' | 'operator' | 'viewer';
   userName?: string;
   userEmail?: string;
+  onLogout?: () => void | Promise<void>;
 }) {
   const navGroups = roleNavGroups[userRole] ?? adminNavGroups;
 
@@ -280,6 +286,17 @@ function SidebarContent({
             </div>
           )}
         </Link>
+        <button
+          type="button"
+          onClick={() => {
+            if (onLogout) void onLogout();
+          }}
+          className={`mt-1 w-full flex items-center gap-3 px-2 py-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors ${collapsed ? 'justify-center' : ''}`}
+          title={collapsed ? 'Log out' : undefined}
+        >
+          <LogOut size={14} className="flex-shrink-0" />
+          {!collapsed && <span className="text-xs font-medium">Log out</span>}
+        </button>
       </div>
     </>
   );

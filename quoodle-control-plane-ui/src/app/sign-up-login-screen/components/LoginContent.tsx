@@ -37,7 +37,13 @@ export default function LoginContent() {
     const params = new URLSearchParams(window.location.search);
     const error = params.get('error');
     if (error) {
-      toast.error('Authentication failed', { description: error.replace(/_/g, ' ') });
+      const description =
+        error === 'google_not_configured'
+          ? 'Google sign-in is not configured in this environment.'
+          : error === 'google_state_invalid'
+            ? 'Google sign-in state expired. Please try again.'
+            : error.replace(/_/g, ' ');
+      toast.error('Authentication failed', { description });
       params.delete('error');
       const next = params.toString();
       window.history.replaceState({}, '', next ? `?${next}` : window.location.pathname);
@@ -68,10 +74,16 @@ export default function LoginContent() {
       };
 
       if (!response.ok) {
-        toast.error('Could not send OTP', {
-          description: payload.message === 'rate_limited'
+        const description =
+          payload.message === 'rate_limited'
             ? 'Too many requests. Please wait a minute and try again.'
-            : 'Please check your email and try again.',
+            : payload.message === 'control_plane_unreachable'
+              ? 'Auth service is unreachable. Ensure control-plane is running.'
+              : payload.message === 'auth_service_unavailable'
+                ? 'Auth service is starting up. Please try again in a few seconds.'
+                : 'Please check your email and try again.';
+        toast.error('Could not send OTP', {
+          description,
         });
         return;
       }
@@ -131,8 +143,11 @@ export default function LoginContent() {
   }
 
   function continueWithGoogle() {
-    const next = window.location.search ? window.location.search : '';
-    window.location.href = `/api/auth/google/start${next}`;
+    const params = new URLSearchParams(window.location.search);
+    const next = params.get('next');
+    window.location.href = next
+      ? `/api/auth/google/start?next=${encodeURIComponent(next)}`
+      : '/api/auth/google/start';
   }
 
   return (

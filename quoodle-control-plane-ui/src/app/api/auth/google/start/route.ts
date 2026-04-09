@@ -4,13 +4,33 @@ function base64Url(input: string): string {
   return Buffer.from(input, 'utf-8').toString('base64url');
 }
 
+function publicOrigin(request: NextRequest): string {
+  const forwardedProto = request.headers.get('x-forwarded-proto');
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  const host = forwardedHost ?? request.headers.get('host') ?? request.nextUrl.host;
+  const proto = forwardedProto ?? request.nextUrl.protocol.replace(':', '');
+  return `${proto}://${host}`;
+}
+
+function shouldUseSecureCookie(request: NextRequest): boolean {
+  const override = (process.env.AUTH_COOKIE_SECURE ?? '').trim().toLowerCase();
+  if (override === '1' || override === 'true' || override === 'yes' || override === 'on') return true;
+  if (override === '0' || override === 'false' || override === 'no' || override === 'off') return false;
+
+  const forwardedProto = request.headers.get('x-forwarded-proto');
+  const protocol = (forwardedProto ?? request.nextUrl.protocol.replace(':', '')).toLowerCase();
+  return protocol === 'https';
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const clientId = process.env.GOOGLE_CLIENT_ID ?? '';
+  const clientId = process.env.GOOGLE_CLIENT_ID ?? process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? '';
   if (!clientId) {
-    return NextResponse.json({ message: 'google_client_id_missing' }, { status: 500 });
+    const loginUrl = new URL('/sign-up-login-screen', publicOrigin(request));
+    loginUrl.searchParams.set('error', 'google_not_configured');
+    return NextResponse.redirect(loginUrl);
   }
 
-  const origin = request.nextUrl.origin;
+  const origin = publicOrigin(request);
   const redirectUri = `${origin}/api/auth/google/callback`;
   const statePayload = {
     nonce: crypto.randomUUID(),
@@ -32,10 +52,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     value: state,
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: shouldUseSecureCookie(request),
     path: '/',
     maxAge: 10 * 60,
   });
   return response;
 }
-
