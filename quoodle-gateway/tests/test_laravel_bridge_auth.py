@@ -117,3 +117,20 @@ def test_dispatch_rejects_invalid_signature(client):
     finally:
         settings.require_laravel_signature = old_require
         settings.laravel_service_pubkey_b64 = old_pub
+
+
+def test_dispatch_blocks_runtime_unsupported_method(client):
+    old_require = settings.require_laravel_signature
+    try:
+        settings.require_laravel_signature = False
+        payload = _sample_dispatch_payload()
+        payload["method"] = "lock_screen"
+        payload["envelope"]["body"]["method"] = "lock_screen"
+
+        resp = client.post("/api/v1/command/dispatch", json=payload)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "blocked"
+        assert body["reason"] == "not_supported_runtime"
+    finally:
+        settings.require_laravel_signature = old_require
