@@ -120,10 +120,15 @@ async def agent_ws(websocket: WebSocket):
     agent_info: dict[str, str] = {}
     agent_pubkey_b64: str | None = None
     try:
-        raw = await websocket.receive_text()
+        try:
+            raw = await websocket.receive_text()
+        except WebSocketDisconnect as exc:
+            logger.info("ws disconnected before AUTH: code=%s reason=%s", exc.code, exc.reason)
+            return
         try:
             payload = json.loads(raw)
         except json.JSONDecodeError:
+            logger.warning("AUTH_INVALID_PAYLOAD for device=%s", device_id)
             await websocket.send_json(build_auth_error(device_id, "AUTH_INVALID_PAYLOAD", "Invalid JSON"))
             await websocket.close(code=4400)
             return
@@ -131,6 +136,7 @@ async def agent_ws(websocket: WebSocket):
         try:
             validate_auth_envelope(payload)
         except ValueError as exc:
+            logger.warning("AUTH_INVALID_ENVELOPE for device=%s error=%s", device_id, str(exc))
             await websocket.send_json(build_auth_error(device_id, "AUTH_INVALID_ENVELOPE", str(exc)))
             await websocket.close(code=4400)
             return
@@ -144,6 +150,7 @@ async def agent_ws(websocket: WebSocket):
             # as "pending_pairing" in Laravel for discovery UX.
             agent_info = payload.get("body", {}).get("agent_info", {}) or {}
             agent_info["connected_at"] = iso_timestamp()
+            logger.warning("AUTH_UNKNOWN_DEVICE for device=%s", device_id)
             fire_and_forget(notify_device_online(device_id, "unpaired", agent_info))
             await websocket.send_json(build_auth_error(device_id, "AUTH_UNKNOWN_DEVICE", "Unknown device_id"))
             await websocket.close(code=4401)
@@ -156,7 +163,14 @@ async def agent_ws(websocket: WebSocket):
             if isinstance(nonce, str):
                 await replay.check_and_store_nonce(device_id, nonce)
             verify_ed25519_signature(payload, agent_pubkey_b64)
-        except (ReplayError, SignatureError):
+        except ReplayError as exc:
+            logger.warning("AUTH_REPLAY for device=%s error=%s", device_id, str(exc))
+            await websocket.send_json(build_auth_error(device_id, "AUTH_REPLAY", str(exc)))
+            await websocket.close(code=4401)
+            return
+        except SignatureError as exc:
+            logger.warning("AUTH_INVALID_SIGNATURE for device=%s error=%s", device_id, str(exc))
+            await websocket.send_json(build_auth_error(device_id, "AUTH_INVALID_SIGNATURE", str(exc)))
             await websocket.close(code=4401)
             return
 
@@ -167,6 +181,7 @@ async def agent_ws(websocket: WebSocket):
         try:
             claims = await validate_auth_jwt(auth_token)
         except Exception as exc:
+            logger.warning("AUTH_INVALID_JWT for device=%s error=%s", device_id, str(exc))
             await websocket.send_json(build_auth_error(device_id, "AUTH_INVALID_JWT", str(exc)))
             await websocket.close(code=4401)
             return
