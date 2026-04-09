@@ -68,5 +68,8 @@ scripts/ci_secrets_output.txt
 
 # Ignore system-specific agent/kernel artifacts
 quoodle-agent-windows/build/
+quoodle-agent-windows/ui-companion/bin/
+quoodle-agent-windows/ui-companion/obj/
 kernel-service/build/
 logs/
+assets/photo_*.jpg
