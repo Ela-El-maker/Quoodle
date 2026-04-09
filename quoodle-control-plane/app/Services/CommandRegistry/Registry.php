@@ -28,14 +28,6 @@ class Registry
                 allowedInQuarantine: false,
                 paramsRules: []
             ),
-            'logout' => new CommandDefinition(
-                name: 'logout',
-                riskLevel: 'medium',
-                minRole: 'operator',
-                requires2fa: false,
-                allowedInQuarantine: false,
-                paramsRules: []
-            ),
             'reboot_device' => new CommandDefinition(
                 name: 'reboot_device',
                 riskLevel: 'high',
@@ -46,39 +38,8 @@ class Registry
                     'delay_seconds' => ['nullable', 'integer', 'min:0', 'max:300'],
                 ]
             ),
-            'reboot_system' => new CommandDefinition(
-                name: 'reboot_system',
-                riskLevel: 'high',
-                minRole: 'admin',
-                requires2fa: true,
-                allowedInQuarantine: false,
-                paramsRules: [
-                    'delay_seconds' => ['nullable', 'integer', 'min:0', 'max:300'],
-                ]
-            ),
-            'reboot' => new CommandDefinition(
-                name: 'reboot',
-                riskLevel: 'high',
-                minRole: 'admin',
-                requires2fa: true,
-                allowedInQuarantine: false,
-                paramsRules: [
-                    'delay_seconds' => ['nullable', 'integer', 'min:0', 'max:300'],
-                ]
-            ),
             'shutdown_device' => new CommandDefinition(
                 name: 'shutdown_device',
-                riskLevel: 'high',
-                minRole: 'admin',
-                requires2fa: true,
-                allowedInQuarantine: false,
-                paramsRules: [
-                    'delay_seconds' => ['nullable', 'integer', 'min:0', 'max:300'],
-                    'force' => ['nullable', 'boolean'],
-                ]
-            ),
-            'shutdown' => new CommandDefinition(
-                name: 'shutdown',
                 riskLevel: 'high',
                 minRole: 'admin',
                 requires2fa: true,
