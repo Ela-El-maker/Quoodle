@@ -44,6 +44,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     refreshToken: nextRefreshToken,
     sessionId,
     role: roleValue,
-  });
+  }, request);
   return response;
 }

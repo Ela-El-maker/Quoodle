@@ -16,7 +16,7 @@ function isAllowedPath(pathname: string, prefixes: readonly string[]): boolean {
 export function middleware(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
 
-  if (pathname.startsWith('/api/auth')) {
+  if (pathname.startsWith('/api/')) {
     return NextResponse.next();
   }
 

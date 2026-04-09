@@ -1,13 +1,14 @@
 'use client';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Monitor, Terminal, Activity, Shield, Clock, Cpu, HardDrive, Wifi, ChevronRight, ArrowLeft, Play, CheckCircle, XCircle, AlertTriangle, RefreshCw, ScrollText, Search, ChevronDown, ChevronUp, Download, RotateCcw, Layers, Globe, Lock, Users, Power, Camera, Folder, File, List, Network, Database, Server, Wrench, BarChart2, Calendar, Clipboard, Volume2, Monitor as DisplayIcon, Package, Rocket, Hash, Info, X, Send, Radio, Loader2 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { toast } from 'sonner';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ Types ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬
 type DeviceStatus = 'online' | 'offline' | 'quarantined' | 'degraded';
+type ComplianceStatus = 'compliant' | 'non_compliant' | 'drift';
 type CommandState = 'queued' | 'dispatched' | 'ack_received' | 'executing' | 'completed' | 'failed' | 'expired' | 'rejected';
 
 interface Device {
@@ -20,8 +21,8 @@ interface Device {
   compliance: 'compliant' | 'non_compliant' | 'drift';
   lastSeen: string;
   agentVersion: string;
-  policySync: boolean;
-  kernelGuard: boolean;
+  policySync: boolean | null;
+  kernelGuard: boolean | null;
   ipAddress: string;
   sessionId: string | null;
   cpu: string;
@@ -35,6 +36,7 @@ interface Device {
 interface CommandEntry {
   id: string;
   method: string;
+  params: Record<string, unknown>;
   state: CommandState;
   actor: string;
   queuedAt: string;
@@ -50,7 +52,118 @@ interface TraceStep {
   time: string | null;
 }
 
-// ─── Command Library ──────────────────────────────────────────────────────────
+interface DeviceDetailApi {
+  device_id: string;
+  owner_email?: string | null;
+  device_name?: string | null;
+  lifecycle_state?: string | null;
+  last_seen?: string | null;
+  agent_version?: string | null;
+  os_build?: string | null;
+  risk_score?: number | string | null;
+  policy_in_sync?: boolean | null;
+  compliance?: { status?: string | null };
+  telemetry_latest?: {
+    cpu?: number | null;
+    ram?: number | null;
+    disk_usage?: number | null;
+    risk_score?: number | string | null;
+  } | null;
+}
+
+interface CommandsApiResponse {
+  commands?: Array<{
+    command_id?: string;
+    method?: string;
+    params?: Record<string, unknown> | null;
+    state?: CommandState;
+    queued_at?: string | null;
+    completed_at?: string | null;
+    result_status?: string | null;
+    error_code?: number | null;
+    error_message?: string | null;
+    actor_email?: string | null;
+  }>;
+}
+
+interface CommandDetailApiResponse {
+  command_id?: string;
+  method?: string;
+  params?: Record<string, unknown> | null;
+  state?: CommandState;
+  queued_at?: string | null;
+  completed_at?: string | null;
+  result?: {
+    status?: string | null;
+    notes?: string | null;
+    artifact_url?: string | null;
+    artifact_checksum?: string | null;
+    data?: Record<string, unknown> | null;
+  } | null;
+  error_code?: number | null;
+  error_message?: string | null;
+}
+
+interface TelemetryApiResponse {
+  timestamp?: string | null;
+  metrics?: {
+    cpu?: number | null;
+    ram?: number | null;
+    disk_usage?: number | null;
+    network_tx?: number | null;
+    network_rx?: number | null;
+    risk_score?: number | null;
+  };
+}
+
+interface AlertsApiResponse {
+  alerts?: Array<{
+    alert_id?: string;
+    device_id?: string;
+    severity?: string;
+    message?: string;
+    timestamp?: string | null;
+    acknowledged?: boolean;
+  }>;
+}
+
+interface AuditApiResponse {
+  entries?: Array<{
+    id?: string;
+    timestamp?: string | null;
+    event_type?: string;
+    summary?: string;
+  }>;
+}
+
+interface DeviceAlert {
+  id: string;
+  severity: string;
+  message: string;
+  time: string;
+  status: string;
+}
+
+interface DeviceAuditEntry {
+  id: string;
+  type: string;
+  actor: string;
+  action: string;
+  time: string;
+  outcome: 'success' | 'failure';
+}
+
+interface DeviceTelemetry {
+  cpu: number | null;
+  ram: number | null;
+  disk_usage: number | null;
+  network_tx: number | null;
+  network_rx: number | null;
+  risk_score: number | null;
+  timestamp: string | null;
+}
+
+// ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ Command Library ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬
 const COMMAND_CATEGORIES = [
   {
     category: 'System',
@@ -193,32 +306,103 @@ const COMMAND_CATEGORIES = [
   },
 ];
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-const mockDevices: Record<string, Device> = {
-  'PC001': { id: 'PC001', hostname: 'WKSTN-001', osBuild: '19045.4170', owner: 'sarah.chen@quoodle.io', status: 'online', riskScore: 0.12, compliance: 'compliant', lastSeen: '21:06:11', agentVersion: '0.0.1', policySync: true, kernelGuard: true, ipAddress: '10.0.1.11', sessionId: 'sess-7a2f', cpu: 'Intel Core i7-12700K', ram: '32 GB', disk: '512 GB SSD', uptime: '4d 6h 22m', location: 'HQ Floor 2', department: 'Engineering' },
-  'WKSTN-055': { id: 'WKSTN-055', hostname: 'WKSTN-055', osBuild: '19045.4170', owner: 'chloe.dubois@quoodle.io', status: 'online', riskScore: 0.06, compliance: 'compliant', lastSeen: '21:06:12', agentVersion: '0.0.1', policySync: true, kernelGuard: true, ipAddress: '10.0.1.65', sessionId: 'sess-1k2l', cpu: 'Intel Core i5-11400', ram: '16 GB', disk: '256 GB SSD', uptime: '2d 14h 5m', location: 'HQ Floor 3', department: 'Marketing' },
-};
+// ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ Mock data ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬
+function normalizeStatus(value: string | null | undefined): DeviceStatus {
+  const normalized = String(value ?? '').toLowerCase();
+  if (normalized === 'active' || normalized === 'online') return 'online';
+  if (normalized === 'quarantined') return 'quarantined';
+  if (normalized === 'degraded') return 'degraded';
+  return 'offline';
+}
 
-const getDevice = (id: string): Device => mockDevices[id] ?? {
-  id, hostname: id, osBuild: '19045.4170', owner: 'admin@quoodle.io', status: 'online', riskScore: 0.15, compliance: 'compliant', lastSeen: '21:06:00', agentVersion: '0.0.1', policySync: true, kernelGuard: true, ipAddress: '10.0.1.100', sessionId: 'sess-demo', cpu: 'Intel Core i7', ram: '16 GB', disk: '512 GB SSD', uptime: '1d 2h', location: 'HQ', department: 'IT',
-};
+function normalizeCompliance(value: string | null | undefined): ComplianceStatus {
+  const normalized = String(value ?? '').toLowerCase();
+  if (normalized === 'compliant') return 'compliant';
+  if (normalized === 'drift' || normalized === 'unknown' || normalized === 'degraded') return 'drift';
+  return 'non_compliant';
+}
 
-const mockCommandHistory: CommandEntry[] = [
-  { id: 'CMD-7742', method: 'system-info', state: 'completed', actor: 'chloe.dubois@quoodle.io', queuedAt: '21:06:01', completedAt: '21:06:09', duration: '8s', resultPreview: 'Windows 11 Pro 22H2 · 12-core · 32GB RAM' },
-  { id: 'CMD-7740', method: 'screenshot-capture', state: 'completed', actor: 'admin@quoodle.io', queuedAt: '21:04:50', completedAt: '21:04:54', duration: '4s', resultPreview: '1920×1080 PNG · 2.4 MB' },
-  { id: 'CMD-7739', method: 'process-list', state: 'completed', actor: 'ops.team@quoodle.io', queuedAt: '21:05:40', completedAt: '21:05:48', duration: '8s', resultPreview: '142 processes · 8 high-CPU' },
-  { id: 'CMD-7737', method: 'filesystem', state: 'completed', actor: 'sarah.chen@quoodle.io', queuedAt: '21:03:10', completedAt: '21:03:18', duration: '8s', resultPreview: 'C:\\ · 512 GB · 187 GB used' },
-  { id: 'CMD-7741', method: 'lock_screen', state: 'failed', actor: 'raj.mehta@quoodle.io', queuedAt: '21:01:55', completedAt: '21:01:58', duration: '3s', resultPreview: null },
-  { id: 'CMD-7736', method: 'network-info', state: 'completed', actor: 'alex.kumar@quoodle.io', queuedAt: '20:45:00', completedAt: '20:45:06', duration: '6s', resultPreview: '3 interfaces · IPv4 10.0.1.29' },
-];
+function normalizeRisk(value: number | string | null | undefined): number {
+  const parsed = typeof value === 'number' ? value : Number(value ?? 0);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  if (parsed > 1) return Math.max(0, Math.min(1, parsed / 100));
+  return Math.max(0, Math.min(1, parsed));
+}
 
+function formatTime(iso: string | null | undefined): string {
+  if (!iso) return '-';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toISOString().replace('T', ' ').replace('Z', '').slice(11, 19);
+}
+
+function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return '-';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toISOString().replace('T', ' ').replace('Z', ' UTC').slice(0, 23);
+}
+
+function formatDuration(startIso: string | null | undefined, endIso: string | null | undefined): string | null {
+  if (!startIso || !endIso) return null;
+  const start = new Date(startIso).getTime();
+  const end = new Date(endIso).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null;
+  return `${Math.round((end - start) / 1000)}s`;
+}
+
+function parseJsonParams(input: string): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return { ok: true, value: {} };
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+      return { ok: false, error: 'Parameters must be a JSON object.' };
+    }
+
+    return { ok: true, value: parsed as Record<string, unknown> };
+  } catch {
+    return { ok: false, error: 'Invalid JSON parameters.' };
+  }
+}
+
+function isTerminalState(state: CommandState): boolean {
+  return ['completed', 'failed', 'expired', 'rejected'].includes(state);
+}
+
+function getFallbackDevice(id: string): Device {
+  return {
+    id,
+    hostname: id,
+    osBuild: '-',
+    owner: 'Unknown',
+    status: 'offline',
+    riskScore: 0,
+    compliance: 'drift',
+    lastSeen: '-',
+    agentVersion: '-',
+    policySync: null,
+    kernelGuard: null,
+    ipAddress: '-',
+    sessionId: null,
+    cpu: 'Unknown',
+    ram: 'Unknown',
+    disk: 'Unknown',
+    uptime: 'Unknown',
+    location: 'Unknown',
+    department: 'Unknown',
+  };
+}
 const buildTraceSteps = (method: string, state: CommandState): TraceStep[] => {
   const steps: TraceStep[] = [
     { label: 'Web UI', detail: 'Command submitted via control plane', status: 'done', time: '21:06:01' },
     { label: 'Laravel API', detail: 'Validated, authorized, signed payload', status: 'done', time: '21:06:01' },
     { label: 'FastAPI Gateway', detail: 'Signature verified, dispatched to agent channel', status: state === 'queued' ? 'pending' : 'done', time: state === 'queued' ? null : '21:06:02' },
     { label: 'Windows Agent', detail: `Executing: ${method}`, status: ['queued', 'dispatched'].includes(state) ? 'pending' : state === 'executing' ? 'active' : state === 'failed' ? 'error' : 'done', time: ['queued', 'dispatched'].includes(state) ? null : '21:06:03' },
-    { label: 'Result Return', detail: 'Agent → FastAPI → Laravel → UI', status: ['queued', 'dispatched', 'ack_received', 'executing'].includes(state) ? 'pending' : state === 'failed' ? 'error' : 'done', time: ['queued', 'dispatched', 'ack_received', 'executing'].includes(state) ? null : '21:06:09' },
+    { label: 'Result Return', detail: 'Agent -> FastAPI -> Laravel -> UI', status: ['queued', 'dispatched', 'ack_received', 'executing'].includes(state) ? 'pending' : state === 'failed' ? 'error' : 'done', time: ['queued', 'dispatched', 'ack_received', 'executing'].includes(state) ? null : '21:06:09' },
   ];
   return steps;
 };
@@ -228,7 +412,20 @@ const MAIN_TABS = ['Overview', 'Commands', 'Trace', 'Results', 'History', 'Telem
 export default function DeviceDetailPageContent() {
   const searchParams = useSearchParams();
   const deviceId = searchParams.get('device') ?? 'WKSTN-055';
-  const device = getDevice(deviceId);
+    const [device, setDevice] = useState<Device>(() => getFallbackDevice(deviceId));
+  const [isLoadingDevice, setIsLoadingDevice] = useState(true);
+  const [commandHistory, setCommandHistory] = useState<CommandEntry[]>([]);
+  const [alerts, setAlerts] = useState<DeviceAlert[]>([]);
+  const [auditEntries, setAuditEntries] = useState<DeviceAuditEntry[]>([]);
+  const [telemetry, setTelemetry] = useState<DeviceTelemetry>({
+    cpu: null,
+    ram: null,
+    disk_usage: null,
+    network_tx: null,
+    network_rx: null,
+    risk_score: null,
+    timestamp: null,
+  });
 
   const [activeTab, setActiveTab] = useState('Overview');
   const [commandSearch, setCommandSearch] = useState('');
@@ -240,14 +437,156 @@ export default function DeviceDetailPageContent() {
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const liveRef = useRef<HTMLDivElement>(null);
 
+  const loadDeviceData = useCallback(async () => {
+    setIsLoadingDevice(true);
+
+    const encodedId = encodeURIComponent(deviceId);
+    const [deviceRes, commandsRes, telemetryRes, alertsRes, auditRes] = await Promise.allSettled([
+      fetch(`/api/devices/${encodedId}`, { credentials: 'include', cache: 'no-store' }),
+      fetch(`/api/devices/${encodedId}/commands?limit=20`, { credentials: 'include', cache: 'no-store' }),
+      fetch(`/api/devices/${encodedId}/telemetry/latest`, { credentials: 'include', cache: 'no-store' }),
+      fetch('/api/alerts?limit=100', { credentials: 'include', cache: 'no-store' }),
+      fetch(`/api/audit/device/${encodedId}?limit=100`, { credentials: 'include', cache: 'no-store' }),
+    ]);
+
+    if (deviceRes.status === 'fulfilled' && deviceRes.value.ok) {
+      const payload = (await deviceRes.value.json()) as DeviceDetailApi;
+      const detailTelemetry = payload.telemetry_latest ?? {};
+
+      setDevice({
+        id: payload.device_id,
+        hostname: payload.device_name?.trim() || payload.device_id,
+        osBuild: payload.os_build?.trim() || '-',
+        owner: payload.owner_email?.trim() || 'Unknown',
+        status: normalizeStatus(payload.lifecycle_state),
+        riskScore: normalizeRisk(payload.risk_score ?? detailTelemetry.risk_score),
+        compliance: normalizeCompliance(payload.compliance?.status),
+        lastSeen: formatDateTime(payload.last_seen),
+        agentVersion: payload.agent_version?.trim() || '-',
+        policySync: typeof payload.policy_in_sync === 'boolean' ? payload.policy_in_sync : null,
+        kernelGuard: null,
+        ipAddress: '-',
+        sessionId: null,
+        cpu: detailTelemetry.cpu == null ? 'Unknown' : `${detailTelemetry.cpu}%`,
+        ram: detailTelemetry.ram == null ? 'Unknown' : `${detailTelemetry.ram}%`,
+        disk: detailTelemetry.disk_usage == null ? 'Unknown' : `${detailTelemetry.disk_usage}%`,
+        uptime: 'Unknown',
+        location: 'Unknown',
+        department: 'Unknown',
+      });
+    } else {
+      setDevice(getFallbackDevice(deviceId));
+      toast.error('Could not load device detail');
+    }
+
+    if (commandsRes.status === 'fulfilled' && commandsRes.value.ok) {
+      const payload = (await commandsRes.value.json()) as CommandsApiResponse;
+      setCommandHistory(
+        (payload.commands ?? []).map((cmd) => ({
+          id: cmd.command_id ?? 'unknown',
+          method: cmd.method ?? 'unknown',
+          params: cmd.params ?? {},
+          state: (cmd.state as CommandState) ?? 'queued',
+          actor: cmd.actor_email?.trim() || 'system',
+          queuedAt: formatTime(cmd.queued_at),
+          completedAt: cmd.completed_at ? formatTime(cmd.completed_at) : null,
+          duration: formatDuration(cmd.queued_at, cmd.completed_at),
+          resultPreview: cmd.error_message || cmd.result_status || (cmd.error_code ? `error ${cmd.error_code}` : null),
+        })),
+      );
+    } else {
+      setCommandHistory([]);
+    }
+
+    if (telemetryRes.status === 'fulfilled' && telemetryRes.value.ok) {
+      const payload = (await telemetryRes.value.json()) as TelemetryApiResponse;
+      setTelemetry({
+        cpu: payload.metrics?.cpu ?? null,
+        ram: payload.metrics?.ram ?? null,
+        disk_usage: payload.metrics?.disk_usage ?? null,
+        network_tx: payload.metrics?.network_tx ?? null,
+        network_rx: payload.metrics?.network_rx ?? null,
+        risk_score: payload.metrics?.risk_score ?? null,
+        timestamp: payload.timestamp ?? null,
+      });
+    } else {
+      setTelemetry({
+        cpu: null,
+        ram: null,
+        disk_usage: null,
+        network_tx: null,
+        network_rx: null,
+        risk_score: null,
+        timestamp: null,
+      });
+    }
+
+    if (alertsRes.status === 'fulfilled' && alertsRes.value.ok) {
+      const payload = (await alertsRes.value.json()) as AlertsApiResponse;
+      setAlerts(
+        (payload.alerts ?? [])
+          .filter((item) => item.device_id === deviceId)
+          .map((item) => ({
+            id: item.alert_id ?? 'unknown',
+            severity: (item.severity ?? 'low').toLowerCase(),
+            message: item.message ?? 'No message',
+            time: formatTime(item.timestamp),
+            status: item.acknowledged ? 'acknowledged' : 'open',
+          })),
+      );
+    } else {
+      setAlerts([]);
+    }
+
+    if (auditRes.status === 'fulfilled' && auditRes.value.ok) {
+      const payload = (await auditRes.value.json()) as AuditApiResponse;
+      setAuditEntries(
+        (payload.entries ?? []).map((entry) => ({
+          id: entry.id ?? 'unknown',
+          type: entry.event_type ?? 'event',
+          actor: 'system',
+          action: entry.summary ?? `${entry.event_type ?? 'event'} event`,
+          time: formatTime(entry.timestamp),
+          outcome: 'success' as const,
+        })),
+      );
+    } else {
+      setAuditEntries([]);
+    }
+
+    setIsLoadingDevice(false);
+  }, [deviceId]);
+
+  useEffect(() => {
+    void loadDeviceData();
+  }, [loadDeviceData]);
   const riskColor = device.riskScore > 0.6 ? 'text-red-400' : device.riskScore > 0.3 ? 'text-amber-400' : 'text-green-400';
 
-  const filteredCategories = COMMAND_CATEGORIES.map(cat => ({
-    ...cat,
-    commands: cat.commands.filter(cmd =>
-      !commandSearch || cmd.label.toLowerCase().includes(commandSearch.toLowerCase()) || cmd.desc.toLowerCase().includes(commandSearch.toLowerCase())
-    ),
-  })).filter(cat => !commandSearch || cat.commands.length > 0);
+  const telemetryCards = useMemo(
+    () => [
+      { label: 'CPU Usage', value: telemetry.cpu, color: 'bg-green-500', icon: Cpu },
+      { label: 'RAM Usage', value: telemetry.ram, color: 'bg-blue-500', icon: Activity },
+      { label: 'Disk Usage', value: telemetry.disk_usage, color: 'bg-amber-500', icon: HardDrive },
+      { label: 'Network TX', value: telemetry.network_tx, color: 'bg-cyan-500', icon: Wifi },
+      { label: 'Network RX', value: telemetry.network_rx, color: 'bg-violet-500', icon: Wifi },
+      { label: 'Risk Score', value: telemetry.risk_score, color: 'bg-pink-500', icon: BarChart2 },
+    ],
+    [telemetry],
+  );
+
+  const filteredCategories = useMemo(
+    () =>
+      COMMAND_CATEGORIES.map((cat) => ({
+        ...cat,
+        commands: cat.commands.filter(
+          (cmd) =>
+            !commandSearch ||
+            cmd.label.toLowerCase().includes(commandSearch.toLowerCase()) ||
+            cmd.desc.toLowerCase().includes(commandSearch.toLowerCase()),
+        ),
+      })).filter((cat) => !commandSearch || cat.commands.length > 0),
+    [commandSearch],
+  );
 
   const riskBadge = (risk: string) => {
     const map: Record<string, string> = {
@@ -259,35 +598,122 @@ export default function DeviceDetailPageContent() {
     return map[risk] ?? 'text-muted-foreground bg-muted border-border';
   };
 
-  const dispatchCommand = () => {
-    if (!activeCommand) return;
-    setIsDispatching(true);
-    const cmdId = 'CMD-' + Math.floor(Math.random() * 9000 + 1000);
-    const traceSteps = buildTraceSteps(activeCommand.id, 'executing');
+  const readApiError = async (response: Response): Promise<string> => {
+    const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    const nestedError = payload?.error as Record<string, unknown> | undefined;
+    const message = String(
+      payload?.message ??
+      payload?.reason ??
+      nestedError?.message ??
+      `Request failed (${response.status})`,
+    );
+    return message;
+  };
 
-    setTimeout(() => {
-      setIsDispatching(false);
+  const pollCommandUntilTerminal = useCallback(async (commandId: string, method: string): Promise<void> => {
+    const startedAt = Date.now();
+    const timeoutMs = 90_000;
+
+    while (Date.now() - startedAt < timeoutMs) {
+      const response = await fetch(`/api/commands/${encodeURIComponent(commandId)}`, {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        const errorMessage = await readApiError(response);
+        throw new Error(errorMessage);
+      }
+
+      const payload = (await response.json()) as CommandDetailApiResponse;
+      const state = (payload.state as CommandState) ?? 'queued';
+      const outputPayload = {
+        command_id: payload.command_id ?? commandId,
+        device_id: device.id,
+        method: payload.method ?? method,
+        params: payload.params ?? {},
+        state,
+        result: payload.result ?? null,
+        error_code: payload.error_code ?? null,
+        error_message: payload.error_message ?? null,
+        completed_at: payload.completed_at ?? null,
+      };
+
+      setLiveResults((previous) => previous ? {
+        ...previous,
+        state,
+        traceSteps: buildTraceSteps(method, state),
+        output: isTerminalState(state) ? JSON.stringify(outputPayload, null, 2) : previous.output,
+      } : {
+        commandId,
+        method,
+        state,
+        traceSteps: buildTraceSteps(method, state),
+        output: isTerminalState(state) ? JSON.stringify(outputPayload, null, 2) : '',
+      });
+
+      if (isTerminalState(state)) {
+        return;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+
+    throw new Error('Command polling timed out after 90 seconds.');
+  }, [device.id]);
+
+  const dispatchCommand = useCallback(async (
+    method: string,
+    params: Record<string, unknown>,
+    label: string,
+    sensitive = false,
+  ) => {
+    setIsDispatching(true);
+
+    try {
+      const response = await fetch('/api/commands', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_message_id: crypto.randomUUID(),
+          device_id: device.id,
+          method,
+          params,
+          sensitive,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorMessage = await readApiError(response);
+        throw new Error(errorMessage);
+      }
+
+      const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      const commandId = String(payload.command_id ?? '');
+      if (!commandId) {
+        throw new Error('Command dispatch failed: missing command_id');
+      }
+
       setLiveResults({
-        commandId: cmdId,
-        method: activeCommand.id,
-        state: 'executing',
+        commandId,
+        method,
+        state: 'queued',
         output: '',
-        traceSteps,
+        traceSteps: buildTraceSteps(method, 'queued'),
       });
       setActiveTab('Trace');
-      toast.success(`${activeCommand.label} dispatched — ${cmdId}`);
+      toast.success(`${label} dispatched (${commandId})`);
 
-      // Simulate result arriving
-      setTimeout(() => {
-        setLiveResults(prev => prev ? {
-          ...prev,
-          state: 'completed',
-          traceSteps: buildTraceSteps(activeCommand.id, 'completed'),
-          output: `{"status":"ok","command":"${activeCommand.id}","device":"${device.hostname}","timestamp":"${new Date().toISOString()}","result":{"data":"Command executed successfully on ${device.hostname}"}}`,
-        } : null);
-      }, 3000);
-    }, 1200);
-  };
+      await pollCommandUntilTerminal(commandId, method);
+      await loadDeviceData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Command dispatch failed';
+      toast.error(message);
+    } finally {
+      setIsDispatching(false);
+    }
+  }, [device.id, loadDeviceData, pollCommandUntilTerminal]);
 
   const stateIcon = (s: CommandState) => {
     if (s === 'completed') return <CheckCircle size={12} className="text-green-400 flex-shrink-0" />;
@@ -313,11 +739,16 @@ export default function DeviceDetailPageContent() {
                 <h1 className="text-2xl font-semibold tracking-tight">{device.hostname}</h1>
                 <StatusBadge variant={device.status} pulse={device.status === 'online'} />
               </div>
-              <p className="text-sm text-muted-foreground font-mono">{device.id} · {device.ipAddress} · {device.department} · {device.location}</p>
+              <p className="text-sm text-muted-foreground font-mono">{device.id} - {device.ipAddress} - {device.department} - {device.location}</p>
             </div>
             <div className="ml-auto flex items-center gap-2">
-              <button onClick={() => toast.info('Device refreshed')} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground border border-border rounded-md hover:bg-muted/60 transition-colors">
-                <RefreshCw size={12} /> Refresh
+              <button
+                onClick={() => {
+                  void loadDeviceData();
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground border border-border rounded-md hover:bg-muted/60 transition-colors"
+              >
+                <RefreshCw size={12} className={isLoadingDevice ? 'animate-spin' : ''} /> {isLoadingDevice ? 'Refreshing...' : 'Refresh'}
               </button>
               <Link href="/command-results" className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary/10 border border-primary/20 text-primary rounded-md hover:bg-primary/20 transition-colors">
                 <BarChart2 size={12} /> View Results
@@ -359,7 +790,7 @@ export default function DeviceDetailPageContent() {
         ))}
       </div>
 
-      {/* ── Overview ── */}
+      {/* ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ Overview ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ */}
       {activeTab === 'Overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="space-y-3">
@@ -372,7 +803,7 @@ export default function DeviceDetailPageContent() {
                   { label: 'IP Address', value: device.ipAddress },
                   { label: 'OS Build', value: device.osBuild },
                   { label: 'Agent Version', value: device.agentVersion },
-                  { label: 'Session ID', value: device.sessionId ?? '—' },
+                  { label: 'Session ID', value: device.sessionId ?? '-' },
                   { label: 'Owner', value: device.owner },
                   { label: 'Department', value: device.department },
                   { label: 'Location', value: device.location },
@@ -406,7 +837,7 @@ export default function DeviceDetailPageContent() {
                 ].map(item => (
                   <div key={item.label} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
                     <p className="text-xs text-muted-foreground">{item.label}</p>
-                    <span className={`text-xs font-medium ${item.ok ? 'text-green-400' : 'text-amber-400'}`}>{item.ok ? '✓' : '⚠'} {item.value}</span>
+                    <span className={`text-xs font-medium ${item.ok ? 'text-green-400' : 'text-amber-400'}`}>{item.ok ? 'OK' : 'WARN'} {item.value}</span>
                   </div>
                 ))}
               </div>
@@ -434,7 +865,7 @@ export default function DeviceDetailPageContent() {
         </div>
       )}
 
-      {/* ── Commands ── */}
+      {/* ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ Commands ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ */}
       {activeTab === 'Commands' && (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
           {/* Command library */}
@@ -443,7 +874,7 @@ export default function DeviceDetailPageContent() {
               <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Search commands…"
+                placeholder="Search commands..."
                 value={commandSearch}
                 onChange={e => setCommandSearch(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 text-sm bg-muted/60 border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
@@ -518,14 +949,23 @@ export default function DeviceDetailPageContent() {
                       </div>
                     )}
                     <button
-                      onClick={dispatchCommand}
+                      onClick={async () => {
+                        if (!activeCommand) return;
+                        const parsed = parseJsonParams(commandParams);
+                        if (!parsed.ok) {
+                          toast.error(parsed.error);
+                          return;
+                        }
+                        const sensitive = ['high', 'critical'].includes(activeCommand.risk);
+                        await dispatchCommand(activeCommand.id, parsed.value, activeCommand.label, sensitive);
+                      }}
                       disabled={isDispatching || device.status !== 'online'}
                       className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                     >
-                      {isDispatching ? <><Loader2 size={14} className="animate-spin" /> Dispatching…</> : <><Send size={14} /> Execute {activeCommand.label}</>}
+                      {isDispatching ? <><Loader2 size={14} className="animate-spin" /> Dispatching...</> : <><Send size={14} /> Execute {activeCommand.label}</>}
                     </button>
                     {device.status !== 'online' && (
-                      <p className="text-[11px] text-amber-400 text-center">Device is {device.status} — commands unavailable</p>
+                      <p className="text-[11px] text-amber-400 text-center">Device is {device.status} - commands unavailable</p>
                     )}
                   </>
                 ) : (
@@ -541,15 +981,15 @@ export default function DeviceDetailPageContent() {
         </div>
       )}
 
-      {/* ── Trace ── */}
+      {/* ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ Trace ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ */}
       {activeTab === 'Trace' && (
         <div className="space-y-4">
           {liveResults ? (
             <div className="bg-card border border-border rounded-lg p-5">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <p className="text-sm font-semibold">{liveResults.commandId} — {liveResults.method}</p>
-                  <p className="text-[11px] text-muted-foreground">Live trace path: Web → Laravel → FastAPI → Agent → Back</p>
+                  <p className="text-sm font-semibold">{liveResults.commandId} - {liveResults.method}</p>
+                  <p className="text-[11px] text-muted-foreground">Live trace path: Web to Laravel to FastAPI to Agent to Back</p>
                 </div>
                 <StatusBadge variant={liveResults.state} />
               </div>
@@ -605,16 +1045,16 @@ export default function DeviceDetailPageContent() {
             <div className="flex items-center gap-2 flex-wrap">
               {[
                 { label: 'Web UI', color: 'bg-blue-500/20 border-blue-500/40 text-blue-400' },
-                { label: '→', color: '' },
+                { label: '->', color: '' },
                 { label: 'Laravel API', color: 'bg-violet-500/20 border-violet-500/40 text-violet-400' },
-                { label: '→', color: '' },
+                { label: '->', color: '' },
                 { label: 'FastAPI Gateway', color: 'bg-amber-500/20 border-amber-500/40 text-amber-400' },
-                { label: '→', color: '' },
+                { label: '->', color: '' },
                 { label: 'Windows Agent', color: 'bg-green-500/20 border-green-500/40 text-green-400' },
-                { label: '→', color: '' },
+                { label: '->', color: '' },
                 { label: 'Result Return', color: 'bg-cyan-500/20 border-cyan-500/40 text-cyan-400' },
               ].map((node, i) => (
-                node.label === '→' ? (
+                node.label === '->' ? (
                   <ChevronRight key={i} size={16} className="text-muted-foreground" />
                 ) : (
                   <div key={i} className={`px-3 py-1.5 rounded-lg border text-xs font-semibold ${node.color}`}>{node.label}</div>
@@ -625,7 +1065,7 @@ export default function DeviceDetailPageContent() {
         </div>
       )}
 
-      {/* ── Results ── */}
+      {/* ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ Results ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ */}
       {activeTab === 'Results' && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -637,7 +1077,7 @@ export default function DeviceDetailPageContent() {
           {liveResults?.output ? (
             <div className="bg-card border border-border rounded-lg p-4">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-semibold">{liveResults.commandId} — {liveResults.method}</p>
+                <p className="text-sm font-semibold">{liveResults.commandId} - {liveResults.method}</p>
                 <StatusBadge variant={liveResults.state} />
               </div>
               <pre className="text-xs font-mono bg-muted/40 rounded-lg p-3 overflow-x-auto text-green-400">{liveResults.output}</pre>
@@ -652,53 +1092,70 @@ export default function DeviceDetailPageContent() {
         </div>
       )}
 
-      {/* ── History ── */}
+      {/* ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ History ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ */}
       {activeTab === 'History' && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">{mockCommandHistory.length} commands for {device.hostname}</p>
+            <p className="text-sm text-muted-foreground">{commandHistory.length} commands for {device.hostname}</p>
             <Link href="/command-history" className="flex items-center gap-1.5 text-xs text-primary hover:underline">
               Full history <ChevronRight size={12} />
             </Link>
           </div>
           <div className="bg-card border border-border rounded-lg overflow-hidden">
-            <div className="divide-y divide-border">
-              {mockCommandHistory.map(cmd => (
-                <React.Fragment key={cmd.id}>
-                  <div
-                    className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/20 transition-colors"
-                    onClick={() => setExpandedHistoryId(expandedHistoryId === cmd.id ? null : cmd.id)}
-                  >
-                    {stateIcon(cmd.state)}
-                    <span className="font-mono text-[11px] text-primary font-semibold w-20">{cmd.id}</span>
-                    <span className="text-xs font-medium flex-1">{cmd.method}</span>
-                    <StatusBadge variant={cmd.state} size="sm" />
-                    <span className="text-[11px] text-muted-foreground tabular-nums">{cmd.queuedAt}</span>
-                    <span className="text-[11px] text-muted-foreground">{cmd.duration ?? '—'}</span>
-                    <button
-                      onClick={e => { e.stopPropagation(); toast.promise(new Promise(r => setTimeout(r, 1000)), { loading: `Replaying ${cmd.method}…`, success: 'Command replayed', error: 'Failed' }); }}
-                      className="flex items-center gap-1 px-2 py-0.5 text-[11px] bg-primary/10 border border-primary/20 text-primary rounded hover:bg-primary/20 transition-colors"
+            {commandHistory.length === 0 ? (
+              <div className="p-6 text-center text-sm text-muted-foreground">No command history for this device yet.</div>
+            ) : (
+              <div className="divide-y divide-border">
+                {commandHistory.map((cmd) => (
+                  <React.Fragment key={cmd.id}>
+                    <div
+                      className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/20 transition-colors"
+                      onClick={() => setExpandedHistoryId(expandedHistoryId === cmd.id ? null : cmd.id)}
                     >
-                      <RotateCcw size={9} /> Replay
-                    </button>
-                  </div>
-                  {expandedHistoryId === cmd.id && (
-                    <div className="px-4 py-3 bg-muted/10 border-t border-border/50">
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        <div className="bg-muted/30 rounded p-2"><p className="text-[10px] text-muted-foreground mb-0.5">Actor</p><p className="text-xs">{cmd.actor}</p></div>
-                        <div className="bg-muted/30 rounded p-2"><p className="text-[10px] text-muted-foreground mb-0.5">Completed</p><p className="text-xs">{cmd.completedAt ?? '—'}</p></div>
-                        {cmd.resultPreview && <div className="bg-muted/30 rounded p-2 col-span-2"><p className="text-[10px] text-muted-foreground mb-0.5">Result</p><p className="text-xs">{cmd.resultPreview}</p></div>}
-                      </div>
+                      {stateIcon(cmd.state)}
+                      <span className="font-mono text-[11px] text-primary font-semibold w-20">{cmd.id}</span>
+                      <span className="text-xs font-medium flex-1">{cmd.method}</span>
+                      <StatusBadge variant={cmd.state} size="sm" />
+                      <span className="text-[11px] text-muted-foreground tabular-nums">{cmd.queuedAt}</span>
+                      <span className="text-[11px] text-muted-foreground">{cmd.duration ?? '-'}</span>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          await dispatchCommand(cmd.method, cmd.params ?? {}, `Replay ${cmd.method}`);
+                        }}
+                        className="flex items-center gap-1 px-2 py-0.5 text-[11px] bg-primary/10 border border-primary/20 text-primary rounded hover:bg-primary/20 transition-colors"
+                      >
+                        <RotateCcw size={9} /> Replay
+                      </button>
                     </div>
-                  )}
-                </React.Fragment>
-              ))}
-            </div>
+                    {expandedHistoryId === cmd.id && (
+                      <div className="px-4 py-3 bg-muted/10 border-t border-border/50">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                          <div className="bg-muted/30 rounded p-2">
+                            <p className="text-[10px] text-muted-foreground mb-0.5">Actor</p>
+                            <p className="text-xs">{cmd.actor}</p>
+                          </div>
+                          <div className="bg-muted/30 rounded p-2">
+                            <p className="text-[10px] text-muted-foreground mb-0.5">Completed</p>
+                            <p className="text-xs">{cmd.completedAt ?? '-'}</p>
+                          </div>
+                          {cmd.resultPreview && (
+                            <div className="bg-muted/30 rounded p-2 col-span-2">
+                              <p className="text-[10px] text-muted-foreground mb-0.5">Result</p>
+                              <p className="text-xs">{cmd.resultPreview}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
-
-      {/* ── Telemetry ── */}
+      {/* ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ Telemetry ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ */}
       {activeTab === 'Telemetry' && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -708,33 +1165,34 @@ export default function DeviceDetailPageContent() {
             </Link>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {[
-              { label: 'CPU Usage', value: '12%', bar: 12, color: 'bg-green-500', icon: Cpu },
-              { label: 'RAM Usage', value: '45%', bar: 45, color: 'bg-blue-500', icon: Activity },
-              { label: 'Disk Usage', value: '60%', bar: 60, color: 'bg-amber-500', icon: HardDrive },
-              { label: 'Network TX', value: '2.3 Mbps', bar: 23, color: 'bg-cyan-500', icon: Wifi },
-              { label: 'Network RX', value: '1.1 Mbps', bar: 11, color: 'bg-violet-500', icon: Wifi },
-              { label: 'GPU Usage', value: '8%', bar: 8, color: 'bg-pink-500', icon: BarChart2 },
-            ].map(metric => (
-              <div key={metric.label} className="bg-card border border-border rounded-lg p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <metric.icon size={13} className="text-muted-foreground" />
-                    <p className="text-sm font-medium">{metric.label}</p>
+            {telemetryCards.map((metric) => {
+              const numericValue = typeof metric.value === 'number' && Number.isFinite(metric.value)
+                ? Math.max(0, Math.min(100, metric.value))
+                : null;
+              const displayValue = numericValue == null ? 'Unknown' : `${numericValue}%`;
+
+              return (
+                <div key={metric.label} className="bg-card border border-border rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <metric.icon size={13} className="text-muted-foreground" />
+                      <p className="text-sm font-medium">{metric.label}</p>
+                    </div>
+                    <span className="text-sm font-bold tabular-nums">{displayValue}</span>
                   </div>
-                  <span className="text-sm font-bold tabular-nums">{metric.value}</span>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full ${metric.color} transition-all`} style={{ width: `${numericValue ?? 0}%` }} />
+                  </div>
                 </div>
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full ${metric.color} transition-all`} style={{ width: `${metric.bar}%` }} />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
-          <p className="text-[11px] text-muted-foreground text-center">Last snapshot: {device.lastSeen} UTC</p>
+          <p className="text-[11px] text-muted-foreground text-center">
+            Last snapshot: {telemetry.timestamp ? formatDateTime(telemetry.timestamp) : 'Unknown'}
+          </p>
         </div>
       )}
-
-      {/* ── Alerts ── */}
+      {/* ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ Alerts ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ */}
       {activeTab === 'Alerts' && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -744,28 +1202,57 @@ export default function DeviceDetailPageContent() {
             </Link>
           </div>
           <div className="space-y-2">
-            {[
-              { id: 'ALT-001', severity: 'high', message: 'Policy hash mismatch detected', time: '20:14:22', status: 'open' },
-              { id: 'ALT-002', severity: 'medium', message: 'Unusual process activity: svchost.exe high CPU', time: '19:45:11', status: 'acknowledged' },
-              { id: 'ALT-003', severity: 'low', message: 'Agent version outdated — v0.0.1 → v0.0.2 available', time: '18:00:00', status: 'open' },
-            ].map(alert => (
-              <div key={alert.id} className={`flex items-start gap-3 bg-card border rounded-lg p-4 ${alert.severity === 'high' ? 'border-red-500/30' : alert.severity === 'medium' ? 'border-amber-500/30' : 'border-border'}`}>
-                <AlertTriangle size={14} className={alert.severity === 'high' ? 'text-red-400' : alert.severity === 'medium' ? 'text-amber-400' : 'text-muted-foreground'} />
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded-full ${alert.severity === 'high' ? 'bg-red-500/10 text-red-400' : alert.severity === 'medium' ? 'bg-amber-500/10 text-amber-400' : 'bg-muted text-muted-foreground'}`}>{alert.severity}</span>
-                    <span className="text-[11px] text-muted-foreground">{alert.id}</span>
-                  </div>
-                  <p className="text-sm mt-1">{alert.message}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">{alert.time} UTC · {alert.status}</p>
-                </div>
+            {alerts.length === 0 ? (
+              <div className="bg-card border border-border rounded-lg p-6 text-center text-sm text-muted-foreground">
+                No alerts for this device.
               </div>
-            ))}
+            ) : (
+              alerts.map((alert) => (
+                <div
+                  key={alert.id}
+                  className={`flex items-start gap-3 bg-card border rounded-lg p-4 ${
+                    alert.severity === 'critical' || alert.severity === 'high'
+                      ? 'border-red-500/30'
+                      : alert.severity === 'medium'
+                        ? 'border-amber-500/30'
+                        : 'border-border'
+                  }`}
+                >
+                  <AlertTriangle
+                    size={14}
+                    className={
+                      alert.severity === 'critical' || alert.severity === 'high'
+                        ? 'text-red-400'
+                        : alert.severity === 'medium'
+                          ? 'text-amber-400'
+                          : 'text-muted-foreground'
+                    }
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded-full ${
+                          alert.severity === 'critical' || alert.severity === 'high'
+                            ? 'bg-red-500/10 text-red-400'
+                            : alert.severity === 'medium'
+                              ? 'bg-amber-500/10 text-amber-400'
+                              : 'bg-muted text-muted-foreground'
+                        }`}
+                      >
+                        {alert.severity}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">{alert.id}</span>
+                    </div>
+                    <p className="text-sm mt-1">{alert.message}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{alert.time} UTC - {alert.status}</p>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
-
-      {/* ── Audit ── */}
+      {/* ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ Audit ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ */}
       {activeTab === 'Audit' && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -775,27 +1262,39 @@ export default function DeviceDetailPageContent() {
             </Link>
           </div>
           <div className="bg-card border border-border rounded-lg overflow-hidden">
-            <div className="divide-y divide-border">
-              {[
-                { id: 'AUD-001', type: 'command', actor: 'chloe.dubois@quoodle.io', action: 'Executed system-info', time: '21:06:01', outcome: 'success' },
-                { id: 'AUD-002', type: 'command', actor: 'admin@quoodle.io', action: 'Executed screenshot-capture', time: '21:04:50', outcome: 'success' },
-                { id: 'AUD-003', type: 'policy', actor: 'admin@quoodle.io', action: 'Policy hash updated', time: '20:30:00', outcome: 'success' },
-                { id: 'AUD-004', type: 'command', actor: 'raj.mehta@quoodle.io', action: 'Executed lock_screen — FAILED', time: '21:01:55', outcome: 'failure' },
-                { id: 'AUD-005', type: 'access', actor: 'sarah.chen@quoodle.io', action: 'Device detail viewed', time: '20:00:00', outcome: 'success' },
-              ].map(entry => (
-                <div key={entry.id} className="flex items-center gap-3 px-4 py-3">
-                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${entry.outcome === 'success' ? 'bg-green-500' : 'bg-red-500'}`} />
-                  <span className="text-[11px] font-mono text-muted-foreground w-20">{entry.id}</span>
-                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${entry.type === 'command' ? 'bg-blue-500/10 text-blue-400' : entry.type === 'policy' ? 'bg-violet-500/10 text-violet-400' : 'bg-muted text-muted-foreground'}`}>{entry.type}</span>
-                  <span className="text-xs flex-1">{entry.action}</span>
-                  <span className="text-[11px] text-muted-foreground">{entry.actor.split('@')[0]}</span>
-                  <span className="text-[11px] text-muted-foreground tabular-nums">{entry.time}</span>
-                </div>
-              ))}
-            </div>
+            {auditEntries.length === 0 ? (
+              <div className="p-6 text-center text-sm text-muted-foreground">No audit entries for this device.</div>
+            ) : (
+              <div className="divide-y divide-border">
+                {auditEntries.map((entry) => (
+                  <div key={entry.id} className="flex items-center gap-3 px-4 py-3">
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${entry.outcome === 'success' ? 'bg-green-500' : 'bg-red-500'}`} />
+                    <span className="text-[11px] font-mono text-muted-foreground w-20">{entry.id}</span>
+                    <span
+                      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                        entry.type === 'command'
+                          ? 'bg-blue-500/10 text-blue-400'
+                          : entry.type === 'policy'
+                            ? 'bg-violet-500/10 text-violet-400'
+                            : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      {entry.type}
+                    </span>
+                    <span className="text-xs flex-1">{entry.action}</span>
+                    <span className="text-[11px] text-muted-foreground">{entry.actor.split('@')[0]}</span>
+                    <span className="text-[11px] text-muted-foreground tabular-nums">{entry.time}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
     </div>
   );
 }
+
+
+
+

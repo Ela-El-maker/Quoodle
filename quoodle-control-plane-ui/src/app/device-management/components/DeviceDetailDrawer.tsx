@@ -15,9 +15,9 @@ interface Device {
   compliance: 'compliant' | 'non_compliant' | 'drift';
   lastSeen: string;
   agentVersion: string;
-  policySync: boolean;
-  kernelGuard: boolean;
-  ipAddress: string;
+  policySync: boolean | null;
+  kernelGuard: boolean | null;
+  ipAddress: string | null;
   sessionId: string | null;
 }
 
@@ -55,7 +55,7 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
 
   const quickDispatch = (cmdId: string, cmdLabel: string) => {
     if (device.status !== 'online') {
-      toast.error(`${device.hostname} is ${device.status} — cannot dispatch commands`);
+      toast.error(`${device.hostname} is ${device.status} - cannot dispatch commands`);
       return;
     }
     setDispatchingCmd(cmdId);
@@ -86,7 +86,7 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
             </div>
             <div>
               <h2 className="font-semibold text-sm">{device.hostname}</h2>
-              <p className="text-[11px] text-muted-foreground font-mono">{device.id} · {device.ipAddress}</p>
+              <p className="text-[11px] text-muted-foreground font-mono">{device.id}  ·  {device.ipAddress ?? '-'}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -97,7 +97,7 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
           </div>
         </div>
 
-        {/* CTA Banner — Deep link to full device page */}
+        {/* CTA Banner - Deep link to full device page */}
         <div className="px-5 py-3 bg-primary/5 border-b border-primary/20 flex-shrink-0">
           <Link
             href={`/device-detail?device=${device.id}`}
@@ -105,7 +105,7 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
           >
             <div>
               <p className="text-xs font-semibold text-primary">Open Full Device Console</p>
-              <p className="text-[11px] text-muted-foreground">Commands · Trace · Results · History · Telemetry · Alerts · Audit — everything in one place</p>
+              <p className="text-[11px] text-muted-foreground">Commands  ·  Trace  ·  Results  ·  History  ·  Telemetry  ·  Alerts  ·  Audit - everything in one place</p>
             </div>
             <div className="flex items-center gap-1 text-primary group-hover:gap-2 transition-all">
               <ExternalLink size={14} />
@@ -131,17 +131,17 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
         {/* Content */}
         <div className="flex-1 overflow-y-auto scrollbar-thin p-5 space-y-4">
 
-          {/* ── Overview ── */}
+          {/* Overview */}
           {activeTab === 'Overview' && (
             <>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { label: 'IP Address',    value: device.ipAddress,              mono: true },
+                  { label: 'IP Address',    value: device.ipAddress ?? '-',       mono: true },
                   { label: 'OS Build',      value: device.osBuild,                mono: true },
                   { label: 'Agent Version', value: device.agentVersion,           mono: true },
-                  { label: 'Session ID',    value: device.sessionId ?? '—',       mono: true },
+                  { label: 'Session ID',    value: device.sessionId ?? '-',       mono: true },
                   { label: 'Owner',         value: device.owner,                  mono: false },
-                  { label: 'Kernel Guard',  value: device.kernelGuard ? '✓ Active' : '✗ Inactive', mono: false },
+                  { label: 'Kernel Guard',  value: device.kernelGuard === null ? 'Unknown' : device.kernelGuard ? 'Active' : 'Inactive', mono: false },
                 ].map((item) => (
                   <div key={`detail-${item.label}`} className="bg-muted/30 rounded-lg p-3">
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{item.label}</p>
@@ -167,10 +167,12 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
 
               <div className="bg-muted/30 rounded-lg p-3">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Policy Sync</p>
-                {device.policySync ? (
-                  <p className="text-xs text-green-400 font-medium">✓ Policy hash synchronized — policy-2026-04</p>
+                {device.policySync === null ? (
+                  <p className="text-xs text-muted-foreground font-medium">Unknown</p>
+                ) : device.policySync ? (
+                  <p className="text-xs text-green-400 font-medium">Policy hash synchronized</p>
                 ) : (
-                  <p className="text-xs text-amber-400 font-medium">⚠ Hash mismatch — policy-2026-04 vs reported</p>
+                  <p className="text-xs text-amber-400 font-medium">Hash mismatch</p>
                 )}
               </div>
 
@@ -191,7 +193,7 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
             </>
           )}
 
-          {/* ── Telemetry ── */}
+          {/* Telemetry */}
           {activeTab === 'Telemetry' && (
             <div className="space-y-3">
               {[
@@ -221,7 +223,7 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
             </div>
           )}
 
-          {/* ── Commands ── */}
+          {/* Commands */}
           {activeTab === 'Commands' && (
             <div className="space-y-3">
               <p className="text-[11px] text-muted-foreground">Quick-dispatch common commands. For the full command library with all {'>'}40 commands, open the device console.</p>
@@ -247,7 +249,7 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
                     <span className="text-xs font-medium flex-1">{cmd.method}</span>
                     <span className="text-[11px] text-muted-foreground tabular-nums">{cmd.time}</span>
                     <button
-                      onClick={() => toast.promise(new Promise(r => setTimeout(r, 1000)), { loading: `Replaying ${cmd.method}…`, success: 'Replayed', error: 'Failed' })}
+                      onClick={() => toast.promise(new Promise(r => setTimeout(r, 1000)), { loading: `Replaying ${cmd.method}...`, success: 'Replayed', error: 'Failed' })}
                       className="p-1 text-muted-foreground hover:text-primary transition-colors"
                       title="Replay"
                     >
@@ -262,7 +264,7 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
             </div>
           )}
 
-          {/* ── Security ── */}
+          {/* Security */}
           {activeTab === 'Security' && (
             <div className="space-y-3">
               <div className="bg-muted/30 rounded-lg p-3 space-y-2">
@@ -274,9 +276,13 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
               </div>
               <div className="bg-muted/30 rounded-lg p-3">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Kernel Guard</p>
-                <p className={`text-xs font-medium ${device.kernelGuard ? 'text-green-400' : 'text-red-400'}`}>
-                  {device.kernelGuard ? '✓ KMDF driver active — IOCTL interface available' : '✗ Driver not detected — falling back to named pipe'}
-                </p>
+                {device.kernelGuard === null ? (
+                  <p className="text-xs font-medium text-muted-foreground">Unknown</p>
+                ) : (
+                  <p className={`text-xs font-medium ${device.kernelGuard ? 'text-green-400' : 'text-red-400'}`}>
+                    {device.kernelGuard ? 'Kernel guard active' : 'Kernel guard not detected'}
+                  </p>
+                )}
               </div>
               <div className="bg-muted/30 rounded-lg p-3">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-2">Risk Score</p>
@@ -286,7 +292,7 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
                     <div className="h-2 bg-muted rounded-full overflow-hidden">
                       <div className={`h-full rounded-full ${device.riskScore > 0.6 ? 'bg-red-500' : device.riskScore > 0.3 ? 'bg-amber-500' : 'bg-green-500'}`} style={{ width: `${device.riskScore * 100}%` }} />
                     </div>
-                    <p className="text-[10px] text-muted-foreground mt-1">{device.riskScore > 0.6 ? 'High risk — immediate attention required' : device.riskScore > 0.3 ? 'Medium risk — monitor closely' : 'Low risk — within acceptable range'}</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">{device.riskScore > 0.6 ? 'High risk - immediate attention required' : device.riskScore > 0.3 ? 'Medium risk - monitor closely' : 'Low risk - within acceptable range'}</p>
                   </div>
                 </div>
               </div>
@@ -302,7 +308,7 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
             </div>
           )}
 
-          {/* ── Alerts ── */}
+          {/* Alerts */}
           {activeTab === 'Alerts' && (
             <div className="space-y-2">
               {[
@@ -314,7 +320,7 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
                   <AlertTriangle size={13} className={alert.severity === 'high' ? 'text-red-400' : alert.severity === 'medium' ? 'text-amber-400' : 'text-muted-foreground'} />
                   <div>
                     <p className="text-xs font-medium">{alert.message}</p>
-                    <p className="text-[11px] text-muted-foreground">{alert.id} · {alert.time} UTC</p>
+                    <p className="text-[11px] text-muted-foreground">{alert.id}  ·  {alert.time} UTC</p>
                   </div>
                 </div>
               ))}
@@ -324,14 +330,14 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
             </div>
           )}
 
-          {/* ── Audit ── */}
+          {/* Audit */}
           {activeTab === 'Audit' && (
             <div className="space-y-2">
               {[
                 { id: 'AUD-001', type: 'command', actor: 'chloe.dubois', action: 'Executed system-info', time: '21:06:01', ok: true },
                 { id: 'AUD-002', type: 'command', actor: 'admin', action: 'Executed screenshot-capture', time: '21:04:50', ok: true },
                 { id: 'AUD-003', type: 'policy', actor: 'admin', action: 'Policy hash updated', time: '20:30:00', ok: true },
-                { id: 'AUD-004', type: 'command', actor: 'raj.mehta', action: 'lock_screen — FAILED', time: '21:01:55', ok: false },
+                { id: 'AUD-004', type: 'command', actor: 'raj.mehta', action: 'lock_screen - FAILED', time: '21:01:55', ok: false },
               ].map(entry => (
                 <div key={entry.id} className="flex items-center gap-3 bg-muted/20 rounded-lg px-3 py-2.5">
                   <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${entry.ok ? 'bg-green-500' : 'bg-red-500'}`} />
@@ -348,7 +354,7 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
           )}
         </div>
 
-        {/* Footer — CTA row */}
+        {/* Footer - CTA row */}
         <div className="border-t border-border px-5 py-3 flex-shrink-0">
           <Link
             href={`/device-detail?device=${device.id}`}

@@ -12,21 +12,38 @@ import {
   ArrowUpRight,
 } from 'lucide-react';
 
-// Backend integration point: fetch from GET /api/devices/stats + /api/commands/stats + /api/alerts/stats
-const kpiData = {
-  totalDevices: 84,
-  onlineDevices: 71,
-  offlineDevices: 9,
-  quarantinedDevices: 4,
-  activeCommands: 12,
-  failingCommands: 3,
-  criticalAlerts: 2,
-  complianceDrift: 6,
-  avgRiskScore: 0.23,
-  fleetOnlineRate: 84.5,
+export interface DashboardKpiData {
+  totalDevices: number;
+  onlineDevices: number;
+  offlineDevices: number;
+  quarantinedDevices: number;
+  activeCommands: number;
+  failingCommands: number;
+  criticalAlerts: number;
+  complianceDrift: number;
+  avgRiskScore: number;
+  fleetOnlineRate: number;
+}
+
+const DEFAULT_KPI_DATA: DashboardKpiData = {
+  totalDevices: 0,
+  onlineDevices: 0,
+  offlineDevices: 0,
+  quarantinedDevices: 0,
+  activeCommands: 0,
+  failingCommands: 0,
+  criticalAlerts: 0,
+  complianceDrift: 0,
+  avgRiskScore: 0,
+  fleetOnlineRate: 0,
 };
 
-export default function DashboardKPIGrid() {
+interface DashboardKPIGridProps {
+  data?: DashboardKpiData;
+}
+
+export default function DashboardKPIGrid({ data }: DashboardKPIGridProps) {
+  const kpiData = data ?? DEFAULT_KPI_DATA;
   // Grid plan: 6 cards → grid-cols-4 → row 1: hero spans 2 cols + 2 regular, row 2: 4 regular
   // Actually: 6 cards → 2 rows of 3 on lg, hero card spans 2 cols on xl
 

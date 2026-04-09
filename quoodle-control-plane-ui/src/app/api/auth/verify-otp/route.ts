@@ -94,7 +94,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     { status: 200 },
   );
 
-  attachAuthCookies(response, cookieValues);
+  attachAuthCookies(response, cookieValues, request);
   return response;
 }
-

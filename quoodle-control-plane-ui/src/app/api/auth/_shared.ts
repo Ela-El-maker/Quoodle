@@ -6,7 +6,26 @@ const CONTROL_PLANE_API_URL =
   process.env.NEXT_PUBLIC_CONTROL_PLANE_API_URL ??
   'http://localhost:8088/api';
 
-const SECURE_COOKIE = process.env.NODE_ENV === 'production';
+function envForcesSecureCookie(): boolean | null {
+  const raw = (process.env.AUTH_COOKIE_SECURE ?? '').trim().toLowerCase();
+  if (!raw) return null;
+  if (raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on') return true;
+  if (raw === '0' || raw === 'false' || raw === 'no' || raw === 'off') return false;
+  return null;
+}
+
+export function shouldUseSecureCookies(request?: NextRequest): boolean {
+  const forced = envForcesSecureCookie();
+  if (forced !== null) return forced;
+
+  if (request) {
+    const forwardedProto = request.headers.get('x-forwarded-proto');
+    const protocol = (forwardedProto ?? request.nextUrl.protocol.replace(':', '')).toLowerCase();
+    return protocol === 'https';
+  }
+
+  return process.env.NODE_ENV === 'production';
+}
 
 export interface AuthTokenPayload {
   jwt: string;
@@ -75,13 +94,15 @@ export function mapMePayload(payload: MePayload): AuthUser | null {
 export function attachAuthCookies(
   response: NextResponse,
   cookies: { jwt: string; refreshToken: string; sessionId: string; role: UserRole },
+  request?: NextRequest,
 ): void {
+  const secure = shouldUseSecureCookies(request);
   response.cookies.set({
     name: AUTH_COOKIE.jwt,
     value: cookies.jwt,
     httpOnly: true,
     sameSite: 'lax',
-    secure: SECURE_COOKIE,
+    secure,
     path: '/',
   });
   response.cookies.set({
@@ -89,7 +110,7 @@ export function attachAuthCookies(
     value: cookies.refreshToken,
     httpOnly: true,
     sameSite: 'lax',
-    secure: SECURE_COOKIE,
+    secure,
     path: '/',
   });
   response.cookies.set({
@@ -97,7 +118,7 @@ export function attachAuthCookies(
     value: cookies.sessionId,
     httpOnly: true,
     sameSite: 'lax',
-    secure: SECURE_COOKIE,
+    secure,
     path: '/',
   });
   response.cookies.set({
@@ -105,7 +126,7 @@ export function attachAuthCookies(
     value: cookies.role,
     httpOnly: false,
     sameSite: 'lax',
-    secure: SECURE_COOKIE,
+    secure,
     path: '/',
   });
 }
@@ -113,13 +134,15 @@ export function attachAuthCookies(
 export function attachTokenCookies(
   response: NextResponse,
   cookies: { jwt: string; refreshToken: string; sessionId: string; role?: UserRole | null },
+  request?: NextRequest,
 ): void {
+  const secure = shouldUseSecureCookies(request);
   response.cookies.set({
     name: AUTH_COOKIE.jwt,
     value: cookies.jwt,
     httpOnly: true,
     sameSite: 'lax',
-    secure: SECURE_COOKIE,
+    secure,
     path: '/',
   });
   response.cookies.set({
@@ -127,7 +150,7 @@ export function attachTokenCookies(
     value: cookies.refreshToken,
     httpOnly: true,
     sameSite: 'lax',
-    secure: SECURE_COOKIE,
+    secure,
     path: '/',
   });
   response.cookies.set({
@@ -135,7 +158,7 @@ export function attachTokenCookies(
     value: cookies.sessionId,
     httpOnly: true,
     sameSite: 'lax',
-    secure: SECURE_COOKIE,
+    secure,
     path: '/',
   });
   if (cookies.role) {
@@ -144,7 +167,7 @@ export function attachTokenCookies(
       value: cookies.role,
       httpOnly: false,
       sameSite: 'lax',
-      secure: SECURE_COOKIE,
+      secure,
       path: '/',
     });
   }
