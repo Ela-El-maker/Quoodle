@@ -24,6 +24,31 @@ function publicOrigin(request: NextRequest): string {
   return `${proto}://${host}`;
 }
 
+function configuredUiOrigin(): string | null {
+  const candidates = [
+    process.env.GOOGLE_OAUTH_REDIRECT_BASE_URL,
+    process.env.CONTROL_PLANE_UI_URL,
+    process.env.NEXT_PUBLIC_CONTROL_PLANE_UI_URL,
+  ];
+  for (const candidate of candidates) {
+    const value = (candidate ?? '').trim();
+    if (!value) continue;
+    try {
+      return new URL(value).origin;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+function googleRedirectUri(request: NextRequest): string {
+  const explicit = (process.env.GOOGLE_OAUTH_REDIRECT_URI ?? '').trim();
+  if (explicit) return explicit;
+  const origin = configuredUiOrigin() ?? publicOrigin(request);
+  return `${origin.replace(/\/+$/, '')}/api/auth/google/callback`;
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const code = request.nextUrl.searchParams.get('code') ?? '';
   const state = request.nextUrl.searchParams.get('state') ?? '';
@@ -37,8 +62,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return response;
   }
 
-  const origin = publicOrigin(request);
-  const redirectUri = `${origin}/api/auth/google/callback`;
+  const redirectUri = googleRedirectUri(request);
 
   const exchangeResponse = await fetch(controlPlaneApiUrl('/auth/google/exchange'), {
     method: 'POST',

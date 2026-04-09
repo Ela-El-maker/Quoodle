@@ -8,6 +8,9 @@ Root of trust for the Quoodle system. Handles identity, certificate authority, p
 
 **Prerequisites:** PHP 8.4+, Composer, MySQL 8.0+, Redis
 
+For Docker/dev-stack runs, secrets and keys are centralized in repo-root `.env`.
+Use this local `.env.example` only when running Laravel standalone.
+
 ```bash
 composer install
 cp .env.example .env
@@ -20,6 +23,9 @@ php artisan serve
 Or via Docker from the repo root:
 
 ```bash
+# centralized env source of truth
+cp .env.example .env
+
 ./scripts/setup_dev.sh
 ```
 

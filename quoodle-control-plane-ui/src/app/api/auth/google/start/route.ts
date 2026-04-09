@@ -12,6 +12,31 @@ function publicOrigin(request: NextRequest): string {
   return `${proto}://${host}`;
 }
 
+function configuredUiOrigin(): string | null {
+  const candidates = [
+    process.env.GOOGLE_OAUTH_REDIRECT_BASE_URL,
+    process.env.CONTROL_PLANE_UI_URL,
+    process.env.NEXT_PUBLIC_CONTROL_PLANE_UI_URL,
+  ];
+  for (const candidate of candidates) {
+    const value = (candidate ?? '').trim();
+    if (!value) continue;
+    try {
+      return new URL(value).origin;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+function googleRedirectUri(request: NextRequest): string {
+  const explicit = (process.env.GOOGLE_OAUTH_REDIRECT_URI ?? '').trim();
+  if (explicit) return explicit;
+  const origin = configuredUiOrigin() ?? publicOrigin(request);
+  return `${origin.replace(/\/+$/, '')}/api/auth/google/callback`;
+}
+
 function shouldUseSecureCookie(request: NextRequest): boolean {
   const override = (process.env.AUTH_COOKIE_SECURE ?? '').trim().toLowerCase();
   if (override === '1' || override === 'true' || override === 'yes' || override === 'on') return true;
@@ -30,8 +55,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(loginUrl);
   }
 
-  const origin = publicOrigin(request);
-  const redirectUri = `${origin}/api/auth/google/callback`;
+  const redirectUri = googleRedirectUri(request);
   const statePayload = {
     nonce: crypto.randomUUID(),
     next: request.nextUrl.searchParams.get('next') ?? '',

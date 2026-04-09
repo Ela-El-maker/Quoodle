@@ -8,9 +8,9 @@ services:
     ports:
       - "${QUOODLE_DB_PORT:-3308}:3306"
     environment:
-      MYSQL_DATABASE: secure_device
+      MYSQL_DATABASE: ${DB_DATABASE:-secure_device}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD}
-      MYSQL_USER: quoodle
+      MYSQL_USER: ${DB_USERNAME:-quoodle}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD}
     volumes:
       - db_data:/var/lib/mysql
@@ -34,7 +34,7 @@ services:
     image: redis:7-alpine
     container_name: quoodle-redis
     ports:
-      - "6380:6379"
+      - "${QUOODLE_REDIS_PORT:-6380}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -56,41 +56,92 @@ services:
     ports:
       - "${QUOODLE_CONTROL_PLANE_PORT:-8088}:80"
     environment:
-      APP_NAME: "Quoodle Control Plane"
-      APP_ENV: local
-      APP_KEY: "base64:QxkzZLJ3rLZLy960pyF2CN1TRfB2glfQOh4vZBI0pHY="
-      APP_DEBUG: "true"
-      APP_URL: http://localhost:${QUOODLE_CONTROL_PLANE_PORT:-8088}
-      DEFAULT_USER_ROLE: "operator"
+      APP_NAME: ${APP_NAME:-Quoodle Control Plane}
+      APP_ENV: ${APP_ENV:-local}
+      APP_KEY: ${APP_KEY:?Set APP_KEY}
+      APP_DEBUG: ${APP_DEBUG:-true}
+      APP_URL: ${CONTROL_PLANE_APP_URL:-http://localhost:${QUOODLE_CONTROL_PLANE_PORT:-8088}}
+      DEFAULT_USER_ROLE: ${DEFAULT_USER_ROLE:-operator}
       DEV_ADMIN_EMAIL: ${DEV_ADMIN_EMAIL:-admin@quoodle.com}
       DEV_ADMIN_PASSWORD: ${DEV_ADMIN_PASSWORD:-password}
       DEV_ADMIN_NAME: ${DEV_ADMIN_NAME:-Quoodle Admin}
 
-      DB_CONNECTION: mysql
-      DB_HOST: quoodle-db
-      DB_PORT: 3306
-      DB_DATABASE: secure_device
-      DB_USERNAME: root
-      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD}
+      DB_CONNECTION: ${DB_CONNECTION:-mysql}
+      DB_HOST: ${DB_HOST:-quoodle-db}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_DATABASE: ${DB_DATABASE:-secure_device}
+      DB_USERNAME: ${DB_USERNAME:-quoodle}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD}
 
-      REDIS_HOST: redis
-      REDIS_PASSWORD: null
-      REDIS_PORT: 6379
-      REDIS_CLIENT: predis
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-null}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_CLIENT: ${REDIS_CLIENT:-predis}
 
       # Integration
-      FASTAPI_BASE_URL: http://gateway:8000/api/v1
-      LARAVEL_SERVICE_PRIVATE_KEY_B64: "Hvx/4W6Qr6WYoQ2eXHJt/JUDjg1CH1Gw1MTXJGS3gg4Rp1/SRZgsQKdLoc9oOorSTZcxo8dMQ1T0nrSYCq1Dkg=="
-      FASTAPI_SERVICE_PUBLIC_KEY_B64: "ddGZHNgSdDOPD88DnchOKQjYtgUeEpKAi1t6+MS8yRg="
-      REQUIRE_FASTAPI_SIGNATURE: "true"
-      POLICY_HASH: "sha256:4058fa9b252a07e03ee6ac2585e6424973427f953b6763b48679b61acafe49d2"
-      POLICY_VERSION: "2026-01-21"
-      ALLOW_DEVICE_REPAIR_WITH_HWID: "false"
+      FASTAPI_BASE_URL: ${FASTAPI_BASE_URL:-http://gateway:8000/api/v1}
+      LARAVEL_SERVICE_PRIVATE_KEY_B64: ${LARAVEL_SERVICE_PRIVATE_KEY_B64:?Set LARAVEL_SERVICE_PRIVATE_KEY_B64}
+      FASTAPI_SERVICE_PUBLIC_KEY_B64: ${FASTAPI_SERVICE_PUBLIC_KEY_B64:?Set FASTAPI_SERVICE_PUBLIC_KEY_B64}
+      REQUIRE_FASTAPI_SIGNATURE: ${REQUIRE_FASTAPI_SIGNATURE:-true}
+      POLICY_HASH: ${POLICY_HASH:?Set POLICY_HASH}
+      POLICY_VERSION: ${POLICY_VERSION:-2026-01-21}
+      ALLOW_DEVICE_REPAIR_WITH_HWID: ${ALLOW_DEVICE_REPAIR_WITH_HWID:-false}
+
+      # Passwordless auth (Google + OTP)
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_TOKEN_URL: ${GOOGLE_TOKEN_URL:-https://oauth2.googleapis.com/token}
+      GOOGLE_USERINFO_URL: ${GOOGLE_USERINFO_URL:-https://openidconnect.googleapis.com/v1/userinfo}
+      AUTH_OTP_DIGITS: ${AUTH_OTP_DIGITS:-6}
+      AUTH_OTP_TTL_SECONDS: ${AUTH_OTP_TTL_SECONDS:-600}
+      AUTH_OTP_RESEND_COOLDOWN_SECONDS: ${AUTH_OTP_RESEND_COOLDOWN_SECONDS:-60}
+      AUTH_OTP_MAX_ATTEMPTS: ${AUTH_OTP_MAX_ATTEMPTS:-5}
+      AUTH_OTP_REQUEST_IP_MAX_PER_MINUTE: ${AUTH_OTP_REQUEST_IP_MAX_PER_MINUTE:-20}
+      AUTH_OTP_REQUEST_EMAIL_MAX_PER_MINUTE: ${AUTH_OTP_REQUEST_EMAIL_MAX_PER_MINUTE:-6}
+
+      # Mail (OTP delivery)
+      MAIL_MAILER: ${MAIL_MAILER:-smtp}
+      MAIL_SCHEME: ${MAIL_SCHEME:-tls}
+      MAIL_HOST: ${MAIL_HOST:-smtp-relay.brevo.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Quoodle}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - quoodle-net
+
+  # -----------------------------------------------------------------------------
+  # CONTROL PLANE UI (Next.js)
+  # -----------------------------------------------------------------------------
+  control-plane-ui:
+    build:
+      context: ./quoodle-control-plane-ui
+      dockerfile: Dockerfile
+    container_name: quoodle-control-plane-ui
+    ports:
+      - "${QUOODLE_CONTROL_PLANE_UI_PORT:-3000}:3000"
+    environment:
+      CONTROL_PLANE_API_URL: ${CONTROL_PLANE_API_URL:-http://control-plane:80/api}
+      NEXT_PUBLIC_CONTROL_PLANE_BASE_URL: ${NEXT_PUBLIC_CONTROL_PLANE_BASE_URL:-http://localhost:${QUOODLE_CONTROL_PLANE_PORT:-8088}}
+      NEXT_PUBLIC_CONTROL_PLANE_API_URL: ${NEXT_PUBLIC_CONTROL_PLANE_API_URL:-http://localhost:${QUOODLE_CONTROL_PLANE_PORT:-8088}/api}
+      CONTROL_PLANE_UI_URL: ${CONTROL_PLANE_UI_URL:-http://localhost:${QUOODLE_CONTROL_PLANE_UI_PORT:-3000}}
+      NEXT_PUBLIC_CONTROL_PLANE_UI_URL: ${CONTROL_PLANE_UI_URL:-http://localhost:${QUOODLE_CONTROL_PLANE_UI_PORT:-3000}}
+      GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI:-}
+      GOOGLE_OAUTH_REDIRECT_BASE_URL: ${GOOGLE_OAUTH_REDIRECT_BASE_URL:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      PORT: ${CONTROL_PLANE_UI_INTERNAL_PORT:-3000}
+      HOSTNAME: ${CONTROL_PLANE_UI_HOSTNAME:-0.0.0.0}
+    depends_on:
+      control-plane:
+        condition: service_started
     networks:
       - quoodle-net
 
@@ -103,33 +154,33 @@ services:
       dockerfile: Dockerfile
     container_name: quoodle-gateway
     ports:
-      - "8000:8000"
+      - "${QUOODLE_GATEWAY_PORT:-8000}:8000"
     environment:
       # Core
-      HEARTBEAT_INTERVAL_SECONDS: 30
-      TELEMETRY_INTERVAL_SECONDS: 60
-      POLICY_HASH: "sha256:4058fa9b252a07e03ee6ac2585e6424973427f953b6763b48679b61acafe49d2"
-      POLICY_VERSION: "2026-01-21"
-      CONTROLLER_ID: "dev_controller_01"
+      HEARTBEAT_INTERVAL_SECONDS: ${HEARTBEAT_INTERVAL_SECONDS:-30}
+      TELEMETRY_INTERVAL_SECONDS: ${TELEMETRY_INTERVAL_SECONDS:-60}
+      POLICY_HASH: ${POLICY_HASH:?Set POLICY_HASH}
+      POLICY_VERSION: ${POLICY_VERSION:-2026-01-21}
+      CONTROLLER_ID: ${CONTROLLER_ID:-dev_controller_01}
 
       # Redis
-      REDIS_URL: redis://redis:6379/0
-      REDIS_KEY_PREFIX: "quoodle:"
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_KEY_PREFIX: ${REDIS_KEY_PREFIX:-quoodle:}
 
       # Integration
-      LARAVEL_WEBHOOK_BASE: http://control-plane:80/api/v1/webhook
-      JWKS_URL: http://control-plane:80/.well-known/jwks.json
+      LARAVEL_WEBHOOK_BASE: ${LARAVEL_WEBHOOK_BASE:-http://control-plane:80/api/v1/webhook}
+      JWKS_URL: ${JWKS_URL:-http://control-plane:80/.well-known/jwks.json}
 
       # Security (Dev Defaults)
-      REQUIRE_ED25519: "true"
-      ALLOW_DEV_SIG_FALLBACK: "false"
-      REQUIRE_AGENT_SEQ: "true"
-      REQUIRE_LARAVEL_SIGNATURE: "true"
-      ENABLE_TEST_ENDPOINTS: "false"
-      LARAVEL_SERVICE_PUBKEY_B64: "Eadf0kWYLECnS6HPaDqK0k2XMaPHTENU9J60mAqtQ5I="
-      SIGN_LARAVEL_WEBHOOKS: "true"
-      FASTAPI_SERVICE_PRIVATE_KEY_B64: "QwY6n5+wq5TzRIgH1sg+QTqJcHOvq46IcAHsmgeQXLl10Zkc2BJ0M48PzwOdyE4pCNi2BR4SkoCLW3r4xLzJGA=="
-      ED25519_PRIVATE_KEY_B64: "R/zVAF4DWvfSMEvqtcTy0btMdAsKcPFycblZoTmurh11Gabg6ET+5xd5Fx6ELKv5ttYmxCMTo8PBeZabIRl36w=="
+      REQUIRE_ED25519: ${REQUIRE_ED25519:-true}
+      ALLOW_DEV_SIG_FALLBACK: ${ALLOW_DEV_SIG_FALLBACK:-false}
+      REQUIRE_AGENT_SEQ: ${REQUIRE_AGENT_SEQ:-true}
+      REQUIRE_LARAVEL_SIGNATURE: ${REQUIRE_LARAVEL_SIGNATURE:-true}
+      ENABLE_TEST_ENDPOINTS: ${ENABLE_TEST_ENDPOINTS:-false}
+      LARAVEL_SERVICE_PUBKEY_B64: ${LARAVEL_SERVICE_PUBKEY_B64:?Set LARAVEL_SERVICE_PUBKEY_B64}
+      SIGN_LARAVEL_WEBHOOKS: ${SIGN_LARAVEL_WEBHOOKS:-true}
+      FASTAPI_SERVICE_PRIVATE_KEY_B64: ${FASTAPI_SERVICE_PRIVATE_KEY_B64:?Set FASTAPI_SERVICE_PRIVATE_KEY_B64}
+      ED25519_PRIVATE_KEY_B64: ${ED25519_PRIVATE_KEY_B64:?Set ED25519_PRIVATE_KEY_B64}
 
     depends_on:
       redis:
