@@ -23,6 +23,12 @@ from app.state import (
 from app.ws.connection_manager import ConnectionManager
 from app.ws.protocol import iso_timestamp, compute_sig
 
+RUNTIME_SUPPORTED_METHODS = {
+    "ping",
+    "reboot_device",
+    "shutdown_device",
+}
+
 
 class DeviceKeyUpsertRequest(BaseModel):
     ed25519_pubkey_b64: str
@@ -115,6 +121,8 @@ def create_router(manager: ConnectionManager) -> APIRouter:
     @router.post("/command/dispatch")
     async def dispatch_command(payload: CommandDispatchRequest):
         device_id = payload.device_id
+        if payload.method not in RUNTIME_SUPPORTED_METHODS:
+            return build_dispatch_response("blocked", device_id, payload.command_id, "not_supported_runtime")
 
         if quarantine_handler.is_blocked(device_id, payload.method):
             return build_dispatch_response("blocked", device_id, payload.command_id, "device_quarantined")
