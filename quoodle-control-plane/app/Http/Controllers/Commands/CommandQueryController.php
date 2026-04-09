@@ -4,15 +4,62 @@ namespace App\Http\Controllers\Commands;
 
 use App\Http\Controllers\Controller;
 use App\Models\Command;
+use App\Models\Device;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 
 class CommandQueryController extends Controller
 {
+    public function index(Request $request): JsonResponse
+    {
+        $limit = min(max((int) $request->query('limit', 50), 1), 200);
+        $stateFilter = $request->query('state');
+        $deviceFilter = $request->query('device_id');
+        $before = $request->query('before');
+
+        $query = $this->visibleCommandsQuery($request)
+            ->with('user:id,email')
+            ->orderByDesc('queued_at')
+            ->orderByDesc('id');
+
+        if (is_string($stateFilter) && trim($stateFilter) !== '') {
+            $states = array_values(array_filter(array_map('trim', explode(',', $stateFilter))));
+            if (! empty($states)) {
+                $query->whereIn('state', $states);
+            }
+        }
+
+        if (is_string($deviceFilter) && trim($deviceFilter) !== '') {
+            $query->where('device_id', $deviceFilter);
+        }
+
+        if (is_string($before) && trim($before) !== '') {
+            try {
+                $beforeAt = Carbon::parse($before);
+                $query->where('queued_at', '<', $beforeAt);
+            } catch (\Throwable $e) {
+                // Ignore invalid before cursor and return first page.
+            }
+        }
+
+        $commands = $query->limit($limit)->get();
+
+        return response()->json([
+            'commands' => $commands->map(fn (Command $cmd) => $this->listRow($cmd)),
+            'next_before' => optional($commands->last()?->queued_at)?->toIso8601String(),
+        ]);
+    }
+
     public function show(string $command_id): JsonResponse
     {
         $command = Command::find($command_id);
         if (! $command) {
+            return response()->json(['message' => 'not_found'], 404);
+        }
+
+        if (! $this->canViewCommand(request(), $command)) {
             return response()->json(['message' => 'not_found'], 404);
         }
 
@@ -23,27 +70,79 @@ class CommandQueryController extends Controller
 
     public function deviceCommands(Request $request, string $device_id): JsonResponse
     {
+        $user = $request->user();
+        if (! $user) {
+            return response()->json(['message' => 'not_found'], 404);
+        }
+        if ($user->role !== 'admin') {
+            $visibleDevice = Device::where('device_id', $device_id)
+                ->where('user_id', $user->id)
+                ->exists();
+            if (! $visibleDevice) {
+                return response()->json(['message' => 'not_found'], 404);
+            }
+        }
+
         $limit = min((int) $request->query('limit', 20), 100);
         $commands = Command::where('device_id', $device_id)
+            ->with('user:id,email')
             ->orderByDesc('queued_at')
             ->limit($limit)
             ->get();
 
         return response()->json([
-            'commands' => $commands->map(fn (Command $cmd) => [
-                'command_id' => $cmd->id,
-                'device_id' => $cmd->device_id,
-                'method' => $cmd->method,
-                'params' => $cmd->params ?? [],
-                'state' => $cmd->state,
-                'queued_at' => optional($cmd->queued_at)?->toIso8601String(),
-                'completed_at' => optional($cmd->completed_at)?->toIso8601String(),
-                'result_status' => is_array($cmd->result) ? ($cmd->result['status'] ?? null) : null,
-                'error_code' => $cmd->error_code,
-                'error_message' => $cmd->error_message,
-            ]),
+            'commands' => $commands->map(fn (Command $cmd) => $this->listRow($cmd)),
             'next_before' => null,
         ]);
+    }
+
+    private function visibleCommandsQuery(Request $request): Builder
+    {
+        $user = $request->user();
+        $query = Command::query();
+
+        if (! $user || $user->role !== 'admin') {
+            $query->whereHas('device', function (Builder $deviceQuery) use ($user) {
+                $deviceQuery->where('user_id', $user?->id);
+            });
+        }
+
+        return $query;
+    }
+
+    private function canViewCommand(Request $request, Command $command): bool
+    {
+        $user = $request->user();
+        if (! $user) {
+            return false;
+        }
+        if ($user->role === 'admin') {
+            return true;
+        }
+
+        $device = Device::query()
+            ->where('device_id', $command->device_id)
+            ->where('user_id', $user->id)
+            ->exists();
+
+        return $device;
+    }
+
+    private function listRow(Command $cmd): array
+    {
+        return [
+            'command_id' => $cmd->id,
+            'device_id' => $cmd->device_id,
+            'method' => $cmd->method,
+            'params' => $cmd->params ?? [],
+            'state' => $cmd->state,
+            'queued_at' => optional($cmd->queued_at)?->toIso8601String(),
+            'completed_at' => optional($cmd->completed_at)?->toIso8601String(),
+            'result_status' => is_array($cmd->result) ? ($cmd->result['status'] ?? null) : null,
+            'error_code' => $cmd->error_code,
+            'error_message' => $cmd->error_message,
+            'actor_email' => $cmd->user?->email,
+        ];
     }
 
     private function formatCommand(Command $cmd): array

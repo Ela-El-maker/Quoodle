@@ -5,6 +5,20 @@ set -e
 echo "Waiting for database connection..."
 sleep 5
 
+# Ensure JWT keypair exists before booting auth flows.
+JWT_PRIVATE_KEY_PATH=${JWT_PRIVATE_KEY_PATH:-/var/www/storage/app/private/jwt_private.pem}
+JWT_PUBLIC_KEY_PATH=${JWT_PUBLIC_KEY_PATH:-/var/www/storage/app/private/jwt_public.pem}
+
+if [ ! -s "$JWT_PRIVATE_KEY_PATH" ] || [ ! -s "$JWT_PUBLIC_KEY_PATH" ]; then
+    echo "JWT keys missing; generating RSA keypair..."
+    mkdir -p "$(dirname "$JWT_PRIVATE_KEY_PATH")"
+    openssl genpkey -algorithm RSA -out "$JWT_PRIVATE_KEY_PATH" -pkeyopt rsa_keygen_bits:2048
+    openssl rsa -in "$JWT_PRIVATE_KEY_PATH" -pubout -out "$JWT_PUBLIC_KEY_PATH"
+    chmod 600 "$JWT_PRIVATE_KEY_PATH" || true
+    chmod 644 "$JWT_PUBLIC_KEY_PATH" || true
+    chown www-data:www-data "$JWT_PRIVATE_KEY_PATH" "$JWT_PUBLIC_KEY_PATH" || true
+fi
+
 # Run migrations
 echo "Running migrations..."
 php artisan migrate --force

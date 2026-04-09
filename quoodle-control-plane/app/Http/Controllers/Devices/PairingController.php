@@ -62,6 +62,13 @@ class PairingController extends Controller
             'device_name' => ['required', 'string', 'max:190'],
             'hwid' => ['required', 'string', 'max:190'],
             'pubkey' => ['required', 'string', 'max:2048'],
+            'identity_version' => ['nullable', 'string', 'max:32'],
+            'identity_components' => ['nullable', 'array'],
+            'identity_components.mb_uuid' => ['nullable', 'string', 'max:128'],
+            'identity_components.cpu_id' => ['nullable', 'string', 'max:128'],
+            'identity_components.disk_serial' => ['nullable', 'string', 'max:128'],
+            'identity_components.primary_mac' => ['nullable', 'string', 'max:128'],
+            'machine_secret_hash' => ['nullable', 'string', 'max:128'],
         ]);
 
         if ($validator->fails()) {
@@ -70,15 +77,28 @@ class PairingController extends Controller
 
         $data = $validator->validated();
         $normalizedPubkey = $this->normalizePubkey((string) $data['pubkey']);
+        $identityVersion = isset($data['identity_version']) ? trim((string) $data['identity_version']) : null;
+        $identityComponents = $this->normalizeIdentityComponents($data['identity_components'] ?? null);
+        $machineSecretHash = isset($data['machine_secret_hash']) ? trim((string) $data['machine_secret_hash']) : null;
         $policyHash = (string) config('policy.master_hash');
         if ($policyHash === '') {
             return response()->json(['status' => 'invalid', 'reason' => 'policy_hash_not_configured'], 500);
         }
 
         $device = Device::where('hwid', $data['hwid'])->first();
+        if (! $device && $identityVersion && ! empty($identityComponents)) {
+            $fuzzyMatch = $this->findFuzzyIdentityMatch($identityVersion, $identityComponents);
+            if (($fuzzyMatch['status'] ?? null) === 'ambiguous') {
+                return response()->json(['status' => 'conflict', 'reason' => 'identity_match_ambiguous'], 409);
+            }
+            if (($fuzzyMatch['status'] ?? null) === 'matched') {
+                $device = $fuzzyMatch['device'] ?? null;
+            }
+        }
 
         if ($device && ! empty($device->user_id)) {
             if (! empty($device->ed25519_pubkey_b64) && $this->pubkeysMatch((string) $device->ed25519_pubkey_b64, $normalizedPubkey)) {
+                $this->updateIdentityMetadata($device, (string) $data['hwid'], $identityVersion, $identityComponents, $machineSecretHash);
                 $pairToken = $this->jwtSigner->issueForDevice(
                     $device->device_id,
                     [
@@ -102,6 +122,7 @@ class PairingController extends Controller
                     'device_name' => $data['device_name'],
                     'ed25519_pubkey_b64' => $normalizedPubkey,
                 ]);
+                $this->updateIdentityMetadata($device, (string) $data['hwid'], $identityVersion, $identityComponents, $machineSecretHash);
                 $pairToken = $this->jwtSigner->issueForDevice(
                     $device->device_id,
                     [
@@ -128,6 +149,9 @@ class PairingController extends Controller
                 'device_id' => (string) Str::uuid(),
                 'device_name' => $data['device_name'],
                 'hwid' => $data['hwid'],
+                'identity_version' => $identityVersion,
+                'identity_components' => $identityComponents,
+                'machine_secret_hash' => $machineSecretHash ?: null,
                 'lifecycle_state' => 'pending_pairing',
                 'compliance_status' => 'unknown',
                 'policy_hash' => $policyHash,
@@ -138,6 +162,7 @@ class PairingController extends Controller
                 'device_name' => $data['device_name'],
                 'ed25519_pubkey_b64' => $normalizedPubkey,
             ]);
+            $this->updateIdentityMetadata($device, (string) $data['hwid'], $identityVersion, $identityComponents, $machineSecretHash);
         }
 
         $pairToken = $this->jwtSigner->issueForDevice(
@@ -360,6 +385,128 @@ class PairingController extends Controller
         }
 
         return json_decode(json_encode($decoded), true);
+    }
+
+    /**
+     * @param mixed $raw
+     * @return array<string, string>
+     */
+    private function normalizeIdentityComponents(mixed $raw): array
+    {
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        $allowedKeys = ['mb_uuid', 'cpu_id', 'disk_serial', 'primary_mac'];
+        $normalized = [];
+
+        foreach ($allowedKeys as $key) {
+            $value = trim((string) ($raw[$key] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+            $normalized[$key] = strtolower($value);
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<string, string> $identityComponents
+     * @return array{status:string,device?:Device}
+     */
+    private function findFuzzyIdentityMatch(string $identityVersion, array $identityComponents): array
+    {
+        $anchor = $identityComponents['mb_uuid'] ?? '';
+        if ($anchor === '') {
+            return ['status' => 'none'];
+        }
+
+        $candidates = Device::query()
+            ->where('identity_version', $identityVersion)
+            ->whereNotNull('identity_components')
+            ->where('identity_components->mb_uuid', $anchor)
+            ->get();
+
+        if ($candidates->isEmpty()) {
+            return ['status' => 'none'];
+        }
+
+        $matches = [];
+        foreach ($candidates as $candidate) {
+            $stored = $this->normalizeIdentityComponents($candidate->identity_components ?? []);
+            if (($stored['mb_uuid'] ?? '') !== $anchor) {
+                continue;
+            }
+
+            $score = $this->identityMatchScore($stored, $identityComponents);
+            if ($score >= 3) {
+                $matches[] = ['device' => $candidate, 'score' => $score];
+            }
+        }
+
+        if (empty($matches)) {
+            return ['status' => 'none'];
+        }
+
+        usort($matches, fn (array $a, array $b) => $b['score'] <=> $a['score']);
+        $topScore = $matches[0]['score'];
+        $topMatches = array_values(array_filter($matches, fn (array $m) => $m['score'] === $topScore));
+        if (count($topMatches) > 1) {
+            return ['status' => 'ambiguous'];
+        }
+
+        return ['status' => 'matched', 'device' => $topMatches[0]['device']];
+    }
+
+    /**
+     * @param array<string, string> $stored
+     * @param array<string, string> $incoming
+     */
+    private function identityMatchScore(array $stored, array $incoming): int
+    {
+        $score = 0;
+        foreach (['mb_uuid', 'cpu_id', 'disk_serial', 'primary_mac'] as $key) {
+            if (($stored[$key] ?? '') !== '' && ($incoming[$key] ?? '') !== '' && $stored[$key] === $incoming[$key]) {
+                $score++;
+            }
+        }
+
+        return $score;
+    }
+
+    /**
+     * @param array<string, string> $identityComponents
+     */
+    private function updateIdentityMetadata(
+        Device $device,
+        string $hwid,
+        ?string $identityVersion,
+        array $identityComponents,
+        ?string $machineSecretHash,
+    ): void {
+        $updates = [];
+
+        $normalizedHwid = trim($hwid);
+        if ($normalizedHwid !== '' && $device->hwid !== $normalizedHwid) {
+            $updates['hwid'] = $normalizedHwid;
+        }
+
+        if (! empty($identityVersion) && $device->identity_version !== $identityVersion) {
+            $updates['identity_version'] = $identityVersion;
+        }
+
+        if (! empty($identityComponents)) {
+            $updates['identity_components'] = $identityComponents;
+        }
+
+        if (! empty($machineSecretHash) && $device->machine_secret_hash !== $machineSecretHash) {
+            $updates['machine_secret_hash'] = $machineSecretHash;
+        }
+
+        if (! empty($updates)) {
+            $device->update($updates);
+        }
     }
 
     private function normalizePubkey(string $pubkey): string

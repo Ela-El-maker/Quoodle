@@ -7,6 +7,7 @@ use App\Models\AuthToken;
 use App\Models\Device;
 use App\Models\TelemetrySnapshot;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -21,15 +22,30 @@ class DeviceController extends Controller
             ->exists();
     }
 
+    private function visibleDevicesQuery(Request $request): Builder
+    {
+        $user = $request->user();
+        $query = Device::query();
+
+        if (! $user || $user->role !== 'admin') {
+            $query->where('user_id', $user?->id);
+        }
+
+        return $query;
+    }
+
     public function index(Request $request): JsonResponse
     {
         $perPage = min((int) $request->query('per_page', 50), 200);
-        $devices = Device::paginate($perPage, ['device_id', 'device_name', 'lifecycle_state', 'last_seen', 'agent_version', 'os_build', 'compliance_status', 'risk_score']);
+        $devices = $this->visibleDevicesQuery($request)
+            ->with('user:id,email')
+            ->paginate($perPage, ['device_id', 'user_id', 'device_name', 'lifecycle_state', 'last_seen', 'agent_version', 'os_build', 'compliance_status', 'risk_score']);
 
         return response()->json([
             'devices' => $devices->getCollection()->map(function (Device $device) {
                 return [
                     'device_id' => $device->device_id,
+                    'owner_email' => $device->user?->email,
                     'device_name' => $device->device_name,
                     'lifecycle_state' => $device->lifecycle_state,
                     'last_seen' => optional($device->last_seen)?->toIso8601String(),
@@ -122,10 +138,14 @@ class DeviceController extends Controller
         ]);
     }
 
-    public function show(string $device_id): JsonResponse
+    public function show(Request $request, string $device_id): JsonResponse
     {
-        $device = Device::find($device_id);
+        $device = Device::with('user:id,email')->find($device_id);
         if (! $device) {
+            return response()->json(['message' => 'not_found'], 404);
+        }
+        $user = $request->user();
+        if (! $user || ($user->role !== 'admin' && $device->user_id !== $user->id)) {
             return response()->json(['message' => 'not_found'], 404);
         }
 
@@ -137,12 +157,14 @@ class DeviceController extends Controller
 
         return response()->json([
             'device_id' => $device->device_id,
+            'owner_email' => $device->user?->email,
             'device_name' => $device->device_name,
             'hwid' => $device->hwid,
             'lifecycle_state' => $device->lifecycle_state,
             'last_seen' => optional($device->last_seen)?->toIso8601String(),
             'agent_version' => $device->agent_version,
             'os_build' => $device->os_build,
+            'risk_score' => $device->risk_score,
             'policy_hash' => $device->policy_hash,
             'reported_policy_hash' => $device->reported_policy_hash,
             'policy_in_sync' => $policyInSync,
