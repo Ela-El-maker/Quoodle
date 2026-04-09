@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 type DeviceStatus = 'online' | 'offline' | 'quarantined' | 'degraded';
 type ComplianceStatus = 'compliant' | 'non_compliant' | 'drift';
 type CommandState = 'queued' | 'dispatched' | 'ack_received' | 'executing' | 'completed' | 'failed' | 'expired' | 'rejected';
+type CommandBlockReason = 'unknown_command' | 'not_supported_runtime';
 
 interface Device {
   id: string;
@@ -82,8 +83,15 @@ interface CommandsApiResponse {
     result_status?: string | null;
     error_code?: number | null;
     error_message?: string | null;
+    reason?: string | null;
     actor_email?: string | null;
   }>;
+}
+
+interface CommandCapabilitiesResponse {
+  canonical_methods?: string[];
+  runtime_supported_methods?: string[];
+  rejection_reasons?: Record<string, string>;
 }
 
 interface CommandDetailApiResponse {
@@ -102,6 +110,7 @@ interface CommandDetailApiResponse {
   } | null;
   error_code?: number | null;
   error_message?: string | null;
+  reason?: string | null;
 }
 
 interface TelemetryApiResponse {
@@ -269,7 +278,7 @@ const COMMAND_CATEGORIES = [
     commands: [
       { id: 'users-list', label: 'Users List', desc: 'Local and domain user accounts', icon: Users, risk: 'low' },
       { id: 'active-sessions', label: 'Active Sessions', desc: 'Currently logged-in users', icon: Users, risk: 'low' },
-      { id: 'logoff-user', label: 'Log Off User', desc: 'Force log off a user session', icon: X, risk: 'high' },
+      { id: 'logout_user', label: 'Log Off User', desc: 'Force log off a user session', icon: X, risk: 'high' },
     ],
   },
   {
@@ -278,8 +287,8 @@ const COMMAND_CATEGORIES = [
     color: 'text-yellow-400',
     commands: [
       { id: 'power-info', label: 'Power Info', desc: 'Battery, power plan, sleep settings', icon: Power, risk: 'low' },
-      { id: 'shutdown', label: 'Shutdown', desc: 'Gracefully shut down the device', icon: Power, risk: 'critical' },
-      { id: 'reboot', label: 'Reboot', desc: 'Restart the device', icon: RotateCcw, risk: 'critical' },
+      { id: 'shutdown_device', label: 'Shutdown', desc: 'Gracefully shut down the device', icon: Power, risk: 'critical' },
+      { id: 'reboot_device', label: 'Reboot', desc: 'Restart the device', icon: RotateCcw, risk: 'critical' },
       { id: 'sleep', label: 'Sleep', desc: 'Put the device to sleep', icon: Power, risk: 'high' },
     ],
   },
@@ -373,6 +382,16 @@ function isTerminalState(state: CommandState): boolean {
   return ['completed', 'failed', 'expired', 'rejected'].includes(state);
 }
 
+function reasonToText(reason: string): string {
+  if (reason === 'unknown_command') {
+    return 'Non-canonical command id';
+  }
+  if (reason === 'not_supported_runtime') {
+    return 'Not supported by current runtime';
+  }
+  return reason;
+}
+
 function getFallbackDevice(id: string): Device {
   return {
     id,
@@ -435,18 +454,24 @@ export default function DeviceDetailPageContent() {
   const [isDispatching, setIsDispatching] = useState(false);
   const [liveResults, setLiveResults] = useState<{ commandId: string; method: string; state: CommandState; output: string; traceSteps: TraceStep[] } | null>(null);
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
+  const [commandCapabilities, setCommandCapabilities] = useState<CommandCapabilitiesResponse>({
+    canonical_methods: [],
+    runtime_supported_methods: [],
+    rejection_reasons: {},
+  });
   const liveRef = useRef<HTMLDivElement>(null);
 
   const loadDeviceData = useCallback(async () => {
     setIsLoadingDevice(true);
 
     const encodedId = encodeURIComponent(deviceId);
-    const [deviceRes, commandsRes, telemetryRes, alertsRes, auditRes] = await Promise.allSettled([
+    const [deviceRes, commandsRes, telemetryRes, alertsRes, auditRes, capabilitiesRes] = await Promise.allSettled([
       fetch(`/api/devices/${encodedId}`, { credentials: 'include', cache: 'no-store' }),
       fetch(`/api/devices/${encodedId}/commands?limit=20`, { credentials: 'include', cache: 'no-store' }),
       fetch(`/api/devices/${encodedId}/telemetry/latest`, { credentials: 'include', cache: 'no-store' }),
       fetch('/api/alerts?limit=100', { credentials: 'include', cache: 'no-store' }),
       fetch(`/api/audit/device/${encodedId}?limit=100`, { credentials: 'include', cache: 'no-store' }),
+      fetch(`/api/commands/capabilities?device_id=${encodedId}`, { credentials: 'include', cache: 'no-store' }),
     ]);
 
     if (deviceRes.status === 'fulfilled' && deviceRes.value.ok) {
@@ -491,7 +516,7 @@ export default function DeviceDetailPageContent() {
           queuedAt: formatTime(cmd.queued_at),
           completedAt: cmd.completed_at ? formatTime(cmd.completed_at) : null,
           duration: formatDuration(cmd.queued_at, cmd.completed_at),
-          resultPreview: cmd.error_message || cmd.result_status || (cmd.error_code ? `error ${cmd.error_code}` : null),
+          resultPreview: cmd.error_message || cmd.reason || cmd.result_status || (cmd.error_code ? `error ${cmd.error_code}` : null),
         })),
       );
     } else {
@@ -554,6 +579,22 @@ export default function DeviceDetailPageContent() {
       setAuditEntries([]);
     }
 
+    if (capabilitiesRes.status === 'fulfilled' && capabilitiesRes.value.ok) {
+      const payload = (await capabilitiesRes.value.json()) as CommandCapabilitiesResponse;
+      setCommandCapabilities({
+        canonical_methods: payload.canonical_methods ?? [],
+        runtime_supported_methods: payload.runtime_supported_methods ?? [],
+        rejection_reasons: payload.rejection_reasons ?? {},
+      });
+    } else {
+      setCommandCapabilities({
+        canonical_methods: [],
+        runtime_supported_methods: [],
+        rejection_reasons: {},
+      });
+      toast.error('Command capabilities unavailable');
+    }
+
     setIsLoadingDevice(false);
   }, [deviceId]);
 
@@ -587,6 +628,25 @@ export default function DeviceDetailPageContent() {
       })).filter((cat) => !commandSearch || cat.commands.length > 0),
     [commandSearch],
   );
+
+  const canonicalMethods = useMemo(
+    () => new Set(commandCapabilities.canonical_methods ?? []),
+    [commandCapabilities.canonical_methods],
+  );
+  const runtimeSupportedMethods = useMemo(
+    () => new Set(commandCapabilities.runtime_supported_methods ?? []),
+    [commandCapabilities.runtime_supported_methods],
+  );
+
+  const getCommandBlockReason = useCallback((method: string): CommandBlockReason | null => {
+    if (!canonicalMethods.has(method)) {
+      return 'unknown_command';
+    }
+    if (!runtimeSupportedMethods.has(method)) {
+      return 'not_supported_runtime';
+    }
+    return null;
+  }, [canonicalMethods, runtimeSupportedMethods]);
 
   const riskBadge = (risk: string) => {
     const map: Record<string, string> = {
@@ -636,6 +696,7 @@ export default function DeviceDetailPageContent() {
         result: payload.result ?? null,
         error_code: payload.error_code ?? null,
         error_message: payload.error_message ?? null,
+        reason: payload.reason ?? null,
         completed_at: payload.completed_at ?? null,
       };
 
@@ -668,6 +729,12 @@ export default function DeviceDetailPageContent() {
     label: string,
     sensitive = false,
   ) => {
+    const blockReason = getCommandBlockReason(method);
+    if (blockReason) {
+      toast.error(`${label} blocked: ${reasonToText(blockReason)}`);
+      return;
+    }
+
     setIsDispatching(true);
 
     try {
@@ -713,7 +780,7 @@ export default function DeviceDetailPageContent() {
     } finally {
       setIsDispatching(false);
     }
-  }, [device.id, loadDeviceData, pollCommandUntilTerminal]);
+  }, [device.id, getCommandBlockReason, loadDeviceData, pollCommandUntilTerminal]);
 
   const stateIcon = (s: CommandState) => {
     if (s === 'completed') return <CheckCircle size={12} className="text-green-400 flex-shrink-0" />;
@@ -721,6 +788,8 @@ export default function DeviceDetailPageContent() {
     if (['executing', 'ack_received'].includes(s)) return <Loader2 size={12} className="text-blue-400 flex-shrink-0 animate-spin" />;
     return <Clock size={12} className="text-amber-400 flex-shrink-0" />;
   };
+
+  const activeCommandBlockReason = activeCommand ? getCommandBlockReason(activeCommand.id) : null;
 
   return (
     <div className="space-y-4 fade-in">
@@ -894,20 +963,29 @@ export default function DeviceDetailPageContent() {
                   </button>
                   {(selectedCategory === cat.category || commandSearch) && (
                     <div className="border-t border-border divide-y divide-border/50">
-                      {cat.commands.map(cmd => (
-                        <div
-                          key={cmd.id}
-                          onClick={() => setActiveCommand({ id: cmd.id, label: cmd.label, risk: cmd.risk })}
-                          className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-muted/20 ${activeCommand?.id === cmd.id ? 'bg-primary/5 border-l-2 border-primary' : ''}`}
-                        >
-                          <cmd.icon size={14} className="text-muted-foreground flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium">{cmd.label}</p>
-                            <p className="text-[11px] text-muted-foreground">{cmd.desc}</p>
+                      {cat.commands.map((cmd) => {
+                        const blockReason = getCommandBlockReason(cmd.id);
+                        const isBlocked = Boolean(blockReason);
+                        return (
+                          <div
+                            key={cmd.id}
+                            onClick={() => setActiveCommand({ id: cmd.id, label: cmd.label, risk: cmd.risk })}
+                            className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${
+                              isBlocked ? 'opacity-60 bg-muted/10' : 'hover:bg-muted/20'
+                            } ${activeCommand?.id === cmd.id ? 'bg-primary/5 border-l-2 border-primary' : ''}`}
+                          >
+                            <cmd.icon size={14} className="text-muted-foreground flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium">{cmd.label}</p>
+                              <p className="text-[11px] text-muted-foreground">{cmd.desc}</p>
+                              {blockReason && (
+                                <p className="text-[10px] text-amber-400 mt-1">Blocked: {reasonToText(blockReason)}</p>
+                              )}
+                            </div>
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${riskBadge(cmd.risk)}`}>{cmd.risk}</span>
                           </div>
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${riskBadge(cmd.risk)}`}>{cmd.risk}</span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -951,6 +1029,10 @@ export default function DeviceDetailPageContent() {
                     <button
                       onClick={async () => {
                         if (!activeCommand) return;
+                        if (activeCommandBlockReason) {
+                          toast.error(`${activeCommand.label} blocked: ${reasonToText(activeCommandBlockReason)}`);
+                          return;
+                        }
                         const parsed = parseJsonParams(commandParams);
                         if (!parsed.ok) {
                           toast.error(parsed.error);
@@ -959,13 +1041,16 @@ export default function DeviceDetailPageContent() {
                         const sensitive = ['high', 'critical'].includes(activeCommand.risk);
                         await dispatchCommand(activeCommand.id, parsed.value, activeCommand.label, sensitive);
                       }}
-                      disabled={isDispatching || device.status !== 'online'}
+                      disabled={isDispatching || device.status !== 'online' || Boolean(activeCommandBlockReason)}
                       className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                     >
                       {isDispatching ? <><Loader2 size={14} className="animate-spin" /> Dispatching...</> : <><Send size={14} /> Execute {activeCommand.label}</>}
                     </button>
                     {device.status !== 'online' && (
                       <p className="text-[11px] text-amber-400 text-center">Device is {device.status} - commands unavailable</p>
+                    )}
+                    {activeCommandBlockReason && (
+                      <p className="text-[11px] text-amber-400 text-center">Blocked: {reasonToText(activeCommandBlockReason)}</p>
                     )}
                   </>
                 ) : (
@@ -1106,7 +1191,9 @@ export default function DeviceDetailPageContent() {
               <div className="p-6 text-center text-sm text-muted-foreground">No command history for this device yet.</div>
             ) : (
               <div className="divide-y divide-border">
-                {commandHistory.map((cmd) => (
+                {commandHistory.map((cmd) => {
+                  const replayBlockReason = getCommandBlockReason(cmd.method);
+                  return (
                   <React.Fragment key={cmd.id}>
                     <div
                       className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/20 transition-colors"
@@ -1121,9 +1208,14 @@ export default function DeviceDetailPageContent() {
                       <button
                         onClick={async (e) => {
                           e.stopPropagation();
+                          if (replayBlockReason) {
+                            toast.error(`Replay blocked: ${reasonToText(replayBlockReason)}`);
+                            return;
+                          }
                           await dispatchCommand(cmd.method, cmd.params ?? {}, `Replay ${cmd.method}`);
                         }}
-                        className="flex items-center gap-1 px-2 py-0.5 text-[11px] bg-primary/10 border border-primary/20 text-primary rounded hover:bg-primary/20 transition-colors"
+                        disabled={Boolean(replayBlockReason)}
+                        className="flex items-center gap-1 px-2 py-0.5 text-[11px] bg-primary/10 border border-primary/20 text-primary rounded hover:bg-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <RotateCcw size={9} /> Replay
                       </button>
@@ -1145,11 +1237,17 @@ export default function DeviceDetailPageContent() {
                               <p className="text-xs">{cmd.resultPreview}</p>
                             </div>
                           )}
+                          {replayBlockReason && (
+                            <div className="bg-muted/30 rounded p-2 col-span-2">
+                              <p className="text-[10px] text-muted-foreground mb-0.5">Replay</p>
+                              <p className="text-xs text-amber-400">Blocked: {reasonToText(replayBlockReason)}</p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
                   </React.Fragment>
-                ))}
+                )})}
               </div>
             )}
           </div>
