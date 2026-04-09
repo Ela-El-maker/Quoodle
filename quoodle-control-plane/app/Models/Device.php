@@ -28,11 +28,15 @@ class Device extends Model
         'reported_policy_hash',
         'compliance_status',
         'risk_score',
+        'identity_version',
+        'identity_components',
+        'machine_secret_hash',
     ];
 
     protected $casts = [
         'last_seen' => 'datetime',
         'risk_score' => 'decimal:2',
+        'identity_components' => 'array',
     ];
 
     // =========================================================================
