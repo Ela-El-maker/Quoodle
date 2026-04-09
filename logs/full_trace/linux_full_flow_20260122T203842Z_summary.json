@@ -1,8 +1,0 @@
-{
-  "device_id": "fe5d440d-a3aa-441c-b714-4d2f2bf8a94b",
-  "command_id": "01kfkpwkwpdmjr8n5g6xh7gz21",
-  "final_state": "failed",
-  "trace_log": "/home/ela/Work-Force/Quoodle/logs/full_trace/linux_full_flow_20260122T203842Z.jsonl",
-  "agent_log": "/home/ela/Work-Force/Quoodle/logs/full_trace/linux_agent_20260122T203842Z.log",
-  "daemon_log": "/home/ela/Work-Force/Quoodle/logs/full_trace/linux_daemon_20260122T203842Z.log"
-}
