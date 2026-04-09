@@ -12,7 +12,7 @@ Steps (recommended):
 1. Generate keys locally (requires Python + PyNaCl):
 
 ```bash
-python3 scripts/generate_ed25519_keys.py
+python3 quoodle-scripts/generate_ed25519_keys.py
 ```
 
 The script prints two base64 strings: first the 64-byte secret (secret+public), second the public key.
@@ -32,4 +32,5 @@ If you prefer the web UI: repo Settings → Secrets and variables → Actions �
 
 Security note:
 - Do NOT commit private keys into the repository. Use GitHub Secrets or a secure secret manager in production.
+- For local Docker runs, keep sensitive values centralized in root `.env` only.
 

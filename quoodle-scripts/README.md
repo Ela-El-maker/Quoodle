@@ -1,13 +1,23 @@
 # Ed25519 keys and usage
 
-This folder contains a helper to generate Ed25519 keypairs for local development.
+This folder is the central place for local secret tooling.
+
+- `generate_ed25519_keys.py`: generate local Ed25519 keypair values.
+- `print_ci_secret_commands.py`: print `gh secret set` commands for CI.
+- `check_centralized_secrets.py`: validate required keys are set in root `.env`.
 
 Generate keys (requires Python + PyNaCl):
 
 ```bash
-python3 scripts/generate_ed25519_keys.py > /dev/null
+python3 quoodle-scripts/generate_ed25519_keys.py > /dev/null
 # The script prints two base64 strings: first is a 64-byte secret (secret+public),
 # second is the public key. Copy them to environment variables as explained below.
+```
+
+Validate centralized secrets:
+
+```bash
+python3 quoodle-scripts/check_centralized_secrets.py --env-file .env
 ```
 
 ## Environment variables for local testing
