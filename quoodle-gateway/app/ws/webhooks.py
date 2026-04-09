@@ -61,6 +61,7 @@ async def forward_telemetry_summary(
     policy_hash: str | None = None,
 ) -> None:
     try:
+        kernel_event = metrics.get("kernel_event") if isinstance(metrics, dict) else None
         def _percent(val: str | None) -> float | None:
             if not val:
                 return None
@@ -78,6 +79,8 @@ async def forward_telemetry_summary(
             "risk_score_avg": risk_score or 0.0,
             "policy_hash": policy_hash,
         }
+        if kernel_event:
+            rollup["kernel_event"] = kernel_event
     except Exception:
         rollup = {
             "avg_cpu": 0.0,
@@ -87,6 +90,8 @@ async def forward_telemetry_summary(
             "risk_score_avg": 0.0,
             "policy_hash": policy_hash,
         }
+        if isinstance(metrics, dict) and metrics.get("kernel_event"):
+            rollup["kernel_event"] = metrics.get("kernel_event")
 
     payload = {
         "device_id": device_id,

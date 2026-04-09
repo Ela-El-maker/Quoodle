@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Dict
+from typing import Dict, Any
 
 class TelemetryMetrics(BaseModel):
     cpu: str
@@ -10,5 +10,5 @@ class TelemetryMetrics(BaseModel):
 
 class TelemetryBody(BaseModel):
     timestamp: str
-    metrics: Dict[str, str]
+    metrics: Dict[str, Any]
     telemetry_scope: str

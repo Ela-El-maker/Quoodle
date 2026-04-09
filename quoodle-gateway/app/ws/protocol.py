@@ -172,6 +172,16 @@ def validate_telemetry(payload: Dict[str, Any], expected_session: str) -> None:
     if "policy_hash" in body and body.get("policy_hash") is not None and not isinstance(body.get("policy_hash"), str):
         raise ValueError("Telemetry body.policy_hash must be a string")
     metrics = body.get("metrics") or {}
+    telemetry_scope = body.get("telemetry_scope")
+    if telemetry_scope == "kernel_event":
+        kernel_event = metrics.get("kernel_event")
+        if not isinstance(kernel_event, dict):
+            raise ValueError("Telemetry metrics.kernel_event required for kernel_event scope")
+        for field in ["event_id", "event_type", "event_timestamp_unix", "payload_json"]:
+            if field not in kernel_event:
+                raise ValueError(f"Telemetry kernel_event missing {field}")
+        return
+
     for field in ["cpu", "ram", "disk_usage", "network_tx", "network_rx"]:
         if field not in metrics:
             raise ValueError(f"Telemetry metrics missing {field}")
