@@ -1,7 +1,7 @@
 services:
   gateway:
     ports:
-      - "8443:8000"
+      - "${QUOODLE_GATEWAY_TLS_PORT:-8443}:8000"
     environment:
       GATEWAY_TLS_CERT_FILE: /certs/gateway.crt
       GATEWAY_TLS_KEY_FILE: /certs/gateway.key
@@ -10,8 +10,8 @@ services:
 
   control-plane:
     ports:
-      - "8080:80"
-      - "8444:443"
+      - "${QUOODLE_CONTROL_PLANE_HTTP_PORT_TLS:-8080}:80"
+      - "${QUOODLE_CONTROL_PLANE_HTTPS_PORT_TLS:-8444}:443"
     volumes:
       - ./certs:/certs:ro
       - ./quoodle-control-plane/docker/nginx.tls.conf:/etc/nginx/sites-available/default:ro
