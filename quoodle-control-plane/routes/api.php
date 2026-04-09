@@ -100,6 +100,7 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
 
         // Command status (read-only)
         Route::get('/commands', [CommandQueryController::class, 'index']);
+        Route::get('/commands/capabilities', [CommandQueryController::class, 'capabilities']);
         Route::get('/commands/{command_id}', [CommandQueryController::class, 'show']);
         Route::get('/devices/{device_id}/commands', [CommandQueryController::class, 'deviceCommands']);
 

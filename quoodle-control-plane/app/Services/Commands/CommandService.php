@@ -18,6 +18,7 @@ class CommandService
 {
     public function __construct(
         private readonly Registry $registry,
+        private readonly RuntimeCapabilities $runtimeCapabilities,
         private readonly PolicyEvaluator $policyEvaluator,
         private readonly ComplianceChecker $complianceChecker,
         private readonly FastAPIDispatcher $dispatcher,
@@ -51,6 +52,10 @@ class CommandService
         $definition = $this->registry->get($payload['method']);
         if (! $definition) {
             return ['status' => 'rejected', 'reason' => 'unknown_command'];
+        }
+
+        if (! $this->runtimeCapabilities->isRuntimeSupported($payload['method'])) {
+            return ['status' => 'rejected', 'reason' => 'not_supported_runtime'];
         }
 
         $validation = $definition->validate($payload['params'] ?? []);

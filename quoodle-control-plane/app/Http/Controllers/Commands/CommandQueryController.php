@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Commands;
 use App\Http\Controllers\Controller;
 use App\Models\Command;
 use App\Models\Device;
+use App\Services\Commands\RuntimeCapabilities;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Builder;
@@ -12,6 +13,10 @@ use Illuminate\Support\Carbon;
 
 class CommandQueryController extends Controller
 {
+    public function __construct(private readonly RuntimeCapabilities $runtimeCapabilities)
+    {
+    }
+
     public function index(Request $request): JsonResponse
     {
         $limit = min(max((int) $request->query('limit', 50), 1), 200);
@@ -49,6 +54,31 @@ class CommandQueryController extends Controller
         return response()->json([
             'commands' => $commands->map(fn (Command $cmd) => $this->listRow($cmd)),
             'next_before' => optional($commands->last()?->queued_at)?->toIso8601String(),
+        ]);
+    }
+
+    public function capabilities(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user) {
+            return response()->json(['message' => 'unauthenticated'], 401);
+        }
+
+        $deviceId = trim((string) $request->query('device_id', ''));
+        if ($deviceId !== '' && $user->role !== 'admin') {
+            $visibleDevice = Device::query()
+                ->where('device_id', $deviceId)
+                ->where('user_id', $user->id)
+                ->exists();
+            if (! $visibleDevice) {
+                return response()->json(['message' => 'not_found'], 404);
+            }
+        }
+
+        return response()->json([
+            'canonical_methods' => $this->runtimeCapabilities->canonicalMethods(),
+            'runtime_supported_methods' => $this->runtimeCapabilities->runtimeSupportedMethods(),
+            'rejection_reasons' => $this->runtimeCapabilities->rejectionReasonsByMethod(),
         ]);
     }
 
@@ -141,6 +171,7 @@ class CommandQueryController extends Controller
             'result_status' => is_array($cmd->result) ? ($cmd->result['status'] ?? null) : null,
             'error_code' => $cmd->error_code,
             'error_message' => $cmd->error_message,
+            'reason' => $cmd->reason,
             'actor_email' => $cmd->user?->email,
         ];
     }
@@ -174,6 +205,7 @@ class CommandQueryController extends Controller
             ],
             'error_code' => $cmd->error_code,
             'error_message' => $cmd->error_message,
+            'reason' => $cmd->reason,
         ];
     }
 
