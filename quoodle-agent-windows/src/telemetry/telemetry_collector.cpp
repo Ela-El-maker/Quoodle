@@ -2,12 +2,65 @@
 #include <cstdio>
 #include <iostream>
 #include <cstdlib>
+#include <string>
 
 #ifdef _WIN32
 #include <winreg.h>
 #endif
 
 #ifdef _WIN32
+namespace
+{
+constexpr const char *kCurrentVersionPath = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion";
+
+bool open_current_version_key(HKEY &hKey)
+{
+    hKey = nullptr;
+    LONG rc = RegOpenKeyExA(HKEY_LOCAL_MACHINE, kCurrentVersionPath, 0, KEY_READ | KEY_WOW64_64KEY, &hKey);
+    if (rc == ERROR_SUCCESS) return true;
+    rc = RegOpenKeyExA(HKEY_LOCAL_MACHINE, kCurrentVersionPath, 0, KEY_READ, &hKey);
+    return rc == ERROR_SUCCESS;
+}
+
+std::string query_reg_string(HKEY hKey, const char *valueName)
+{
+    char value[256] = {0};
+    DWORD size = sizeof(value);
+    DWORD type = 0;
+    LONG rc = RegQueryValueExA(
+        hKey,
+        valueName,
+        nullptr,
+        &type,
+        reinterpret_cast<LPBYTE>(value),
+        &size);
+    if (rc != ERROR_SUCCESS || (type != REG_SZ && type != REG_EXPAND_SZ))
+    {
+        return "";
+    }
+    const std::string raw(value);
+    if (raw.empty())
+    {
+        return "";
+    }
+    return raw;
+}
+
+bool query_reg_dword(HKEY hKey, const char *valueName, DWORD &outValue)
+{
+    outValue = 0;
+    DWORD size = sizeof(outValue);
+    DWORD type = REG_DWORD;
+    LONG rc = RegQueryValueExA(
+        hKey,
+        valueName,
+        nullptr,
+        &type,
+        reinterpret_cast<LPBYTE>(&outValue),
+        &size);
+    return rc == ERROR_SUCCESS && type == REG_DWORD;
+}
+} // namespace
 
 TelemetryCollector::TelemetryCollector()
 {
@@ -137,28 +190,16 @@ std::string TelemetryCollector::get_os_build()
     }
 
     HKEY hKey = nullptr;
-    constexpr const char *kPath = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion";
-    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, kPath, 0, KEY_READ | KEY_WOW64_64KEY, &hKey) != ERROR_SUCCESS)
+    if (!open_current_version_key(hKey))
     {
         return "";
     }
 
-    char value[64] = {0};
-    DWORD size = sizeof(value);
-    LONG rc = RegQueryValueExA(hKey, "CurrentBuildNumber", nullptr, nullptr, reinterpret_cast<LPBYTE>(value), &size);
-    if (rc != ERROR_SUCCESS)
+    std::string build = query_reg_string(hKey, "CurrentBuildNumber");
+    if (build.empty())
     {
-        size = sizeof(value);
-        rc = RegQueryValueExA(hKey, "CurrentBuild", nullptr, nullptr, reinterpret_cast<LPBYTE>(value), &size);
+        build = query_reg_string(hKey, "CurrentBuild");
     }
-
-    if (rc != ERROR_SUCCESS)
-    {
-        RegCloseKey(hKey);
-        return "";
-    }
-
-    const std::string build = std::string(value);
     if (build.empty())
     {
         RegCloseKey(hKey);
@@ -166,24 +207,99 @@ std::string TelemetryCollector::get_os_build()
     }
 
     DWORD ubr = 0;
-    DWORD ubrSize = sizeof(ubr);
-    DWORD ubrType = REG_DWORD;
-    rc = RegQueryValueExA(
-        hKey,
-        "UBR",
-        nullptr,
-        &ubrType,
-        reinterpret_cast<LPBYTE>(&ubr),
-        &ubrSize
-    );
+    const bool hasUbr = query_reg_dword(hKey, "UBR", ubr);
     RegCloseKey(hKey);
 
-    if (rc == ERROR_SUCCESS && ubrType == REG_DWORD)
+    if (hasUbr)
     {
         return build + "." + std::to_string(ubr);
     }
 
     return build;
+}
+
+std::string TelemetryCollector::get_os_version()
+{
+    if (const char *env_version = std::getenv("AGENT_OS_VERSION"))
+    {
+        if (*env_version)
+        {
+            return env_version;
+        }
+    }
+
+    HKEY hKey = nullptr;
+    if (!open_current_version_key(hKey))
+    {
+        return "";
+    }
+
+    std::string productName = query_reg_string(hKey, "ProductName");
+    std::string displayVersion = query_reg_string(hKey, "DisplayVersion");
+    if (displayVersion.empty())
+    {
+        displayVersion = query_reg_string(hKey, "ReleaseId");
+    }
+    const std::string currentBuild = query_reg_string(hKey, "CurrentBuildNumber");
+    RegCloseKey(hKey);
+
+    if (!productName.empty() && !currentBuild.empty())
+    {
+        try
+        {
+            const int build = std::stoi(currentBuild);
+            if (build >= 22000)
+            {
+                const std::string legacyPrefix = "Windows 10";
+                if (productName.rfind(legacyPrefix, 0) == 0)
+                {
+                    productName.replace(0, legacyPrefix.size(), "Windows 11");
+                }
+            }
+        }
+        catch (...)
+        {
+            // Keep original productName when build parsing fails.
+        }
+    }
+
+    if (!productName.empty() && !displayVersion.empty())
+    {
+        return productName + " " + displayVersion;
+    }
+    if (!productName.empty())
+    {
+        return productName;
+    }
+    return displayVersion;
+}
+
+std::string TelemetryCollector::get_patch_level()
+{
+    if (const char *env_patch = std::getenv("AGENT_PATCH_LEVEL"))
+    {
+        if (*env_patch)
+        {
+            return env_patch;
+        }
+    }
+
+    HKEY hKey = nullptr;
+    if (!open_current_version_key(hKey))
+    {
+        return "";
+    }
+
+    DWORD ubr = 0;
+    if (query_reg_dword(hKey, "UBR", ubr))
+    {
+        RegCloseKey(hKey);
+        return std::to_string(ubr);
+    }
+
+    const std::string buildLabEx = query_reg_string(hKey, "BuildLabEx");
+    RegCloseKey(hKey);
+    return buildLabEx;
 }
 
 TelemetrySample TelemetryCollector::collect()
@@ -198,6 +314,8 @@ TelemetrySample TelemetryCollector::collect()
     s.network_tx = net.second;
     s.battery_pct = get_battery_pct();
     s.os_build = get_os_build();
+    s.os_version = get_os_version();
+    s.patch_level = get_patch_level();
     if (const char *agent_version = std::getenv("AGENT_VERSION"))
     {
         s.agent_version = agent_version;

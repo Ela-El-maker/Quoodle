@@ -23,6 +23,8 @@ struct TelemetrySample
     std::string network_rx;
     std::string battery_pct;
     std::string os_build;
+    std::string os_version;
+    std::string patch_level;
     std::string agent_version;
     std::string risk_score;
 };
@@ -56,5 +58,7 @@ private:
     std::pair<std::string, std::string> get_network_throughput();
     std::string get_battery_pct();
     std::string get_os_build();
+    std::string get_os_version();
+    std::string get_patch_level();
 #endif
 };

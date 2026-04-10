@@ -363,6 +363,8 @@ std::string build_signed_telemetry_json(const std::string &device_id,
         {"network_rx", "\"" + escape_json(sample.network_rx) + "\""},
         {"network_tx", "\"" + escape_json(sample.network_tx) + "\""},
         {"os_build", sample.os_build.empty() ? "null" : "\"" + escape_json(sample.os_build) + "\""},
+        {"os_version", sample.os_version.empty() ? "null" : "\"" + escape_json(sample.os_version) + "\""},
+        {"patch_level", sample.patch_level.empty() ? "null" : "\"" + escape_json(sample.patch_level) + "\""},
         {"ram", "\"" + escape_json(sample.ram) + "\""},
         {"risk_score", sample.risk_score.empty() ? "null" : sample.risk_score},
     });

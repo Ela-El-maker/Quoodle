@@ -20,6 +20,21 @@
 // Global communicator pointer for signal handler
 static std::atomic<Communicator *> g_communicator{nullptr};
 
+#ifdef _WIN32
+static bool allow_multi_instance()
+{
+    const char *raw = std::getenv("AGENT_ALLOW_MULTI_INSTANCE");
+    if (!raw || !*raw)
+    {
+        return false;
+    }
+    std::string value(raw);
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch)
+                   { return static_cast<char>(std::tolower(ch)); });
+    return value == "1" || value == "true" || value == "yes" || value == "on";
+}
+#endif
+
 static void signal_handler(int signal)
 {
     if (auto *comm = g_communicator.load(std::memory_order_acquire))
@@ -250,6 +265,19 @@ static bool try_run_service_dispatcher()
 int main(int argc, char **argv)
 {
 #ifdef _WIN32
+    HANDLE instance_mutex = CreateMutexA(nullptr, FALSE, "Global\\QuoodleAgentSingleton");
+    if (!instance_mutex)
+    {
+        Logger::log(LogLevel::Error, "Failed to create single-instance mutex: " + std::to_string(GetLastError()));
+        return 1;
+    }
+    if (GetLastError() == ERROR_ALREADY_EXISTS && !allow_multi_instance())
+    {
+        Logger::log(LogLevel::Warn, "Another Quoodle agent instance is already running. Exiting this process.");
+        CloseHandle(instance_mutex);
+        return 2;
+    }
+
     bool force_console = false;
     bool force_service = false;
 
@@ -268,22 +296,31 @@ int main(int argc, char **argv)
 
     if (force_console)
     {
-        return run_console_mode();
+        const int rc = run_console_mode();
+        CloseHandle(instance_mutex);
+        return rc;
     }
 
     if (force_service)
     {
         if (try_run_service_dispatcher())
         {
+            CloseHandle(instance_mutex);
             return 0;
         }
+        CloseHandle(instance_mutex);
         return 1;
     }
 
     if (try_run_service_dispatcher())
     {
+        CloseHandle(instance_mutex);
         return 0;
     }
+
+    const int rc = run_console_mode();
+    CloseHandle(instance_mutex);
+    return rc;
 #endif
 
     return run_console_mode();

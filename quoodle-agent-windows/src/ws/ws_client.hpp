@@ -111,6 +111,7 @@ private:
   TelemetryHttpClient telemetry_http_client_;
   TelemetryQueue telemetry_queue_;
   TelemetryStats telemetry_stats_;
+  std::atomic<bool> suspend_http_fallback_{false};
   std::chrono::steady_clock::time_point last_metrics_log_{std::chrono::steady_clock::now()};
 
   // Sequence tracking for replay protection

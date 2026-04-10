@@ -255,6 +255,12 @@ bool WsClient::send_telemetry_http(const std::string &endpoint_path,
                                    std::string *response_body,
                                    int *status_code)
 {
+  if (suspend_http_fallback_.load(std::memory_order_acquire))
+  {
+    error_reason = "fallback_suspended_auth";
+    return false;
+  }
+
   if (!config_.telemetry_http_fallback || config_.jwt.empty())
   {
     error_reason = "http_fallback_disabled";
@@ -279,6 +285,12 @@ bool WsClient::send_telemetry_http(const std::string &endpoint_path,
   }
   if (!response.ok)
   {
+    if (response.status_code == 401)
+    {
+      suspend_http_fallback_.store(true, std::memory_order_release);
+      error_reason = "http_unauthorized";
+      return false;
+    }
     error_reason = response.error_reason.empty() ? ("http_" + std::to_string(response.status_code)) : response.error_reason;
     return false;
   }
@@ -462,6 +474,11 @@ bool WsClient::replay_queued_telemetry()
 
 void WsClient::run_disconnected_telemetry_tick(bool extended_scope)
 {
+  if (suspend_http_fallback_.load(std::memory_order_acquire))
+  {
+    return;
+  }
+
   const std::string session_for_http = last_session_id_.empty() ? "offline" : last_session_id_;
   const char *scope = extended_scope ? "telemetry_extended" : "telemetry_basic";
   auto telemetry_ws = build_signed_telemetry_json(config_.device_id, session_for_http, scope, state_impl_.policy_hash());
@@ -643,6 +660,7 @@ bool WsClient::try_connect()
                 if (mtype == "AUTH_ACK") {
                     std::string session_id = parsed["body"].value("session_id", "");
                     if (!session_id.empty()) {
+                        suspend_http_fallback_.store(false, std::memory_order_release);
                         last_session_id_ = session_id;
                         state_impl_.set_session_id(session_id);
                         {
@@ -700,6 +718,17 @@ bool WsClient::try_connect()
                             }
                         }
                     }
+                } else if (mtype == "AUTH_ERROR") {
+                    auto body = parsed.value("body", nlohmann::json::object());
+                    const std::string errorCode = body.value("error_code", "AUTH_ERROR");
+                    const std::string errorMessage = body.value("error_message", "");
+                    Logger::log(LogLevel::Error, "AUTH_ERROR from gateway: " + errorCode +
+                                                  (errorMessage.empty() ? "" : (" - " + errorMessage)));
+                    if (errorCode == "AUTH_INVALID_JWT" || errorCode == "AUTH_UNKNOWN_DEVICE") {
+                        suspend_http_fallback_.store(true, std::memory_order_release);
+                    }
+                    close_reason = "auth_error:" + errorCode;
+                    connection_error.store(true, std::memory_order_release);
                 } else if (mtype == "POLICY_UPDATE") {
                     auto body = parsed["body"];
                     std::string policy_hash = body.value("policy_hash", "");
