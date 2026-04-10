@@ -1,269 +1,16 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:secure_device_control/app/router/app_navigator.dart';
+import 'package:secure_device_control/features/audit/domain/entities/audit_log_item.dart';
+import 'package:secure_device_control/features/audit/presentation/providers/audit_log_providers.dart';
+import 'package:secure_device_control/features/audit/presentation/providers/audit_log_state.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_navigation.dart';
-import '../../widgets/app_bar_widget.dart';
 
-class AuditLogScreen extends StatefulWidget {
+class AuditLogScreen extends ConsumerWidget {
   const AuditLogScreen({super.key});
-
-  @override
-  State<AuditLogScreen> createState() => _AuditLogScreenState();
-}
-
-class _AuditLogScreenState extends State<AuditLogScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  String _searchQuery = '';
-  String _selectedAction = 'All';
-  String _selectedRole = 'All';
-  String _selectedStatus = 'All';
-  bool _showFilters = false;
-  final int _currentNavIndex = 3;
-
-  final List<String> _actionFilters = [
-    'All',
-    'Command',
-    'Device',
-    'Auth',
-    'Policy',
-    'Config',
-  ];
-  final List<String> _roleFilters = [
-    'All',
-    'Operator',
-    'Admin',
-    'Viewer',
-    'System',
-  ];
-  final List<String> _statusFilters = [
-    'All',
-    'Success',
-    'Failed',
-    'Pending',
-    'Denied',
-  ];
-
-  static final List<Map<String, dynamic>> _allLogs = [
-    {
-      'id': 'AUD-2891',
-      'timestamp': '2026-04-06 10:41:33',
-      'actor': 'operator@quoodle.io',
-      'role': 'Operator',
-      'action': 'Command',
-      'event': 'execute_screenshot',
-      'target': 'EDGE-NODE-021',
-      'status': 'Success',
-      'detail': 'Screenshot captured (1920×1080, 2.4 MB)',
-      'ip': '10.0.1.45',
-    },
-    {
-      'id': 'AUD-2890',
-      'timestamp': '2026-04-06 10:38:17',
-      'actor': 'admin@quoodle.io',
-      'role': 'Admin',
-      'action': 'Policy',
-      'event': 'update_policy',
-      'target': 'Fleet-Group-A',
-      'status': 'Success',
-      'detail': 'Compliance policy v2.4 applied to 14 devices',
-      'ip': '10.0.1.12',
-    },
-    {
-      'id': 'AUD-2889',
-      'timestamp': '2026-04-06 10:35:02',
-      'actor': 'operator@quoodle.io',
-      'role': 'Operator',
-      'action': 'Command',
-      'event': 'collect_filesystem',
-      'target': 'PROD-SRV-014',
-      'status': 'Failed',
-      'detail': 'Connection timeout after 30s — device unreachable',
-      'ip': '10.0.1.45',
-    },
-    {
-      'id': 'AUD-2888',
-      'timestamp': '2026-04-06 10:29:44',
-      'actor': 'system',
-      'role': 'System',
-      'action': 'Device',
-      'event': 'device_offline',
-      'target': 'PROD-SRV-014',
-      'status': 'Failed',
-      'detail': 'Heartbeat missed — device marked offline',
-      'ip': '—',
-    },
-    {
-      'id': 'AUD-2887',
-      'timestamp': '2026-04-06 10:22:11',
-      'actor': 'viewer@quoodle.io',
-      'role': 'Viewer',
-      'action': 'Auth',
-      'event': 'login_attempt',
-      'target': 'Auth Service',
-      'status': 'Denied',
-      'detail': 'Insufficient permissions — admin resource access blocked',
-      'ip': '192.168.2.88',
-    },
-    {
-      'id': 'AUD-2886',
-      'timestamp': '2026-04-06 10:18:55',
-      'actor': 'operator@quoodle.io',
-      'role': 'Operator',
-      'action': 'Command',
-      'event': 'get_process_list',
-      'target': 'WKS-FINANCE-07',
-      'status': 'Success',
-      'detail': '247 processes returned, 3 flagged as suspicious',
-      'ip': '10.0.1.45',
-    },
-    {
-      'id': 'AUD-2885',
-      'timestamp': '2026-04-06 10:14:30',
-      'actor': 'admin@quoodle.io',
-      'role': 'Admin',
-      'action': 'Config',
-      'event': 'update_agent_config',
-      'target': 'EDGE-NODE-019',
-      'status': 'Success',
-      'detail': 'Agent config updated: telemetry_interval=30s, log_level=INFO',
-      'ip': '10.0.1.12',
-    },
-    {
-      'id': 'AUD-2884',
-      'timestamp': '2026-04-06 10:09:18',
-      'actor': 'operator@quoodle.io',
-      'role': 'Operator',
-      'action': 'Command',
-      'event': 'upload_file',
-      'target': 'EDGE-NODE-021',
-      'status': 'Success',
-      'detail': 'patch_v2.1.bin (4.2 MB) uploaded to /tmp/patches/',
-      'ip': '10.0.1.45',
-    },
-    {
-      'id': 'AUD-2883',
-      'timestamp': '2026-04-06 09:58:44',
-      'actor': 'system',
-      'role': 'System',
-      'action': 'Device',
-      'event': 'attestation_failure',
-      'target': 'EDGE-NODE-021',
-      'status': 'Failed',
-      'detail': 'TPM attestation hash mismatch — quarantine enforced',
-      'ip': '—',
-    },
-    {
-      'id': 'AUD-2882',
-      'timestamp': '2026-04-06 09:45:22',
-      'actor': 'admin@quoodle.io',
-      'role': 'Admin',
-      'action': 'Auth',
-      'event': 'user_login',
-      'target': 'Auth Service',
-      'status': 'Success',
-      'detail': 'MFA verified — session established (TTL: 8h)',
-      'ip': '10.0.1.12',
-    },
-    {
-      'id': 'AUD-2881',
-      'timestamp': '2026-04-06 09:33:07',
-      'actor': 'operator@quoodle.io',
-      'role': 'Operator',
-      'action': 'Command',
-      'event': 'get_network_info',
-      'target': 'PROD-SRV-014',
-      'status': 'Success',
-      'detail': '6 interfaces, 142 active connections returned',
-      'ip': '10.0.1.45',
-    },
-    {
-      'id': 'AUD-2880',
-      'timestamp': '2026-04-06 09:21:55',
-      'actor': 'operator@quoodle.io',
-      'role': 'Operator',
-      'action': 'Command',
-      'event': 'reboot_device',
-      'target': 'WKS-FINANCE-07',
-      'status': 'Pending',
-      'detail': 'Reboot scheduled — awaiting device acknowledgment',
-      'ip': '10.0.1.45',
-    },
-    {
-      'id': 'AUD-2879',
-      'timestamp': '2026-04-06 09:10:33',
-      'actor': 'admin@quoodle.io',
-      'role': 'Admin',
-      'action': 'Policy',
-      'event': 'create_policy',
-      'target': 'Finance-Group',
-      'status': 'Success',
-      'detail': 'New isolation policy created for Finance device group',
-      'ip': '10.0.1.12',
-    },
-    {
-      'id': 'AUD-2878',
-      'timestamp': '2026-04-06 08:55:19',
-      'actor': 'viewer@quoodle.io',
-      'role': 'Viewer',
-      'action': 'Device',
-      'event': 'view_device_detail',
-      'target': 'EDGE-NODE-019',
-      'status': 'Success',
-      'detail': 'Device detail page accessed — read-only',
-      'ip': '192.168.2.88',
-    },
-    {
-      'id': 'AUD-2877',
-      'timestamp': '2026-04-06 08:42:08',
-      'actor': 'system',
-      'role': 'System',
-      'action': 'Device',
-      'event': 'device_online',
-      'target': 'EDGE-NODE-019',
-      'status': 'Success',
-      'detail': 'Device reconnected after 4m 22s offline',
-      'ip': '—',
-    },
-  ];
-
-  List<Map<String, dynamic>> get _filteredLogs {
-    return _allLogs.where((log) {
-      final matchSearch =
-          _searchQuery.isEmpty ||
-          log['event'].toString().toLowerCase().contains(
-            _searchQuery.toLowerCase(),
-          ) ||
-          log['actor'].toString().toLowerCase().contains(
-            _searchQuery.toLowerCase(),
-          ) ||
-          log['target'].toString().toLowerCase().contains(
-            _searchQuery.toLowerCase(),
-          ) ||
-          log['id'].toString().toLowerCase().contains(
-            _searchQuery.toLowerCase(),
-          );
-      final matchAction =
-          _selectedAction == 'All' || log['action'] == _selectedAction;
-      final matchRole = _selectedRole == 'All' || log['role'] == _selectedRole;
-      final matchStatus =
-          _selectedStatus == 'All' || log['status'] == _selectedStatus;
-      return matchSearch && matchAction && matchRole && matchStatus;
-    }).toList();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
 
   Color _statusColor(String status) {
     switch (status) {
@@ -315,21 +62,25 @@ class _AuditLogScreenState extends State<AuditLogScreen>
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isTablet = MediaQuery.of(context).size.width >= 600;
-    final logs = _filteredLogs;
+    final auditState = ref.watch(auditLogControllerProvider);
+    final logs = auditState.filteredLogs;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        title: Text('Audit Log'),
+        title: const Text('Audit Log'),
         actions: [
           IconButton(
             icon: Icon(
               Icons.filter_list_rounded,
-              color: _showFilters ? AppTheme.primary : AppTheme.textSecondary,
+              color: auditState.showFilters
+                  ? AppTheme.primary
+                  : AppTheme.textSecondary,
             ),
-            onPressed: () => setState(() => _showFilters = !_showFilters),
+            onPressed: () =>
+                ref.read(auditLogControllerProvider.notifier).toggleFilters(),
             tooltip: 'Filters',
           ),
           IconButton(
@@ -346,55 +97,84 @@ class _AuditLogScreenState extends State<AuditLogScreen>
           ? Row(
               children: [
                 AppNavigation(
-                  currentIndex: _currentNavIndex,
-                  onTap: (i) {
-                    final routes = [
-                      '/dashboard-screen',
-                      '/devices-screen',
-                      '/command-timeline-screen',
-                      '/alerts-screen',
-                      '/settings-screen',
-                    ];
-                    Navigator.pushNamedAndRemoveUntil(
-                      context,
-                      routes[i],
-                      (r) => false,
-                    );
-                  },
+                  currentIndex: 3,
+                  onTap: (i) => AppNavigator.navigateToTab(
+                    context,
+                    i,
+                    profileTabTarget: ProfileTabTarget.settings,
+                  ),
                 ),
-                Expanded(child: _buildBody(logs)),
+                Expanded(
+                  child: _buildBody(
+                    logs: logs,
+                    state: auditState,
+                    onSearchChanged: (v) => ref
+                        .read(auditLogControllerProvider.notifier)
+                        .setSearchQuery(v),
+                    onActionChanged: (v) => ref
+                        .read(auditLogControllerProvider.notifier)
+                        .setActionFilter(v),
+                    onRoleChanged: (v) => ref
+                        .read(auditLogControllerProvider.notifier)
+                        .setRoleFilter(v),
+                    onStatusChanged: (v) => ref
+                        .read(auditLogControllerProvider.notifier)
+                        .setStatusFilter(v),
+                  ),
+                ),
               ],
             )
           : Column(
               children: [
-                Expanded(child: _buildBody(logs)),
+                Expanded(
+                  child: _buildBody(
+                    logs: logs,
+                    state: auditState,
+                    onSearchChanged: (v) => ref
+                        .read(auditLogControllerProvider.notifier)
+                        .setSearchQuery(v),
+                    onActionChanged: (v) => ref
+                        .read(auditLogControllerProvider.notifier)
+                        .setActionFilter(v),
+                    onRoleChanged: (v) => ref
+                        .read(auditLogControllerProvider.notifier)
+                        .setRoleFilter(v),
+                    onStatusChanged: (v) => ref
+                        .read(auditLogControllerProvider.notifier)
+                        .setStatusFilter(v),
+                  ),
+                ),
                 AppNavigation(
-                  currentIndex: _currentNavIndex,
-                  onTap: (i) {
-                    final routes = [
-                      '/dashboard-screen',
-                      '/devices-screen',
-                      '/command-timeline-screen',
-                      '/alerts-screen',
-                      '/settings-screen',
-                    ];
-                    Navigator.pushNamedAndRemoveUntil(
-                      context,
-                      routes[i],
-                      (r) => false,
-                    );
-                  },
+                  currentIndex: 3,
+                  onTap: (i) => AppNavigator.navigateToTab(
+                    context,
+                    i,
+                    profileTabTarget: ProfileTabTarget.settings,
+                  ),
                 ),
               ],
             ),
     );
   }
 
-  Widget _buildBody(List<Map<String, dynamic>> logs) {
+  Widget _buildBody({
+    required List<AuditLogItem> logs,
+    required AuditLogState state,
+    required ValueChanged<String> onSearchChanged,
+    required ValueChanged<String> onActionChanged,
+    required ValueChanged<String> onRoleChanged,
+    required ValueChanged<String> onStatusChanged,
+  }) {
     return Column(
       children: [
-        _buildSearchBar(),
-        if (_showFilters) _buildFilterPanel(),
+        _buildSearchBar(onSearchChanged),
+        if (state.showFilters)
+          _buildFilterPanel(
+            state: state,
+            onActionChanged: onActionChanged,
+            onRoleChanged: onRoleChanged,
+            onStatusChanged: onStatusChanged,
+          ),
         _buildStatsRow(logs),
         Expanded(
           child: logs.isEmpty
@@ -403,10 +183,10 @@ class _AuditLogScreenState extends State<AuditLogScreen>
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
                   itemCount: logs.length,
                   itemBuilder: (ctx, i) => _AuditLogEntry(
-                    log: logs[i],
-                    statusColor: _statusColor(logs[i]['status']),
-                    actionColor: _actionColor(logs[i]['action']),
-                    actionIcon: _actionIcon(logs[i]['action']),
+                    log: _toMap(logs[i]),
+                    statusColor: _statusColor(logs[i].status),
+                    actionColor: _actionColor(logs[i].action),
+                    actionIcon: _actionIcon(logs[i].action),
                   ),
                 ),
         ),
@@ -414,7 +194,7 @@ class _AuditLogScreenState extends State<AuditLogScreen>
     );
   }
 
-  Widget _buildSearchBar() {
+  Widget _buildSearchBar(ValueChanged<String> onSearchChanged) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: ClipRRect(
@@ -428,13 +208,13 @@ class _AuditLogScreenState extends State<AuditLogScreen>
               border: Border.all(color: AppTheme.border),
             ),
             child: TextField(
-              onChanged: (v) => setState(() => _searchQuery = v),
+              onChanged: onSearchChanged,
               style: GoogleFonts.ibmPlexSans(
                 fontSize: 13,
                 color: AppTheme.textPrimary,
               ),
               decoration: InputDecoration(
-                hintText: 'Search events, actors, targets…',
+                hintText: 'Search events, actors, targets...',
                 hintStyle: GoogleFonts.ibmPlexSans(
                   fontSize: 13,
                   color: AppTheme.textMuted,
@@ -457,7 +237,12 @@ class _AuditLogScreenState extends State<AuditLogScreen>
     );
   }
 
-  Widget _buildFilterPanel() {
+  Widget _buildFilterPanel({
+    required AuditLogState state,
+    required ValueChanged<String> onActionChanged,
+    required ValueChanged<String> onRoleChanged,
+    required ValueChanged<String> onStatusChanged,
+  }) {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       padding: const EdgeInsets.all(12),
@@ -471,23 +256,23 @@ class _AuditLogScreenState extends State<AuditLogScreen>
         children: [
           _buildFilterRow(
             'Action',
-            _actionFilters,
-            _selectedAction,
-            (v) => setState(() => _selectedAction = v),
+            AuditLogState.actionFilters,
+            state.selectedAction,
+            onActionChanged,
           ),
           const SizedBox(height: 8),
           _buildFilterRow(
             'Role',
-            _roleFilters,
-            _selectedRole,
-            (v) => setState(() => _selectedRole = v),
+            AuditLogState.roleFilters,
+            state.selectedRole,
+            onRoleChanged,
           ),
           const SizedBox(height: 8),
           _buildFilterRow(
             'Status',
-            _statusFilters,
-            _selectedStatus,
-            (v) => setState(() => _selectedStatus = v),
+            AuditLogState.statusFilters,
+            state.selectedStatus,
+            onStatusChanged,
           ),
         ],
       ),
@@ -545,9 +330,8 @@ class _AuditLogScreenState extends State<AuditLogScreen>
                         color: isSelected
                             ? AppTheme.primary
                             : AppTheme.textSecondary,
-                        fontWeight: isSelected
-                            ? FontWeight.w600
-                            : FontWeight.w400,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w400,
                       ),
                     ),
                   ),
@@ -560,10 +344,10 @@ class _AuditLogScreenState extends State<AuditLogScreen>
     );
   }
 
-  Widget _buildStatsRow(List<Map<String, dynamic>> logs) {
-    final success = logs.where((l) => l['status'] == 'Success').length;
-    final failed = logs.where((l) => l['status'] == 'Failed').length;
-    final denied = logs.where((l) => l['status'] == 'Denied').length;
+  Widget _buildStatsRow(List<AuditLogItem> logs) {
+    final success = logs.where((l) => l.status == 'Success').length;
+    final failed = logs.where((l) => l.status == 'Failed').length;
+    final denied = logs.where((l) => l.status == 'Denied').length;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -589,7 +373,8 @@ class _AuditLogScreenState extends State<AuditLogScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.history_rounded, size: 48, color: AppTheme.textMuted),
+          const Icon(Icons.history_rounded,
+              size: 48, color: AppTheme.textMuted),
           const SizedBox(height: 12),
           Text(
             'No audit events match filters',
@@ -601,6 +386,21 @@ class _AuditLogScreenState extends State<AuditLogScreen>
         ],
       ),
     );
+  }
+
+  Map<String, dynamic> _toMap(AuditLogItem log) {
+    return <String, dynamic>{
+      'id': log.id,
+      'timestamp': log.timestamp,
+      'actor': log.actor,
+      'role': log.role,
+      'action': log.action,
+      'event': log.event,
+      'target': log.target,
+      'status': log.status,
+      'detail': log.detail,
+      'ip': log.ip,
+    };
   }
 }
 
@@ -661,9 +461,8 @@ class _AuditLogEntryState extends State<_AuditLogEntry> {
           color: AppTheme.surfaceVariant,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: _expanded
-                ? widget.actionColor.withAlpha(102)
-                : AppTheme.border,
+            color:
+                _expanded ? widget.actionColor.withAlpha(102) : AppTheme.border,
           ),
         ),
         child: Column(

@@ -1,89 +1,53 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:secure_device_control/app/router/app_navigator.dart';
+import 'package:secure_device_control/features/notifications/domain/entities/notification_item.dart';
+import 'package:secure_device_control/features/notifications/presentation/providers/notification_providers.dart';
 
-import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_bar_widget.dart';
 import '../../widgets/app_navigation.dart';
 import '../../widgets/empty_state_widget.dart';
-import '../../services/push_notification_service.dart';
 
-class NotificationCenterScreen extends StatefulWidget {
+class NotificationCenterScreen extends ConsumerStatefulWidget {
   const NotificationCenterScreen({super.key});
 
   @override
-  State<NotificationCenterScreen> createState() =>
+  ConsumerState<NotificationCenterScreen> createState() =>
       _NotificationCenterScreenState();
 }
 
-class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
-  final PushNotificationService _notifService = PushNotificationService();
+class _NotificationCenterScreenState
+    extends ConsumerState<NotificationCenterScreen> {
   int _currentNavIndex = 3;
-  NotificationSeverity? _severityFilter;
-  NotificationCategory? _categoryFilter;
-  bool _showUnreadOnly = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _notifService.addListener(_onUpdate);
-  }
-
-  void _onUpdate() {
-    if (mounted) setState(() {});
-  }
-
-  @override
-  void dispose() {
-    _notifService.removeListener(_onUpdate);
-    super.dispose();
-  }
 
   void _onNavTap(int index) {
-    final routes = [
-      AppRoutes.dashboardScreen,
-      AppRoutes.devicesScreen,
-      AppRoutes.commandTimelineScreen,
-      AppRoutes.alertsScreen,
-      AppRoutes.settingsScreen,
-    ];
     if (index != _currentNavIndex) {
       setState(() => _currentNavIndex = index);
-      Navigator.pushNamedAndRemoveUntil(
+      AppNavigator.navigateToTab(
         context,
-        routes[index],
-        (route) => false,
+        index,
+        profileTabTarget: ProfileTabTarget.settings,
       );
     }
   }
 
-  List<AppNotification> get _filteredNotifications {
-    var list = _notifService.notifications.toList();
-    if (_showUnreadOnly) list = list.where((n) => !n.isRead).toList();
-    if (_severityFilter != null) {
-      list = list.where((n) => n.severity == _severityFilter).toList();
-    }
-    if (_categoryFilter != null) {
-      list = list.where((n) => n.category == _categoryFilter).toList();
-    }
-    return list;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final unread = _notifService.unreadCount;
-    final filtered = _filteredNotifications;
+    final state = ref.watch(notificationCenterControllerProvider);
+    final controller = ref.read(notificationCenterControllerProvider.notifier);
 
     return Scaffold(
       backgroundColor: AppTheme.background,
       extendBodyBehindAppBar: true,
-      appBar: _buildAppBar(unread),
+      appBar: _buildAppBar(state.unreadCount),
       body: Column(
         children: [
           SizedBox(height: MediaQuery.of(context).padding.top + 56),
-          _buildFilterRow(unread),
+          _buildFilterRow(state),
           Expanded(
-            child: filtered.isEmpty
+            child: state.filteredNotifications.isEmpty
                 ? const EmptyStateWidget(
                     icon: Icons.notifications_none_rounded,
                     title: 'No Notifications',
@@ -96,15 +60,15 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
                         await Future.delayed(const Duration(milliseconds: 500)),
                     child: ListView.builder(
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
-                      itemCount: filtered.length,
+                      itemCount: state.filteredNotifications.length,
                       itemBuilder: (ctx, i) => _NotificationTile(
-                        notification: filtered[i],
-                        onTap: () =>
-                            _notifService.navigateToDeepLink(filtered[i]),
-                        onDismiss: () =>
-                            _notifService.deleteNotification(filtered[i].id),
-                        onMarkRead: () =>
-                            _notifService.markAsRead(filtered[i].id),
+                        notification: state.filteredNotifications[i],
+                        onTap: () => controller.openNotification(
+                            state.filteredNotifications[i].id),
+                        onDismiss: () => controller.deleteNotification(
+                            state.filteredNotifications[i].id),
+                        onMarkRead: () => controller
+                            .markAsRead(state.filteredNotifications[i].id),
                       ),
                     ),
                   ),
@@ -119,12 +83,13 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
   }
 
   PreferredSizeWidget _buildAppBar(int unread) {
+    final controller = ref.read(notificationCenterControllerProvider.notifier);
     return GlassAppBar(
       title: 'Notifications',
       actions: [
         if (unread > 0)
           TextButton(
-            onPressed: _notifService.markAllAsRead,
+            onPressed: controller.markAllAsRead,
             child: Text(
               'Mark all read',
               style: GoogleFonts.ibmPlexSans(
@@ -143,7 +108,10 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
     );
   }
 
-  Widget _buildFilterRow(int unread) {
+  Widget _buildFilterRow(NotificationCenterState state) {
+    final controller = ref.read(notificationCenterControllerProvider.notifier);
+    final unread = state.unreadCount;
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
@@ -152,98 +120,73 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
           // Unread toggle
           _FilterChip(
             label: 'Unread${unread > 0 ? ' ($unread)' : ''}',
-            isSelected: _showUnreadOnly,
+            isSelected: state.showUnreadOnly,
             color: AppTheme.primary,
-            onTap: () => setState(() => _showUnreadOnly = !_showUnreadOnly),
+            onTap: controller.toggleUnreadOnly,
           ),
           const SizedBox(width: 6),
           // Severity filters
           _FilterChip(
             label: 'Critical',
-            isSelected: _severityFilter == NotificationSeverity.critical,
+            isSelected:
+                state.severityFilter == NotificationSeverityLevel.critical,
             color: AppTheme.critical,
-            onTap: () => setState(
-              () => _severityFilter =
-                  _severityFilter == NotificationSeverity.critical
-                  ? null
-                  : NotificationSeverity.critical,
-            ),
+            onTap: () => controller
+                .toggleSeverityFilter(NotificationSeverityLevel.critical),
           ),
           const SizedBox(width: 6),
           _FilterChip(
             label: 'High',
-            isSelected: _severityFilter == NotificationSeverity.high,
+            isSelected: state.severityFilter == NotificationSeverityLevel.high,
             color: AppTheme.error,
-            onTap: () => setState(
-              () =>
-                  _severityFilter = _severityFilter == NotificationSeverity.high
-                  ? null
-                  : NotificationSeverity.high,
-            ),
+            onTap: () =>
+                controller.toggleSeverityFilter(NotificationSeverityLevel.high),
           ),
           const SizedBox(width: 6),
           _FilterChip(
             label: 'Warning',
-            isSelected: _severityFilter == NotificationSeverity.warning,
+            isSelected:
+                state.severityFilter == NotificationSeverityLevel.warning,
             color: AppTheme.warning,
-            onTap: () => setState(
-              () => _severityFilter =
-                  _severityFilter == NotificationSeverity.warning
-                  ? null
-                  : NotificationSeverity.warning,
-            ),
+            onTap: () => controller
+                .toggleSeverityFilter(NotificationSeverityLevel.warning),
           ),
           const SizedBox(width: 6),
           _FilterChip(
             label: 'Info',
-            isSelected: _severityFilter == NotificationSeverity.info,
+            isSelected: state.severityFilter == NotificationSeverityLevel.info,
             color: AppTheme.secondary,
-            onTap: () => setState(
-              () =>
-                  _severityFilter = _severityFilter == NotificationSeverity.info
-                  ? null
-                  : NotificationSeverity.info,
-            ),
+            onTap: () =>
+                controller.toggleSeverityFilter(NotificationSeverityLevel.info),
           ),
           const SizedBox(width: 10),
           // Category filters
           _FilterChip(
             label: 'Commands',
-            isSelected: _categoryFilter == NotificationCategory.command,
+            isSelected:
+                state.categoryFilter == NotificationCategoryType.command,
             color: AppTheme.primary,
             icon: Icons.terminal_rounded,
-            onTap: () => setState(
-              () => _categoryFilter =
-                  _categoryFilter == NotificationCategory.command
-                  ? null
-                  : NotificationCategory.command,
-            ),
+            onTap: () => controller
+                .toggleCategoryFilter(NotificationCategoryType.command),
           ),
           const SizedBox(width: 6),
           _FilterChip(
             label: 'Devices',
-            isSelected: _categoryFilter == NotificationCategory.device,
+            isSelected: state.categoryFilter == NotificationCategoryType.device,
             color: AppTheme.primary,
             icon: Icons.devices_rounded,
-            onTap: () => setState(
-              () => _categoryFilter =
-                  _categoryFilter == NotificationCategory.device
-                  ? null
-                  : NotificationCategory.device,
-            ),
+            onTap: () => controller
+                .toggleCategoryFilter(NotificationCategoryType.device),
           ),
           const SizedBox(width: 6),
           _FilterChip(
             label: 'Alerts',
-            isSelected: _categoryFilter == NotificationCategory.alert,
+            isSelected: state.categoryFilter == NotificationCategoryType.alert,
             color: AppTheme.primary,
             icon: Icons.warning_amber_rounded,
-            onTap: () => setState(
-              () => _categoryFilter =
-                  _categoryFilter == NotificationCategory.alert
-                  ? null
-                  : NotificationCategory.alert,
-            ),
+            onTap: () =>
+                controller.toggleCategoryFilter(NotificationCategoryType.alert),
           ),
         ],
       ),
@@ -251,6 +194,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
   }
 
   void _confirmClearAll() {
+    final controller = ref.read(notificationCenterControllerProvider.notifier);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -282,7 +226,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
-              _notifService.clearAll();
+              controller.clearAll();
             },
             child: Text(
               'Clear All',
@@ -356,7 +300,7 @@ class _FilterChip extends StatelessWidget {
 // ── Notification Tile ─────────────────────────────────────────────────────────
 
 class _NotificationTile extends StatelessWidget {
-  final AppNotification notification;
+  final NotificationItem notification;
   final VoidCallback onTap;
   final VoidCallback onDismiss;
   final VoidCallback onMarkRead;
@@ -370,26 +314,26 @@ class _NotificationTile extends StatelessWidget {
 
   Color get _severityColor {
     switch (notification.severity) {
-      case NotificationSeverity.critical:
+      case NotificationSeverityLevel.critical:
         return AppTheme.critical;
-      case NotificationSeverity.high:
+      case NotificationSeverityLevel.high:
         return AppTheme.error;
-      case NotificationSeverity.warning:
+      case NotificationSeverityLevel.warning:
         return AppTheme.warning;
-      case NotificationSeverity.info:
+      case NotificationSeverityLevel.info:
         return AppTheme.primary;
     }
   }
 
   IconData get _categoryIcon {
     switch (notification.category) {
-      case NotificationCategory.command:
+      case NotificationCategoryType.command:
         return Icons.terminal_rounded;
-      case NotificationCategory.device:
+      case NotificationCategoryType.device:
         return Icons.devices_rounded;
-      case NotificationCategory.alert:
+      case NotificationCategoryType.alert:
         return Icons.warning_amber_rounded;
-      case NotificationCategory.system:
+      case NotificationCategoryType.system:
         return Icons.settings_rounded;
     }
   }
