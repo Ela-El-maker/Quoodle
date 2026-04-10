@@ -331,7 +331,9 @@ std::string build_update_status_json(const std::string &device_id,
 }
 
 std::string build_signed_telemetry_json(const std::string &device_id,
-                                        const std::string &session_id)
+                                        const std::string &session_id,
+                                        const std::string &telemetry_scope,
+                                        const std::string &policy_hash)
 {
     using utils::canonical_object;
     using utils::escape_json;
@@ -349,16 +351,25 @@ std::string build_signed_telemetry_json(const std::string &device_id,
     auto sample = g_collector.collect();
 
     std::string metrics = canonical_object({
+        {"agent_version", sample.agent_version.empty() ? "null" : "\"" + escape_json(sample.agent_version) + "\""},
+        {"battery_pct", sample.battery_pct.empty() ? "null" : sample.battery_pct},
         {"cpu", "\"" + escape_json(sample.cpu) + "\""},
         {"disk_usage", "\"" + escape_json(sample.disk) + "\""},
         {"network_rx", "\"" + escape_json(sample.network_rx) + "\""},
         {"network_tx", "\"" + escape_json(sample.network_tx) + "\""},
+        {"os_build", sample.os_build.empty() ? "null" : "\"" + escape_json(sample.os_build) + "\""},
         {"ram", "\"" + escape_json(sample.ram) + "\""},
+        {"risk_score", sample.risk_score.empty() ? "null" : sample.risk_score},
     });
 
     std::string body = canonical_object({
         {"metrics", metrics},
-        {"telemetry_scope", "\"telemetry_basic\""},
+        {"masked_fields", "[]"},
+        {"policy_hash", policy_hash.empty() ? "null" : "\"" + escape_json(policy_hash) + "\""},
+        {"schema_version", "\"v1\""},
+        {"seq", std::to_string(env.seq)},
+        {"session_id", "\"" + escape_json(session_id) + "\""},
+        {"telemetry_scope", "\"" + escape_json(telemetry_scope) + "\""},
         {"timestamp", "\"" + escape_json(env.timestamp) + "\""},
     });
 
@@ -424,6 +435,11 @@ std::string build_signed_kernel_event_telemetry_json(const std::string &device_i
 
     std::string body = canonical_object({
         {"metrics", metrics},
+        {"masked_fields", "[]"},
+        {"policy_hash", "null"},
+        {"schema_version", "\"v1\""},
+        {"seq", std::to_string(env.seq)},
+        {"session_id", "\"" + escape_json(session_id) + "\""},
         {"telemetry_scope", "\"kernel_event\""},
         {"timestamp", "\"" + escape_json(env.timestamp) + "\""},
     });

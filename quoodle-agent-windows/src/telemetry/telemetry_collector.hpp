@@ -21,6 +21,10 @@ struct TelemetrySample
     std::string disk;
     std::string network_tx;
     std::string network_rx;
+    std::string battery_pct;
+    std::string os_build;
+    std::string agent_version;
+    std::string risk_score;
 };
 
 class TelemetryCollector
@@ -50,5 +54,7 @@ private:
     std::string get_ram_usage();
     std::string get_disk_usage();
     std::pair<std::string, std::string> get_network_throughput();
+    std::string get_battery_pct();
+    std::string get_os_build();
 #endif
 };

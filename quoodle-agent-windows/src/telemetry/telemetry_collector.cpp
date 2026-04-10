@@ -1,6 +1,11 @@
 #include "telemetry_collector.hpp"
 #include <cstdio>
 #include <iostream>
+#include <cstdlib>
+
+#ifdef _WIN32
+#include <winreg.h>
+#endif
 
 #ifdef _WIN32
 
@@ -28,14 +33,14 @@ TelemetryCollector::~TelemetryCollector()
 std::string TelemetryCollector::get_cpu_usage()
 {
     if (!pdhInitialized)
-        return "0.0%";
+        return "0.0";
 
     PDH_FMT_COUNTERVALUE counterVal;
     PdhCollectQueryData(cpuQuery);
     PdhGetFormattedCounterValue(cpuTotal, PDH_FMT_DOUBLE, NULL, &counterVal);
 
     char buf[16];
-    std::snprintf(buf, sizeof(buf), "%.1f%%", counterVal.doubleValue);
+    std::snprintf(buf, sizeof(buf), "%.1f", counterVal.doubleValue);
     return std::string(buf);
 }
 
@@ -46,10 +51,10 @@ std::string TelemetryCollector::get_ram_usage()
     if (GlobalMemoryStatusEx(&memInfo))
     {
         char buf[16];
-        std::snprintf(buf, sizeof(buf), "%ld%%", memInfo.dwMemoryLoad);
+        std::snprintf(buf, sizeof(buf), "%ld", memInfo.dwMemoryLoad);
         return std::string(buf);
     }
-    return "0%";
+    return "0";
 }
 
 std::string TelemetryCollector::get_disk_usage()
@@ -63,10 +68,10 @@ std::string TelemetryCollector::get_disk_usage()
         double used_pct = ((total - free) / total) * 100.0;
 
         char buf[16];
-        std::snprintf(buf, sizeof(buf), "%.1f%%", used_pct);
+        std::snprintf(buf, sizeof(buf), "%.1f", used_pct);
         return std::string(buf);
     }
-    return "0%";
+    return "0";
 }
 
 std::pair<std::string, std::string> TelemetryCollector::get_network_throughput()
@@ -95,7 +100,7 @@ std::pair<std::string, std::string> TelemetryCollector::get_network_throughput()
     // Calculate Delta
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastNetStats.timestamp).count();
     if (duration <= 0)
-        return {"0.0Mbps", "0.0Mbps"};
+        return {"0.0", "0.0"};
 
     // Calculate Megabits per second (Octets * 8 / 1024 / 1024 / (ms/1000))
     double rx_mbps = ((current_rx - lastNetStats.rx_bytes) * 8.0 / 1024.0 / 1024.0) / (duration / 1000.0);
@@ -105,10 +110,53 @@ std::pair<std::string, std::string> TelemetryCollector::get_network_throughput()
     lastNetStats = {current_rx, current_tx, now};
 
     char rx_buf[32], tx_buf[32];
-    std::snprintf(rx_buf, sizeof(rx_buf), "%.2fMbps", rx_mbps < 0 ? 0 : rx_mbps);
-    std::snprintf(tx_buf, sizeof(tx_buf), "%.2fMbps", tx_mbps < 0 ? 0 : tx_mbps);
+    std::snprintf(rx_buf, sizeof(rx_buf), "%.2f", rx_mbps < 0 ? 0 : rx_mbps);
+    std::snprintf(tx_buf, sizeof(tx_buf), "%.2f", tx_mbps < 0 ? 0 : tx_mbps);
 
     return {std::string(rx_buf), std::string(tx_buf)};
+}
+
+std::string TelemetryCollector::get_battery_pct()
+{
+    SYSTEM_POWER_STATUS power{};
+    if (GetSystemPowerStatus(&power) && power.BatteryLifePercent != 255)
+    {
+        return std::to_string(static_cast<int>(power.BatteryLifePercent));
+    }
+    return "";
+}
+
+std::string TelemetryCollector::get_os_build()
+{
+    if (const char *env_build = std::getenv("AGENT_OS_BUILD"))
+    {
+        if (*env_build)
+        {
+            return env_build;
+        }
+    }
+
+    HKEY hKey = nullptr;
+    constexpr const char *kPath = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion";
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, kPath, 0, KEY_READ | KEY_WOW64_64KEY, &hKey) != ERROR_SUCCESS)
+    {
+        return "";
+    }
+
+    char value[64] = {0};
+    DWORD size = sizeof(value);
+    LONG rc = RegQueryValueExA(hKey, "CurrentBuildNumber", nullptr, nullptr, reinterpret_cast<LPBYTE>(value), &size);
+    if (rc != ERROR_SUCCESS)
+    {
+        size = sizeof(value);
+        rc = RegQueryValueExA(hKey, "CurrentBuild", nullptr, nullptr, reinterpret_cast<LPBYTE>(value), &size);
+    }
+    RegCloseKey(hKey);
+    if (rc != ERROR_SUCCESS)
+    {
+        return "";
+    }
+    return std::string(value);
 }
 
 TelemetrySample TelemetryCollector::collect()
@@ -121,6 +169,20 @@ TelemetrySample TelemetryCollector::collect()
     auto net = get_network_throughput();
     s.network_rx = net.first;
     s.network_tx = net.second;
+    s.battery_pct = get_battery_pct();
+    s.os_build = get_os_build();
+    if (const char *agent_version = std::getenv("AGENT_VERSION"))
+    {
+        s.agent_version = agent_version;
+    }
+    else
+    {
+        s.agent_version = "0.0.1";
+    }
+    if (const char *risk_score = std::getenv("AGENT_RISK_SCORE_HINT"))
+    {
+        s.risk_score = risk_score;
+    }
 
     return s;
 }

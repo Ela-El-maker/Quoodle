@@ -39,6 +39,30 @@ struct AgentConfig
     /// Keep-alive interval for heartbeats (seconds)
     std::uint32_t heartbeat_interval_s{30};
 
+    /// Telemetry snapshot interval for extended telemetry (seconds)
+    std::uint32_t telemetry_interval_s{60};
+
+    /// Enable HTTP telemetry fallback path when WSS is unavailable.
+    bool telemetry_http_fallback{true};
+
+    /// Gateway base URL for telemetry HTTP fallback.
+    std::string telemetry_fallback_url{"http://localhost:8000"};
+
+    /// Telemetry queue SQLite path used for offline buffering/replay.
+    std::string telemetry_queue_db_path{"C:/ProgramData/Quoodle/telemetry_queue.db"};
+
+    /// Max number of telemetry entries drained per replay call.
+    std::uint32_t telemetry_batch_size{50};
+
+    /// Max number of telemetry entries retained in queue before oldest drop.
+    std::uint32_t telemetry_max_queue_items{5000};
+
+    /// Base retry backoff (seconds) for telemetry replay failures.
+    std::uint32_t telemetry_retry_backoff_s{5};
+
+    /// Max retry backoff (seconds) for telemetry replay failures.
+    std::uint32_t telemetry_retry_backoff_max_s{300};
+
     /// Connection timeout (milliseconds)
     std::uint32_t connection_timeout_ms{10000};
 };

@@ -1,11 +1,13 @@
 #include "ws_client.hpp"
 
 #include <chrono>
+#include <cstdio>
 #include <iostream>
 #include <thread>
 #include <unordered_map>
 #include <algorithm>
 #include <cstdlib>
+#include <mutex>
 
 #include <ixwebsocket/IXNetSystem.h>
 #include <ixwebsocket/IXWebSocket.h>
@@ -45,17 +47,105 @@ static bool is_kernel_driver_enabled()
   return env && std::string(env) != "0";
 }
 
-WsClient::WsClient(const AgentConfig &config)
-    : config_(config), state_impl_(config.device_id), current_delay_ms_(config.reconnection.initial_delay_ms), rng_(std::random_device{}())
+static std::string trim_trailing_slash(const std::string &url)
 {
+  if (url.empty())
+  {
+    return url;
+  }
+  std::string out = url;
+  while (!out.empty() && out.back() == '/')
+  {
+    out.pop_back();
+  }
+  return out;
+}
+
+static std::string now_iso_utc()
+{
+  using namespace std::chrono;
+  const auto now = system_clock::now();
+  const auto tt = system_clock::to_time_t(now);
+  std::tm tm{};
+#ifdef _WIN32
+  gmtime_s(&tm, &tt);
+#else
+  gmtime_r(&tt, &tm);
+#endif
+  char buffer[64];
+  std::snprintf(buffer, sizeof(buffer), "%04d-%02d-%02dT%02d:%02d:%02dZ",
+                tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+                tm.tm_hour, tm.tm_min, tm.tm_sec);
+  return std::string(buffer);
+}
+
+static bool parse_ws_telemetry_to_http_payload(
+    const std::string &ws_envelope_json,
+    std::string &http_payload_json,
+    std::int64_t &seq_out)
+{
+  try
+  {
+    const auto envelope = nlohmann::json::parse(ws_envelope_json);
+    const auto &body = envelope.at("body");
+
+    nlohmann::json payload;
+    payload["schema_version"] = body.value("schema_version", "v1");
+    payload["device_id"] = envelope.value("device_id", "");
+    payload["session_id"] = envelope.value("session_id", body.value("session_id", ""));
+    payload["timestamp"] = body.value("timestamp", envelope.value("timestamp", ""));
+    payload["seq"] = envelope.value("seq", body.value("seq", 0));
+    payload["telemetry_scope"] = body.value("telemetry_scope", "telemetry_extended");
+    payload["metrics"] = body.value("metrics", nlohmann::json::object());
+    if (body.contains("policy_hash"))
+    {
+      payload["policy_hash"] = body["policy_hash"];
+    }
+    if (body.contains("machine_secret_hash"))
+    {
+      payload["machine_secret_hash"] = body["machine_secret_hash"];
+    }
+    payload["masked_fields"] = body.value("masked_fields", nlohmann::json::array());
+
+    seq_out = payload["seq"].is_number_integer() ? payload["seq"].get<std::int64_t>() : 0;
+    http_payload_json = payload.dump();
+    return true;
+  }
+  catch (const std::exception &)
+  {
+    return false;
+  }
+}
+
+WsClient::WsClient(const AgentConfig &config)
+    : config_(config),
+      state_impl_(config.device_id),
+      telemetry_queue_(TelemetryQueueConfig{
+          config.telemetry_queue_db_path,
+          static_cast<std::int32_t>(config.telemetry_max_queue_items),
+          5000,
+          true}),
+      current_delay_ms_(config.reconnection.initial_delay_ms),
+      rng_(std::random_device{}())
+{
+  if (!telemetry_queue_.open())
+  {
+    Logger::log(LogLevel::Warn, "telemetry queue unavailable; fallback buffering disabled");
+  }
 }
 
 WsClient::WsClient(std::string endpoint, std::string device_id)
-    : state_impl_(device_id), rng_(std::random_device{}())
+    : state_impl_(device_id),
+      telemetry_queue_(TelemetryQueueConfig{}),
+      rng_(std::random_device{}())
 {
   config_.endpoint = std::move(endpoint);
   config_.device_id = std::move(device_id);
   current_delay_ms_ = config_.reconnection.initial_delay_ms;
+  if (!telemetry_queue_.open())
+  {
+    Logger::log(LogLevel::Warn, "telemetry queue unavailable; fallback buffering disabled");
+  }
 }
 
 void WsClient::set_initial_message(const std::string &message)
@@ -159,6 +249,240 @@ void WsClient::reset_backoff()
   reconnect_attempts_.store(0, std::memory_order_release);
 }
 
+bool WsClient::send_telemetry_http(const std::string &endpoint_path,
+                                   const std::string &payload_json,
+                                   std::string &error_reason,
+                                   std::string *response_body,
+                                   int *status_code)
+{
+  if (!config_.telemetry_http_fallback || config_.jwt.empty())
+  {
+    error_reason = "http_fallback_disabled";
+    return false;
+  }
+
+  const std::string base = trim_trailing_slash(config_.telemetry_fallback_url);
+  if (base.empty())
+  {
+    error_reason = "fallback_url_missing";
+    return false;
+  }
+
+  const auto response = telemetry_http_client_.post_json(base + endpoint_path, config_.jwt, payload_json, config_.connection_timeout_ms);
+  if (response_body)
+  {
+    *response_body = response.body;
+  }
+  if (status_code)
+  {
+    *status_code = response.status_code;
+  }
+  if (!response.ok)
+  {
+    error_reason = response.error_reason.empty() ? ("http_" + std::to_string(response.status_code)) : response.error_reason;
+    return false;
+  }
+
+  telemetry_stats_.last_success_ts = now_iso_utc();
+  return true;
+}
+
+void WsClient::queue_telemetry_payload(const std::string &payload_json, std::int64_t seq, const std::string &reason)
+{
+  if (!telemetry_queue_.is_open())
+  {
+    telemetry_stats_.dropped += 1;
+    Logger::log(LogLevel::Warn, "telemetry dropped (queue unavailable): " + reason);
+    return;
+  }
+  const std::int32_t dropped_now = telemetry_queue_.enqueue(seq, payload_json, reason);
+  telemetry_stats_.queued += 1;
+  if (dropped_now > 0)
+  {
+    telemetry_stats_.dropped += static_cast<std::uint64_t>(dropped_now);
+    Logger::log(LogLevel::Warn, "telemetry queue drop policy triggered (dropped=" + std::to_string(dropped_now) + ")");
+  }
+}
+
+bool WsClient::replay_queued_telemetry()
+{
+  if (!telemetry_queue_.is_open() || !config_.telemetry_http_fallback)
+  {
+    return false;
+  }
+
+  const auto pending = telemetry_queue_.fetch_batch(static_cast<std::int32_t>(config_.telemetry_batch_size),
+                                                    static_cast<std::int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                                                                 std::chrono::system_clock::now().time_since_epoch())
+                                                                                 .count()));
+  if (pending.empty())
+  {
+    return false;
+  }
+
+  nlohmann::json batch = nlohmann::json::object();
+  nlohmann::json entries = nlohmann::json::array();
+  std::string device_id = config_.device_id;
+
+  for (const auto &item : pending)
+  {
+    try
+    {
+      const auto payload = nlohmann::json::parse(item.payload_json);
+      if (payload.contains("device_id") && payload["device_id"].is_string())
+      {
+        device_id = payload["device_id"].get<std::string>();
+      }
+      entries.push_back(payload);
+    }
+    catch (const std::exception &)
+    {
+      telemetry_queue_.mark_failed(item.id, "invalid_queue_payload", static_cast<std::int64_t>(
+                                                                   std::chrono::duration_cast<std::chrono::milliseconds>(
+                                                                       std::chrono::system_clock::now().time_since_epoch())
+                                                                       .count() +
+                                                                   config_.telemetry_retry_backoff_s * 1000ULL));
+      telemetry_stats_.retry_count += 1;
+    }
+  }
+  if (entries.empty())
+  {
+    return false;
+  }
+
+  batch["device_id"] = device_id;
+  batch["entries"] = entries;
+
+  std::string error;
+  std::string response_body;
+  if (send_telemetry_http("/api/v1/telemetry/batch", batch.dump(), error, &response_body, nullptr))
+  {
+    std::vector<std::int64_t> success_ids;
+    success_ids.reserve(pending.size());
+
+    // Default to full success if response body is absent/unparseable.
+    bool parsed_response = false;
+    try
+    {
+      const auto parsed = nlohmann::json::parse(response_body);
+      const std::string status = parsed.value("status", "accepted");
+      if (status == "accepted")
+      {
+        parsed_response = true;
+        for (const auto &item : pending)
+        {
+          success_ids.push_back(item.id);
+        }
+      }
+      else if (status == "partial_accept")
+      {
+        parsed_response = true;
+        std::unordered_map<int, std::string> rejected_indexes;
+        const auto errors = parsed.value("errors", nlohmann::json::array());
+        for (const auto &entry : errors)
+        {
+          if (entry.is_object() && entry.contains("index"))
+          {
+            const int idx = entry.value("index", -1);
+            rejected_indexes[idx] = entry.value("reason", "partial_reject");
+          }
+        }
+
+        const auto now_ms = static_cast<std::int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                                           std::chrono::system_clock::now().time_since_epoch())
+                                                           .count());
+
+        for (std::size_t i = 0; i < pending.size(); ++i)
+        {
+          auto it = rejected_indexes.find(static_cast<int>(i));
+          if (it == rejected_indexes.end())
+          {
+            success_ids.push_back(pending[i].id);
+            continue;
+          }
+          const std::uint64_t backoff_s = std::min<std::uint64_t>(
+              static_cast<std::uint64_t>(config_.telemetry_retry_backoff_s) * (1ULL << std::min(pending[i].retry_count, 6)),
+              static_cast<std::uint64_t>(config_.telemetry_retry_backoff_max_s));
+          telemetry_queue_.mark_failed(pending[i].id, it->second, now_ms + static_cast<std::int64_t>(backoff_s * 1000ULL));
+          telemetry_stats_.retry_count += 1;
+        }
+      }
+      else if (status == "rejected")
+      {
+        parsed_response = true;
+        const auto now_ms = static_cast<std::int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                                           std::chrono::system_clock::now().time_since_epoch())
+                                                           .count());
+        for (const auto &item : pending)
+        {
+          const std::uint64_t backoff_s = std::min<std::uint64_t>(
+              static_cast<std::uint64_t>(config_.telemetry_retry_backoff_s) * (1ULL << std::min(item.retry_count, 6)),
+              static_cast<std::uint64_t>(config_.telemetry_retry_backoff_max_s));
+          telemetry_queue_.mark_failed(item.id, "batch_rejected", now_ms + static_cast<std::int64_t>(backoff_s * 1000ULL));
+          telemetry_stats_.retry_count += 1;
+        }
+      }
+    }
+    catch (const std::exception &)
+    {
+      parsed_response = false;
+    }
+
+    if (!parsed_response)
+    {
+      for (const auto &item : pending)
+      {
+        success_ids.push_back(item.id);
+      }
+    }
+
+    if (!success_ids.empty() && telemetry_queue_.delete_ids(success_ids))
+    {
+      telemetry_stats_.replayed += static_cast<std::uint64_t>(success_ids.size());
+      Logger::log(LogLevel::Info, "telemetry replayed via HTTP batch: " + std::to_string(success_ids.size()));
+      return true;
+    }
+    return !success_ids.empty();
+  }
+
+  const auto now_ms = static_cast<std::int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                                     std::chrono::system_clock::now().time_since_epoch())
+                                                     .count());
+  for (const auto &item : pending)
+  {
+    const std::uint64_t backoff_s = std::min<std::uint64_t>(
+        static_cast<std::uint64_t>(config_.telemetry_retry_backoff_s) * (1ULL << std::min(item.retry_count, 6)),
+        static_cast<std::uint64_t>(config_.telemetry_retry_backoff_max_s));
+    telemetry_queue_.mark_failed(item.id, error, now_ms + static_cast<std::int64_t>(backoff_s * 1000ULL));
+    telemetry_stats_.retry_count += 1;
+  }
+  Logger::log(LogLevel::Warn, "telemetry replay failed: " + error);
+  return false;
+}
+
+void WsClient::run_disconnected_telemetry_tick(bool extended_scope)
+{
+  const std::string session_for_http = last_session_id_.empty() ? "offline" : last_session_id_;
+  const char *scope = extended_scope ? "telemetry_extended" : "telemetry_basic";
+  auto telemetry_ws = build_signed_telemetry_json(config_.device_id, session_for_http, scope, state_impl_.policy_hash());
+  std::string payload;
+  std::int64_t seq = 0;
+  if (!telemetry_ws.empty() && parse_ws_telemetry_to_http_payload(telemetry_ws, payload, seq))
+  {
+    std::string reason;
+    if (send_telemetry_http("/api/v1/telemetry/heartbeat", payload, reason))
+    {
+      telemetry_stats_.sent += 1;
+    }
+    else
+    {
+      queue_telemetry_payload(payload, seq, reason);
+    }
+  }
+
+  replay_queued_telemetry();
+}
+
 void WsClient::run()
 {
   ix::initNetSystem();
@@ -168,6 +492,9 @@ void WsClient::run()
                                    std::to_string(config_.reconnection.initial_delay_ms) + "ms, max_delay=" +
                                    std::to_string(config_.reconnection.max_delay_ms) + "ms, multiplier=" +
                                    std::to_string(config_.reconnection.backoff_multiplier));
+
+  auto next_disconnected_heartbeat = std::chrono::steady_clock::now() + std::chrono::seconds(config_.heartbeat_interval_s);
+  auto next_disconnected_telemetry = std::chrono::steady_clock::now() + std::chrono::seconds(config_.telemetry_interval_s);
 
   while (!shutdown_requested_.load(std::memory_order_acquire))
   {
@@ -207,6 +534,30 @@ void WsClient::run()
     const std::uint32_t check_interval = 100; // Check every 100ms
     while (remaining > 0 && !shutdown_requested_.load(std::memory_order_acquire))
     {
+      const auto now = std::chrono::steady_clock::now();
+      if (now >= next_disconnected_heartbeat)
+      {
+        run_disconnected_telemetry_tick(false);
+        next_disconnected_heartbeat = now + std::chrono::seconds(config_.heartbeat_interval_s);
+      }
+      if (now >= next_disconnected_telemetry)
+      {
+        run_disconnected_telemetry_tick(true);
+        next_disconnected_telemetry = now + std::chrono::seconds(config_.telemetry_interval_s);
+      }
+      if (now - last_metrics_log_ >= std::chrono::seconds(60))
+      {
+        last_metrics_log_ = now;
+        Logger::log(
+            LogLevel::Info,
+            "telemetry stats: sent=" + std::to_string(telemetry_stats_.sent) +
+                " queued=" + std::to_string(telemetry_stats_.queued) +
+                " replayed=" + std::to_string(telemetry_stats_.replayed) +
+                " dropped=" + std::to_string(telemetry_stats_.dropped) +
+                " retries=" + std::to_string(telemetry_stats_.retry_count) +
+                (telemetry_stats_.last_success_ts.empty() ? "" : (" last_success=" + telemetry_stats_.last_success_ts)));
+      }
+
       auto sleep_time = std::min(remaining, check_interval);
       std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
       remaining -= sleep_time;
@@ -230,7 +581,13 @@ bool WsClient::try_connect()
   std::atomic<bool> connection_opened{false};
   std::atomic<bool> connection_closed{false};
   std::atomic<bool> connection_error{false};
+  std::atomic<bool> authenticated{false};
+  std::mutex session_mutex;
+  std::string active_session_id;
   std::string close_reason;
+  auto last_heartbeat_tick = std::chrono::steady_clock::now();
+  auto last_telemetry_tick = std::chrono::steady_clock::now();
+  auto last_replay_tick = std::chrono::steady_clock::now();
 
   // Reset per-connection state
   heartbeat_sent_ = false;
@@ -284,15 +641,31 @@ bool WsClient::try_connect()
                     if (!session_id.empty()) {
                         last_session_id_ = session_id;
                         state_impl_.set_session_id(session_id);
+                        {
+                            std::lock_guard<std::mutex> guard(session_mutex);
+                            active_session_id = session_id;
+                        }
+                        authenticated.store(true, std::memory_order_release);
+                        const std::string ack_policy_hash = parsed["body"].value("policy_hash", "");
+                        if (!ack_policy_hash.empty()) {
+                            state_impl_.set_policy_hash(ack_policy_hash);
+                        }
                         if (!heartbeat_sent_) {
                             auto hb = build_signed_heartbeat_json(config_.device_id, session_id, "alive", 120, "ok");
                             socket.sendText(hb);
                             heartbeat_sent_ = true;
+                            telemetry_stats_.sent += 1;
                         }
                         if (!telemetry_sent_) {
-                            auto tel = build_signed_telemetry_json(config_.device_id, session_id);
+                            auto tel = build_signed_telemetry_json(
+                                config_.device_id,
+                                session_id,
+                                "telemetry_extended",
+                                state_impl_.policy_hash());
                             socket.sendText(tel);
                             telemetry_sent_ = true;
+                            telemetry_stats_.sent += 1;
+                            replay_queued_telemetry();
                         }
                         if (is_kernel_driver_enabled() && !kernel_listener_started.load()) {
                             const std::string session_id_copy = session_id;
@@ -483,6 +856,51 @@ bool WsClient::try_connect()
          !connection_error.load(std::memory_order_acquire) &&
          !shutdown_requested_.load(std::memory_order_acquire))
   {
+    const auto now = std::chrono::steady_clock::now();
+    if (authenticated.load(std::memory_order_acquire))
+    {
+      std::string session_id;
+      {
+        std::lock_guard<std::mutex> guard(session_mutex);
+        session_id = active_session_id;
+      }
+
+      if (!session_id.empty())
+      {
+        if (now - last_heartbeat_tick >= std::chrono::seconds(config_.heartbeat_interval_s))
+        {
+          const auto hb = build_signed_heartbeat_json(config_.device_id, session_id, "alive", 120, "ok");
+          if (!hb.empty())
+          {
+            socket.sendText(hb);
+            telemetry_stats_.sent += 1;
+          }
+          last_heartbeat_tick = now;
+        }
+
+        if (now - last_telemetry_tick >= std::chrono::seconds(config_.telemetry_interval_s))
+        {
+          const auto telemetry = build_signed_telemetry_json(
+              config_.device_id,
+              session_id,
+              "telemetry_extended",
+              state_impl_.policy_hash());
+          if (!telemetry.empty())
+          {
+            socket.sendText(telemetry);
+            telemetry_stats_.sent += 1;
+          }
+          last_telemetry_tick = now;
+        }
+
+        if (now - last_replay_tick >= std::chrono::seconds(5))
+        {
+          replay_queued_telemetry();
+          last_replay_tick = now;
+        }
+      }
+    }
+
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 

@@ -46,7 +46,9 @@ std::string build_signed_heartbeat_json(const std::string &device_id,
                                         const std::string &error_state = "ok");
 
 std::string build_signed_telemetry_json(const std::string &device_id,
-                                        const std::string &session_id);
+                                        const std::string &session_id,
+                                        const std::string &telemetry_scope = "telemetry_extended",
+                                        const std::string &policy_hash = "");
 
 std::string build_signed_kernel_event_telemetry_json(const std::string &device_id,
                                                      const std::string &session_id,

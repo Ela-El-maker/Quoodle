@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <functional>
 #include <random>
 #include <string>
@@ -12,6 +13,8 @@
 #include "../ota/ota_manager.hpp"
 #include "../quarantine/quarantine_manager.hpp"
 #include "../recovery/recovery_manager.hpp"
+#include "../telemetry/telemetry_http_client.hpp"
+#include "../telemetry/telemetry_queue.hpp"
 
 /**
  * Connection state for tracking reconnection status.
@@ -86,6 +89,16 @@ public:
   void on_state_change(StateCallback callback);
 
 private:
+  struct TelemetryStats
+  {
+    std::uint64_t sent{0};
+    std::uint64_t queued{0};
+    std::uint64_t replayed{0};
+    std::uint64_t dropped{0};
+    std::uint64_t retry_count{0};
+    std::string last_success_ts;
+  };
+
   AgentConfig config_;
   std::string initial_message_;
   bool heartbeat_sent_{false};
@@ -95,6 +108,10 @@ private:
   OTAManager ota_;
   QuarantineManager quarantine_;
   RecoveryManager recovery_;
+  TelemetryHttpClient telemetry_http_client_;
+  TelemetryQueue telemetry_queue_;
+  TelemetryStats telemetry_stats_;
+  std::chrono::steady_clock::time_point last_metrics_log_{std::chrono::steady_clock::now()};
 
   // Sequence tracking for replay protection
   std::uint64_t last_command_seq_{0};
@@ -132,4 +149,13 @@ private:
    *         false if connection failed or was terminated.
    */
   bool try_connect();
+
+  void run_disconnected_telemetry_tick(bool extended_scope);
+  bool send_telemetry_http(const std::string &endpoint_path,
+                           const std::string &payload_json,
+                           std::string &error_reason,
+                           std::string *response_body = nullptr,
+                           int *status_code = nullptr);
+  void queue_telemetry_payload(const std::string &payload_json, std::int64_t seq, const std::string &reason);
+  bool replay_queued_telemetry();
 };

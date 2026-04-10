@@ -68,6 +68,18 @@ Override order:
 - Driver transport is fail-closed by default when `QUOODLE_USE_KERNEL_DRIVER=1`.
 - Explicit pipe fallback is dev/lab only: `QUOODLE_ALLOW_PIPE_FALLBACK=1`.
 
+## Telemetry Runtime Knobs
+
+- `AGENT_HEARTBEAT_INTERVAL_S` (default `30`)
+- `AGENT_TELEMETRY_INTERVAL_S` (default `60`)
+- `AGENT_TELEMETRY_HTTP_FALLBACK` (default `1`)
+- `AGENT_TELEMETRY_FALLBACK_URL` (default `http://localhost:8000`)
+- `AGENT_TELEMETRY_QUEUE_DB_PATH` (default `C:/ProgramData/Quoodle/telemetry_queue.db`)
+- `AGENT_TELEMETRY_BATCH_SIZE` (default `50`)
+- `AGENT_TELEMETRY_MAX_QUEUE_ITEMS` (default `5000`)
+- `AGENT_TELEMETRY_RETRY_BACKOFF_S` (default `5`)
+- `AGENT_TELEMETRY_RETRY_BACKOFF_MAX_S` (default `300`)
+
 ## UI Companion (Milestone 1)
 
 Interactive Windows UI shell lives in `ui-companion/` and is intentionally decoupled from ring0 and backend runtime during this phase.

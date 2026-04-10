@@ -145,6 +145,8 @@ add_executable(agent
   src/quarantine/quarantine_manager.hpp
   src/recovery/recovery_manager.hpp
   src/telemetry/telemetry_collector.cpp
+  src/telemetry/telemetry_queue.cpp
+  src/telemetry/telemetry_http_client.cpp
   src/crypto/ed25519_sign.cpp
   src/crypto/ed25519_verify.cpp
   src/crypto/command_verifier.cpp
@@ -165,7 +167,7 @@ target_include_directories(agent PRIVATE src ${SQLITE3_INCLUDE_DIR})
 target_link_libraries(agent PRIVATE ixwebsocket::ixwebsocket nlohmann_json::nlohmann_json ${SQLITE3_LIB})
 # Link Windows-specific system libraries used by telemetry and networking
 if(WIN32)
-  target_link_libraries(agent PRIVATE pdh iphlpapi crypt32 advapi32)
+  target_link_libraries(agent PRIVATE pdh iphlpapi crypt32 advapi32 winhttp)
 endif()
 if(HAVE_SODIUM)
   target_include_directories(agent PRIVATE ${SODIUM_INCLUDE_DIR})
