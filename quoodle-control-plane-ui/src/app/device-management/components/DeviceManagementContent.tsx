@@ -1,6 +1,6 @@
 'use client';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Search,
   SlidersHorizontal,
@@ -23,141 +23,26 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import DeviceDetailDrawer from './DeviceDetailDrawer';
 import ExportModal from '@/components/ExportModal';
 import { toast } from 'sonner';
-
-type DeviceStatus = 'online' | 'offline' | 'quarantined' | 'degraded';
-type ComplianceStatus = 'compliant' | 'non_compliant' | 'drift';
-
-interface Device {
-  id: string;
-  hostname: string;
-  osBuild: string;
-  owner: string;
-  status: DeviceStatus;
-  riskScore: number; // normalized 0..1 for existing UI
-  compliance: ComplianceStatus;
-  lastSeen: string;
-  agentVersion: string;
-  policySync: boolean | null;
-  kernelGuard: boolean | null;
-  ipAddress: string | null;
-  sessionId: string | null;
-}
-
-interface ListDeviceApi {
-  device_id: string;
-  owner_email?: string | null;
-  device_name?: string | null;
-  lifecycle_state?: string | null;
-  last_seen?: string | null;
-  agent_version?: string | null;
-  os_build?: string | null;
-  compliance_status?: string | null;
-  risk_score?: number | string | null;
-}
-
-interface DetailDeviceApi {
-  device_id: string;
-  owner_email?: string | null;
-  device_name?: string | null;
-  lifecycle_state?: string | null;
-  last_seen?: string | null;
-  agent_version?: string | null;
-  os_build?: string | null;
-  compliance?: { status?: string | null };
-  compliance_status?: string | null;
-  risk_score?: number | string | null;
-  policy_in_sync?: boolean | null;
-  telemetry_latest?: { risk_score?: number | string | null };
-  ip_address?: string | null;
-  session_id?: string | null;
-  kernel_guard?: boolean | null;
-}
+import {
+  mapListDevice,
+  mergeDeviceDetail,
+  parseStatusCsv,
+  type DetailDeviceApi,
+  type Device,
+  type DeviceStatus,
+  type ListDeviceApi,
+} from '../lib/deviceManagementData';
 
 type SortKey = keyof Device;
 
-const VALID_STATUSES: DeviceStatus[] = ['online', 'offline', 'degraded', 'quarantined'];
-
-function normalizeStatus(value: string | null | undefined): DeviceStatus {
-  const normalized = String(value ?? '').toLowerCase();
-  if (normalized === 'online' || normalized === 'active') return 'online';
-  if (normalized === 'quarantined') return 'quarantined';
-  if (normalized === 'degraded') return 'degraded';
-  return 'offline';
-}
-
-function normalizeCompliance(value: string | null | undefined): ComplianceStatus {
-  const normalized = String(value ?? '').toLowerCase();
-  if (normalized === 'compliant') return 'compliant';
-  if (normalized === 'drift' || normalized === 'degraded' || normalized === 'unknown') return 'drift';
-  return 'non_compliant';
-}
-
-function normalizeRisk(value: number | string | null | undefined): number {
-  const parsed = typeof value === 'number' ? value : Number(value ?? 0);
-  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
-  if (parsed > 1) return Math.max(0, Math.min(1, parsed / 100));
-  return Math.max(0, Math.min(1, parsed));
-}
-
-function formatLastSeen(value: string | null | undefined): string {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toISOString().replace('T', ' ').replace('Z', ' UTC').slice(0, 23);
-}
-
-function parseStatusCsv(value: string | null): DeviceStatus[] {
-  if (!value) return [];
-  return value
-    .split(',')
-    .map((v) => v.trim().toLowerCase())
-    .filter((v): v is DeviceStatus => VALID_STATUSES.includes(v as DeviceStatus));
-}
-
-function mapListDevice(item: ListDeviceApi): Device {
-  return {
-    id: item.device_id,
-    hostname: item.device_name?.trim() || item.device_id,
-    osBuild: item.os_build?.trim() || '-',
-    owner: item.owner_email?.trim() || 'Unknown',
-    status: normalizeStatus(item.lifecycle_state),
-    riskScore: normalizeRisk(item.risk_score),
-    compliance: normalizeCompliance(item.compliance_status),
-    lastSeen: formatLastSeen(item.last_seen),
-    agentVersion: item.agent_version?.trim() || '-',
-    policySync: null,
-    kernelGuard: null,
-    ipAddress: null,
-    sessionId: null,
-  };
-}
-
-function mergeDetail(base: Device, detail: DetailDeviceApi): Device {
-  return {
-    ...base,
-    hostname: detail.device_name?.trim() || base.hostname,
-    osBuild: detail.os_build?.trim() || base.osBuild,
-    owner: detail.owner_email?.trim() || base.owner,
-    status: normalizeStatus(detail.lifecycle_state ?? base.status),
-    compliance: normalizeCompliance(detail.compliance?.status ?? detail.compliance_status ?? base.compliance),
-    riskScore: normalizeRisk(
-      detail.risk_score ?? detail.telemetry_latest?.risk_score ?? base.riskScore,
-    ),
-    lastSeen: formatLastSeen(detail.last_seen) !== '-' ? formatLastSeen(detail.last_seen) : base.lastSeen,
-    agentVersion: detail.agent_version?.trim() || base.agentVersion,
-    policySync: typeof detail.policy_in_sync === 'boolean' ? detail.policy_in_sync : base.policySync,
-    kernelGuard: typeof detail.kernel_guard === 'boolean' ? detail.kernel_guard : base.kernelGuard,
-    ipAddress: detail.ip_address?.trim() || base.ipAddress,
-    sessionId: detail.session_id?.trim() || base.sessionId,
-  };
-}
-
 export default function DeviceManagementContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   const [devices, setDevices] = useState<Device[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [statusCsvFilter, setStatusCsvFilter] = useState<DeviceStatus[] | null>(null);
@@ -170,18 +55,24 @@ export default function DeviceManagementContent() {
   const [showExport, setShowExport] = useState(false);
   const [isBatchRefreshing, setIsBatchRefreshing] = useState(false);
   const [pendingOpenDeviceId, setPendingOpenDeviceId] = useState<string | null>(null);
+  const listAbortRef = useRef<AbortController | null>(null);
+  const detailAbortRef = useRef<AbortController | null>(null);
 
   const pageSize = 10;
 
-  const fetchDevices = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
+  const fetchDevices = useCallback(async (mode: 'initial' | 'refresh' | 'silent' = 'initial') => {
     if (mode === 'initial') setIsLoading(true);
     if (mode === 'refresh') setIsRefreshing(true);
+    listAbortRef.current?.abort();
+    const controller = new AbortController();
+    listAbortRef.current = controller;
 
     try {
       const response = await fetch('/api/devices?per_page=200', {
         method: 'GET',
         credentials: 'include',
         cache: 'no-store',
+        signal: controller.signal,
       });
       if (!response.ok) throw new Error(`fetch_failed_${response.status}`);
 
@@ -189,10 +80,15 @@ export default function DeviceManagementContent() {
       const mapped = (payload.devices ?? []).map(mapListDevice);
       setDevices(mapped);
       setSelectedIds((prev) => new Set([...prev].filter((id) => mapped.some((d) => d.id === id))));
-    } catch {
-      toast.error('Could not load devices');
-      setDevices([]);
-      setSelectedIds(new Set());
+      setListError(null);
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') return;
+      console.error('device-list-load-failed', error);
+      setListError('Failed to load data');
+      if (mode === 'initial') {
+        setDevices([]);
+        setSelectedIds(new Set());
+      }
     } finally {
       if (mode === 'initial') setIsLoading(false);
       if (mode === 'refresh') setIsRefreshing(false);
@@ -205,19 +101,25 @@ export default function DeviceManagementContent() {
       if (!baseDevice) return;
 
       setSelectedDevice(baseDevice);
+      detailAbortRef.current?.abort();
+      const controller = new AbortController();
+      detailAbortRef.current = controller;
       try {
         const response = await fetch(`/api/devices/${encodeURIComponent(deviceId)}`, {
           method: 'GET',
           credentials: 'include',
           cache: 'no-store',
+          signal: controller.signal,
         });
         if (!response.ok) return;
 
         const detail = (await response.json()) as DetailDeviceApi;
-        const merged = mergeDetail(baseDevice, detail);
+        const merged = mergeDeviceDetail(baseDevice, detail);
         setDevices((prev) => prev.map((d) => (d.id === merged.id ? merged : d)));
         setSelectedDevice(merged);
-      } catch {
+      } catch (error) {
+        if ((error as Error).name === 'AbortError') return;
+        console.error('device-detail-load-failed', error);
         // Keep base device view if detail enrichment fails.
       }
     },
@@ -226,6 +128,18 @@ export default function DeviceManagementContent() {
 
   useEffect(() => {
     void fetchDevices('initial');
+  }, [fetchDevices]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      void fetchDevices('silent');
+    }, 30000);
+
+    return () => {
+      window.clearInterval(interval);
+      listAbortRef.current?.abort();
+      detailAbortRef.current?.abort();
+    };
   }, [fetchDevices]);
 
   useEffect(() => {
@@ -329,12 +243,72 @@ export default function DeviceManagementContent() {
     else setSelectedIds(new Set(filtered.map((d) => d.id)));
   };
 
-  const handleBatchRefresh = () => {
+  const dispatchCommandToDevice = useCallback(
+    async (deviceId: string, method: string, params: Record<string, unknown> = {}, sensitive = false) => {
+      const payload = {
+        client_message_id: `dm-${deviceId}-${method}-${crypto.randomUUID()}`,
+        device_id: deviceId,
+        method,
+        params,
+        sensitive,
+      };
+      const response = await fetch('/api/commands', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        command_id?: string;
+        reason?: string;
+        message?: string;
+      };
+
+      if (!response.ok || !data.command_id) {
+        return { ok: false as const, reason: data.reason ?? data.message ?? `http_${response.status}` };
+      }
+      return { ok: true as const, commandId: data.command_id };
+    },
+    [],
+  );
+
+  const dispatchBatch = useCallback(
+    async (method: string, label: string, params: Record<string, unknown> = {}, sensitive = false) => {
+      if (selectedIds.size === 0) return;
+      const targets = Array.from(selectedIds);
+      setIsBatchRefreshing(true);
+      try {
+        const results = await Promise.all(
+          targets.map((deviceId) => dispatchCommandToDevice(deviceId, method, params, sensitive)),
+        );
+
+        const successCount = results.filter((result) => result.ok).length;
+        const failCount = results.length - successCount;
+
+        if (successCount > 0) {
+          toast.success(`${label}: dispatched to ${successCount} device${successCount === 1 ? '' : 's'}`);
+        }
+        if (failCount > 0) {
+          toast.error(`${label}: failed for ${failCount} device${failCount === 1 ? '' : 's'}`);
+        }
+      } catch (error) {
+        console.error('device-batch-dispatch-failed', error);
+        toast.error('Failed to load data');
+      } finally {
+        setIsBatchRefreshing(false);
+      }
+    },
+    [dispatchCommandToDevice, selectedIds],
+  );
+
+  const handleBatchRefresh = async () => {
     setIsBatchRefreshing(true);
-    setTimeout(() => {
-      setIsBatchRefreshing(false);
+    try {
+      await fetchDevices('refresh');
       toast.success(`Refreshed ${selectedIds.size} device${selectedIds.size !== 1 ? 's' : ''}`);
-    }, 1200);
+    } finally {
+      setIsBatchRefreshing(false);
+    }
   };
 
   const SortIcon = ({ k }: { k: SortKey }) =>
@@ -451,25 +425,36 @@ export default function DeviceManagementContent() {
           </button>
           <div className="flex items-center gap-2 ml-1">
             <button
-              onClick={() => toast.success(`Dispatched ping to ${selectedIds.size} devices`)}
+              onClick={() => {
+                void dispatchBatch('ping', 'Ping', {}, false);
+              }}
+              disabled={isBatchRefreshing}
               className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-md hover:bg-blue-500/20 transition-colors"
             >
               <Terminal size={11} /> Send Command
             </button>
             <button
-              onClick={() => toast.info(`Applying policy to ${selectedIds.size} devices...`)}
+              onClick={() => {
+                void dispatchBatch('ping', 'Policy Sync Check', { policy_sync_probe: true }, false);
+              }}
+              disabled={isBatchRefreshing}
               className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-violet-500/10 border border-violet-500/20 text-violet-400 rounded-md hover:bg-violet-500/20 transition-colors"
             >
               <Layers size={11} /> Apply Policy
             </button>
             <button
-              onClick={() => toast.warning(`Lock screen sent to ${selectedIds.size} devices`)}
+              onClick={() => {
+                void dispatchBatch('lock_screen', 'Lock Screen', {}, true);
+              }}
+              disabled={isBatchRefreshing}
               className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-md hover:bg-amber-500/20 transition-colors"
             >
               <Shield size={11} /> Lock All
             </button>
             <button
-              onClick={handleBatchRefresh}
+              onClick={() => {
+                void handleBatchRefresh();
+              }}
               disabled={isBatchRefreshing}
               className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-green-500/10 border border-green-500/20 text-green-400 rounded-md hover:bg-green-500/20 transition-colors disabled:opacity-50"
             >
@@ -530,11 +515,17 @@ export default function DeviceManagementContent() {
                     Loading devices...
                   </td>
                 </tr>
+              ) : listError ? (
+                <tr>
+                  <td colSpan={12} className="px-4 py-12 text-center text-red-400">
+                    Failed to load data
+                  </td>
+                </tr>
               ) : paginatedData.length === 0 ? (
                 <tr>
                   <td colSpan={12} className="px-4 py-12 text-center">
                     <Monitor size={32} className="mx-auto text-muted-foreground/30 mb-3" />
-                    <p className="text-sm font-medium text-muted-foreground">No devices match your filters</p>
+                    <p className="text-sm font-medium text-muted-foreground">No devices found</p>
                     <p className="text-xs text-muted-foreground/60 mt-1">Try adjusting your search or filter criteria</p>
                   </td>
                 </tr>
@@ -600,7 +591,7 @@ export default function DeviceManagementContent() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            toast.info(`Opening command panel for ${device.hostname}`);
+                            router.push(`/device-detail?device=${encodeURIComponent(device.id)}`);
                           }}
                           className="p-1 rounded text-muted-foreground hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
                           title="Dispatch command"
@@ -673,4 +664,3 @@ export default function DeviceManagementContent() {
     </div>
   );
 }
-

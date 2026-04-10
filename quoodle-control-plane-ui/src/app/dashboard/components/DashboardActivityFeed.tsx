@@ -28,9 +28,11 @@ export interface DashboardActivityItem {
 
 interface DashboardActivityFeedProps {
   items?: DashboardActivityItem[];
+  loading?: boolean;
+  error?: string | null;
 }
 
-export default function DashboardActivityFeed({ items }: DashboardActivityFeedProps) {
+export default function DashboardActivityFeed({ items, loading, error }: DashboardActivityFeedProps) {
   const feedItems = items ?? [];
 
   return (
@@ -40,15 +42,25 @@ export default function DashboardActivityFeed({ items }: DashboardActivityFeedPr
           <h3 className="text-sm font-semibold">Live Activity</h3>
           <span className="w-1.5 h-1.5 rounded-full bg-green-400 pulse-dot" />
         </div>
-        <span className="text-[10px] text-muted-foreground">UTC</span>
+        <span className="text-[10px] text-muted-foreground">Local</span>
       </div>
       <div className="divide-y divide-border overflow-y-auto max-h-[420px] scrollbar-thin">
-        {feedItems.length === 0 && (
+        {loading && (
           <div className="px-4 py-10 text-center">
-            <p className="text-sm text-muted-foreground">No recent activity yet.</p>
+            <p className="text-sm text-muted-foreground">Loading data...</p>
           </div>
         )}
-        {feedItems.map((item) => {
+        {!loading && error && (
+          <div className="px-4 py-10 text-center">
+            <p className="text-sm text-red-400">Failed to load data</p>
+          </div>
+        )}
+        {!loading && !error && feedItems.length === 0 && (
+          <div className="px-4 py-10 text-center">
+            <p className="text-sm text-muted-foreground">No recent activity</p>
+          </div>
+        )}
+        {!loading && !error && feedItems.map((item) => {
           const Icon = ICON_BY_TYPE[item.type] ?? Activity;
           const color = COLOR_BY_TYPE[item.type] ?? 'text-muted-foreground bg-muted';
 

@@ -11,24 +11,7 @@ import {
   ReferenceLine,
 } from 'recharts';
 
-// Backend integration point: GET /api/telemetry/history?device_id={deviceId}&window={timeWindow}&metric=cpu
-const generateCpuData = (deviceId: string) => {
-  const base = deviceId === 'WKSTN-007' ? 75 : 12;
-  return [
-    { time: '20:00', value: base + 3 },
-    { time: '20:30', value: base - 2 },
-    { time: '21:00', value: base + 8 },
-    { time: '21:30', value: base + 18 },
-    { time: '22:00', value: base + 2 },
-    { time: '22:30', value: base - 1 },
-    { time: '23:00', value: base + 5 },
-    { time: '23:30', value: base + 3 },
-    { time: '00:00', value: base - 3 },
-    { time: '00:30', value: base + 7 },
-    { time: '01:00', value: base + 4 },
-    { time: '01:30', value: base - 2 },
-  ].map((d) => ({ ...d, value: Math.max(1, Math.min(100, d.value)) }));
-};
+type CpuPoint = { time: string; value: number };
 
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) => {
   if (!active || !payload?.length) return null;
@@ -40,11 +23,16 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
   );
 };
 
-interface Props { deviceId: string; timeWindow: string; }
+interface Props {
+  deviceId: string;
+  timeWindow: string;
+  data: CpuPoint[];
+  loading?: boolean;
+  error?: string | null;
+}
 
-export default function TelemetryCpuChart({ deviceId }: Props) {
-  const data = generateCpuData(deviceId);
-  const isElevated = deviceId === 'WKSTN-007';
+export default function TelemetryCpuChart({ data, loading, error }: Props) {
+  const isElevated = data.some((point) => point.value >= 80);
 
   return (
     <div className="bg-card border border-border rounded-lg p-4">
@@ -79,6 +67,8 @@ export default function TelemetryCpuChart({ deviceId }: Props) {
           />
         </AreaChart>
       </ResponsiveContainer>
+      {error ? <p className="text-[11px] text-red-400 mt-2">Failed to load data</p> : null}
+      {!error && !loading && data.length === 0 ? <p className="text-[11px] text-muted-foreground mt-2">No data available</p> : null}
     </div>
   );
 }

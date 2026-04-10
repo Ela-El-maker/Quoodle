@@ -2,7 +2,7 @@ import React from 'react';
 import { Suspense } from 'react';
 import AppLayout from '@/components/AppLayout';
 import DeviceManagementContent from './components/DeviceManagementContent';
-import AuditTrailSection from '@/components/AuditTrailSection';
+import DeviceManagementAuditTrail from './components/DeviceManagementAuditTrail';
 
 export default function DeviceManagementPage() {
   return (
@@ -12,7 +12,7 @@ export default function DeviceManagementPage() {
           <DeviceManagementContent />
         </Suspense>
         <div className="px-0">
-          <AuditTrailSection title="Device Management Audit Trail" maxRows={5} />
+          <DeviceManagementAuditTrail />
         </div>
       </div>
     </AppLayout>

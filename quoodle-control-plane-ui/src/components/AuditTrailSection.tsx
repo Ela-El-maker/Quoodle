@@ -42,13 +42,12 @@ const outcomeConfig = {
   pending: 'text-amber-400',
 };
 
-// Unique actors derived from entries
-const ALL_ACTORS = Array.from(new Set(defaultEntries.map((e) => e.actor)));
-
 interface AuditTrailSectionProps {
   entries?: AuditEntry[];
   maxRows?: number;
   title?: string;
+  loading?: boolean;
+  error?: string | null;
 }
 
 function exportToCSV(entries: AuditEntry[], title: string) {
@@ -71,6 +70,8 @@ export default function AuditTrailSection({
   entries = defaultEntries,
   maxRows = 5,
   title = 'Audit Trail',
+  loading = false,
+  error = null,
 }: AuditTrailSectionProps) {
   const [expanded, setExpanded] = useState(false);
   const [typeFilter, setTypeFilter] = useState<AuditEventType | 'all'>('all');
@@ -83,6 +84,7 @@ export default function AuditTrailSection({
   const actors = useMemo(() => Array.from(new Set(entries.map((e) => e.actor))), [entries]);
 
   const filtered = useMemo(() => {
+    if (loading || error) return [];
     return entries.filter((e) => {
       if (typeFilter !== 'all' && e.eventType !== typeFilter) return false;
       if (actorFilter !== 'all' && e.actor !== actorFilter) return false;
@@ -96,7 +98,7 @@ export default function AuditTrailSection({
       }
       return true;
     });
-  }, [entries, typeFilter, actorFilter, dateFrom, dateTo]);
+  }, [entries, typeFilter, actorFilter, dateFrom, dateTo, loading, error]);
 
   const visible = expanded ? filtered : filtered.slice(0, maxRows);
   const hasDateFilter = dateFrom || dateTo;
@@ -272,7 +274,19 @@ export default function AuditTrailSection({
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {visible.length === 0 ? (
+            {loading ? (
+              <tr>
+                <td colSpan={7} className="px-4 py-8 text-center text-xs text-muted-foreground">
+                  Loading data...
+                </td>
+              </tr>
+            ) : error ? (
+              <tr>
+                <td colSpan={7} className="px-4 py-8 text-center text-xs text-red-400">
+                  Failed to load data
+                </td>
+              </tr>
+            ) : visible.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-4 py-8 text-center text-xs text-muted-foreground">
                   No audit events match the selected filters
@@ -318,7 +332,7 @@ export default function AuditTrailSection({
       </div>
 
       {/* Expand/collapse */}
-      {filtered.length > maxRows && (
+      {!loading && !error && filtered.length > maxRows && (
         <div className="border-t border-border px-4 py-2.5">
           <button
             onClick={() => setExpanded(!expanded)}
@@ -329,6 +343,7 @@ export default function AuditTrailSection({
           </button>
         </div>
       )}
+
     </div>
   );
 }

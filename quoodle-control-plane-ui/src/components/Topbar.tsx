@@ -1,7 +1,8 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Menu, Search, Bell, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
+import { formatNowLocalTime } from '@/lib/dateTime';
 
 interface TopbarProps {
   onMobileMenuToggle: () => void;
@@ -9,6 +10,14 @@ interface TopbarProps {
 
 export default function Topbar({ onMobileMenuToggle }: TopbarProps) {
   const [liveConnected] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(() => formatNowLocalTime());
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setLastUpdated(formatNowLocalTime());
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   return (
     <header className="h-14 border-b border-border bg-zinc-950/80 backdrop-blur-sm flex items-center px-4 gap-3 flex-shrink-0 z-30">
@@ -50,7 +59,7 @@ export default function Topbar({ onMobileMenuToggle }: TopbarProps) {
 
       {/* Last updated */}
       <span className="hidden lg:block text-[11px] text-muted-foreground tabular-nums">
-        Updated 21:06:13 UTC
+        Updated {lastUpdated}
       </span>
 
       {/* Refresh */}

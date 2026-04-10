@@ -1,8 +1,6 @@
 'use client';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Wifi, WifiOff, Bell, Terminal, AlertTriangle, CheckCircle2, X, Zap, Activity } from 'lucide-react';
-import Icon from '@/components/ui/AppIcon';
-
 
 export type WsEventType = 'alert' | 'command_status' | 'device_state' | 'system';
 
@@ -17,15 +15,14 @@ export interface WsEvent {
   read: boolean;
 }
 
-// Simulated push events pool
 const EVENT_POOL: Omit<WsEvent, 'id' | 'timestamp' | 'read'>[] = [
-  { type: 'alert', severity: 'critical', title: 'Attestation Failure', detail: 'WKSTN-055 — kernel guard state mismatch detected', device: 'WKSTN-055' },
-  { type: 'command_status', severity: 'info', title: 'CMD-7745 Completed', detail: 'ping completed on WKSTN-001 — 12ms RTT', device: 'WKSTN-001' },
+  { type: 'alert', severity: 'critical', title: 'Attestation Failure', detail: 'WKSTN-055 - kernel guard state mismatch detected', device: 'WKSTN-055' },
+  { type: 'command_status', severity: 'info', title: 'CMD-7745 Completed', detail: 'ping completed on WKSTN-001 - 12ms RTT', device: 'WKSTN-001' },
   { type: 'alert', severity: 'warning', title: 'Policy Drift', detail: 'WKSTN-011 reports policy-2025-11, expected policy-2026-04', device: 'WKSTN-011' },
-  { type: 'command_status', severity: 'warning', title: 'CMD-7746 Failed', detail: 'lock_screen failed on WKSTN-007 — agent timeout', device: 'WKSTN-007' },
+  { type: 'command_status', severity: 'warning', title: 'CMD-7746 Failed', detail: 'lock_screen failed on WKSTN-007 - agent timeout', device: 'WKSTN-007' },
   { type: 'device_state', severity: 'warning', title: 'Device Degraded', detail: 'WKSTN-019 risk score elevated to 0.72', device: 'WKSTN-019' },
   { type: 'command_status', severity: 'info', title: 'CMD-7747 Dispatched', detail: 'get_system_info queued for SRV-PROD-04', device: 'SRV-PROD-04' },
-  { type: 'alert', severity: 'critical', title: 'Compliance Violation', detail: 'SRV-PROD-04 — compliance score dropped to 42%', device: 'SRV-PROD-04' },
+  { type: 'alert', severity: 'critical', title: 'Compliance Violation', detail: 'SRV-PROD-04 - compliance score dropped to 42%', device: 'SRV-PROD-04' },
   { type: 'system', severity: 'info', title: 'Policy Sync Complete', detail: 'Fleet policy-2026-04 propagated to 47/50 devices' },
   { type: 'command_status', severity: 'info', title: 'CMD-7748 ACK', detail: 'Agent acknowledged lock_screen on WKSTN-042', device: 'WKSTN-042' },
   { type: 'device_state', severity: 'info', title: 'Device Online', detail: 'WKSTN-033 reconnected after 8 min offline', device: 'WKSTN-033' },
@@ -65,60 +62,85 @@ const severityIconColor: Record<string, string> = {
 };
 
 interface LiveAlertFeedProps {
-  /** Interval in ms between simulated push events (default: 8000) */
   pushInterval?: number;
-  /** Max events to keep in feed (default: 12) */
   maxEvents?: number;
   className?: string;
+  events?: WsEvent[];
+  loading?: boolean;
+  error?: string | null;
 }
 
 export default function LiveAlertFeed({
   pushInterval = 8000,
   maxEvents = 12,
   className = '',
+  events,
+  loading = false,
+  error = null,
 }: LiveAlertFeedProps) {
+  const usingExternalEvents = events !== undefined;
   const [connected, setConnected] = useState(false);
-  const [events, setEvents] = useState<WsEvent[]>([]);
+  const [feedEvents, setFeedEvents] = useState<WsEvent[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
   const [connecting, setConnecting] = useState(true);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const previousIdsRef = useRef<Set<string>>(new Set());
+  const effectiveConnecting = usingExternalEvents ? false : connecting;
+  const effectiveConnected = usingExternalEvents ? true : connected;
 
-  // Simulate WebSocket connection
   useEffect(() => {
+    if (usingExternalEvents) return;
+
     const connectTimer = setTimeout(() => {
       setConnecting(false);
       setConnected(true);
-      // Seed with 2 initial events
       const seed = [generateEvent(), generateEvent()];
-      setEvents(seed);
+      setFeedEvents(seed);
       setUnreadCount(2);
     }, 1200);
     return () => clearTimeout(connectTimer);
-  }, []);
+  }, [usingExternalEvents]);
 
-  // Simulate push events
   const pushEvent = useCallback(() => {
     const evt = generateEvent();
-    setEvents((prev) => [evt, ...prev].slice(0, maxEvents));
+    setFeedEvents((prev) => [evt, ...prev].slice(0, maxEvents));
     setUnreadCount((c) => c + 1);
   }, [maxEvents]);
 
   useEffect(() => {
-    if (!connected) return;
+    if (usingExternalEvents || !connected) return;
     intervalRef.current = setInterval(pushEvent, pushInterval);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [connected, pushEvent, pushInterval]);
+  }, [usingExternalEvents, connected, pushEvent, pushInterval]);
+
+  useEffect(() => {
+    if (!usingExternalEvents) return;
+
+    const incoming = (events ?? []).slice(0, maxEvents);
+    const previous = previousIdsRef.current;
+    let nextUnread = 0;
+    const next = incoming.map((evt) => {
+      const isNew = !previous.has(evt.id);
+      const read = !isNew;
+      if (!read) nextUnread += 1;
+      return { ...evt, read };
+    });
+
+    previousIdsRef.current = new Set(incoming.map((evt) => evt.id));
+    setFeedEvents(next);
+    setUnreadCount(nextUnread);
+  }, [usingExternalEvents, events, maxEvents]);
 
   const markAllRead = () => {
-    setEvents((prev) => prev.map((e) => ({ ...e, read: true })));
+    setFeedEvents((prev) => prev.map((e) => ({ ...e, read: true })));
     setUnreadCount(0);
   };
 
   const dismissEvent = (id: string) => {
-    setEvents((prev) => {
+    setFeedEvents((prev) => {
       const evt = prev.find((e) => e.id === id);
       const next = prev.filter((e) => e.id !== id);
       if (evt && !evt.read) setUnreadCount((c) => Math.max(0, c - 1));
@@ -128,13 +150,12 @@ export default function LiveAlertFeed({
 
   return (
     <div className={`bg-card border border-border rounded-lg overflow-hidden ${className}`}>
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div className="flex items-center gap-2">
           <div className="relative">
-            {connecting ? (
+            {effectiveConnecting ? (
               <WifiOff size={14} className="text-muted-foreground animate-pulse" />
-            ) : connected ? (
+            ) : effectiveConnected ? (
               <Wifi size={14} className="text-green-400" />
             ) : (
               <WifiOff size={14} className="text-red-400" />
@@ -160,36 +181,41 @@ export default function LiveAlertFeed({
             </button>
           )}
           <div className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border ${
-            connecting ? 'border-amber-500/30 text-amber-400 bg-amber-500/10' : connected ?'border-green-500/30 text-green-400 bg-green-500/10': 'border-red-500/30 text-red-400 bg-red-500/10'
+            effectiveConnecting ? 'border-amber-500/30 text-amber-400 bg-amber-500/10' : effectiveConnected
+              ? 'border-green-500/30 text-green-400 bg-green-500/10'
+              : 'border-red-500/30 text-red-400 bg-red-500/10'
           }`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${connecting ? 'bg-amber-400 animate-pulse' : connected ? 'bg-green-400 pulse-dot' : 'bg-red-400'}`} />
-            {connecting ? 'Connecting…' : connected ? 'Connected' : 'Disconnected'}
+            <span className={`w-1.5 h-1.5 rounded-full ${effectiveConnecting ? 'bg-amber-400 animate-pulse' : effectiveConnected ? 'bg-green-400 pulse-dot' : 'bg-red-400'}`} />
+            {effectiveConnecting ? 'Connecting...' : effectiveConnected ? 'Connected' : 'Disconnected'}
           </div>
           <button
             onClick={() => setCollapsed(!collapsed)}
             className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
-            {collapsed
-              ? <CheckCircle2 size={13} />
-              : <AlertTriangle size={13} />}
+            {collapsed ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
           </button>
         </div>
       </div>
 
       {!collapsed && (
         <div className="divide-y divide-border max-h-72 overflow-y-auto scrollbar-thin">
-          {connecting && (
+          {(loading || effectiveConnecting) && (
             <div className="flex items-center justify-center py-8 gap-2 text-xs text-muted-foreground">
               <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-              Establishing WebSocket connection to FastAPI…
+              {loading ? 'Loading data...' : 'Establishing WebSocket connection to FastAPI...'}
             </div>
           )}
-          {!connecting && events.length === 0 && (
+          {!loading && !effectiveConnecting && error && (
+            <div className="flex items-center justify-center py-8 text-xs text-red-400">
+              Failed to load data
+            </div>
+          )}
+          {!loading && !effectiveConnecting && !error && feedEvents.length === 0 && (
             <div className="flex items-center justify-center py-8 text-xs text-muted-foreground">
-              No events yet — waiting for push…
+              No data available
             </div>
           )}
-          {!connecting && events.map((evt) => {
+          {!loading && !effectiveConnecting && !error && feedEvents.map((evt) => {
             const Icon = typeIcon[evt.type];
             const sev = evt.severity || 'info';
             return (
@@ -213,7 +239,7 @@ export default function LiveAlertFeed({
                     )}
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{evt.detail}</p>
-                  <p className="font-mono text-[10px] text-muted-foreground/60 mt-0.5">{evt.timestamp} UTC</p>
+                  <p className="font-mono text-[10px] text-muted-foreground/60 mt-0.5">{evt.timestamp}</p>
                 </div>
                 <button
                   onClick={() => dismissEvent(evt.id)}
@@ -229,7 +255,7 @@ export default function LiveAlertFeed({
 
       {collapsed && (
         <div className="px-4 py-2 text-xs text-muted-foreground">
-          Feed collapsed — {events.length} events buffered
+          Feed collapsed - {feedEvents.length} events buffered
         </div>
       )}
     </div>

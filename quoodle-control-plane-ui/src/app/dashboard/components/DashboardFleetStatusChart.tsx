@@ -2,13 +2,17 @@
 import React from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 
-// Backend integration point: GET /api/devices/stats
-const fleetData = [
-  { name: 'Online',      value: 71, color: 'hsl(142 71% 45%)' },
-  { name: 'Offline',     value: 9,  color: 'hsl(240 5% 45%)' },
-  { name: 'Degraded',    value: 4,  color: 'hsl(38 92% 50%)' },
-  { name: 'Quarantined', value: 4,  color: 'hsl(0 72% 51%)' },
-];
+export interface FleetStatusDatum {
+  name: string;
+  value: number;
+  color: string;
+}
+
+interface DashboardFleetStatusChartProps {
+  data?: FleetStatusDatum[];
+  loading?: boolean;
+  error?: string | null;
+}
 
 const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number; payload: { color: string } }> }) => {
   if (!active || !payload?.length) return null;
@@ -24,14 +28,28 @@ const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
   );
 };
 
-export default function DashboardFleetStatusChart() {
+const DEFAULT_DATA: FleetStatusDatum[] = [
+  { name: 'Online', value: 0, color: 'hsl(142 71% 45%)' },
+  { name: 'Offline', value: 0, color: 'hsl(240 5% 45%)' },
+  { name: 'Degraded', value: 0, color: 'hsl(38 92% 50%)' },
+  { name: 'Quarantined', value: 0, color: 'hsl(0 72% 51%)' },
+];
+
+export default function DashboardFleetStatusChart({ data, loading, error }: DashboardFleetStatusChartProps) {
+  const fleetData = data && data.length > 0 ? data : DEFAULT_DATA;
   const total = fleetData.reduce((s, d) => s + d.value, 0);
+  const onlineCount = fleetData.find((row) => row.name === 'Online')?.value ?? 0;
+  const onlineRate = total > 0 ? Number(((onlineCount / total) * 100).toFixed(1)) : 0;
+  const showEmpty = !loading && !error && total === 0;
 
   return (
     <div className="bg-card border border-border rounded-lg p-5 h-full">
       <div className="mb-4">
         <h3 className="text-sm font-semibold">Fleet Status</h3>
         <p className="text-xs text-muted-foreground mt-0.5">{total} managed devices</p>
+        {loading && <p className="text-[11px] text-muted-foreground mt-1">Loading data...</p>}
+        {!loading && error && <p className="text-[11px] text-red-400 mt-1">{error}</p>}
+        {showEmpty && <p className="text-[11px] text-muted-foreground mt-1">No data available</p>}
       </div>
       <div className="relative">
         <ResponsiveContainer width="100%" height={160}>
@@ -54,7 +72,7 @@ export default function DashboardFleetStatusChart() {
           </PieChart>
         </ResponsiveContainer>
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <p className="text-2xl font-bold tabular-nums">84.5%</p>
+          <p className="text-2xl font-bold tabular-nums">{onlineRate}%</p>
           <p className="text-[10px] text-muted-foreground">online</p>
         </div>
       </div>

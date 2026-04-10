@@ -1,8 +1,8 @@
 'use client';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
-import DashboardKPIGrid, { type DashboardKpiData } from './components/DashboardKPIGrid';
-import DashboardActivityFeed, { type DashboardActivityItem } from './components/DashboardActivityFeed';
+import DashboardKPIGrid from './components/DashboardKPIGrid';
+import DashboardActivityFeed from './components/DashboardActivityFeed';
 import DashboardCommandVolumeChart from './components/DashboardCommandVolumeChart';
 import DashboardFleetStatusChart from './components/DashboardFleetStatusChart';
 import DashboardNeedsAttention from './components/DashboardNeedsAttention';
@@ -11,218 +11,32 @@ import LiveAlertFeed from '@/components/LiveAlertFeed';
 import { Bell, Shield, RefreshCw, X, Download } from 'lucide-react';
 import Link from 'next/link';
 import ExportModal from '@/components/ExportModal';
-
-const AUTO_REFRESH_INTERVAL = 30000;
-
-interface DevicesApiResponse {
-  devices?: Array<{
-    device_id?: string;
-    device_name?: string | null;
-    lifecycle_state?: string | null;
-    compliance_status?: string | null;
-    risk_score?: number | string | null;
-    last_seen?: string | null;
-    agent_version?: string | null;
-  }>;
-}
-
-interface AlertsApiResponse {
-  alerts?: Array<{
-    alert_id?: string;
-    severity?: string | null;
-    message?: string | null;
-    timestamp?: string | null;
-    device_id?: string | null;
-  }>;
-}
-
-interface CommandsApiResponse {
-  commands?: Array<{
-    command_id?: string;
-    method?: string;
-    state?: string;
-    queued_at?: string | null;
-    completed_at?: string | null;
-    device_id?: string;
-    error_message?: string | null;
-  }>;
-}
-
-const EMPTY_KPI: DashboardKpiData = {
-  totalDevices: 0,
-  onlineDevices: 0,
-  offlineDevices: 0,
-  quarantinedDevices: 0,
-  activeCommands: 0,
-  failingCommands: 0,
-  criticalAlerts: 0,
-  complianceDrift: 0,
-  avgRiskScore: 0,
-  fleetOnlineRate: 0,
-};
-
-function normalizeStatus(value: string | null | undefined): 'online' | 'offline' | 'quarantined' | 'degraded' {
-  const normalized = String(value ?? '').toLowerCase();
-  if (normalized === 'active' || normalized === 'online') return 'online';
-  if (normalized === 'quarantined') return 'quarantined';
-  if (normalized === 'degraded') return 'degraded';
-  return 'offline';
-}
-
-function normalizeRisk(value: number | string | null | undefined): number {
-  const parsed = typeof value === 'number' ? value : Number(value ?? 0);
-  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
-  if (parsed > 1) return Math.max(0, Math.min(1, parsed / 100));
-  return Math.max(0, Math.min(1, parsed));
-}
-
-function formatUtcTime(iso: string | null | undefined): string {
-  if (!iso) return '--:--:--';
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '--:--:--';
-  return date.toISOString().slice(11, 19);
-}
-
-function nowTimeString(): string {
-  const now = new Date();
-  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-}
+import { useDashboardData } from './hooks/useDashboardData';
 
 export default function DashboardPage() {
-  const [lastRefresh, setLastRefresh] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
   const [newAlertBanner, setNewAlertBanner] = useState(true);
   const [alertPulse, setAlertPulse] = useState(false);
   const [showExport, setShowExport] = useState(false);
-  const [kpiData, setKpiData] = useState<DashboardKpiData>(EMPTY_KPI);
-  const [activityItems, setActivityItems] = useState<DashboardActivityItem[]>([]);
 
-  const loadDashboardData = useCallback(async () => {
-    const [devicesRes, alertsRes, commandsRes] = await Promise.all([
-      fetch('/api/devices?per_page=200', { credentials: 'include', cache: 'no-store' }),
-      fetch('/api/alerts?limit=100', { credentials: 'include', cache: 'no-store' }),
-      fetch('/api/commands?limit=50', { credentials: 'include', cache: 'no-store' }),
-    ]);
-
-    const devicesPayload = devicesRes.ok
-      ? ((await devicesRes.json()) as DevicesApiResponse)
-      : { devices: [] as DevicesApiResponse['devices'] };
-    const alertsPayload = alertsRes.ok
-      ? ((await alertsRes.json()) as AlertsApiResponse)
-      : { alerts: [] as AlertsApiResponse['alerts'] };
-    const commandsPayload = commandsRes.ok
-      ? ((await commandsRes.json()) as CommandsApiResponse)
-      : { commands: [] as CommandsApiResponse['commands'] };
-
-    const devices = devicesPayload.devices ?? [];
-    const alerts = alertsPayload.alerts ?? [];
-    const commands = commandsPayload.commands ?? [];
-
-    const totalDevices = devices.length;
-    const onlineDevices = devices.filter((device) => normalizeStatus(device.lifecycle_state) === 'online').length;
-    const quarantinedDevices = devices.filter((device) => normalizeStatus(device.lifecycle_state) === 'quarantined').length;
-    const offlineDevices = Math.max(totalDevices - onlineDevices - quarantinedDevices, 0);
-    const fleetOnlineRate = totalDevices > 0 ? Number(((onlineDevices / totalDevices) * 100).toFixed(1)) : 0;
-
-    const riskValues = devices
-      .map((device) => normalizeRisk(device.risk_score))
-      .filter((value) => Number.isFinite(value));
-    const avgRiskScore = riskValues.length > 0
-      ? Number((riskValues.reduce((sum, value) => sum + value, 0) / riskValues.length).toFixed(4))
-      : 0;
-
-    const activeStates = new Set(['queued', 'dispatched', 'ack_received', 'executing']);
-    const failedStates = new Set(['failed', 'expired', 'rejected']);
-
-    const activeCommands = commands.filter((command) => activeStates.has(String(command.state ?? '').toLowerCase())).length;
-    const failingCommands = commands.filter((command) => failedStates.has(String(command.state ?? '').toLowerCase())).length;
-
-    const criticalAlerts = alerts.filter((alert) => String(alert.severity ?? '').toLowerCase() === 'critical').length;
-    const complianceDrift = devices.filter((device) => {
-      const status = String(device.compliance_status ?? '').toLowerCase();
-      return status === 'drift' || status === 'non_compliant';
-    }).length;
-
-    setKpiData({
-      totalDevices,
-      onlineDevices,
-      offlineDevices,
-      quarantinedDevices,
-      activeCommands,
-      failingCommands,
-      criticalAlerts,
-      complianceDrift,
-      avgRiskScore,
-      fleetOnlineRate,
-    });
-
-    const commandEvents = commands.map((command) => {
-      const ts = command.completed_at ?? command.queued_at;
-      const state = String(command.state ?? 'queued').toLowerCase();
-      return {
-        id: command.command_id ?? crypto.randomUUID(),
-        type: 'command' as const,
-        title: `${command.command_id ?? 'command'} ${state}`,
-        detail: `${command.method ?? 'unknown'} on ${command.device_id ?? 'device'}`,
-        sortAt: ts ? Date.parse(ts) : 0,
-        time: formatUtcTime(ts),
-      };
-    });
-
-    const alertEvents = alerts.map((alert) => ({
-      id: alert.alert_id ?? crypto.randomUUID(),
-      type: 'alert' as const,
-      title: `${String(alert.severity ?? 'alert').toUpperCase()} alert`,
-      detail: alert.message ?? 'Alert event',
-      sortAt: alert.timestamp ? Date.parse(alert.timestamp) : 0,
-      time: formatUtcTime(alert.timestamp),
-    }));
-
-    const deviceEvents = devices
-      .filter((device) => Boolean(device.last_seen))
-      .map((device) => ({
-        id: `device-${device.device_id}`,
-        type: 'device' as const,
-        title: `${device.device_name?.trim() || device.device_id || 'Device'} heartbeat`,
-        detail: `${normalizeStatus(device.lifecycle_state)} · Agent ${device.agent_version ?? '-'}`,
-        sortAt: device.last_seen ? Date.parse(device.last_seen) : 0,
-        time: formatUtcTime(device.last_seen),
-      }));
-
-    const merged = [...commandEvents, ...alertEvents, ...deviceEvents]
-      .filter((event) => Number.isFinite(event.sortAt))
-      .sort((a, b) => b.sortAt - a.sortAt)
-      .slice(0, 12)
-      .map(({ id, type, title, detail, time }) => ({ id, type, title, detail, time }));
-
-    setActivityItems(merged);
-  }, []);
+  const { data, loading, refreshing, errors, refresh, lastRefreshLabel } = useDashboardData();
 
   const doRefresh = useCallback(async () => {
-    setRefreshing(true);
     setAlertPulse(true);
     try {
-      await loadDashboardData();
-      setLastRefresh(nowTimeString());
+      await refresh();
     } finally {
-      setRefreshing(false);
       setTimeout(() => setAlertPulse(false), 2000);
     }
-  }, [loadDashboardData]);
+  }, [refresh]);
 
-  useEffect(() => {
-    setLastRefresh(nowTimeString());
-    void loadDashboardData();
-    const timer = setInterval(() => {
-      void doRefresh();
-    }, AUTO_REFRESH_INTERVAL);
-    return () => clearInterval(timer);
-  }, [doRefresh, loadDashboardData]);
+  const anyError = errors.devices || errors.alerts || errors.commands ? 'Failed to load data' : null;
+  const needsAttentionError = errors.devices || errors.commands ? 'Failed to load data' : null;
+  const auditError = errors.alerts || errors.commands ? 'Failed to load data' : null;
 
   return (
     <AppLayout currentPath="/dashboard">
       <div className="space-y-6 fade-in">
-        {newAlertBanner && kpiData.criticalAlerts > 0 && (
+        {newAlertBanner && data.kpi.criticalAlerts > 0 && (
           <div
             className={`relative flex items-start gap-3 px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-lg overflow-hidden transition-all duration-300 ${
               alertPulse ? 'border-red-500/60 bg-red-500/15' : ''
@@ -236,7 +50,7 @@ export default function DashboardPage() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-red-400">
-                {kpiData.criticalAlerts} Critical Alert{kpiData.criticalAlerts !== 1 ? 's' : ''} - Immediate Action Required
+                {data.kpi.criticalAlerts} Critical Alert{data.kpi.criticalAlerts !== 1 ? 's' : ''} - Immediate Action Required
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Review the alerts inbox for affected devices.
@@ -282,7 +96,7 @@ export default function DashboardPage() {
               }`}
             >
               <Bell size={12} className={alertPulse ? 'pulse-dot' : ''} />
-              <span className="tabular-nums">{kpiData.criticalAlerts}</span>
+              <span className="tabular-nums">{data.kpi.criticalAlerts}</span>
               <span className="hidden sm:inline">Critical</span>
             </Link>
             <button
@@ -292,34 +106,67 @@ export default function DashboardPage() {
             >
               <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 pulse-dot" />
-              {lastRefresh ? `${lastRefresh} UTC` : 'Live'}
+              {lastRefreshLabel || 'Live'}
             </button>
           </div>
         </div>
 
-        <DashboardKPIGrid data={kpiData} />
+        <DashboardKPIGrid
+          data={data.kpi}
+          loading={loading}
+          error={anyError}
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-3 gap-4">
           <div className="lg:col-span-2">
-            <DashboardCommandVolumeChart />
+            <DashboardCommandVolumeChart
+              data={data.commandVolume}
+              loading={loading}
+              error={errors.commands}
+            />
           </div>
           <div className="lg:col-span-1">
-            <DashboardFleetStatusChart />
+            <DashboardFleetStatusChart
+              data={data.fleetStatus}
+              loading={loading}
+              error={errors.devices}
+            />
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-3 gap-4">
           <div className="lg:col-span-2">
-            <DashboardNeedsAttention />
+            <DashboardNeedsAttention
+              failingCommands={data.failingCommands}
+              attentionDevices={data.attentionDevices}
+              loading={loading}
+              error={needsAttentionError}
+            />
           </div>
           <div className="lg:col-span-1">
-            <DashboardActivityFeed items={activityItems} />
+            <DashboardActivityFeed
+              items={data.activityItems}
+              loading={loading}
+              error={anyError}
+            />
           </div>
         </div>
 
-        <AuditTrailSection title="Dashboard Audit Trail" maxRows={5} />
+        <AuditTrailSection
+          title="Dashboard Audit Trail"
+          maxRows={5}
+          entries={data.auditEntries}
+          loading={loading}
+          error={auditError}
+        />
 
-        <LiveAlertFeed pushInterval={9000} maxEvents={12} />
+        <LiveAlertFeed
+          pushInterval={9000}
+          maxEvents={12}
+          events={data.liveFeedEvents}
+          loading={loading}
+          error={anyError}
+        />
       </div>
 
       {showExport && (
