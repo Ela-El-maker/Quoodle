@@ -5,6 +5,10 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { formatLocalDateTime, formatLocalTime } from '@/lib/dateTime';
+import {
+  mapCommandListRow,
+  type NormalizedCommandResult,
+} from '@/lib/commandResults';
 import { parseKernelTelemetryEvent, telemetryMaskedFields, telemetryPercent, telemetryText } from '@/lib/telemetry';
 import { toast } from 'sonner';
 
@@ -82,12 +86,29 @@ interface DeviceDetailApi {
 interface CommandsApiResponse {
   commands?: Array<{
     command_id?: string;
+    device_id?: string;
+    device_name?: string | null;
     method?: string;
     params?: Record<string, unknown> | null;
     state?: CommandState;
+    execution_state?: string | null;
     queued_at?: string | null;
+    dispatched_at?: string | null;
     completed_at?: string | null;
+    trace_id?: string | null;
+    result?: {
+      status?: string | null;
+      notes?: string | null;
+      artifact_url?: string | null;
+      artifact_checksum?: string | null;
+      data?: unknown;
+      output_text?: string | null;
+      meta?: Record<string, unknown> | null;
+    } | null;
     result_status?: string | null;
+    result_notes?: string | null;
+    artifact_url?: string | null;
+    artifact_checksum?: string | null;
     error_code?: number | null;
     error_message?: string | null;
     reason?: string | null;
@@ -103,18 +124,30 @@ interface CommandCapabilitiesResponse {
 
 interface CommandDetailApiResponse {
   command_id?: string;
+  device_id?: string;
+  device_name?: string | null;
   method?: string;
   params?: Record<string, unknown> | null;
   state?: CommandState;
+  execution_state?: string | null;
   queued_at?: string | null;
+  dispatched_at?: string | null;
   completed_at?: string | null;
+  trace_id?: string | null;
+  actor_email?: string | null;
   result?: {
     status?: string | null;
     notes?: string | null;
     artifact_url?: string | null;
     artifact_checksum?: string | null;
-    data?: Record<string, unknown> | null;
+    data?: unknown;
+    output_text?: string | null;
+    meta?: Record<string, unknown> | null;
   } | null;
+  result_status?: string | null;
+  result_notes?: string | null;
+  artifact_url?: string | null;
+  artifact_checksum?: string | null;
   error_code?: number | null;
   error_message?: string | null;
   reason?: string | null;
@@ -502,6 +535,7 @@ export default function DeviceDetailPageContent() {
     const [device, setDevice] = useState<Device>(() => getFallbackDevice(deviceId));
   const [isLoadingDevice, setIsLoadingDevice] = useState(true);
   const [commandHistory, setCommandHistory] = useState<CommandEntry[]>([]);
+  const [recentResults, setRecentResults] = useState<NormalizedCommandResult[]>([]);
   const [alerts, setAlerts] = useState<DeviceAlert[]>([]);
   const [auditEntries, setAuditEntries] = useState<DeviceAuditEntry[]>([]);
   const [telemetry, setTelemetry] = useState<DeviceTelemetry>({
@@ -604,21 +638,29 @@ export default function DeviceDetailPageContent() {
 
     if (commandsRes.status === 'fulfilled' && commandsRes.value.ok) {
       const payload = (await commandsRes.value.json()) as CommandsApiResponse;
+      const normalizedRows = (payload.commands ?? []).map((cmd) => mapCommandListRow(cmd));
+      setRecentResults(normalizedRows);
       setCommandHistory(
-        (payload.commands ?? []).map((cmd) => ({
-          id: cmd.command_id ?? 'unknown',
-          method: cmd.method ?? 'unknown',
-          params: cmd.params ?? {},
-          state: (cmd.state as CommandState) ?? 'queued',
-          actor: cmd.actor_email?.trim() || 'system',
-          queuedAt: formatTime(cmd.queued_at),
-          completedAt: cmd.completed_at ? formatTime(cmd.completed_at) : null,
-          duration: formatDuration(cmd.queued_at, cmd.completed_at),
-          resultPreview: cmd.error_message || cmd.reason || cmd.result_status || (cmd.error_code ? `error ${cmd.error_code}` : null),
+        normalizedRows.map((cmd) => ({
+          id: cmd.commandId,
+          method: cmd.method,
+          params: cmd.params,
+          state: cmd.state,
+          actor: cmd.actorEmail,
+          queuedAt: formatTime(cmd.queuedAt),
+          completedAt: cmd.completedAt ? formatTime(cmd.completedAt) : null,
+          duration: formatDuration(cmd.queuedAt, cmd.completedAt),
+          resultPreview:
+            cmd.errorMessage ||
+            cmd.reason ||
+            cmd.resultNotes ||
+            cmd.resultStatus ||
+            (cmd.errorCode != null ? `error ${cmd.errorCode}` : null),
         })),
       );
     } else {
       setCommandHistory([]);
+      setRecentResults([]);
     }
 
     if (telemetryRes.status === 'fulfilled' && telemetryRes.value.ok) {
@@ -1385,6 +1427,25 @@ export default function DeviceDetailPageContent() {
               </div>
               <pre className="text-xs font-mono bg-muted/40 rounded-lg p-3 overflow-x-auto text-green-400">{liveResults.output}</pre>
             </div>
+          ) : recentResults.length > 0 ? (
+            <div className="bg-card border border-border rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold">{recentResults[0].commandId} - {recentResults[0].method}</p>
+                <StatusBadge variant={recentResults[0].state} />
+              </div>
+              <pre className="text-xs font-mono bg-muted/40 rounded-lg p-3 overflow-x-auto text-green-400">
+                {JSON.stringify({
+                  result_status: recentResults[0].resultStatus,
+                  result_notes: recentResults[0].resultNotes,
+                  output_text: recentResults[0].result?.output_text ?? null,
+                  data: recentResults[0].result?.data ?? null,
+                  artifact_url: recentResults[0].artifactUrl,
+                  artifact_checksum: recentResults[0].artifactChecksum,
+                  error_code: recentResults[0].errorCode,
+                  error_message: recentResults[0].errorMessage,
+                }, null, 2)}
+              </pre>
+            </div>
           ) : (
             <div className="bg-card border border-border rounded-lg p-8 text-center">
               <BarChart2 size={32} className="mx-auto text-muted-foreground/30 mb-3" />
@@ -1392,6 +1453,35 @@ export default function DeviceDetailPageContent() {
               <p className="text-xs text-muted-foreground/60 mt-1">Dispatch a command to see results here in real-time</p>
             </div>
           )}
+          <div className="bg-card border border-border rounded-lg overflow-hidden">
+            <div className="px-4 py-3 border-b border-border bg-muted/20 flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recent Result History</p>
+              <span className="text-[11px] text-muted-foreground">{recentResults.length}</span>
+            </div>
+            {recentResults.length === 0 ? (
+              <div className="px-4 py-6 text-sm text-muted-foreground text-center">No data available</div>
+            ) : (
+              <div className="divide-y divide-border">
+                {recentResults.slice(0, 10).map((item) => (
+                  <div key={`result-${item.commandId}`} className="px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold font-mono truncate">{item.commandId}</p>
+                        <p className="text-xs text-muted-foreground truncate">{item.method} · {item.actorEmail}</p>
+                      </div>
+                      <StatusBadge variant={item.state} size="sm" />
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                      <span>{formatTime(item.queuedAt)}{item.completedAt ? ` -> ${formatTime(item.completedAt)}` : ''}</span>
+                      <span className="truncate text-right">
+                        {item.resultNotes || item.errorMessage || item.reason || item.resultStatus || 'No data available'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
