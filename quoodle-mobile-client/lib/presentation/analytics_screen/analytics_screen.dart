@@ -1,26 +1,25 @@
-import 'dart:ui';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:secure_device_control/app/router/app_navigator.dart';
+import 'package:secure_device_control/features/analytics/presentation/providers/analytics_controller.dart';
+import 'package:secure_device_control/features/analytics/presentation/providers/analytics_state.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_navigation.dart';
-import '../../widgets/app_bar_widget.dart';
 
-class AnalyticsScreen extends StatefulWidget {
+class AnalyticsScreen extends ConsumerStatefulWidget {
   const AnalyticsScreen({super.key});
 
   @override
-  State<AnalyticsScreen> createState() => _AnalyticsScreenState();
+  ConsumerState<AnalyticsScreen> createState() => _AnalyticsScreenState();
 }
 
-class _AnalyticsScreenState extends State<AnalyticsScreen>
+class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  String _timeRange = '7d';
   final int _currentNavIndex = 3;
-
-  final List<String> _timeRanges = ['24h', '7d', '30d', '90d'];
 
   @override
   void initState() {
@@ -36,6 +35,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final analyticsState = ref.watch(analyticsControllerProvider);
     final isTablet = MediaQuery.of(context).size.width >= 600;
 
     return Scaffold(
@@ -52,9 +52,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
         backgroundColor: AppTheme.surfaceVariant,
         actions: [
           _TimeRangePicker(
-            selected: _timeRange,
-            options: _timeRanges,
-            onChanged: (v) => setState(() => _timeRange = v),
+            selected: analyticsState.timeRange,
+            options: AnalyticsState.timeRanges,
+            onChanged: (v) =>
+                ref.read(analyticsControllerProvider.notifier).setTimeRange(v),
           ),
           const SizedBox(width: 8),
         ],
@@ -64,50 +65,32 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
               children: [
                 AppNavigation(
                   currentIndex: _currentNavIndex,
-                  onTap: (i) {
-                    final routes = [
-                      '/dashboard-screen',
-                      '/devices-screen',
-                      '/command-timeline-screen',
-                      '/alerts-screen',
-                      '/settings-screen',
-                    ];
-                    Navigator.pushNamedAndRemoveUntil(
-                      context,
-                      routes[i],
-                      (r) => false,
-                    );
-                  },
+                  onTap: (i) => AppNavigator.navigateToTab(
+                    context,
+                    i,
+                    profileTabTarget: ProfileTabTarget.settings,
+                  ),
                 ),
-                Expanded(child: _buildBody()),
+                Expanded(child: _buildBody(analyticsState)),
               ],
             )
           : Column(
               children: [
-                Expanded(child: _buildBody()),
+                Expanded(child: _buildBody(analyticsState)),
                 AppNavigation(
                   currentIndex: _currentNavIndex,
-                  onTap: (i) {
-                    final routes = [
-                      '/dashboard-screen',
-                      '/devices-screen',
-                      '/command-timeline-screen',
-                      '/alerts-screen',
-                      '/settings-screen',
-                    ];
-                    Navigator.pushNamedAndRemoveUntil(
-                      context,
-                      routes[i],
-                      (r) => false,
-                    );
-                  },
+                  onTap: (i) => AppNavigator.navigateToTab(
+                    context,
+                    i,
+                    profileTabTarget: ProfileTabTarget.settings,
+                  ),
                 ),
               ],
             ),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(AnalyticsState analyticsState) {
     return Column(
       children: [
         _buildTabBar(),
@@ -115,10 +98,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
           child: TabBarView(
             controller: _tabController,
             children: [
-              _CommandSuccessTab(timeRange: _timeRange),
-              _DeviceHealthTab(timeRange: _timeRange),
-              _ComplianceTab(timeRange: _timeRange),
-              _OperatorActivityTab(timeRange: _timeRange),
+              _CommandSuccessTab(timeRange: analyticsState.timeRange),
+              _DeviceHealthTab(timeRange: analyticsState.timeRange),
+              _ComplianceTab(timeRange: analyticsState.timeRange),
+              _OperatorActivityTab(timeRange: analyticsState.timeRange),
             ],
           ),
         ),
@@ -368,24 +351,24 @@ class _CommandSuccessTab extends StatelessWidget {
   const _CommandSuccessTab({required this.timeRange});
 
   List<FlSpot> get _successRateSpots => const [
-    FlSpot(0, 88),
-    FlSpot(1, 91),
-    FlSpot(2, 87),
-    FlSpot(3, 94),
-    FlSpot(4, 92),
-    FlSpot(5, 96),
-    FlSpot(6, 93),
-  ];
+        FlSpot(0, 88),
+        FlSpot(1, 91),
+        FlSpot(2, 87),
+        FlSpot(3, 94),
+        FlSpot(4, 92),
+        FlSpot(5, 96),
+        FlSpot(6, 93),
+      ];
 
   List<FlSpot> get _failureRateSpots => const [
-    FlSpot(0, 12),
-    FlSpot(1, 9),
-    FlSpot(2, 13),
-    FlSpot(3, 6),
-    FlSpot(4, 8),
-    FlSpot(5, 4),
-    FlSpot(6, 7),
-  ];
+        FlSpot(0, 12),
+        FlSpot(1, 9),
+        FlSpot(2, 13),
+        FlSpot(3, 6),
+        FlSpot(4, 8),
+        FlSpot(5, 4),
+        FlSpot(6, 7),
+      ];
 
   static const _commandTypes = [
     {'name': 'screenshot', 'success': 98, 'total': 142},
@@ -471,8 +454,9 @@ class _CommandSuccessTab extends StatelessWidget {
                         getTitlesWidget: (v, _) {
                           const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
                           final i = v.toInt();
-                          if (i < 0 || i >= days.length)
+                          if (i < 0 || i >= days.length) {
                             return const SizedBox.shrink();
+                          }
                           return Text(
                             days[i],
                             style: GoogleFonts.ibmPlexMono(
@@ -535,8 +519,8 @@ class _CommandSuccessTab extends StatelessWidget {
                 final color = rate >= 0.95
                     ? AppTheme.secondary
                     : rate >= 0.88
-                    ? AppTheme.warning
-                    : AppTheme.error;
+                        ? AppTheme.warning
+                        : AppTheme.error;
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: Column(
@@ -765,8 +749,9 @@ class _DeviceHealthTab extends StatelessWidget {
                         getTitlesWidget: (v, _) {
                           const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
                           final i = v.toInt();
-                          if (i < 0 || i >= days.length)
+                          if (i < 0 || i >= days.length) {
                             return const SizedBox.shrink();
+                          }
                           return Text(
                             days[i],
                             style: GoogleFonts.ibmPlexMono(
@@ -820,76 +805,75 @@ class _DeviceHealthTab extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
             child: Column(
-              children:
-                  [
-                    {
-                      'group': 'EDGE-NODES',
-                      'uptime': 99.1,
-                      'color': AppTheme.secondary,
-                    },
-                    {
-                      'group': 'PROD-SERVERS',
-                      'uptime': 97.4,
-                      'color': AppTheme.secondary,
-                    },
-                    {
-                      'group': 'WKS-FINANCE',
-                      'uptime': 94.8,
-                      'color': AppTheme.warning,
-                    },
-                    {
-                      'group': 'WKS-OPS',
-                      'uptime': 91.2,
-                      'color': AppTheme.warning,
-                    },
-                    {
-                      'group': 'QUARANTINE',
-                      'uptime': 42.0,
-                      'color': AppTheme.error,
-                    },
-                  ].map((item) {
-                    final uptime = item['uptime'] as double;
-                    final color = item['color'] as Color;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                {
+                  'group': 'EDGE-NODES',
+                  'uptime': 99.1,
+                  'color': AppTheme.secondary,
+                },
+                {
+                  'group': 'PROD-SERVERS',
+                  'uptime': 97.4,
+                  'color': AppTheme.secondary,
+                },
+                {
+                  'group': 'WKS-FINANCE',
+                  'uptime': 94.8,
+                  'color': AppTheme.warning,
+                },
+                {
+                  'group': 'WKS-OPS',
+                  'uptime': 91.2,
+                  'color': AppTheme.warning,
+                },
+                {
+                  'group': 'QUARANTINE',
+                  'uptime': 42.0,
+                  'color': AppTheme.error,
+                },
+              ].map((item) {
+                final uptime = item['uptime'] as double;
+                final color = item['color'] as Color;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  item['group'] as String,
-                                  style: GoogleFonts.ibmPlexMono(
-                                    fontSize: 11,
-                                    color: AppTheme.textSecondary,
-                                  ),
-                                ),
+                          Expanded(
+                            child: Text(
+                              item['group'] as String,
+                              style: GoogleFonts.ibmPlexMono(
+                                fontSize: 11,
+                                color: AppTheme.textSecondary,
                               ),
-                              Text(
-                                '${uptime.toStringAsFixed(1)}%',
-                                style: GoogleFonts.ibmPlexSans(
-                                  fontSize: 11,
-                                  color: color,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
-                          const SizedBox(height: 4),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: LinearProgressIndicator(
-                              value: uptime / 100,
-                              backgroundColor: AppTheme.borderLight,
-                              valueColor: AlwaysStoppedAnimation<Color>(color),
-                              minHeight: 4,
+                          Text(
+                            '${uptime.toStringAsFixed(1)}%',
+                            style: GoogleFonts.ibmPlexSans(
+                              fontSize: 11,
+                              color: color,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ],
                       ),
-                    );
-                  }).toList(),
+                      const SizedBox(height: 4),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: uptime / 100,
+                          backgroundColor: AppTheme.borderLight,
+                          valueColor: AlwaysStoppedAnimation<Color>(color),
+                          minHeight: 4,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
             ),
           ),
         ),
@@ -1002,85 +986,83 @@ class _ComplianceTab extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
             child: Column(
-              children:
-                  [
-                    {'policy': 'Agent Version', 'pass': 91, 'fail': 9},
-                    {'policy': 'Disk Encryption', 'pass': 96, 'fail': 4},
-                    {'policy': 'Firewall Rules', 'pass': 88, 'fail': 12},
-                    {'policy': 'Patch Level', 'pass': 79, 'fail': 21},
-                    {'policy': 'TPM Attestation', 'pass': 94, 'fail': 6},
-                    {'policy': 'Log Forwarding', 'pass': 85, 'fail': 15},
-                  ].map((item) {
-                    final pass = item['pass'] as int;
-                    final fail = item['fail'] as int;
-                    final passColor = pass >= 90
-                        ? AppTheme.secondary
-                        : pass >= 80
+              children: [
+                {'policy': 'Agent Version', 'pass': 91, 'fail': 9},
+                {'policy': 'Disk Encryption', 'pass': 96, 'fail': 4},
+                {'policy': 'Firewall Rules', 'pass': 88, 'fail': 12},
+                {'policy': 'Patch Level', 'pass': 79, 'fail': 21},
+                {'policy': 'TPM Attestation', 'pass': 94, 'fail': 6},
+                {'policy': 'Log Forwarding', 'pass': 85, 'fail': 15},
+              ].map((item) {
+                final pass = item['pass'] as int;
+                final fail = item['fail'] as int;
+                final passColor = pass >= 90
+                    ? AppTheme.secondary
+                    : pass >= 80
                         ? AppTheme.warning
                         : AppTheme.error;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  item['policy'] as String,
-                                  style: GoogleFonts.ibmPlexSans(
-                                    fontSize: 11,
-                                    color: AppTheme.textSecondary,
-                                  ),
-                                ),
+                          Expanded(
+                            child: Text(
+                              item['policy'] as String,
+                              style: GoogleFonts.ibmPlexSans(
+                                fontSize: 11,
+                                color: AppTheme.textSecondary,
                               ),
-                              Text(
-                                '$pass% pass',
-                                style: GoogleFonts.ibmPlexSans(
-                                  fontSize: 11,
-                                  color: passColor,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                '$fail% fail',
-                                style: GoogleFonts.ibmPlexSans(
-                                  fontSize: 11,
-                                  color: AppTheme.error.withAlpha(153),
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
-                          const SizedBox(height: 4),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: Stack(
-                              children: [
-                                Container(
-                                  height: 6,
-                                  color: AppTheme.error.withAlpha(51),
-                                ),
-                                FractionallySizedBox(
-                                  widthFactor: pass / 100,
-                                  child: Container(
-                                    height: 6,
-                                    decoration: BoxDecoration(
-                                      color: passColor,
-                                      borderRadius:
-                                          const BorderRadius.horizontal(
-                                            right: Radius.circular(4),
-                                          ),
-                                    ),
-                                  ),
-                                ),
-                              ],
+                          Text(
+                            '$pass% pass',
+                            style: GoogleFonts.ibmPlexSans(
+                              fontSize: 11,
+                              color: passColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '$fail% fail',
+                            style: GoogleFonts.ibmPlexSans(
+                              fontSize: 11,
+                              color: AppTheme.error.withAlpha(153),
                             ),
                           ),
                         ],
                       ),
-                    );
-                  }).toList(),
+                      const SizedBox(height: 4),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: Stack(
+                          children: [
+                            Container(
+                              height: 6,
+                              color: AppTheme.error.withAlpha(51),
+                            ),
+                            FractionallySizedBox(
+                              widthFactor: pass / 100,
+                              child: Container(
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: passColor,
+                                  borderRadius: const BorderRadius.horizontal(
+                                    right: Radius.circular(4),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
             ),
           ),
         ),
@@ -1121,8 +1103,9 @@ class _ComplianceTab extends StatelessWidget {
                         getTitlesWidget: (v, _) {
                           const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
                           final i = v.toInt();
-                          if (i < 0 || i >= days.length)
+                          if (i < 0 || i >= days.length) {
                             return const SizedBox.shrink();
+                          }
                           return Text(
                             days[i],
                             style: GoogleFonts.ibmPlexMono(
@@ -1183,8 +1166,8 @@ class _ComplianceGauge extends StatelessWidget {
     final color = score >= 90
         ? AppTheme.secondary
         : score >= 75
-        ? AppTheme.warning
-        : AppTheme.error;
+            ? AppTheme.warning
+            : AppTheme.error;
     return SizedBox(
       height: 160,
       child: Stack(
@@ -1376,8 +1359,9 @@ class _OperatorActivityTab extends StatelessWidget {
                         getTitlesWidget: (v, _) {
                           const labels = ['Oper.', 'Admin', 'View.', 'Bot'];
                           final i = v.toInt();
-                          if (i < 0 || i >= labels.length)
+                          if (i < 0 || i >= labels.length) {
                             return const SizedBox.shrink();
+                          }
                           return Padding(
                             padding: const EdgeInsets.only(top: 4),
                             child: Text(
@@ -1445,8 +1429,8 @@ class _OperatorActivityTab extends StatelessWidget {
                 final successColor = successRate >= 95
                     ? AppTheme.secondary
                     : successRate >= 88
-                    ? AppTheme.warning
-                    : AppTheme.error;
+                        ? AppTheme.warning
+                        : AppTheme.error;
                 final rankColors = [
                   const Color(0xFFFFD700),
                   const Color(0xFFC0C0C0),

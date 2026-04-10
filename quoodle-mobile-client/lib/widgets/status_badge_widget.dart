@@ -28,69 +28,69 @@ class StatusBadgeWidget extends StatelessWidget {
     required this.label,
     required this.color,
     this.backgroundColor,
-    this.fontSize = 11,
+    this.fontSize = 12,
     this.showDot = false,
   });
 
   factory StatusBadgeWidget.device(DeviceStatus status) {
     final map = {
-      DeviceStatus.online: ('ONLINE', AppTheme.statusOnline),
-      DeviceStatus.offline: ('OFFLINE', AppTheme.statusOffline),
-      DeviceStatus.degraded: ('DEGRADED', AppTheme.statusDegraded),
-      DeviceStatus.quarantined: ('QUARANTINED', AppTheme.statusQuarantined),
-      DeviceStatus.pending: ('PAIRING', AppTheme.statusPending),
+      DeviceStatus.online: ('Online', AppTheme.statusOnline),
+      DeviceStatus.offline: ('Offline', AppTheme.statusOffline),
+      DeviceStatus.degraded: ('Degraded', AppTheme.statusDegraded),
+      DeviceStatus.quarantined: ('Quarantined', AppTheme.statusQuarantined),
+      DeviceStatus.pending: ('Pairing', AppTheme.statusPending),
     };
     final entry = map[status]!;
     return StatusBadgeWidget(
       label: entry.$1,
       color: entry.$2,
-      backgroundColor: entry.$2.withAlpha(38),
+      backgroundColor: entry.$2.withAlpha(30),
       showDot: true,
     );
   }
 
   factory StatusBadgeWidget.command(CommandStatus status) {
     final map = {
-      CommandStatus.queued: ('QUEUED', AppTheme.primary),
-      CommandStatus.dispatched: ('DISPATCHED', AppTheme.primary),
-      CommandStatus.acked: ('ACKED', AppTheme.secondary),
-      CommandStatus.executing: ('EXECUTING', AppTheme.warning),
-      CommandStatus.completed: ('COMPLETED', AppTheme.statusOnline),
-      CommandStatus.failed: ('FAILED', AppTheme.error),
-      CommandStatus.expired: ('EXPIRED', AppTheme.statusOffline),
+      CommandStatus.queued: ('Queued', AppTheme.primary),
+      CommandStatus.dispatched: ('Dispatched', AppTheme.primary),
+      CommandStatus.acked: ('Acked', AppTheme.secondary),
+      CommandStatus.executing: ('Executing', AppTheme.warning),
+      CommandStatus.completed: ('Completed', AppTheme.statusOnline),
+      CommandStatus.failed: ('Failed', AppTheme.error),
+      CommandStatus.expired: ('Expired', AppTheme.statusOffline),
     };
     final entry = map[status]!;
     return StatusBadgeWidget(
       label: entry.$1,
       color: entry.$2,
-      backgroundColor: entry.$2.withAlpha(38),
+      backgroundColor: entry.$2.withAlpha(30),
     );
   }
 
   factory StatusBadgeWidget.alert(AlertSeverity severity) {
     final map = {
-      AlertSeverity.critical: ('CRITICAL', AppTheme.critical),
-      AlertSeverity.high: ('HIGH', AppTheme.error),
-      AlertSeverity.warning: ('WARNING', AppTheme.warning),
-      AlertSeverity.info: ('INFO', AppTheme.primary),
+      AlertSeverity.critical: ('Critical', AppTheme.critical),
+      AlertSeverity.high: ('High', AppTheme.error),
+      AlertSeverity.warning: ('Warning', AppTheme.warning),
+      AlertSeverity.info: ('Info', AppTheme.primary),
     };
     final entry = map[severity]!;
     return StatusBadgeWidget(
       label: entry.$1,
       color: entry.$2,
-      backgroundColor: entry.$2.withAlpha(38),
+      backgroundColor: entry.$2.withAlpha(30),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final bg = backgroundColor ?? color.withAlpha(38);
+    final bg = backgroundColor ?? color.withAlpha(30);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withAlpha(102), width: 1),
+        borderRadius: BorderRadius.circular(6.0),
+        border: Border.all(color: color.withAlpha(80), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -105,11 +105,10 @@ class StatusBadgeWidget extends StatelessWidget {
           ],
           Text(
             label,
-            style: GoogleFonts.ibmPlexMono(
+            style: GoogleFonts.ibmPlexSans(
               fontSize: fontSize,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
               color: color,
-              letterSpacing: 0.5,
             ),
           ),
         ],

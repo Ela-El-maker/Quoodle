@@ -1,9 +1,12 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:secure_device_control/app/router/app_navigator.dart';
+import 'package:secure_device_control/features/devices/domain/entities/device_entity.dart';
+import 'package:secure_device_control/features/devices/presentation/providers/devices_providers.dart';
 
-import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/status_badge_widget.dart';
 import './widgets/device_alerts_tab_widget.dart';
@@ -12,35 +15,17 @@ import './widgets/device_commands_tab_widget.dart';
 import './widgets/device_overview_tab_widget.dart';
 import './widgets/device_telemetry_tab_widget.dart';
 
-class DeviceDetailScreen extends StatefulWidget {
+class DeviceDetailScreen extends ConsumerStatefulWidget {
   const DeviceDetailScreen({super.key});
 
   @override
-  State<DeviceDetailScreen> createState() => _DeviceDetailScreenState();
+  ConsumerState<DeviceDetailScreen> createState() => _DeviceDetailScreenState();
 }
 
-class _DeviceDetailScreenState extends State<DeviceDetailScreen>
+class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
     with SingleTickerProviderStateMixin {
-  // TODO: Replace withRiverpod/Bloc for production
   late TabController _tabController;
-
-  // Mock device data
-  final Map<String, dynamic> _device = {
-    'id': 'dev-007',
-    'name': 'WKS-FINANCE-07',
-    'status': 'degraded',
-    'lastSeen': '12s ago',
-    'riskScore': 71,
-    'compliance': 'non_compliant',
-    'os': 'Windows 10 Pro',
-    'policySync': false,
-    'agentVersion': '2.0.9',
-    'ipAddress': '10.0.3.22',
-    'hostname': 'WKSFINANCE07',
-    'pairedAt': '2026-01-14T09:22:00Z',
-    'assignedUser': 'L. Nakamura',
-    'location': 'Tokyo HQ – Floor 3',
-  };
+  String? _deviceId;
 
   @override
   void initState() {
@@ -49,52 +34,38 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _deviceId ??= _extractDeviceId(ModalRoute.of(context)?.settings.arguments);
+  }
+
+  @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
   }
 
-  DeviceStatus get _deviceStatus {
-    switch (_device['status'] as String) {
-      case 'online':
-        return DeviceStatus.online;
-      case 'offline':
-        return DeviceStatus.offline;
-      case 'degraded':
-        return DeviceStatus.degraded;
-      case 'quarantined':
-        return DeviceStatus.quarantined;
-      default:
-        return DeviceStatus.pending;
-    }
-  }
-
-  Color get _statusBorderColor {
-    switch (_deviceStatus) {
-      case DeviceStatus.online:
-        return AppTheme.statusOnline;
-      case DeviceStatus.offline:
-        return AppTheme.statusOffline;
-      case DeviceStatus.degraded:
-        return AppTheme.statusDegraded;
-      case DeviceStatus.quarantined:
-        return AppTheme.statusQuarantined;
-      default:
-        return AppTheme.primary;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final isTablet = MediaQuery.of(context).size.width >= 600;
+    final selectedDeviceId = _deviceId ?? 'dev-007';
+    final fallbackDevice = ref.watch(deviceDetailProvider('dev-007'));
+    final selectedDevice = ref.watch(deviceDetailProvider(selectedDeviceId));
+    final device = selectedDevice ?? fallbackDevice;
+
+    if (device == null) {
+      return Scaffold(
+        backgroundColor: AppTheme.background,
+        appBar: AppBar(title: const Text('Device Detail')),
+        body: const Center(child: Text('Device not found')),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppTheme.background,
       extendBodyBehindAppBar: true,
-      appBar: _buildGlassAppBar(context),
+      appBar: _buildGlassAppBar(context, device),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () =>
-            Navigator.pushNamed(context, AppRoutes.sendCommandScreen),
+        onPressed: () => AppNavigator.push(context, AppRoute.sendCommand),
         icon: const Icon(Icons.terminal_rounded, size: 18),
         label: Text(
           'Send Command',
@@ -106,20 +77,17 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       ),
       body: Column(
         children: [
-          // Device header
-          _buildDeviceHeader(context, isTablet),
-          // Tab bar
+          _buildDeviceHeader(device),
           _buildTabBar(),
-          // Tab content
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
-                DeviceOverviewTabWidget(device: _device),
-                DeviceTelemetryTabWidget(deviceId: _device['id'] as String),
-                DeviceCommandsTabWidget(deviceId: _device['id'] as String),
-                DeviceAlertsTabWidget(deviceId: _device['id'] as String),
-                DeviceAuditTabWidget(deviceId: _device['id'] as String),
+                DeviceOverviewTabWidget(device: _toDeviceMap(device)),
+                DeviceTelemetryTabWidget(deviceId: device.id),
+                DeviceCommandsTabWidget(deviceId: device.id),
+                DeviceAlertsTabWidget(deviceId: device.id),
+                DeviceAuditTabWidget(deviceId: device.id),
               ],
             ),
           ),
@@ -128,17 +96,40 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     );
   }
 
-  PreferredSizeWidget _buildGlassAppBar(BuildContext context) {
+  String? _extractDeviceId(Object? arguments) {
+    if (arguments is String && arguments.isNotEmpty) {
+      return arguments;
+    }
+
+    if (arguments is Map) {
+      final map = arguments.cast<Object?, Object?>();
+      final fromDeviceId = map['deviceId'];
+      if (fromDeviceId is String && fromDeviceId.isNotEmpty) {
+        return fromDeviceId;
+      }
+      final fromId = map['id'];
+      if (fromId is String && fromId.isNotEmpty) {
+        return fromId;
+      }
+    }
+
+    return null;
+  }
+
+  PreferredSizeWidget _buildGlassAppBar(
+    BuildContext context,
+    DeviceEntity device,
+  ) {
     return PreferredSize(
       preferredSize: const Size.fromHeight(56),
       child: ClipRect(
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
           child: Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: AppTheme.glassSurface,
-              border: const Border(
-                bottom: BorderSide(color: AppTheme.borderLight, width: 1),
+              border: Border(
+                bottom: BorderSide(color: AppTheme.border, width: 1),
               ),
             ),
             child: SafeArea(
@@ -153,11 +144,11 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                         size: 18,
                         color: AppTheme.textPrimary,
                       ),
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () => Navigator.maybePop(context),
                     ),
                     Expanded(
                       child: Text(
-                        _device['name'] as String,
+                        device.name,
                         style: GoogleFonts.ibmPlexSans(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -184,43 +175,37 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     );
   }
 
-  Widget _buildDeviceHeader(BuildContext context, bool isTablet) {
-    final riskScore = _device['riskScore'] as int;
+  Widget _buildDeviceHeader(DeviceEntity device) {
+    final riskScore = device.riskScore;
     final riskColor = riskScore >= 80
         ? AppTheme.critical
         : riskScore >= 60
-        ? AppTheme.error
-        : AppTheme.warning;
+            ? AppTheme.error
+            : AppTheme.warning;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: AppTheme.surface,
-        border: const Border(
-          bottom: BorderSide(color: AppTheme.borderLight, width: 1),
-        ),
+        border: Border(bottom: BorderSide(color: AppTheme.border, width: 1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              // OS icon container with status border
               Container(
-                width: 48,
-                height: 48,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
-                  color: _statusBorderColor.withAlpha(26),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: _statusBorderColor.withAlpha(102),
-                    width: 1.5,
-                  ),
+                  color: AppTheme.surfaceVariant,
+                  borderRadius: BorderRadius.circular(10.0),
+                  border: Border.all(color: AppTheme.border, width: 1),
                 ),
                 child: Icon(
-                  _getOsIcon(_device['os'] as String),
-                  size: 22,
-                  color: _statusBorderColor,
+                  _getOsIcon(device.os),
+                  size: 20,
+                  color: AppTheme.textSecondary,
                 ),
               ),
               const SizedBox(width: 12),
@@ -230,12 +215,12 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                   children: [
                     Row(
                       children: [
-                        StatusBadgeWidget.device(_deviceStatus),
+                        StatusBadgeWidget.device(_deviceStatus(device.status)),
                         const SizedBox(width: 8),
                         Text(
-                          'Last seen ${_device['lastSeen']}',
+                          'Last seen ${device.lastSeen}',
                           style: GoogleFonts.ibmPlexSans(
-                            fontSize: 11,
+                            fontSize: 12,
                             color: AppTheme.textMuted,
                           ),
                         ),
@@ -243,16 +228,15 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _device['hostname'] as String,
-                      style: GoogleFonts.ibmPlexMono(
-                        fontSize: 11,
+                      device.hostname,
+                      style: GoogleFonts.ibmPlexSans(
+                        fontSize: 12,
                         color: AppTheme.textMuted,
                       ),
                     ),
                   ],
                 ),
               ),
-              // Risk score
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -279,32 +263,28 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
             ],
           ),
           const SizedBox(height: 12),
-          // Status chips row
           Row(
             children: [
               _HeaderChip(
                 icon: Icons.verified_rounded,
-                label: _device['compliance'] == 'compliant'
+                label: device.compliance == DeviceComplianceType.compliant
                     ? 'Compliant'
                     : 'Non-Compliant',
-                color: _device['compliance'] == 'compliant'
+                color: device.compliance == DeviceComplianceType.compliant
                     ? AppTheme.secondary
                     : AppTheme.error,
               ),
               const SizedBox(width: 8),
               _HeaderChip(
                 icon: Icons.sync_rounded,
-                label: (_device['policySync'] as bool)
-                    ? 'Policy Synced'
-                    : 'Policy Drift',
-                color: (_device['policySync'] as bool)
-                    ? AppTheme.secondary
-                    : AppTheme.warning,
+                label: device.policySync ? 'Policy Synced' : 'Policy Drift',
+                color:
+                    device.policySync ? AppTheme.secondary : AppTheme.warning,
               ),
               const SizedBox(width: 8),
               _HeaderChip(
                 icon: Icons.router_rounded,
-                label: _device['ipAddress'] as String,
+                label: device.ipAddress,
                 color: AppTheme.primary,
               ),
             ],
@@ -330,6 +310,21 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
         ],
       ),
     );
+  }
+
+  DeviceStatus _deviceStatus(DeviceStatusType status) {
+    switch (status) {
+      case DeviceStatusType.online:
+        return DeviceStatus.online;
+      case DeviceStatusType.offline:
+        return DeviceStatus.offline;
+      case DeviceStatusType.degraded:
+        return DeviceStatus.degraded;
+      case DeviceStatusType.quarantined:
+        return DeviceStatus.quarantined;
+      case DeviceStatusType.pending:
+        return DeviceStatus.pending;
+    }
   }
 
   IconData _getOsIcon(String os) {
@@ -373,8 +368,8 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
               label: 'Send Command',
               color: AppTheme.primary,
               onTap: () {
-                Navigator.pop(context);
-                Navigator.pushNamed(context, AppRoutes.sendCommandScreen);
+                Navigator.maybePop(context);
+                AppNavigator.push(context, AppRoute.sendCommand);
               },
             ),
             _ActionTile(
@@ -382,7 +377,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
               label: 'View Alerts',
               color: AppTheme.warning,
               onTap: () {
-                Navigator.pop(context);
+                Navigator.maybePop(context);
                 _tabController.animateTo(3);
               },
             ),
@@ -390,18 +385,63 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
               icon: Icons.lock_outlined,
               label: 'Lock Screen',
               color: AppTheme.textSecondary,
-              onTap: () => Navigator.pop(context),
+              onTap: () => Navigator.maybePop(context),
             ),
             _ActionTile(
               icon: Icons.block_rounded,
               label: 'Quarantine Device',
               color: AppTheme.error,
-              onTap: () => Navigator.pop(context),
+              onTap: () => Navigator.maybePop(context),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Map<String, dynamic> _toDeviceMap(DeviceEntity device) {
+    return <String, dynamic>{
+      'id': device.id,
+      'name': device.name,
+      'status': _statusToRaw(device.status),
+      'lastSeen': device.lastSeen,
+      'riskScore': device.riskScore,
+      'compliance': _complianceToRaw(device.compliance),
+      'os': device.os,
+      'policySync': device.policySync,
+      'agentVersion': device.agentVersion,
+      'ipAddress': device.ipAddress,
+      'hostname': device.hostname,
+      'pairedAt': device.pairedAt,
+      'assignedUser': device.assignedUser,
+      'location': device.location,
+    };
+  }
+
+  String _statusToRaw(DeviceStatusType status) {
+    switch (status) {
+      case DeviceStatusType.online:
+        return 'online';
+      case DeviceStatusType.offline:
+        return 'offline';
+      case DeviceStatusType.degraded:
+        return 'degraded';
+      case DeviceStatusType.quarantined:
+        return 'quarantined';
+      case DeviceStatusType.pending:
+        return 'pending';
+    }
+  }
+
+  String _complianceToRaw(DeviceComplianceType compliance) {
+    switch (compliance) {
+      case DeviceComplianceType.compliant:
+        return 'compliant';
+      case DeviceComplianceType.nonCompliant:
+        return 'non_compliant';
+      case DeviceComplianceType.unknown:
+        return 'unknown';
+    }
   }
 }
 

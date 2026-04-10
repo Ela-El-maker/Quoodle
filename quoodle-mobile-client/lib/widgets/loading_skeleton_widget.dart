@@ -78,12 +78,12 @@ class SkeletonCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceVariant,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(12.0),
+        border: Border.all(color: AppTheme.border, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -91,9 +91,9 @@ class SkeletonCard extends StatelessWidget {
           Row(
             children: [
               const LoadingSkeletonWidget(
-                width: 40,
-                height: 40,
-                borderRadius: 12,
+                width: 32,
+                height: 32,
+                borderRadius: 8,
               ),
               const SizedBox(width: 12),
               Column(
@@ -107,7 +107,7 @@ class SkeletonCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   LoadingSkeletonWidget(
                     width: 100,
-                    height: 11,
+                    height: 12,
                     borderRadius: 4,
                   ),
                 ],
@@ -116,7 +116,7 @@ class SkeletonCard extends StatelessWidget {
               LoadingSkeletonWidget(width: 60, height: 22, borderRadius: 6),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Row(
             children: List.generate(
               3,
@@ -125,8 +125,8 @@ class SkeletonCard extends StatelessWidget {
                   margin: EdgeInsets.only(right: i < 2 ? 8 : 0),
                   child: LoadingSkeletonWidget(
                     width: double.infinity,
-                    height: 36,
-                    borderRadius: 8,
+                    height: 28,
+                    borderRadius: 6,
                   ),
                 ),
               ),
