@@ -1,80 +1,44 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:secure_device_control/app/router/app_navigator.dart';
+import 'package:secure_device_control/features/commands/data/services/offline_command_queue.dart';
+import 'package:secure_device_control/features/commands/presentation/providers/offline_command_queue_providers.dart';
+import 'package:secure_device_control/features/settings/domain/entities/session_entry.dart';
+import 'package:secure_device_control/features/settings/presentation/providers/settings_controller.dart';
+import 'package:secure_device_control/features/settings/presentation/providers/settings_state.dart';
 import '../../theme/app_theme.dart';
-import '../../routes/app_routes.dart';
-import '../../services/offline_command_queue.dart';
 
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen>
+class _SettingsScreenState extends ConsumerState<SettingsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final OfflineCommandQueue _queue = OfflineCommandQueue();
-
-  // Notification preferences
-  bool _notifCriticalAlerts = true;
-  bool _notifDeviceOffline = true;
-  bool _notifCommandFailed = true;
-  bool _notifPolicyViolation = true;
-  bool _notifNewDevice = false;
-  bool _notifTelemetryAnomaly = false;
-  bool _notifAuditEvents = false;
-  bool _notifWeeklyReport = true;
-
-  // Session data
-  final List<_SessionEntry> _sessions = [
-    _SessionEntry(
-      id: 'sess_001',
-      device: 'Chrome · macOS',
-      location: 'San Francisco, US',
-      ip: '192.168.1.42',
-      lastActive: DateTime.now().subtract(const Duration(minutes: 2)),
-      isCurrent: true,
-    ),
-    _SessionEntry(
-      id: 'sess_002',
-      device: 'Firefox · Windows 11',
-      location: 'New York, US',
-      ip: '10.0.0.15',
-      lastActive: DateTime.now().subtract(const Duration(hours: 3)),
-      isCurrent: false,
-    ),
-    _SessionEntry(
-      id: 'sess_003',
-      device: 'Safari · iPhone 15',
-      location: 'San Francisco, US',
-      ip: '172.16.0.8',
-      lastActive: DateTime.now().subtract(const Duration(days: 1)),
-      isCurrent: false,
-    ),
-  ];
+  OfflineCommandQueue get _queue => ref.read(offlineCommandQueueProvider);
+  SettingsState get _settingsState => ref.watch(settingsControllerProvider);
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _queue.addListener(_onQueueChanged);
-    _queue.initialize();
-  }
-
-  void _onQueueChanged() {
-    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     _tabController.dispose();
-    _queue.removeListener(_onQueueChanged);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(offlineCommandQueueInitializationProvider);
+    ref.watch(offlineCommandQueueProvider);
+
     return Scaffold(
       backgroundColor: AppTheme.background,
       body: Column(
@@ -109,14 +73,14 @@ class _SettingsScreenState extends State<SettingsScreen>
           child: Row(
             children: [
               GestureDetector(
-                onTap: () => Navigator.pop(context),
+                onTap: () => Navigator.maybePop(context),
                 child: Container(
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: AppTheme.glassLight,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppTheme.border),
+                    color: AppTheme.surfaceVariant,
+                    borderRadius: BorderRadius.circular(8.0),
+                    border: Border.all(color: AppTheme.border, width: 1),
                   ),
                   child: const Icon(
                     Icons.arrow_back_ios_new_rounded,
@@ -415,7 +379,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             ],
           ),
           const SizedBox(height: 16),
-          ..._sessions.map(
+          ..._settingsState.sessions.map(
             (s) => _SessionTile(
               session: s,
               onRevoke: s.isCurrent ? null : () => _revokeSession(s.id),
@@ -463,32 +427,40 @@ class _SettingsScreenState extends State<SettingsScreen>
                 iconColor: AppTheme.error,
                 label: 'Critical Alerts',
                 subtitle: 'Device quarantine, policy breach, intrusion',
-                value: _notifCriticalAlerts,
-                onChanged: (v) => setState(() => _notifCriticalAlerts = v),
+                value: _settingsState.notifCriticalAlerts,
+                onChanged: (v) => ref
+                    .read(settingsControllerProvider.notifier)
+                    .setNotifCriticalAlerts(v),
               ),
               _NotifToggle(
                 icon: Icons.wifi_off_rounded,
                 iconColor: AppTheme.warning,
                 label: 'Device Offline',
                 subtitle: 'Notify when a managed device goes offline',
-                value: _notifDeviceOffline,
-                onChanged: (v) => setState(() => _notifDeviceOffline = v),
+                value: _settingsState.notifDeviceOffline,
+                onChanged: (v) => ref
+                    .read(settingsControllerProvider.notifier)
+                    .setNotifDeviceOffline(v),
               ),
               _NotifToggle(
                 icon: Icons.error_outline_rounded,
                 iconColor: AppTheme.error,
                 label: 'Command Failed',
                 subtitle: 'Alert when a dispatched command fails',
-                value: _notifCommandFailed,
-                onChanged: (v) => setState(() => _notifCommandFailed = v),
+                value: _settingsState.notifCommandFailed,
+                onChanged: (v) => ref
+                    .read(settingsControllerProvider.notifier)
+                    .setNotifCommandFailed(v),
               ),
               _NotifToggle(
                 icon: Icons.policy_rounded,
                 iconColor: AppTheme.critical,
                 label: 'Policy Violation',
                 subtitle: 'Immediate alert on policy non-compliance',
-                value: _notifPolicyViolation,
-                onChanged: (v) => setState(() => _notifPolicyViolation = v),
+                value: _settingsState.notifPolicyViolation,
+                onChanged: (v) => ref
+                    .read(settingsControllerProvider.notifier)
+                    .setNotifPolicyViolation(v),
               ),
             ],
           ),
@@ -505,24 +477,30 @@ class _SettingsScreenState extends State<SettingsScreen>
                 iconColor: AppTheme.secondary,
                 label: 'New Device Enrolled',
                 subtitle: 'When a new device joins the fleet',
-                value: _notifNewDevice,
-                onChanged: (v) => setState(() => _notifNewDevice = v),
+                value: _settingsState.notifNewDevice,
+                onChanged: (v) => ref
+                    .read(settingsControllerProvider.notifier)
+                    .setNotifNewDevice(v),
               ),
               _NotifToggle(
                 icon: Icons.analytics_outlined,
                 iconColor: AppTheme.primary,
                 label: 'Telemetry Anomaly',
                 subtitle: 'Unusual CPU, memory, or network patterns',
-                value: _notifTelemetryAnomaly,
-                onChanged: (v) => setState(() => _notifTelemetryAnomaly = v),
+                value: _settingsState.notifTelemetryAnomaly,
+                onChanged: (v) => ref
+                    .read(settingsControllerProvider.notifier)
+                    .setNotifTelemetryAnomaly(v),
               ),
               _NotifToggle(
                 icon: Icons.history_rounded,
                 iconColor: AppTheme.textSecondary,
                 label: 'Audit Events',
                 subtitle: 'Log access and sensitive command execution',
-                value: _notifAuditEvents,
-                onChanged: (v) => setState(() => _notifAuditEvents = v),
+                value: _settingsState.notifAuditEvents,
+                onChanged: (v) => ref
+                    .read(settingsControllerProvider.notifier)
+                    .setNotifAuditEvents(v),
               ),
             ],
           ),
@@ -539,8 +517,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                 iconColor: AppTheme.secondary,
                 label: 'Weekly Fleet Report',
                 subtitle: 'Summary of fleet health and activity',
-                value: _notifWeeklyReport,
-                onChanged: (v) => setState(() => _notifWeeklyReport = v),
+                value: _settingsState.notifWeeklyReport,
+                onChanged: (v) => ref
+                    .read(settingsControllerProvider.notifier)
+                    .setNotifWeeklyReport(v),
               ),
             ],
           ),
@@ -598,15 +578,14 @@ class _SettingsScreenState extends State<SettingsScreen>
               Text(
                 _queue.isOnline
                     ? (_queue.isSyncing
-                          ? 'Syncing...'
-                          : 'Online — Auto-sync active')
+                        ? 'Syncing...'
+                        : 'Online — Auto-sync active')
                     : 'Offline — Commands queued locally',
                 style: GoogleFonts.ibmPlexSans(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: _queue.isOnline
-                      ? AppTheme.secondary
-                      : AppTheme.warning,
+                  color:
+                      _queue.isOnline ? AppTheme.secondary : AppTheme.warning,
                 ),
               ),
               const Spacer(),
@@ -699,7 +678,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   // ── Actions ──────────────────────────────────────────────────────────────────
 
   void _revokeSession(String sessionId) {
-    setState(() => _sessions.removeWhere((s) => s.id == sessionId));
+    ref.read(settingsControllerProvider.notifier).revokeSession(sessionId);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -714,7 +693,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   void _revokeAllOtherSessions() {
-    setState(() => _sessions.removeWhere((s) => !s.isCurrent));
+    ref.read(settingsControllerProvider.notifier).revokeAllOtherSessions();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -760,11 +739,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
-              Navigator.pushNamedAndRemoveUntil(
-                context,
-                AppRoutes.authenticationScreen,
-                (route) => false,
-              );
+              AppNavigator.replaceStackWith(context, AppRoute.authentication);
             },
             child: Text(
               'Sign Out',
@@ -894,25 +869,8 @@ class _PermChip extends StatelessWidget {
   }
 }
 
-class _SessionEntry {
-  final String id;
-  final String device;
-  final String location;
-  final String ip;
-  final DateTime lastActive;
-  final bool isCurrent;
-  const _SessionEntry({
-    required this.id,
-    required this.device,
-    required this.location,
-    required this.ip,
-    required this.lastActive,
-    required this.isCurrent,
-  });
-}
-
 class _SessionTile extends StatelessWidget {
-  final _SessionEntry session;
+  final SessionEntry session;
   final VoidCallback? onRevoke;
   const _SessionTile({required this.session, this.onRevoke});
 
@@ -943,9 +901,8 @@ class _SessionTile extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: session.isCurrent
-                  ? AppTheme.primaryDim
-                  : AppTheme.glassLight,
+              color:
+                  session.isCurrent ? AppTheme.primaryDim : AppTheme.glassLight,
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(

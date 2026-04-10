@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:secure_device_control/app/router/app_navigator.dart';
+import 'package:secure_device_control/features/commands/presentation/providers/send_command_controller.dart';
+import 'package:secure_device_control/features/commands/presentation/providers/send_command_state.dart';
 import '../../theme/app_theme.dart';
-import '../../routes/app_routes.dart';
 
-// All supported command types
+// ── Command Method Definitions ───────────────────────────────────────────────
 class CommandMethod {
   final String id;
   final String label;
@@ -13,7 +16,6 @@ class CommandMethod {
   final IconData icon;
   final Color color;
   final bool sensitive;
-  final String defaultParams;
   final String policyNote;
 
   const CommandMethod({
@@ -23,40 +25,11 @@ class CommandMethod {
     required this.icon,
     required this.color,
     this.sensitive = false,
-    this.defaultParams = '{}',
     this.policyNote = 'Allowed for all operators.',
   });
 }
 
 const List<CommandMethod> kCommandMethods = [
-  CommandMethod(
-    id: 'policy_sync',
-    label: 'Policy Sync',
-    description: 'Force synchronise the device policy to the latest version.',
-    icon: Icons.sync_rounded,
-    color: AppTheme.primary,
-    defaultParams: '{"force": true, "version": "latest"}',
-    policyNote: 'Allowed for all operators. No approval required.',
-  ),
-  CommandMethod(
-    id: 'collect_telemetry',
-    label: 'Collect Telemetry',
-    description: 'Trigger an immediate telemetry collection cycle.',
-    icon: Icons.analytics_rounded,
-    color: AppTheme.secondary,
-    defaultParams:
-        '{"metrics": ["cpu", "ram", "disk", "network", "processes"]}',
-    policyNote: 'Allowed for all operators.',
-  ),
-  CommandMethod(
-    id: 'lock_screen',
-    label: 'Lock Screen',
-    description: 'Immediately lock the device screen.',
-    icon: Icons.lock_rounded,
-    color: AppTheme.warning,
-    defaultParams: '{"reason": "operator_initiated"}',
-    policyNote: 'Requires operator role or above.',
-  ),
   CommandMethod(
     id: 'screenshot_capture',
     label: 'Screenshot',
@@ -64,26 +37,14 @@ const List<CommandMethod> kCommandMethods = [
     icon: Icons.screenshot_rounded,
     color: AppTheme.error,
     sensitive: true,
-    defaultParams: '{"display": 0, "quality": "high"}',
     policyNote: 'SENSITIVE — Requires admin approval. Logged to audit trail.',
   ),
   CommandMethod(
     id: 'process_list',
     label: 'Process List',
-    description: 'Retrieve the list of running processes with resource usage.',
+    description: 'Retrieve running processes with resource usage.',
     icon: Icons.account_tree_rounded,
     color: AppTheme.primary,
-    defaultParams: '{"sort_by": "cpu", "limit": 50}',
-    policyNote: 'Allowed for all operators.',
-  ),
-  CommandMethod(
-    id: 'system_info',
-    label: 'System Info',
-    description:
-        'Collect full system information including hardware and OS details.',
-    icon: Icons.info_outline_rounded,
-    color: AppTheme.secondary,
-    defaultParams: '{"include": ["hardware", "os", "network", "storage"]}',
     policyNote: 'Allowed for all operators.',
   ),
   CommandMethod(
@@ -92,47 +53,73 @@ const List<CommandMethod> kCommandMethods = [
     description: 'List all currently running applications.',
     icon: Icons.apps_rounded,
     color: AppTheme.primary,
-    defaultParams: '{"include_background": true}',
     policyNote: 'Allowed for all operators.',
   ),
   CommandMethod(
     id: 'filesystem',
     label: 'Filesystem',
-    description: 'Browse or snapshot the device filesystem at a given path.',
+    description: 'Browse the device filesystem at a given path.',
     icon: Icons.folder_open_rounded,
     color: AppTheme.warning,
     sensitive: true,
-    defaultParams: '{"path": "/", "depth": 2, "include_hidden": false}',
     policyNote: 'SENSITIVE — Requires admin role. Full path access logged.',
+  ),
+  CommandMethod(
+    id: 'system_info',
+    label: 'System Info',
+    description: 'Collect full system information.',
+    icon: Icons.info_outline_rounded,
+    color: AppTheme.secondary,
+    policyNote: 'Allowed for all operators.',
   ),
   CommandMethod(
     id: 'network_info',
     label: 'Network Info',
-    description: 'Retrieve network interfaces, connections, and DNS config.',
+    description: 'Retrieve network interfaces, connections, and DNS.',
     icon: Icons.lan_rounded,
     color: AppTheme.secondary,
-    defaultParams: '{"include_connections": true, "include_dns": true}',
     policyNote: 'Allowed for all operators.',
+  ),
+  CommandMethod(
+    id: 'collect_telemetry',
+    label: 'Telemetry',
+    description: 'Trigger an immediate telemetry collection cycle.',
+    icon: Icons.analytics_rounded,
+    color: AppTheme.secondary,
+    policyNote: 'Allowed for all operators.',
+  ),
+  CommandMethod(
+    id: 'lock_screen',
+    label: 'Lock Screen',
+    description: 'Immediately lock the device screen.',
+    icon: Icons.lock_rounded,
+    color: AppTheme.warning,
+    policyNote: 'Requires operator role or above.',
+  ),
+  CommandMethod(
+    id: 'policy_sync',
+    label: 'Policy Sync',
+    description: 'Force synchronise the device policy.',
+    icon: Icons.sync_rounded,
+    color: AppTheme.primary,
+    policyNote: 'Allowed for all operators. No approval required.',
   ),
   CommandMethod(
     id: 'upload_file',
     label: 'Upload File',
-    description: 'Upload a file from the device to the management server.',
+    description: 'Upload a file from the device to the server.',
     icon: Icons.upload_rounded,
     color: AppTheme.warning,
     sensitive: true,
-    defaultParams: '{"path": "/path/to/file", "compress": true}',
     policyNote: 'SENSITIVE — Requires admin approval. File content is logged.',
   ),
   CommandMethod(
     id: 'create_file',
     label: 'Create File',
-    description: 'Create a file on the device at the specified path.',
+    description: 'Create a file on the device at a specified path.',
     icon: Icons.note_add_rounded,
     color: AppTheme.error,
     sensitive: true,
-    defaultParams:
-        '{"path": "/path/to/file", "content": "", "overwrite": false}',
     policyNote: 'SENSITIVE — Requires admin role. Creates audit entry.',
   ),
   CommandMethod(
@@ -142,109 +129,115 @@ const List<CommandMethod> kCommandMethods = [
     icon: Icons.restart_alt_rounded,
     color: AppTheme.error,
     sensitive: true,
-    defaultParams: '{"delay_seconds": 30, "force": false}',
     policyNote: 'SENSITIVE — Requires admin approval. Notifies assigned user.',
   ),
 ];
 
-class SendCommandScreen extends StatefulWidget {
+// ── Main Screen ──────────────────────────────────────────────────────────────
+class SendCommandScreen extends ConsumerStatefulWidget {
   const SendCommandScreen({super.key});
 
   @override
-  State<SendCommandScreen> createState() => _SendCommandScreenState();
+  ConsumerState<SendCommandScreen> createState() => _SendCommandScreenState();
 }
 
-class _SendCommandScreenState extends State<SendCommandScreen> {
-  CommandMethod _selectedMethod = kCommandMethods.first;
-  late TextEditingController _paramsController;
-  bool _sensitiveOverride = false;
-  bool _showPolicyPanel = true;
-  bool _jsonValid = true;
-  String _jsonError = '';
-  bool _submitting = false;
-
-  // 2FA state
-  bool _show2FA = false;
+class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
   final TextEditingController _otpController = TextEditingController();
-  bool _otpError = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _paramsController = TextEditingController(
-      text: _selectedMethod.defaultParams,
-    );
-    _paramsController.addListener(_validateJson);
-  }
+  SendCommandState get _flowState => ref.read(sendCommandControllerProvider);
+  CommandMethod get _selectedMethod => kCommandMethods.firstWhere(
+        (m) => m.id == _flowState.selectedMethodId,
+        orElse: () => kCommandMethods.first,
+      );
+  bool get _sensitiveOverride => _flowState.sensitiveOverride;
+  bool get _showPolicyPanel => _flowState.showPolicyPanel;
+  bool get _submitting => _flowState.submitting;
+  bool get _show2FA => _flowState.show2FA;
+  bool get _otpError => _flowState.otpError;
+
+  // Per-command form state
+  // Screenshot
+  int _screenshotDisplay = 0;
+  String _screenshotQuality = 'high';
+
+  // Process list
+  String _processSortBy = 'cpu';
+  double _processLimit = 50;
+
+  // Running apps
+  bool _includeBackground = true;
+
+  // Filesystem
+  final TextEditingController _fsPathController = TextEditingController(
+    text: '/',
+  );
+  double _fsDepth = 2;
+  bool _fsIncludeHidden = false;
+
+  // System info
+  final Set<String> _sysInfoIncludes = {'hardware', 'os', 'network', 'storage'};
+
+  // Network info
+  bool _netIncludeConnections = true;
+  bool _netIncludeDns = true;
+
+  // Telemetry
+  final Set<String> _telemetryMetrics = {
+    'cpu',
+    'ram',
+    'disk',
+    'network',
+    'processes',
+  };
+
+  // Lock screen
+  String _lockReason = 'operator_initiated';
+
+  // Policy sync
+  bool _policyForce = true;
+  String _policyVersion = 'latest';
+
+  // Upload file
+  final TextEditingController _uploadPathController = TextEditingController(
+    text: '/path/to/file',
+  );
+  bool _uploadCompress = true;
+
+  // Create file
+  final TextEditingController _createPathController = TextEditingController(
+    text: '/path/to/file',
+  );
+  final TextEditingController _createContentController =
+      TextEditingController();
+  bool _createOverwrite = false;
+
+  // Reboot
+  double _rebootDelay = 30;
+  bool _rebootForce = false;
 
   @override
   void dispose() {
-    _paramsController.dispose();
     _otpController.dispose();
+    _fsPathController.dispose();
+    _uploadPathController.dispose();
+    _createPathController.dispose();
+    _createContentController.dispose();
     super.dispose();
   }
 
-  void _validateJson() {
-    final text = _paramsController.text.trim();
-    if (text.isEmpty) {
-      setState(() {
-        _jsonValid = true;
-        _jsonError = '';
-      });
-      return;
-    }
-    // Basic JSON validation
-    try {
-      if (!text.startsWith('{') && !text.startsWith('[')) {
-        throw Exception('Must start with { or [');
-      }
-      int depth = 0;
-      for (final c in text.runes) {
-        if (c == 123 || c == 91) depth++;
-        if (c == 125 || c == 93) depth--;
-        if (depth < 0) throw Exception('Unexpected closing bracket');
-      }
-      if (depth != 0) throw Exception('Unclosed brackets');
-      setState(() {
-        _jsonValid = true;
-        _jsonError = '';
-      });
-    } catch (e) {
-      setState(() {
-        _jsonValid = false;
-        _jsonError = e.toString();
-      });
-    }
-  }
-
   void _selectMethod(CommandMethod method) {
-    setState(() {
-      _selectedMethod = method;
-      _paramsController.text = method.defaultParams;
-      _sensitiveOverride = false;
-    });
+    ref.read(sendCommandControllerProvider.notifier).selectMethod(method.id);
   }
 
   bool get _requiresSensitiveConfirm =>
       _selectedMethod.sensitive && !_sensitiveOverride;
 
   void _onSubmitTap() {
-    if (!_jsonValid) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Fix JSON errors before submitting',
-            style: GoogleFonts.ibmPlexSans(fontSize: 13),
-          ),
-        ),
-      );
-      return;
-    }
     if (_requiresSensitiveConfirm) {
       _showSensitiveWarning();
       return;
     }
-    setState(() => _show2FA = true);
+    ref.read(sendCommandControllerProvider.notifier).showTwoFactor();
   }
 
   void _showSensitiveWarning() {
@@ -252,19 +245,19 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surfaceVariant,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
             const Icon(
               Icons.warning_amber_rounded,
               color: AppTheme.warning,
-              size: 22,
+              size: 20,
             ),
             const SizedBox(width: 10),
             Text(
               'Sensitive Command',
               style: GoogleFonts.ibmPlexSans(
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.w700,
                 color: AppTheme.textPrimary,
               ),
@@ -272,7 +265,7 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
           ],
         ),
         content: Text(
-          '${_selectedMethod.label} is a sensitive operation. ${_selectedMethod.policyNote}\n\nDo you want to proceed?',
+          '${_selectedMethod.label} is a sensitive operation.\n\n${_selectedMethod.policyNote}\n\nDo you want to proceed?',
           style: GoogleFonts.ibmPlexSans(
             fontSize: 13,
             color: AppTheme.textSecondary,
@@ -281,7 +274,7 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.maybePop(context),
             child: Text(
               'Cancel',
               style: GoogleFonts.ibmPlexSans(color: AppTheme.textSecondary),
@@ -289,11 +282,10 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
           ),
           ElevatedButton(
             onPressed: () {
-              Navigator.pop(context);
-              setState(() {
-                _sensitiveOverride = true;
-                _show2FA = true;
-              });
+              Navigator.maybePop(context);
+              ref
+                  .read(sendCommandControllerProvider.notifier)
+                  .confirmSensitiveAndShowTwoFactor();
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.warning,
@@ -310,35 +302,75 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
   }
 
   Future<void> _verify2FA() async {
-    final otp = _otpController.text.trim();
-    if (otp.length < 6) {
-      setState(() => _otpError = true);
+    final verified = await ref
+        .read(sendCommandControllerProvider.notifier)
+        .verifyOtp(_otpController.text);
+    if (!verified) {
       return;
     }
-    setState(() {
-      _submitting = true;
-      _otpError = false;
-    });
-    await Future.delayed(const Duration(seconds: 1));
     if (!mounted) return;
-    setState(() => _submitting = false);
-    // Navigate to command timeline
-    Navigator.pushNamedAndRemoveUntil(
+    AppNavigator.pushAndPruneUntil(
       context,
-      AppRoutes.commandTimelineScreen,
-      (route) =>
-          route.settings.name == AppRoutes.deviceDetailScreen ||
-          route.settings.name == AppRoutes.devicesScreen,
+      AppRoute.commandTimeline,
+      predicate: (route) =>
+          route.settings.name == AppNavigator.pathFor(AppRoute.deviceDetail) ||
+          route.settings.name == AppNavigator.pathFor(AppRoute.devices),
       arguments: {
         'method': _selectedMethod.id,
-        'params': _paramsController.text,
+        'params': _buildParamsMap(),
         'sensitive': _selectedMethod.sensitive,
       },
     );
   }
 
+  Map<String, dynamic> _buildParamsMap() {
+    switch (_selectedMethod.id) {
+      case 'screenshot_capture':
+        return {'display': _screenshotDisplay, 'quality': _screenshotQuality};
+      case 'process_list':
+        return {'sort_by': _processSortBy, 'limit': _processLimit.toInt()};
+      case 'running_apps':
+        return {'include_background': _includeBackground};
+      case 'filesystem':
+        return {
+          'path': _fsPathController.text,
+          'depth': _fsDepth.toInt(),
+          'include_hidden': _fsIncludeHidden,
+        };
+      case 'system_info':
+        return {'include': _sysInfoIncludes.toList()};
+      case 'network_info':
+        return {
+          'include_connections': _netIncludeConnections,
+          'include_dns': _netIncludeDns,
+        };
+      case 'collect_telemetry':
+        return {'metrics': _telemetryMetrics.toList()};
+      case 'lock_screen':
+        return {'reason': _lockReason};
+      case 'policy_sync':
+        return {'force': _policyForce, 'version': _policyVersion};
+      case 'upload_file':
+        return {
+          'path': _uploadPathController.text,
+          'compress': _uploadCompress,
+        };
+      case 'create_file':
+        return {
+          'path': _createPathController.text,
+          'content': _createContentController.text,
+          'overwrite': _createOverwrite,
+        };
+      case 'reboot':
+        return {'delay_seconds': _rebootDelay.toInt(), 'force': _rebootForce};
+      default:
+        return {};
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    ref.watch(sendCommandControllerProvider);
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
@@ -353,7 +385,7 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
             size: 18,
             color: AppTheme.textPrimary,
           ),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.maybePop(context),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -412,26 +444,23 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
     );
   }
 
+  // ── Command Form ────────────────────────────────────────────────────────────
   Widget _buildCommandForm() {
     return CustomScrollView(
       slivers: [
-        // Method selector
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
           sliver: SliverToBoxAdapter(child: _buildMethodSelector()),
         ),
-        // JSON editor
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-          sliver: SliverToBoxAdapter(child: _buildJsonEditor()),
+          sliver: SliverToBoxAdapter(child: _buildCommandParamsForm()),
         ),
-        // Sensitivity toggle
         if (_selectedMethod.sensitive)
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            sliver: SliverToBoxAdapter(child: _buildSensitivityToggle()),
+            sliver: SliverToBoxAdapter(child: _buildSensitivityBanner()),
           ),
-        // Policy preview
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
           sliver: SliverToBoxAdapter(child: _buildPolicyPanel()),
@@ -440,12 +469,13 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
     );
   }
 
+  // ── Method Selector ─────────────────────────────────────────────────────────
   Widget _buildMethodSelector() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'COMMAND METHOD',
+          'COMMAND TYPE',
           style: GoogleFonts.ibmPlexSans(
             fontSize: 10,
             fontWeight: FontWeight.w600,
@@ -455,7 +485,7 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
         ),
         const SizedBox(height: 10),
         SizedBox(
-          height: 100,
+          height: 96,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: kCommandMethods.length,
@@ -466,17 +496,17 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
               return GestureDetector(
                 onTap: () => _selectMethod(method),
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: 90,
+                  duration: const Duration(milliseconds: 180),
+                  width: 82,
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: selected
-                        ? method.color.withAlpha(31)
+                        ? method.color.withAlpha(28)
                         : AppTheme.surfaceVariant,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: selected
-                          ? method.color.withAlpha(153)
+                          ? method.color.withAlpha(160)
                           : AppTheme.border,
                       width: selected ? 1.5 : 1,
                     ),
@@ -486,7 +516,7 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
                     children: [
                       Icon(
                         method.icon,
-                        size: 22,
+                        size: 20,
                         color: selected ? method.color : AppTheme.textMuted,
                       ),
                       const SizedBox(height: 6),
@@ -497,12 +527,10 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.ibmPlexSans(
                           fontSize: 10,
-                          fontWeight: selected
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                          color: selected
-                              ? method.color
-                              : AppTheme.textSecondary,
+                          fontWeight:
+                              selected ? FontWeight.w600 : FontWeight.w400,
+                          color:
+                              selected ? method.color : AppTheme.textSecondary,
                           height: 1.2,
                         ),
                       ),
@@ -525,7 +553,6 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        // Selected method description
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -535,12 +562,20 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
           ),
           child: Row(
             children: [
-              Icon(
-                _selectedMethod.icon,
-                size: 18,
-                color: _selectedMethod.color,
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: _selectedMethod.color.withAlpha(24),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  _selectedMethod.icon,
+                  size: 18,
+                  color: _selectedMethod.color,
+                ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -571,188 +606,750 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
     );
   }
 
-  Widget _buildJsonEditor() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  // ── Per-Command Forms ────────────────────────────────────────────────────────
+  Widget _buildCommandParamsForm() {
+    switch (_selectedMethod.id) {
+      case 'screenshot_capture':
+        return _buildScreenshotForm();
+      case 'process_list':
+        return _buildProcessListForm();
+      case 'running_apps':
+        return _buildRunningAppsForm();
+      case 'filesystem':
+        return _buildFilesystemForm();
+      case 'system_info':
+        return _buildSystemInfoForm();
+      case 'network_info':
+        return _buildNetworkInfoForm();
+      case 'collect_telemetry':
+        return _buildTelemetryForm();
+      case 'lock_screen':
+        return _buildLockScreenForm();
+      case 'policy_sync':
+        return _buildPolicySyncForm();
+      case 'upload_file':
+        return _buildUploadFileForm();
+      case 'create_file':
+        return _buildCreateFileForm();
+      case 'reboot':
+        return _buildRebootForm();
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  // ── Screenshot Form ──────────────────────────────────────────────────────────
+  Widget _buildScreenshotForm() {
+    return _FormCard(
+      title: 'CAPTURE OPTIONS',
       children: [
-        Row(
-          children: [
-            Text(
-              'PARAMETERS (JSON)',
-              style: GoogleFonts.ibmPlexSans(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.textMuted,
-                letterSpacing: 0.8,
-              ),
-            ),
-            const Spacer(),
-            if (!_jsonValid)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppTheme.errorMuted,
-                  borderRadius: BorderRadius.circular(5),
-                  border: Border.all(color: AppTheme.error.withAlpha(102)),
-                ),
-                child: Text(
-                  'INVALID JSON',
-                  style: GoogleFonts.ibmPlexMono(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.error,
-                  ),
-                ),
-              )
-            else
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppTheme.secondaryMuted,
-                  borderRadius: BorderRadius.circular(5),
-                  border: Border.all(color: AppTheme.secondary.withAlpha(102)),
-                ),
-                child: Text(
-                  'VALID',
-                  style: GoogleFonts.ibmPlexMono(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.secondary,
-                  ),
-                ),
-              ),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: () {
-                _paramsController.text = _selectedMethod.defaultParams;
-              },
-              child: Text(
-                'Reset',
-                style: GoogleFonts.ibmPlexSans(
-                  fontSize: 11,
-                  color: AppTheme.primary,
-                ),
-              ),
-            ),
-          ],
-        ),
+        _FormLabel('Display'),
         const SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            color: AppTheme.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: _jsonValid ? AppTheme.border : AppTheme.error,
-              width: _jsonValid ? 1 : 1.5,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Editor toolbar
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: const BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(color: AppTheme.borderLight),
+        Row(
+          children: [0, 1, 2].map((d) {
+            final sel = _screenshotDisplay == d;
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() => _screenshotDisplay = d),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  margin: EdgeInsets.only(right: d < 2 ? 8 : 0),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color:
+                        sel ? AppTheme.primary.withAlpha(24) : AppTheme.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: sel ? AppTheme.primary : AppTheme.border,
+                      width: sel ? 1.5 : 1,
+                    ),
                   ),
-                ),
-                child: Row(
-                  children: [
-                    Text(
-                      'params.json',
-                      style: GoogleFonts.ibmPlexMono(
-                        fontSize: 11,
-                        color: AppTheme.textMuted,
-                      ),
+                  child: Text(
+                    d == 0 ? 'Primary' : 'Display $d',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.ibmPlexSans(
+                      fontSize: 12,
+                      fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
+                      color: sel ? AppTheme.primary : AppTheme.textSecondary,
                     ),
-                    const Spacer(),
-                    GestureDetector(
-                      onTap: () {
-                        Clipboard.setData(
-                          ClipboardData(text: _paramsController.text),
-                        );
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Copied to clipboard',
-                              style: GoogleFonts.ibmPlexSans(fontSize: 12),
-                            ),
-                          ),
-                        );
-                      },
-                      child: const Icon(
-                        Icons.copy_rounded,
-                        size: 14,
-                        color: AppTheme.textMuted,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-              // Text editor
-              TextField(
-                controller: _paramsController,
-                style: GoogleFonts.ibmPlexMono(
-                  fontSize: 12,
-                  color: AppTheme.secondary,
-                  height: 1.6,
-                ),
-                maxLines: 8,
-                decoration: InputDecoration(
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.all(12),
-                  hintText: '{\n  "key": "value"\n}',
-                  hintStyle: GoogleFonts.ibmPlexMono(
-                    fontSize: 12,
-                    color: AppTheme.textMuted,
-                  ),
-                  filled: false,
-                ),
-              ),
-              if (!_jsonValid && _jsonError.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: const BoxDecoration(
-                    border: Border(
-                      top: BorderSide(color: AppTheme.borderLight),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 16),
+        _FormLabel('Quality'),
+        const SizedBox(height: 8),
+        Row(
+          children: ['low', 'medium', 'high'].map((q) {
+            final sel = _screenshotQuality == q;
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() => _screenshotQuality = q),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  margin: EdgeInsets.only(right: q != 'high' ? 8 : 0),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color:
+                        sel ? AppTheme.error.withAlpha(24) : AppTheme.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: sel ? AppTheme.error : AppTheme.border,
+                      width: sel ? 1.5 : 1,
                     ),
                   ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.error_outline_rounded,
-                        size: 12,
-                        color: AppTheme.error,
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          _jsonError,
-                          style: GoogleFonts.ibmPlexMono(
-                            fontSize: 10,
-                            color: AppTheme.error,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    q[0].toUpperCase() + q.substring(1),
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.ibmPlexSans(
+                      fontSize: 12,
+                      fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
+                      color: sel ? AppTheme.error : AppTheme.textSecondary,
+                    ),
                   ),
                 ),
-            ],
-          ),
+              ),
+            );
+          }).toList(),
         ),
       ],
     );
   }
 
-  Widget _buildSensitivityToggle() {
+  // ── Process List Form ────────────────────────────────────────────────────────
+  Widget _buildProcessListForm() {
+    return _FormCard(
+      title: 'FILTER OPTIONS',
+      children: [
+        _FormLabel('Sort By'),
+        const SizedBox(height: 8),
+        Row(
+          children: ['cpu', 'memory', 'pid', 'name'].map((s) {
+            final sel = _processSortBy == s;
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() => _processSortBy = s),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  margin: EdgeInsets.only(right: s != 'name' ? 6 : 0),
+                  padding: const EdgeInsets.symmetric(vertical: 9),
+                  decoration: BoxDecoration(
+                    color:
+                        sel ? AppTheme.primary.withAlpha(24) : AppTheme.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: sel ? AppTheme.primary : AppTheme.border,
+                      width: sel ? 1.5 : 1,
+                    ),
+                  ),
+                  child: Text(
+                    s.toUpperCase(),
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.ibmPlexMono(
+                      fontSize: 10,
+                      fontWeight: sel ? FontWeight.w700 : FontWeight.w400,
+                      color: sel ? AppTheme.primary : AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            _FormLabel('Result Limit'),
+            const Spacer(),
+            Text(
+              '${_processLimit.toInt()} processes',
+              style: GoogleFonts.ibmPlexMono(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.primary,
+              ),
+            ),
+          ],
+        ),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: AppTheme.primary,
+            inactiveTrackColor: AppTheme.border,
+            thumbColor: AppTheme.primary,
+            overlayColor: AppTheme.primary.withAlpha(30),
+            trackHeight: 3,
+          ),
+          child: Slider(
+            value: _processLimit,
+            min: 10,
+            max: 200,
+            divisions: 19,
+            onChanged: (v) => setState(() => _processLimit = v),
+          ),
+        ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              '10',
+              style: GoogleFonts.ibmPlexMono(
+                fontSize: 10,
+                color: AppTheme.textMuted,
+              ),
+            ),
+            Text(
+              '200',
+              style: GoogleFonts.ibmPlexMono(
+                fontSize: 10,
+                color: AppTheme.textMuted,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // ── Running Apps Form ────────────────────────────────────────────────────────
+  Widget _buildRunningAppsForm() {
+    return _FormCard(
+      title: 'APP FILTER',
+      children: [
+        _FormToggleRow(
+          label: 'Include Background Apps',
+          subtitle: 'Show apps running in the background',
+          value: _includeBackground,
+          onChanged: (v) => setState(() => _includeBackground = v),
+        ),
+      ],
+    );
+  }
+
+  // ── Filesystem Form ──────────────────────────────────────────────────────────
+  Widget _buildFilesystemForm() {
+    return _FormCard(
+      title: 'BROWSE OPTIONS',
+      children: [
+        _FormLabel('Root Path'),
+        const SizedBox(height: 8),
+        _StyledTextField(
+          controller: _fsPathController,
+          hint: '/path/to/directory',
+          prefix: Icons.folder_outlined,
+          monospace: true,
+        ),
+        const SizedBox(height: 8),
+        _QuickPathRow(
+          paths: ['/', '/home', '/etc', '/var', '/tmp', 'C:\\Users'],
+          onSelect: (p) => setState(() => _fsPathController.text = p),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            _FormLabel('Depth'),
+            const Spacer(),
+            Text(
+              '${_fsDepth.toInt()} level${_fsDepth.toInt() != 1 ? 's' : ''}',
+              style: GoogleFonts.ibmPlexMono(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.warning,
+              ),
+            ),
+          ],
+        ),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: AppTheme.warning,
+            inactiveTrackColor: AppTheme.border,
+            thumbColor: AppTheme.warning,
+            overlayColor: AppTheme.warning.withAlpha(30),
+            trackHeight: 3,
+          ),
+          child: Slider(
+            value: _fsDepth,
+            min: 1,
+            max: 5,
+            divisions: 4,
+            onChanged: (v) => setState(() => _fsDepth = v),
+          ),
+        ),
+        const SizedBox(height: 8),
+        _FormToggleRow(
+          label: 'Include Hidden Files',
+          subtitle: 'Show files and folders starting with .',
+          value: _fsIncludeHidden,
+          onChanged: (v) => setState(() => _fsIncludeHidden = v),
+          accentColor: AppTheme.warning,
+        ),
+      ],
+    );
+  }
+
+  // ── System Info Form ─────────────────────────────────────────────────────────
+  Widget _buildSystemInfoForm() {
+    final options = {
+      'hardware': 'Hardware',
+      'os': 'Operating System',
+      'network': 'Network',
+      'storage': 'Storage',
+      'security': 'Security',
+      'users': 'Users',
+    };
+    return _FormCard(
+      title: 'INFORMATION SECTIONS',
+      children: [
+        Text(
+          'Select which sections to include in the report',
+          style: GoogleFonts.ibmPlexSans(
+            fontSize: 12,
+            color: AppTheme.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: options.entries.map((e) {
+            final sel = _sysInfoIncludes.contains(e.key);
+            return GestureDetector(
+              onTap: () => setState(() {
+                if (sel) {
+                  _sysInfoIncludes.remove(e.key);
+                } else {
+                  _sysInfoIncludes.add(e.key);
+                }
+              }),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color:
+                      sel ? AppTheme.secondary.withAlpha(24) : AppTheme.surface,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: sel ? AppTheme.secondary : AppTheme.border,
+                    width: sel ? 1.5 : 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (sel)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 6),
+                        child: Icon(
+                          Icons.check_rounded,
+                          size: 12,
+                          color: AppTheme.secondary,
+                        ),
+                      ),
+                    Text(
+                      e.value,
+                      style: GoogleFonts.ibmPlexSans(
+                        fontSize: 12,
+                        fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
+                        color:
+                            sel ? AppTheme.secondary : AppTheme.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  // ── Network Info Form ────────────────────────────────────────────────────────
+  Widget _buildNetworkInfoForm() {
+    return _FormCard(
+      title: 'COLLECTION OPTIONS',
+      children: [
+        _FormToggleRow(
+          label: 'Active Connections',
+          subtitle: 'Include TCP/UDP connection table',
+          value: _netIncludeConnections,
+          onChanged: (v) => setState(() => _netIncludeConnections = v),
+          accentColor: AppTheme.secondary,
+        ),
+        const SizedBox(height: 12),
+        _FormToggleRow(
+          label: 'DNS Configuration',
+          subtitle: 'Include DNS servers and search domains',
+          value: _netIncludeDns,
+          onChanged: (v) => setState(() => _netIncludeDns = v),
+          accentColor: AppTheme.secondary,
+        ),
+      ],
+    );
+  }
+
+  // ── Telemetry Form ───────────────────────────────────────────────────────────
+  Widget _buildTelemetryForm() {
+    final options = {
+      'cpu': 'CPU',
+      'ram': 'Memory',
+      'disk': 'Disk',
+      'network': 'Network',
+      'processes': 'Processes',
+      'gpu': 'GPU',
+      'battery': 'Battery',
+    };
+    return _FormCard(
+      title: 'METRICS TO COLLECT',
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: options.entries.map((e) {
+            final sel = _telemetryMetrics.contains(e.key);
+            return GestureDetector(
+              onTap: () => setState(() {
+                if (sel) {
+                  _telemetryMetrics.remove(e.key);
+                } else {
+                  _telemetryMetrics.add(e.key);
+                }
+              }),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color:
+                      sel ? AppTheme.secondary.withAlpha(24) : AppTheme.surface,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: sel ? AppTheme.secondary : AppTheme.border,
+                    width: sel ? 1.5 : 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (sel)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 6),
+                        child: Icon(
+                          Icons.check_rounded,
+                          size: 12,
+                          color: AppTheme.secondary,
+                        ),
+                      ),
+                    Text(
+                      e.value,
+                      style: GoogleFonts.ibmPlexSans(
+                        fontSize: 12,
+                        fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
+                        color:
+                            sel ? AppTheme.secondary : AppTheme.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  // ── Lock Screen Form ─────────────────────────────────────────────────────────
+  Widget _buildLockScreenForm() {
+    final reasons = {
+      'operator_initiated': 'Operator Initiated',
+      'security_policy': 'Security Policy',
+      'inactivity': 'Inactivity Timeout',
+      'compliance': 'Compliance Enforcement',
+    };
+    return _FormCard(
+      title: 'LOCK OPTIONS',
+      children: [
+        _FormLabel('Lock Reason'),
+        const SizedBox(height: 8),
+        ...reasons.entries.map((e) {
+          final sel = _lockReason == e.key;
+          return GestureDetector(
+            onTap: () => setState(() => _lockReason = e.key),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: sel ? AppTheme.warning.withAlpha(20) : AppTheme.surface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: sel ? AppTheme.warning : AppTheme.border,
+                  width: sel ? 1.5 : 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    sel
+                        ? Icons.radio_button_checked_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    size: 16,
+                    color: sel ? AppTheme.warning : AppTheme.textMuted,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    e.value,
+                    style: GoogleFonts.ibmPlexSans(
+                      fontSize: 13,
+                      fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
+                      color:
+                          sel ? AppTheme.textPrimary : AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  // ── Policy Sync Form ─────────────────────────────────────────────────────────
+  Widget _buildPolicySyncForm() {
+    return _FormCard(
+      title: 'SYNC OPTIONS',
+      children: [
+        _FormLabel('Target Version'),
+        const SizedBox(height: 8),
+        Row(
+          children: ['latest', 'v1.0.4', 'v1.0.3'].map((v) {
+            final sel = _policyVersion == v;
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() => _policyVersion = v),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  margin: EdgeInsets.only(right: v != 'v1.0.3' ? 8 : 0),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color:
+                        sel ? AppTheme.primary.withAlpha(24) : AppTheme.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: sel ? AppTheme.primary : AppTheme.border,
+                      width: sel ? 1.5 : 1,
+                    ),
+                  ),
+                  child: Text(
+                    v,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.ibmPlexMono(
+                      fontSize: 11,
+                      fontWeight: sel ? FontWeight.w700 : FontWeight.w400,
+                      color: sel ? AppTheme.primary : AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 16),
+        _FormToggleRow(
+          label: 'Force Sync',
+          subtitle: 'Override local policy cache and force re-apply',
+          value: _policyForce,
+          onChanged: (v) => setState(() => _policyForce = v),
+        ),
+      ],
+    );
+  }
+
+  // ── Upload File Form ─────────────────────────────────────────────────────────
+  Widget _buildUploadFileForm() {
+    return _FormCard(
+      title: 'FILE OPTIONS',
+      children: [
+        _FormLabel('Remote File Path'),
+        const SizedBox(height: 8),
+        _StyledTextField(
+          controller: _uploadPathController,
+          hint: '/path/to/file.ext',
+          prefix: Icons.insert_drive_file_outlined,
+          monospace: true,
+        ),
+        const SizedBox(height: 16),
+        _FormToggleRow(
+          label: 'Compress Before Upload',
+          subtitle: 'Reduces transfer size using gzip compression',
+          value: _uploadCompress,
+          onChanged: (v) => setState(() => _uploadCompress = v),
+          accentColor: AppTheme.warning,
+        ),
+      ],
+    );
+  }
+
+  // ── Create File Form ─────────────────────────────────────────────────────────
+  Widget _buildCreateFileForm() {
+    return _FormCard(
+      title: 'FILE DETAILS',
+      children: [
+        _FormLabel('Destination Path'),
+        const SizedBox(height: 8),
+        _StyledTextField(
+          controller: _createPathController,
+          hint: '/path/to/newfile.txt',
+          prefix: Icons.note_add_outlined,
+          monospace: true,
+        ),
+        const SizedBox(height: 16),
+        _FormLabel('File Content'),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppTheme.border),
+          ),
+          child: TextField(
+            controller: _createContentController,
+            maxLines: 5,
+            style: GoogleFonts.ibmPlexMono(
+              fontSize: 12,
+              color: AppTheme.textPrimary,
+              height: 1.5,
+            ),
+            decoration: InputDecoration(
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.all(12),
+              hintText: 'Enter file content here...',
+              hintStyle: GoogleFonts.ibmPlexMono(
+                fontSize: 12,
+                color: AppTheme.textMuted,
+              ),
+              filled: false,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        _FormToggleRow(
+          label: 'Overwrite if Exists',
+          subtitle: 'Replace existing file at destination path',
+          value: _createOverwrite,
+          onChanged: (v) => setState(() => _createOverwrite = v),
+          accentColor: AppTheme.error,
+        ),
+      ],
+    );
+  }
+
+  // ── Reboot Form ──────────────────────────────────────────────────────────────
+  Widget _buildRebootForm() {
+    return _FormCard(
+      title: 'REBOOT OPTIONS',
+      children: [
+        Row(
+          children: [
+            _FormLabel('Delay Before Reboot'),
+            const Spacer(),
+            Text(
+              '${_rebootDelay.toInt()}s',
+              style: GoogleFonts.ibmPlexMono(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.error,
+              ),
+            ),
+          ],
+        ),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: AppTheme.error,
+            inactiveTrackColor: AppTheme.border,
+            thumbColor: AppTheme.error,
+            overlayColor: AppTheme.error.withAlpha(30),
+            trackHeight: 3,
+          ),
+          child: Slider(
+            value: _rebootDelay,
+            min: 0,
+            max: 300,
+            divisions: 30,
+            onChanged: (v) => setState(() => _rebootDelay = v),
+          ),
+        ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Immediate',
+              style: GoogleFonts.ibmPlexMono(
+                fontSize: 10,
+                color: AppTheme.textMuted,
+              ),
+            ),
+            Text(
+              '5 min',
+              style: GoogleFonts.ibmPlexMono(
+                fontSize: 10,
+                color: AppTheme.textMuted,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _FormToggleRow(
+          label: 'Force Reboot',
+          subtitle: 'Skip graceful shutdown — may cause data loss',
+          value: _rebootForce,
+          onChanged: (v) => setState(() => _rebootForce = v),
+          accentColor: AppTheme.error,
+        ),
+        if (_rebootForce)
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.errorMuted,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.error.withAlpha(80)),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.warning_rounded,
+                  size: 16,
+                  color: AppTheme.error,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Force reboot may cause unsaved data loss on the target device.',
+                    style: GoogleFonts.ibmPlexSans(
+                      fontSize: 11,
+                      color: AppTheme.error,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  // ── Sensitivity Banner ───────────────────────────────────────────────────────
+  Widget _buildSensitivityBanner() {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -789,8 +1386,9 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
           ),
           const SizedBox(width: 10),
           GestureDetector(
-            onTap: () =>
-                setState(() => _sensitiveOverride = !_sensitiveOverride),
+            onTap: () => ref
+                .read(sendCommandControllerProvider.notifier)
+                .toggleSensitiveOverride(),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               width: 38,
@@ -821,13 +1419,16 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
     );
   }
 
+  // ── Policy Panel ─────────────────────────────────────────────────────────────
   Widget _buildPolicyPanel() {
     final isAllowed = !_selectedMethod.sensitive || _sensitiveOverride;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         GestureDetector(
-          onTap: () => setState(() => _showPolicyPanel = !_showPolicyPanel),
+          onTap: () => ref
+              .read(sendCommandControllerProvider.notifier)
+              .togglePolicyPanel(),
           child: Row(
             children: [
               Text(
@@ -945,6 +1546,7 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
     );
   }
 
+  // ── 2FA View ─────────────────────────────────────────────────────────────────
   Widget _build2FAView() {
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -985,7 +1587,6 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          // Command summary
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -995,12 +1596,20 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
             ),
             child: Row(
               children: [
-                Icon(
-                  _selectedMethod.icon,
-                  size: 18,
-                  color: _selectedMethod.color,
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: _selectedMethod.color.withAlpha(24),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    _selectedMethod.icon,
+                    size: 18,
+                    color: _selectedMethod.color,
+                  ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1064,7 +1673,9 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
               errorText: _otpError ? 'Enter a valid 6-digit code' : null,
             ),
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            onChanged: (_) => setState(() => _otpError = false),
+            onChanged: (_) => ref
+                .read(sendCommandControllerProvider.notifier)
+                .clearOtpError(),
           ),
           const SizedBox(height: 24),
           SizedBox(
@@ -1100,11 +1711,12 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
           const SizedBox(height: 12),
           Center(
             child: TextButton(
-              onPressed: () => setState(() {
-                _show2FA = false;
+              onPressed: () {
+                ref
+                    .read(sendCommandControllerProvider.notifier)
+                    .cancelTwoFactor();
                 _otpController.clear();
-                _otpError = false;
-              }),
+              },
               child: Text(
                 'Back to Command',
                 style: GoogleFonts.ibmPlexSans(
@@ -1119,6 +1731,7 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
     );
   }
 
+  // ── Submit Bar ───────────────────────────────────────────────────────────────
   Widget _buildSubmitBar() {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
@@ -1139,9 +1752,8 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
             ),
           ),
           style: ElevatedButton.styleFrom(
-            backgroundColor: _selectedMethod.sensitive
-                ? AppTheme.warning
-                : AppTheme.primary,
+            backgroundColor:
+                _selectedMethod.sensitive ? AppTheme.warning : AppTheme.primary,
             foregroundColor: Colors.black,
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(
@@ -1149,6 +1761,235 @@ class _SendCommandScreenState extends State<SendCommandScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Shared Form Widgets ──────────────────────────────────────────────────────
+
+class _FormCard extends StatelessWidget {
+  final String title;
+  final List<Widget> children;
+
+  const _FormCard({required this.title, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: GoogleFonts.ibmPlexSans(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.textMuted,
+            letterSpacing: 0.8,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceVariant,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppTheme.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: children,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FormLabel extends StatelessWidget {
+  final String text;
+  const _FormLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: GoogleFonts.ibmPlexSans(
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+        color: AppTheme.textSecondary,
+      ),
+    );
+  }
+}
+
+class _FormToggleRow extends StatelessWidget {
+  final String label;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final Color accentColor;
+
+  const _FormToggleRow({
+    required this.label,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+    this.accentColor = AppTheme.primary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.ibmPlexSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              Text(
+                subtitle,
+                style: GoogleFonts.ibmPlexSans(
+                  fontSize: 11,
+                  color: AppTheme.textMuted,
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        GestureDetector(
+          onTap: () => onChanged(!value),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 40,
+            height: 22,
+            decoration: BoxDecoration(
+              color: value ? accentColor : AppTheme.border,
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: AnimatedAlign(
+              duration: const Duration(milliseconds: 200),
+              alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+              child: Container(
+                margin: const EdgeInsets.all(2),
+                width: 18,
+                height: 18,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StyledTextField extends StatelessWidget {
+  final TextEditingController controller;
+  final String hint;
+  final IconData prefix;
+  final bool monospace;
+
+  const _StyledTextField({
+    required this.controller,
+    required this.hint,
+    required this.prefix,
+    this.monospace = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Row(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Icon(prefix, size: 16, color: AppTheme.textMuted),
+          ),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              style: monospace
+                  ? GoogleFonts.ibmPlexMono(
+                      fontSize: 13,
+                      color: AppTheme.textPrimary,
+                    )
+                  : GoogleFonts.ibmPlexSans(
+                      fontSize: 13,
+                      color: AppTheme.textPrimary,
+                    ),
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                hintText: hint,
+                hintStyle: monospace
+                    ? GoogleFonts.ibmPlexMono(
+                        fontSize: 13,
+                        color: AppTheme.textMuted,
+                      )
+                    : GoogleFonts.ibmPlexSans(
+                        fontSize: 13,
+                        color: AppTheme.textMuted,
+                      ),
+                filled: false,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickPathRow extends StatelessWidget {
+  final List<String> paths;
+  final ValueChanged<String> onSelect;
+
+  const _QuickPathRow({required this.paths, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: paths.map((p) {
+          return GestureDetector(
+            onTap: () => onSelect(p),
+            child: Container(
+              margin: const EdgeInsets.only(right: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: AppTheme.surface,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Text(
+                p,
+                style: GoogleFonts.ibmPlexMono(
+                  fontSize: 11,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }

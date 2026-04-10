@@ -1,9 +1,10 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:secure_device_control/features/notifications/presentation/providers/notification_providers.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:secure_device_control/app/router/app_navigator.dart';
 import '../theme/app_theme.dart';
-import '../routes/app_routes.dart';
-import '../services/push_notification_service.dart';
 
 class AppNavigation extends StatelessWidget {
   final int currentIndex;
@@ -98,18 +99,15 @@ class _LiquidGlassBarState extends State<_LiquidGlassBar>
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(16.0),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
           child: Container(
-            height: 64,
+            height: 60,
             decoration: BoxDecoration(
               color: AppTheme.glassSurface,
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(
-                color: AppTheme.border.withAlpha(153),
-                width: 1,
-              ),
+              borderRadius: BorderRadius.circular(16.0),
+              border: Border.all(color: AppTheme.border, width: 1),
             ),
             child: LayoutBuilder(
               builder: (ctx, constraints) {
@@ -119,20 +117,20 @@ class _LiquidGlassBarState extends State<_LiquidGlassBar>
                     AnimatedBuilder(
                       animation: _pillAnimation,
                       builder: (_, __) {
-                        final from = _prevIndex * itemWidth + 8;
-                        final to = widget.currentIndex * itemWidth + 8;
+                        final from = _prevIndex * itemWidth + 6;
+                        final to = widget.currentIndex * itemWidth + 6;
                         final left = from + (to - from) * _pillAnimation.value;
                         return Positioned(
                           left: left,
-                          top: 8,
+                          top: 6,
                           child: Container(
-                            width: itemWidth - 16,
+                            width: itemWidth - 12,
                             height: 48,
                             decoration: BoxDecoration(
                               color: AppTheme.primaryDim,
-                              borderRadius: BorderRadius.circular(20),
+                              borderRadius: BorderRadius.circular(10.0),
                               border: Border.all(
-                                color: AppTheme.primary.withAlpha(102),
+                                color: AppTheme.primary.withAlpha(80),
                                 width: 1,
                               ),
                             ),
@@ -143,7 +141,6 @@ class _LiquidGlassBarState extends State<_LiquidGlassBar>
                     Row(
                       children: List.generate(items.length, (i) {
                         final isActive = i == widget.currentIndex;
-                        // Index 3 = Alerts/Notifications tab
                         final showBadge = i == 3;
                         return Expanded(
                           child: GestureDetector(
@@ -164,7 +161,7 @@ class _LiquidGlassBarState extends State<_LiquidGlassBar>
                                             ? items[i].activeIcon
                                             : items[i].inactiveIcon,
                                         key: ValueKey(isActive),
-                                        size: 22,
+                                        size: 20,
                                         color: isActive
                                             ? AppTheme.primary
                                             : AppTheme.textMuted,
@@ -174,15 +171,15 @@ class _LiquidGlassBarState extends State<_LiquidGlassBar>
                                       Positioned(
                                         top: -4,
                                         right: -6,
-                                        child: _UnreadBadge(),
+                                        child: const _UnreadBadge(),
                                       ),
                                   ],
                                 ),
-                                const SizedBox(height: 3),
+                                const SizedBox(height: 2),
                                 Text(
                                   items[i].label,
                                   style: GoogleFonts.ibmPlexSans(
-                                    fontSize: 10,
+                                    fontSize: 11,
                                     fontWeight: isActive
                                         ? FontWeight.w600
                                         : FontWeight.w400,
@@ -209,33 +206,12 @@ class _LiquidGlassBarState extends State<_LiquidGlassBar>
 }
 
 /// Animated unread badge that listens to PushNotificationService
-class _UnreadBadge extends StatefulWidget {
-  @override
-  State<_UnreadBadge> createState() => _UnreadBadgeState();
-}
-
-class _UnreadBadgeState extends State<_UnreadBadge> {
-  final PushNotificationService _svc = PushNotificationService();
+class _UnreadBadge extends ConsumerWidget {
+  const _UnreadBadge();
 
   @override
-  void initState() {
-    super.initState();
-    _svc.addListener(_onUpdate);
-  }
-
-  void _onUpdate() {
-    if (mounted) setState(() {});
-  }
-
-  @override
-  void dispose() {
-    _svc.removeListener(_onUpdate);
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final count = _svc.unreadCount;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final count = ref.watch(unreadNotificationCountProvider);
     if (count == 0) return const SizedBox.shrink();
     return Container(
       constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
@@ -318,7 +294,11 @@ class _TabletNavRail extends StatelessWidget {
                       color: isActive ? AppTheme.primary : AppTheme.textMuted,
                     ),
                     if (showBadge)
-                      Positioned(top: -4, right: -6, child: _UnreadBadge()),
+                      Positioned(
+                        top: -4,
+                        right: -6,
+                        child: const _UnreadBadge(),
+                      ),
                   ],
                 ),
               ),
@@ -349,19 +329,12 @@ class _MainScaffoldState extends State<MainScaffold> {
   }
 
   void _onNavTap(int index) {
-    final routes = [
-      AppRoutes.dashboardScreen,
-      AppRoutes.devicesScreen,
-      AppRoutes.commandTimelineScreen,
-      AppRoutes.alertsScreen,
-      AppRoutes.settingsScreen,
-    ];
     if (index != _currentIndex) {
       setState(() => _currentIndex = index);
-      Navigator.pushNamedAndRemoveUntil(
+      AppNavigator.navigateToTab(
         context,
-        routes[index],
-        (route) => false,
+        index,
+        profileTabTarget: ProfileTabTarget.settings,
       );
     }
   }

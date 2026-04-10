@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:secure_device_control/app/router/app_navigator.dart';
+import 'package:secure_device_control/features/devices/domain/entities/device_entity.dart';
+import 'package:secure_device_control/features/devices/presentation/providers/devices_controller.dart';
+import 'package:secure_device_control/features/devices/presentation/providers/devices_providers.dart';
+import 'package:secure_device_control/features/devices/presentation/providers/devices_state.dart';
 
-import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_bar_widget.dart';
 import '../../widgets/app_navigation.dart';
@@ -9,172 +14,18 @@ import '../../widgets/empty_state_widget.dart';
 import '../../widgets/loading_skeleton_widget.dart';
 import './widgets/device_card_widget.dart';
 
-class DevicesScreen extends StatefulWidget {
+class DevicesScreen extends ConsumerStatefulWidget {
   const DevicesScreen({super.key});
 
   @override
-  State<DevicesScreen> createState() => _DevicesScreenState();
+  ConsumerState<DevicesScreen> createState() => _DevicesScreenState();
 }
 
-class _DevicesScreenState extends State<DevicesScreen>
+class _DevicesScreenState extends ConsumerState<DevicesScreen>
     with SingleTickerProviderStateMixin {
-  // TODO: Replace with Riverpod/Bloc for production
-  bool _isLoading = true;
-  String _searchQuery = '';
-  int _selectedFilter = 0;
   int _currentNavIndex = 1;
   final _searchController = TextEditingController();
   late AnimationController _listAnimController;
-
-  final List<String> _filters = ['All', 'Online', 'Offline', 'Degraded'];
-
-  // Mock device data — Map-first pattern
-  static final List<Map<String, dynamic>> _deviceMaps = [
-    {
-      'id': 'dev-001',
-      'name': 'PROD-SRV-001',
-      'status': 'online',
-      'lastSeen': '2s ago',
-      'riskScore': 12,
-      'compliance': 'compliant',
-      'os': 'Ubuntu 22.04',
-      'policySync': true,
-      'agentVersion': '2.1.4',
-      'ipAddress': '10.0.1.11',
-    },
-    {
-      'id': 'dev-002',
-      'name': 'WKS-DEVOPS-02',
-      'status': 'online',
-      'lastSeen': '8s ago',
-      'riskScore': 24,
-      'compliance': 'compliant',
-      'os': 'Windows 11',
-      'policySync': true,
-      'agentVersion': '2.1.4',
-      'ipAddress': '10.0.2.45',
-    },
-    {
-      'id': 'dev-003',
-      'name': 'WKS-HR-003',
-      'status': 'online',
-      'lastSeen': '3s ago',
-      'riskScore': 18,
-      'compliance': 'compliant',
-      'os': 'Windows 11',
-      'policySync': true,
-      'agentVersion': '2.1.3',
-      'ipAddress': '10.0.2.67',
-    },
-    {
-      'id': 'dev-007',
-      'name': 'WKS-FINANCE-07',
-      'status': 'degraded',
-      'lastSeen': '12s ago',
-      'riskScore': 71,
-      'compliance': 'non_compliant',
-      'os': 'Windows 10',
-      'policySync': false,
-      'agentVersion': '2.0.9',
-      'ipAddress': '10.0.3.22',
-    },
-    {
-      'id': 'dev-011',
-      'name': 'WKS-DEVOPS-11',
-      'status': 'online',
-      'lastSeen': '5s ago',
-      'riskScore': 31,
-      'compliance': 'compliant',
-      'os': 'macOS 14.3',
-      'policySync': true,
-      'agentVersion': '2.1.4',
-      'ipAddress': '10.0.2.89',
-    },
-    {
-      'id': 'dev-014',
-      'name': 'PROD-SRV-014',
-      'status': 'offline',
-      'lastSeen': '18 min ago',
-      'riskScore': 94,
-      'compliance': 'unknown',
-      'os': 'Ubuntu 20.04',
-      'policySync': false,
-      'agentVersion': '2.0.7',
-      'ipAddress': '10.0.1.14',
-    },
-    {
-      'id': 'dev-015',
-      'name': 'PROD-SRV-015',
-      'status': 'online',
-      'lastSeen': '1s ago',
-      'riskScore': 9,
-      'compliance': 'compliant',
-      'os': 'Ubuntu 22.04',
-      'policySync': true,
-      'agentVersion': '2.1.4',
-      'ipAddress': '10.0.1.15',
-    },
-    {
-      'id': 'dev-019',
-      'name': 'EDGE-NODE-019',
-      'status': 'online',
-      'lastSeen': '4s ago',
-      'riskScore': 43,
-      'compliance': 'compliant',
-      'os': 'Debian 12',
-      'policySync': true,
-      'agentVersion': '2.1.2',
-      'ipAddress': '172.16.0.19',
-    },
-    {
-      'id': 'dev-021',
-      'name': 'EDGE-NODE-021',
-      'status': 'quarantined',
-      'lastSeen': '7 min ago',
-      'riskScore': 98,
-      'compliance': 'non_compliant',
-      'os': 'Debian 11',
-      'policySync': false,
-      'agentVersion': '2.0.5',
-      'ipAddress': '172.16.0.21',
-    },
-    {
-      'id': 'dev-022',
-      'name': 'WKS-LEGAL-22',
-      'status': 'online',
-      'lastSeen': '6s ago',
-      'riskScore': 27,
-      'compliance': 'compliant',
-      'os': 'Windows 11',
-      'policySync': true,
-      'agentVersion': '2.1.4',
-      'ipAddress': '10.0.4.11',
-    },
-  ];
-
-  List<Map<String, dynamic>> get _filteredDevices {
-    var result = _deviceMaps;
-    if (_searchQuery.isNotEmpty) {
-      result = result
-          .where(
-            (d) =>
-                (d['name'] as String).toLowerCase().contains(
-                  _searchQuery.toLowerCase(),
-                ) ||
-                (d['id'] as String).toLowerCase().contains(
-                  _searchQuery.toLowerCase(),
-                ),
-          )
-          .toList();
-    }
-    if (_selectedFilter != 0) {
-      final filterMap = {1: 'online', 2: 'offline', 3: 'degraded'};
-      result = result
-          .where((d) => d['status'] == filterMap[_selectedFilter])
-          .toList();
-    }
-    return result;
-  }
 
   @override
   void initState() {
@@ -183,11 +34,9 @@ class _DevicesScreenState extends State<DevicesScreen>
       vsync: this,
       duration: const Duration(milliseconds: 600),
     );
-    Future.delayed(const Duration(milliseconds: 700), () {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        _listAnimController.forward();
-      }
+    _listAnimController.forward();
+    Future<void>.microtask(() {
+      ref.read(devicesControllerProvider.notifier).loadDevices();
     });
   }
 
@@ -199,23 +48,22 @@ class _DevicesScreenState extends State<DevicesScreen>
   }
 
   void _onNavTap(int index) {
-    final routes = [
-      AppRoutes.dashboardScreen,
-      AppRoutes.devicesScreen,
-      AppRoutes.commandTimelineScreen,
-      AppRoutes.alertsScreen,
-      AppRoutes.authenticationScreen,
-    ];
     if (index != _currentNavIndex) {
       setState(() => _currentNavIndex = index);
-      Navigator.pushNamedAndRemoveUntil(context, routes[index], (r) => false);
+      AppNavigator.navigateToTab(
+        context,
+        index,
+        profileTabTarget: ProfileTabTarget.settings,
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final controller = ref.read(devicesControllerProvider.notifier);
+    final state = ref.watch(devicesControllerProvider);
     final isTablet = MediaQuery.of(context).size.width >= 600;
-    final devices = _filteredDevices;
+    final devices = state.filteredDevices;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -235,7 +83,7 @@ class _DevicesScreenState extends State<DevicesScreen>
               ),
             ),
             child: Text(
-              '${_deviceMaps.length} DEVICES',
+              '${state.allDevices.length} DEVICES',
               style: GoogleFonts.ibmPlexMono(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
@@ -246,8 +94,7 @@ class _DevicesScreenState extends State<DevicesScreen>
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () =>
-            Navigator.pushNamed(context, AppRoutes.qrScannerScreen),
+        onPressed: () => AppNavigator.push(context, AppRoute.qrScanner),
         icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
         label: Text(
           'Pair Device',
@@ -259,23 +106,24 @@ class _DevicesScreenState extends State<DevicesScreen>
       ),
       body: Column(
         children: [
-          _buildSearchAndFilters(),
+          _buildSearchAndFilters(state, controller),
           Expanded(
-            child: _isLoading
+            child: state.isLoading
                 ? _buildSkeleton()
                 : devices.isEmpty
-                ? EmptyStateWidget(
-                    icon: Icons.devices_other_rounded,
-                    title: 'No devices found',
-                    subtitle: _searchQuery.isNotEmpty
-                        ? 'No devices match "$_searchQuery". Try a different search.'
-                        : 'No devices match the selected filter.',
-                    actionLabel: _searchQuery.isEmpty ? 'Pair a Device' : null,
-                    onAction: _searchQuery.isEmpty ? () {} : null,
-                  )
-                : isTablet
-                ? _buildTabletGrid(devices)
-                : _buildPhoneList(devices),
+                    ? EmptyStateWidget(
+                        icon: Icons.devices_other_rounded,
+                        title: 'No devices found',
+                        subtitle: state.searchQuery.isNotEmpty
+                            ? 'No devices match "${state.searchQuery}". Try a different search.'
+                            : 'No devices match the selected filter.',
+                        actionLabel:
+                            state.searchQuery.isEmpty ? 'Pair a Device' : null,
+                        onAction: state.searchQuery.isEmpty ? () {} : null,
+                      )
+                    : isTablet
+                        ? _buildTabletGrid(devices)
+                        : _buildPhoneList(devices),
           ),
         ],
       ),
@@ -286,18 +134,20 @@ class _DevicesScreenState extends State<DevicesScreen>
     );
   }
 
-  Widget _buildSearchAndFilters() {
+  Widget _buildSearchAndFilters(
+    DevicesState state,
+    DevicesController controller,
+  ) {
     return Container(
       color: AppTheme.background,
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       child: Column(
         children: [
-          // Search bar
           Container(
             height: 44,
             decoration: BoxDecoration(
-              color: AppTheme.surfaceVariant,
-              borderRadius: BorderRadius.circular(12),
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(8.0),
               border: Border.all(color: AppTheme.border, width: 1),
             ),
             child: Row(
@@ -327,10 +177,10 @@ class _DevicesScreenState extends State<DevicesScreen>
                       contentPadding: EdgeInsets.zero,
                       filled: false,
                     ),
-                    onChanged: (v) => setState(() => _searchQuery = v),
+                    onChanged: controller.setSearchQuery,
                   ),
                 ),
-                if (_searchQuery.isNotEmpty)
+                if (state.searchQuery.isNotEmpty)
                   IconButton(
                     icon: const Icon(
                       Icons.close_rounded,
@@ -339,23 +189,23 @@ class _DevicesScreenState extends State<DevicesScreen>
                     ),
                     onPressed: () {
                       _searchController.clear();
-                      setState(() => _searchQuery = '');
+                      controller.clearSearch();
                     },
                   ),
               ],
             ),
           ),
-          const SizedBox(height: 10),
-          // Filter chips
+          const SizedBox(height: 8),
           SizedBox(
             height: 34,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
-              itemCount: _filters.length,
+              itemCount: DevicesFilter.values.length,
               itemBuilder: (_, i) {
-                final isSelected = i == _selectedFilter;
+                final filter = DevicesFilter.values[i];
+                final isSelected = filter == state.selectedFilter;
                 return GestureDetector(
-                  onTap: () => setState(() => _selectedFilter = i),
+                  onTap: () => controller.setFilter(filter),
                   child: Container(
                     margin: const EdgeInsets.only(right: 8),
                     padding: const EdgeInsets.symmetric(
@@ -363,24 +213,22 @@ class _DevicesScreenState extends State<DevicesScreen>
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: isSelected
-                          ? AppTheme.primaryDim
-                          : AppTheme.surfaceVariant,
-                      borderRadius: BorderRadius.circular(20),
+                      color:
+                          isSelected ? AppTheme.primaryDim : AppTheme.surface,
+                      borderRadius: BorderRadius.circular(20.0),
                       border: Border.all(
                         color: isSelected
-                            ? AppTheme.primary.withAlpha(128)
+                            ? AppTheme.primary.withAlpha(100)
                             : AppTheme.border,
                         width: 1,
                       ),
                     ),
                     child: Text(
-                      _filters[i],
+                      filter.label,
                       style: GoogleFonts.ibmPlexSans(
                         fontSize: 12,
-                        fontWeight: isSelected
-                            ? FontWeight.w600
-                            : FontWeight.w400,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w400,
                         color: isSelected
                             ? AppTheme.primary
                             : AppTheme.textSecondary,
@@ -391,16 +239,16 @@ class _DevicesScreenState extends State<DevicesScreen>
               },
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
         ],
       ),
     );
   }
 
-  Widget _buildPhoneList(List<Map<String, dynamic>> devices) {
+  Widget _buildPhoneList(List<DeviceEntity> devices) {
     return RefreshIndicator(
       onRefresh: () async =>
-          await Future.delayed(const Duration(milliseconds: 800)),
+          await ref.read(devicesControllerProvider.notifier).loadDevices(),
       color: AppTheme.primary,
       backgroundColor: AppTheme.surfaceVariant,
       child: ListView.builder(
@@ -408,8 +256,8 @@ class _DevicesScreenState extends State<DevicesScreen>
         itemCount: devices.length,
         itemBuilder: (ctx, i) {
           final delay = (i * 60).clamp(0, 400);
-          return FutureBuilder(
-            future: Future.delayed(Duration(milliseconds: delay)),
+          return FutureBuilder<void>(
+            future: Future<void>.delayed(Duration(milliseconds: delay)),
             builder: (_, snap) {
               final ready = snap.connectionState == ConnectionState.done;
               return AnimatedOpacity(
@@ -420,9 +268,12 @@ class _DevicesScreenState extends State<DevicesScreen>
                   duration: const Duration(milliseconds: 350),
                   curve: Curves.easeOutCubic,
                   child: DeviceCardWidget(
-                    device: devices[i],
-                    onTap: () =>
-                        Navigator.pushNamed(ctx, AppRoutes.deviceDetailScreen),
+                    device: _toDeviceMap(devices[i]),
+                    onTap: () => AppNavigator.push(
+                      ctx,
+                      AppRoute.deviceDetail,
+                      arguments: <String, dynamic>{'deviceId': devices[i].id},
+                    ),
                   ),
                 ),
               );
@@ -433,10 +284,10 @@ class _DevicesScreenState extends State<DevicesScreen>
     );
   }
 
-  Widget _buildTabletGrid(List<Map<String, dynamic>> devices) {
+  Widget _buildTabletGrid(List<DeviceEntity> devices) {
     return RefreshIndicator(
       onRefresh: () async =>
-          await Future.delayed(const Duration(milliseconds: 800)),
+          await ref.read(devicesControllerProvider.notifier).loadDevices(),
       color: AppTheme.primary,
       backgroundColor: AppTheme.surfaceVariant,
       child: GridView.builder(
@@ -449,8 +300,12 @@ class _DevicesScreenState extends State<DevicesScreen>
         ),
         itemCount: devices.length,
         itemBuilder: (ctx, i) => DeviceCardWidget(
-          device: devices[i],
-          onTap: () => Navigator.pushNamed(ctx, AppRoutes.deviceDetailScreen),
+          device: _toDeviceMap(devices[i]),
+          onTap: () => AppNavigator.push(
+            ctx,
+            AppRoute.deviceDetail,
+            arguments: <String, dynamic>{'deviceId': devices[i].id},
+          ),
         ),
       ),
     );
@@ -462,5 +317,50 @@ class _DevicesScreenState extends State<DevicesScreen>
       itemCount: 6,
       itemBuilder: (_, __) => const SkeletonCard(),
     );
+  }
+
+  Map<String, dynamic> _toDeviceMap(DeviceEntity device) {
+    return <String, dynamic>{
+      'id': device.id,
+      'name': device.name,
+      'status': _statusToRaw(device.status),
+      'lastSeen': device.lastSeen,
+      'riskScore': device.riskScore,
+      'compliance': _complianceToRaw(device.compliance),
+      'os': device.os,
+      'policySync': device.policySync,
+      'agentVersion': device.agentVersion,
+      'ipAddress': device.ipAddress,
+      'hostname': device.hostname,
+      'pairedAt': device.pairedAt,
+      'assignedUser': device.assignedUser,
+      'location': device.location,
+    };
+  }
+
+  String _statusToRaw(DeviceStatusType status) {
+    switch (status) {
+      case DeviceStatusType.online:
+        return 'online';
+      case DeviceStatusType.offline:
+        return 'offline';
+      case DeviceStatusType.degraded:
+        return 'degraded';
+      case DeviceStatusType.quarantined:
+        return 'quarantined';
+      case DeviceStatusType.pending:
+        return 'pending';
+    }
+  }
+
+  String _complianceToRaw(DeviceComplianceType compliance) {
+    switch (compliance) {
+      case DeviceComplianceType.compliant:
+        return 'compliant';
+      case DeviceComplianceType.nonCompliant:
+        return 'non_compliant';
+      case DeviceComplianceType.unknown:
+        return 'unknown';
+    }
   }
 }

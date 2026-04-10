@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:secure_device_control/app/router/app_navigator.dart';
 import '../../theme/app_theme.dart';
-import '../../routes/app_routes.dart';
 
 class QrScannerScreen extends StatefulWidget {
   const QrScannerScreen({super.key});
@@ -76,11 +76,11 @@ class _QrScannerScreenState extends State<QrScannerScreen>
       builder: (_) => _PairingConfirmationDialog(
         token: token,
         onConfirm: () {
-          Navigator.pop(context); // close dialog
+          Navigator.maybePop(context); // close dialog
           _navigateToDeviceDetail(token);
         },
         onCancel: () {
-          Navigator.pop(context);
+          Navigator.maybePop(context);
           setState(() {
             _processingCode = false;
             _scanning = true;
@@ -91,10 +91,11 @@ class _QrScannerScreenState extends State<QrScannerScreen>
   }
 
   void _navigateToDeviceDetail(String token) {
-    Navigator.pushNamedAndRemoveUntil(
+    AppNavigator.pushAndPruneUntil(
       context,
-      AppRoutes.deviceDetailScreen,
-      (route) => route.settings.name == AppRoutes.devicesScreen,
+      AppRoute.deviceDetail,
+      predicate: (route) =>
+          route.settings.name == AppNavigator.pathFor(AppRoute.devices),
       arguments: {'pairedToken': token, 'fromPairing': true},
     );
   }
@@ -105,11 +106,8 @@ class _QrScannerScreenState extends State<QrScannerScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Camera / Manual toggle
           if (!_isManualEntry) _buildScannerView() else _buildManualEntryView(),
-          // Top bar
           _buildTopBar(),
-          // Bottom controls
           if (!_isManualEntry) _buildBottomControls(),
         ],
       ),
@@ -119,14 +117,11 @@ class _QrScannerScreenState extends State<QrScannerScreen>
   Widget _buildScannerView() {
     return Stack(
       children: [
-        // Camera feed
         MobileScanner(controller: _scannerController!, onDetect: _onDetect),
-        // Dark overlay with cutout
         CustomPaint(
           painter: _ScannerOverlayPainter(),
           child: const SizedBox.expand(),
         ),
-        // Scan line animation
         Positioned.fill(
           child: Center(
             child: SizedBox(
@@ -136,9 +131,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                 animation: _scanLineAnim,
                 builder: (_, __) => Stack(
                   children: [
-                    // Corner brackets
                     ..._buildCornerBrackets(),
-                    // Scan line
                     Positioned(
                       top: _scanLineAnim.value * 220,
                       left: 0,
@@ -170,7 +163,6 @@ class _QrScannerScreenState extends State<QrScannerScreen>
             ),
           ),
         ),
-        // Instruction text
         Positioned(
           bottom: 160,
           left: 0,
@@ -206,6 +198,168 @@ class _QrScannerScreenState extends State<QrScannerScreen>
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildManualEntryView() {
+    return Container(
+      color: AppTheme.background,
+      child: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                24,
+                48,
+                24,
+                24 + MediaQuery.of(context).viewInsets.bottom,
+              ),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              child: ConstrainedBox(
+                constraints:
+                    BoxConstraints(minHeight: constraints.maxHeight - 72),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryDim,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                              color: AppTheme.primary.withAlpha(102)),
+                        ),
+                        child: const Icon(
+                          Icons.keyboard_rounded,
+                          color: AppTheme.primary,
+                          size: 26,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        'Manual Token Entry',
+                        style: GoogleFonts.ibmPlexSans(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Enter the pairing token from the device\'s agent dashboard or enrollment email.',
+                        style: GoogleFonts.ibmPlexSans(
+                          fontSize: 13,
+                          color: AppTheme.textSecondary,
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      Text(
+                        'PAIRING TOKEN',
+                        style: GoogleFonts.ibmPlexSans(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textMuted,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _tokenController,
+                        style: GoogleFonts.ibmPlexMono(
+                          fontSize: 14,
+                          color: AppTheme.textPrimary,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'e.g. QDL-XXXX-XXXX-XXXX',
+                          hintStyle: GoogleFonts.ibmPlexMono(
+                            fontSize: 13,
+                            color: AppTheme.textMuted,
+                          ),
+                          prefixIcon: const Icon(
+                            Icons.vpn_key_rounded,
+                            size: 18,
+                            color: AppTheme.textMuted,
+                          ),
+                          suffixIcon: IconButton(
+                            icon: const Icon(
+                              Icons.paste_rounded,
+                              size: 18,
+                              color: AppTheme.textMuted,
+                            ),
+                            onPressed: () async {
+                              final data =
+                                  await Clipboard.getData('text/plain');
+                              if (data?.text != null) {
+                                _tokenController.text = data!.text!;
+                              }
+                            },
+                          ),
+                        ),
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) {
+                            return 'Token is required';
+                          }
+                          if (v.trim().length < 8) {
+                            return 'Token must be at least 8 characters';
+                          }
+                          return null;
+                        },
+                        textInputAction: TextInputAction.done,
+                        onFieldSubmitted: (_) => _submitManualToken(),
+                      ),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _submitManualToken,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primary,
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            'Pair Device',
+                            style: GoogleFonts.ibmPlexSans(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Center(
+                        child: TextButton.icon(
+                          onPressed: () =>
+                              setState(() => _isManualEntry = false),
+                          icon: const Icon(
+                            Icons.qr_code_scanner_rounded,
+                            size: 16,
+                            color: AppTheme.primary,
+                          ),
+                          label: Text(
+                            'Switch to QR Scanner',
+                            style: GoogleFonts.ibmPlexSans(
+                              fontSize: 13,
+                              color: AppTheme.primary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 
@@ -265,151 +419,6 @@ class _QrScannerScreenState extends State<QrScannerScreen>
     ];
   }
 
-  Widget _buildManualEntryView() {
-    return Container(
-      color: AppTheme.background,
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 80, 24, 24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryDim,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppTheme.primary.withAlpha(102)),
-                  ),
-                  child: const Icon(
-                    Icons.keyboard_rounded,
-                    color: AppTheme.primary,
-                    size: 26,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'Manual Token Entry',
-                  style: GoogleFonts.ibmPlexSans(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Enter the pairing token from the device\'s agent dashboard or enrollment email.',
-                  style: GoogleFonts.ibmPlexSans(
-                    fontSize: 13,
-                    color: AppTheme.textSecondary,
-                    height: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 28),
-                Text(
-                  'PAIRING TOKEN',
-                  style: GoogleFonts.ibmPlexSans(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textMuted,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _tokenController,
-                  style: GoogleFonts.ibmPlexMono(
-                    fontSize: 14,
-                    color: AppTheme.textPrimary,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'e.g. QDL-XXXX-XXXX-XXXX',
-                    hintStyle: GoogleFonts.ibmPlexMono(
-                      fontSize: 13,
-                      color: AppTheme.textMuted,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.vpn_key_rounded,
-                      size: 18,
-                      color: AppTheme.textMuted,
-                    ),
-                    suffixIcon: IconButton(
-                      icon: const Icon(
-                        Icons.paste_rounded,
-                        size: 18,
-                        color: AppTheme.textMuted,
-                      ),
-                      onPressed: () async {
-                        final data = await Clipboard.getData('text/plain');
-                        if (data?.text != null) {
-                          _tokenController.text = data!.text!;
-                        }
-                      },
-                    ),
-                  ),
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) {
-                      return 'Token is required';
-                    }
-                    if (v.trim().length < 8) {
-                      return 'Token must be at least 8 characters';
-                    }
-                    return null;
-                  },
-                  textInputAction: TextInputAction.done,
-                  onFieldSubmitted: (_) => _submitManualToken(),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _submitManualToken,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primary,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Text(
-                      'Pair Device',
-                      style: GoogleFonts.ibmPlexSans(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Center(
-                  child: TextButton.icon(
-                    onPressed: () => setState(() => _isManualEntry = false),
-                    icon: const Icon(
-                      Icons.qr_code_scanner_rounded,
-                      size: 16,
-                      color: AppTheme.primary,
-                    ),
-                    label: Text(
-                      'Switch to QR Scanner',
-                      style: GoogleFonts.ibmPlexSans(
-                        fontSize: 13,
-                        color: AppTheme.primary,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildTopBar() {
     return SafeArea(
       child: Padding(
@@ -418,7 +427,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
           children: [
             _GlassButton(
               icon: Icons.arrow_back_ios_new_rounded,
-              onTap: () => Navigator.pop(context),
+              onTap: () => Navigator.maybePop(context),
             ),
             const Spacer(),
             Text(
@@ -712,9 +721,8 @@ class _PairingConfirmationDialogState
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: _paired
-                        ? AppTheme.secondaryMuted
-                        : AppTheme.primaryDim,
+                    color:
+                        _paired ? AppTheme.secondaryMuted : AppTheme.primaryDim,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: _paired

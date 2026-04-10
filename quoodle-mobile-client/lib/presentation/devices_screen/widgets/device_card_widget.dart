@@ -7,7 +7,11 @@ class DeviceCardWidget extends StatelessWidget {
   final Map<String, dynamic> device;
   final VoidCallback onTap;
 
-  const DeviceCardWidget({super.key, required this.device, required this.onTap});
+  const DeviceCardWidget({
+    super.key,
+    required this.device,
+    required this.onTap,
+  });
 
   DeviceStatus get _status {
     switch (device['status'] as String) {
@@ -24,21 +28,6 @@ class DeviceCardWidget extends StatelessWidget {
     }
   }
 
-  Color get _statusBorderColor {
-    switch (_status) {
-      case DeviceStatus.online:
-        return AppTheme.statusOnline;
-      case DeviceStatus.offline:
-        return AppTheme.statusOffline;
-      case DeviceStatus.degraded:
-        return AppTheme.statusDegraded;
-      case DeviceStatus.quarantined:
-        return AppTheme.statusQuarantined;
-      default:
-        return AppTheme.primary;
-    }
-  }
-
   Color get _riskColor {
     final score = device['riskScore'] as int;
     if (score >= 80) return AppTheme.critical;
@@ -49,66 +38,54 @@ class DeviceCardWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isOnline = device['status'] == 'online';
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      splashColor: AppTheme.primaryDim,
+      borderRadius: BorderRadius.circular(12.0),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppTheme.surfaceVariant,
-          borderRadius: BorderRadius.circular(16),
-          border: Border(
-            left: BorderSide(color: _statusBorderColor, width: 3),
-            top: BorderSide(color: AppTheme.border, width: 1),
-            right: BorderSide(color: AppTheme.border, width: 1),
-            bottom: BorderSide(color: AppTheme.border, width: 1),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: _statusBorderColor.withAlpha(15),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          color: AppTheme.surface,
+          borderRadius: BorderRadius.circular(12.0),
+          border: Border.all(color: AppTheme.border, width: 1),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header row
             Row(
               children: [
                 Container(
-                  width: 36,
-                  height: 36,
+                  width: 32,
+                  height: 32,
                   decoration: BoxDecoration(
-                    color: _statusBorderColor.withAlpha(26),
-                    borderRadius: BorderRadius.circular(10),
+                    color: AppTheme.surfaceVariant,
+                    borderRadius: BorderRadius.circular(8.0),
+                    border: Border.all(color: AppTheme.border, width: 1),
                   ),
                   child: Icon(
                     _getOsIcon(device['os'] as String),
-                    size: 18,
-                    color: _statusBorderColor,
+                    size: 16,
+                    color: AppTheme.textSecondary,
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         device['name'] as String,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        style: GoogleFonts.ibmPlexSans(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
                           color: AppTheme.textPrimary,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
                         device['id'] as String,
-                        style: GoogleFonts.ibmPlexMono(
-                          fontSize: 10,
+                        style: GoogleFonts.ibmPlexSans(
+                          fontSize: 12,
                           color: AppTheme.textMuted,
                         ),
                       ),
@@ -119,7 +96,6 @@ class DeviceCardWidget extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            // Metrics row
             Row(
               children: [
                 _MetricChip(
@@ -143,35 +119,28 @@ class DeviceCardWidget extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            // Footer row
+            const SizedBox(height: 12),
             Row(
               children: [
                 Icon(
                   Icons.access_time_rounded,
-                  size: 11,
+                  size: 12,
                   color: AppTheme.textMuted,
                 ),
                 const SizedBox(width: 4),
                 Text(
                   'Seen ${device['lastSeen']}',
                   style: GoogleFonts.ibmPlexSans(
-                    fontSize: 11,
+                    fontSize: 12,
                     color: AppTheme.textMuted,
                   ),
                 ),
                 const SizedBox(width: 12),
-                Icon(
-                  Icons.computer_rounded,
-                  size: 11,
-                  color: AppTheme.textMuted,
-                ),
-                const SizedBox(width: 4),
                 Expanded(
                   child: Text(
                     device['os'] as String,
                     style: GoogleFonts.ibmPlexSans(
-                      fontSize: 11,
+                      fontSize: 12,
                       color: AppTheme.textMuted,
                     ),
                     overflow: TextOverflow.ellipsis,
@@ -179,8 +148,8 @@ class DeviceCardWidget extends StatelessWidget {
                 ),
                 Text(
                   'v${device['agentVersion']}',
-                  style: GoogleFonts.ibmPlexMono(
-                    fontSize: 10,
+                  style: GoogleFonts.ibmPlexSans(
+                    fontSize: 12,
                     color: AppTheme.textMuted,
                   ),
                 ),
@@ -239,9 +208,9 @@ class _MetricChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withAlpha(26),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withAlpha(64), width: 1),
+        color: color.withAlpha(25),
+        borderRadius: BorderRadius.circular(6.0),
+        border: Border.all(color: color.withAlpha(60), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -249,14 +218,14 @@ class _MetricChip extends StatelessWidget {
           Text(
             '$label: ',
             style: GoogleFonts.ibmPlexSans(
-              fontSize: 10,
+              fontSize: 12,
               color: AppTheme.textMuted,
             ),
           ),
           Text(
             value,
-            style: GoogleFonts.ibmPlexMono(
-              fontSize: 10,
+            style: GoogleFonts.ibmPlexSans(
+              fontSize: 12,
               fontWeight: FontWeight.w600,
               color: color,
             ),
