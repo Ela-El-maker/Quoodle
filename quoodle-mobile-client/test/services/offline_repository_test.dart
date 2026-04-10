@@ -1,24 +1,41 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:secure_device_control/services/offline_repository.dart';
+import 'package:secure_device_control/features/commands/data/services/offline_command_queue.dart';
 
 void main() {
-  group('ConnectivityStatus', () {
-    test('enum has all expected values', () {
+  group('QueuedCommandStatus', () {
+    test('contains expected values', () {
       expect(
-          ConnectivityStatus.values,
-          containsAll([
-            ConnectivityStatus.online,
-            ConnectivityStatus.offline,
-            ConnectivityStatus.unknown,
-          ]));
+        QueuedCommandStatus.values,
+        containsAll([
+          QueuedCommandStatus.pending,
+          QueuedCommandStatus.syncing,
+          QueuedCommandStatus.success,
+          QueuedCommandStatus.failed,
+          QueuedCommandStatus.retrying,
+        ]),
+      );
     });
   });
 
-  group('OfflineRepository connectivity', () {
-    test('initial status is unknown', () {
-      // Can't easily test without mocking ApiService,
-      // but we verify the enum exists and default behavior
-      expect(ConnectivityStatus.unknown.index, isNotNull);
+  group('QueuedCommand', () {
+    test('copyWith updates status and retry metadata', () {
+      final queued = QueuedCommand(
+        id: '1',
+        deviceId: 'd1',
+        deviceName: 'Device 1',
+        method: 'policy_sync',
+        params: const {'force': true},
+        queuedAt: DateTime.utc(2026, 1, 1),
+      );
+
+      final updated = queued.copyWith(
+        status: QueuedCommandStatus.retrying,
+        retryCount: 2,
+      );
+
+      expect(updated.status, QueuedCommandStatus.retrying);
+      expect(updated.retryCount, 2);
+      expect(updated.id, queued.id);
     });
   });
 }
