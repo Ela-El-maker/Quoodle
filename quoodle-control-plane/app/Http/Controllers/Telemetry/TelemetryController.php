@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Telemetry;
 
 use App\Http\Controllers\Controller;
+use App\Models\Device;
 use App\Models\DeviceTelemetryLatest;
 use App\Models\TelemetryEvent;
 use App\Models\TelemetrySnapshot;
@@ -15,15 +16,38 @@ class TelemetryController extends Controller
 {
     public function latest(string $device_id): JsonResponse
     {
+        $device = Device::query()->where('device_id', $device_id)->first();
         $latest = DeviceTelemetryLatest::query()->where('device_id', $device_id)->first();
+        $resolvedOsBuild = $this->resolvedOsBuild($device, $latest);
+        $resolvedPresenceState = $this->resolvedPresenceState($device, $latest);
+        $resolvedConnectionMode = $this->resolvedConnectionMode($latest);
+        $resolvedComplianceStatus = $this->resolvedComplianceStatus($device, $latest);
+        $resolvedPolicyInSync = $this->resolvedPolicyInSync($device, $latest);
+
         if ($latest) {
+            $metrics = is_array($latest->metrics) ? $latest->metrics : [];
+            if (! array_key_exists('os_build', $metrics) || ! is_string($metrics['os_build']) || trim((string) $metrics['os_build']) === '') {
+                $metrics['os_build'] = $resolvedOsBuild;
+            }
+            if (! array_key_exists('compliance_status', $metrics) || ! is_string($metrics['compliance_status']) || trim((string) $metrics['compliance_status']) === '') {
+                $metrics['compliance_status'] = $resolvedComplianceStatus;
+            }
+            if (! array_key_exists('policy_in_sync', $metrics) || ! is_bool($metrics['policy_in_sync'])) {
+                $metrics['policy_in_sync'] = $resolvedPolicyInSync;
+            }
+
             return response()->json([
                 'device_id' => $device_id,
                 'timestamp' => optional($latest->timestamp)?->toIso8601String(),
                 'telemetry_scope' => $latest->telemetry_scope,
-                'presence_state' => $latest->presence_state,
-                'connection_mode' => $latest->connection_mode,
-                'metrics' => $latest->metrics ?? [],
+                'presence_state' => $latest->presence_state ?? $resolvedPresenceState,
+                'connection_mode' => $latest->connection_mode ?? $resolvedConnectionMode,
+                'metrics' => $metrics,
+                'resolved_os_build' => $resolvedOsBuild,
+                'resolved_presence_state' => $resolvedPresenceState,
+                'resolved_connection_mode' => $resolvedConnectionMode,
+                'resolved_compliance_status' => $resolvedComplianceStatus,
+                'resolved_policy_in_sync' => $resolvedPolicyInSync,
             ]);
         }
 
@@ -41,6 +65,11 @@ class TelemetryController extends Controller
                 'risk_score' => null,
                 'policy_hash' => null,
             ],
+            'resolved_os_build' => $resolvedOsBuild,
+            'resolved_presence_state' => $resolvedPresenceState,
+            'resolved_connection_mode' => $resolvedConnectionMode,
+            'resolved_compliance_status' => $resolvedComplianceStatus,
+            'resolved_policy_in_sync' => $resolvedPolicyInSync,
         ]);
     }
 
@@ -118,5 +147,67 @@ class TelemetryController extends Controller
             'bucket' => $data['bucket'] ?? 'raw',
             'points' => $points,
         ]);
+    }
+
+    private function resolvedOsBuild(?Device $device, ?DeviceTelemetryLatest $latest): ?string
+    {
+        $metrics = is_array($latest?->metrics) ? $latest->metrics : [];
+        $fromTelemetry = isset($metrics['os_build']) && is_string($metrics['os_build']) ? trim($metrics['os_build']) : '';
+        if ($fromTelemetry !== '') {
+            return $fromTelemetry;
+        }
+
+        return $device?->os_build;
+    }
+
+    private function resolvedPresenceState(?Device $device, ?DeviceTelemetryLatest $latest): string
+    {
+        $presence = is_string($latest?->presence_state) ? trim($latest->presence_state) : '';
+        if ($presence !== '') {
+            return $presence;
+        }
+
+        return match ($device?->lifecycle_state) {
+            'online', 'active' => 'online',
+            'degraded' => 'stale',
+            'offline' => 'offline',
+            default => 'offline',
+        };
+    }
+
+    private function resolvedConnectionMode(?DeviceTelemetryLatest $latest): ?string
+    {
+        $mode = is_string($latest?->connection_mode) ? trim($latest->connection_mode) : '';
+        return $mode === '' ? null : $mode;
+    }
+
+    private function resolvedComplianceStatus(?Device $device, ?DeviceTelemetryLatest $latest): string
+    {
+        $metrics = is_array($latest?->metrics) ? $latest->metrics : [];
+        $fromTelemetry = isset($metrics['compliance_status']) && is_string($metrics['compliance_status']) ? trim($metrics['compliance_status']) : '';
+        if ($fromTelemetry !== '') {
+            return $fromTelemetry;
+        }
+
+        return $device?->compliance_status ?? 'unknown';
+    }
+
+    private function resolvedPolicyInSync(?Device $device, ?DeviceTelemetryLatest $latest): ?bool
+    {
+        $metrics = is_array($latest?->metrics) ? $latest->metrics : [];
+        if (array_key_exists('policy_in_sync', $metrics) && is_bool($metrics['policy_in_sync'])) {
+            return $metrics['policy_in_sync'];
+        }
+
+        $expected = is_string($device?->policy_hash) ? trim($device->policy_hash) : '';
+        $reported = is_string($latest?->policy_hash) ? trim($latest->policy_hash) : '';
+        if ($reported === '') {
+            $reported = is_string($device?->reported_policy_hash) ? trim($device->reported_policy_hash) : '';
+        }
+        if ($expected === '' || $reported === '') {
+            return null;
+        }
+
+        return hash_equals($expected, $reported);
     }
 }

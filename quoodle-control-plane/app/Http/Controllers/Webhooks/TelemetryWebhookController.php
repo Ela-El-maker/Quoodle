@@ -31,6 +31,8 @@ class TelemetryWebhookController extends Controller
             'seq' => ['nullable', 'integer'],
             'metrics' => ['nullable', 'array'],
             'masked_fields' => ['nullable', 'array'],
+            'presence_state' => ['nullable', 'string'],
+            'connection_mode' => ['nullable', 'string'],
             'source' => ['nullable', 'string'],
         ]);
 

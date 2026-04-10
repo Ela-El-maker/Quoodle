@@ -45,6 +45,10 @@ class TelemetryQueryTest extends TestCase
             'device_name' => 'Telemetry Admin Device',
             'lifecycle_state' => 'active',
             'risk_score' => 41,
+            'os_build' => '19045',
+            'policy_hash' => 'policy-123',
+            'reported_policy_hash' => 'policy-123',
+            'compliance_status' => 'non_compliant',
         ]);
 
         DeviceTelemetryLatest::create([
@@ -52,10 +56,11 @@ class TelemetryQueryTest extends TestCase
             'telemetry_scope' => 'telemetry_extended',
             'schema_version' => 'v1',
             'timestamp' => now(),
-            'metrics' => ['cpu' => 31, 'ram' => 42, 'disk_usage' => 19, 'network_tx' => 10, 'network_rx' => 12, 'risk_score' => 41],
+            'metrics' => ['cpu' => 31, 'ram' => 42, 'disk_usage' => 19, 'network_tx' => 10, 'network_rx' => 12, 'risk_score' => 41, 'os_build' => '26200.8117'],
             'presence_state' => 'online',
             'connection_mode' => 'wss',
             'risk_score' => 41,
+            'policy_hash' => 'policy-123',
             'updated_at' => now(),
         ]);
 
@@ -71,7 +76,12 @@ class TelemetryQueryTest extends TestCase
             ->getJson('/api/telemetry/devices/dev-telemetry-admin/latest')
             ->assertOk()
             ->assertJsonPath('device_id', 'dev-telemetry-admin')
-            ->assertJsonPath('presence_state', 'online');
+            ->assertJsonPath('presence_state', 'online')
+            ->assertJsonPath('resolved_os_build', '26200.8117')
+            ->assertJsonPath('resolved_presence_state', 'online')
+            ->assertJsonPath('resolved_connection_mode', 'wss')
+            ->assertJsonPath('resolved_compliance_status', 'non_compliant')
+            ->assertJsonPath('resolved_policy_in_sync', true);
     }
 
     /** @test */
@@ -114,4 +124,3 @@ class TelemetryQueryTest extends TestCase
             ->assertStatus(404);
     }
 }
-

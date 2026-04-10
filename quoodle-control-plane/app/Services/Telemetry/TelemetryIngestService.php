@@ -9,7 +9,9 @@ use App\Models\TelemetryIngestError;
 use App\Models\TelemetryRollup;
 use App\Models\TelemetrySnapshot;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class TelemetryIngestService
@@ -32,6 +34,7 @@ class TelemetryIngestService
                 $maskedFields = is_array($payload['masked_fields'] ?? null) ? $payload['masked_fields'] : [];
 
                 $canonicalMetrics = $this->normalizeMetrics($rollup, $metrics);
+                $telemetryOsBuild = $this->asNullableString($canonicalMetrics['os_build'] ?? null);
 
                 $event = TelemetryEvent::create([
                     'device_id' => $deviceId,
@@ -75,15 +78,48 @@ class TelemetryIngestService
 
                 $this->upsertRollup($deviceId, $timestamp, $canonicalMetrics, $presenceState);
 
+                $device = Device::query()->where('device_id', $deviceId)->first();
                 $deviceUpdate = [
                     'last_seen' => $timestamp,
                     'risk_score' => $riskScore,
                     'reported_policy_hash' => $policyHash,
                 ];
+                if ($telemetryOsBuild) {
+                    $deviceUpdate['os_build'] = $telemetryOsBuild;
+                }
                 if ($presenceState) {
                     $deviceUpdate['lifecycle_state'] = $this->presenceToLifecycleState($presenceState);
                 }
-                Device::where('device_id', $deviceId)->update($deviceUpdate);
+                if ($device) {
+                    $priorOsBuild = $this->asNullableString($device->os_build);
+                    Device::where('device_id', $deviceId)->update($deviceUpdate);
+                    if ($telemetryOsBuild && $priorOsBuild && $priorOsBuild !== $telemetryOsBuild) {
+                        Cache::add('telemetry:divergence:os_build', 0, now()->addDay());
+                        Cache::increment('telemetry:divergence:os_build');
+                        Log::warning('telemetry.os_build_divergence_reconciled', [
+                            'device_id' => $deviceId,
+                            'previous_os_build' => $priorOsBuild,
+                            'telemetry_os_build' => $telemetryOsBuild,
+                            'session_id' => $sessionId,
+                            'seq' => $seq,
+                        ]);
+                    }
+                } else {
+                    Device::where('device_id', $deviceId)->update($deviceUpdate);
+                }
+
+                Cache::add('telemetry:ingest:accepted', 0, now()->addDay());
+                Cache::increment('telemetry:ingest:accepted');
+                Log::debug('telemetry.ingest.accepted', [
+                    'device_id' => $deviceId,
+                    'scope' => $scope,
+                    'schema_version' => $schemaVersion,
+                    'session_id' => $sessionId,
+                    'seq' => $seq,
+                    'presence_state' => $presenceState,
+                    'connection_mode' => $connectionMode,
+                    'resolved_os_build' => $telemetryOsBuild,
+                ]);
 
                 return [
                     'status' => 'ingested',
@@ -103,6 +139,14 @@ class TelemetryIngestService
                     'payload' => $payload,
                 ],
                 'source' => (string) ($payload['source'] ?? 'gateway'),
+            ]);
+
+            Cache::add('telemetry:ingest:rejected', 0, now()->addDay());
+            Cache::increment('telemetry:ingest:rejected');
+            Log::warning('telemetry.ingest.rejected', [
+                'device_id' => $deviceId,
+                'reason' => 'ingest_exception',
+                'message' => $e->getMessage(),
             ]);
 
             return [

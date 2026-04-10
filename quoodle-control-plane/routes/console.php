@@ -2,6 +2,8 @@
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use App\Models\Device;
+use App\Models\DeviceTelemetryLatest;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -60,3 +62,51 @@ Artisan::command('jwt:generate-keys {--force : Overwrite existing keys}', functi
     $this->line("public : {$pubPath}");
     return 0;
 })->purpose('Generate JWT signing keys for API tokens');
+
+Artisan::command('telemetry:reconcile-device-os-build {--dry-run : Preview changes only}', function () {
+    $dryRun = (bool) $this->option('dry-run');
+
+    $rows = DeviceTelemetryLatest::query()->get(['device_id', 'metrics']);
+    $examined = 0;
+    $updated = 0;
+
+    foreach ($rows as $row) {
+        $examined++;
+        $metrics = is_array($row->metrics) ? $row->metrics : [];
+        $osBuild = isset($metrics['os_build']) && is_string($metrics['os_build']) ? trim($metrics['os_build']) : '';
+        if ($osBuild === '') {
+            continue;
+        }
+
+        $device = Device::query()->where('device_id', $row->device_id)->first();
+        if (! $device) {
+            continue;
+        }
+
+        $current = is_string($device->os_build) ? trim($device->os_build) : '';
+        if ($current === $osBuild) {
+            continue;
+        }
+
+        $updated++;
+        $this->line(sprintf(
+            '%s: %s -> %s',
+            $row->device_id,
+            $current === '' ? '(empty)' : $current,
+            $osBuild
+        ));
+
+        if (! $dryRun) {
+            $device->update(['os_build' => $osBuild]);
+        }
+    }
+
+    $this->info(sprintf(
+        'Reconciliation complete. examined=%d updated=%d mode=%s',
+        $examined,
+        $updated,
+        $dryRun ? 'dry-run' : 'apply'
+    ));
+
+    return 0;
+})->purpose('Reconcile devices.os_build from telemetry latest metrics.os_build');

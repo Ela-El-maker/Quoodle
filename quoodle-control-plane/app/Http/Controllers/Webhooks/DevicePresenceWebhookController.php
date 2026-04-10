@@ -36,13 +36,17 @@ class DevicePresenceWebhookController extends Controller
             'device_name' => $data['device_id'],
         ]);
 
-        $device->update([
+        $update = [
             'last_seen' => $data['connected_at'],
             'agent_version' => $data['agent_version'],
-            'os_build' => $data['os_build'],
             'policy_hash' => $device->policy_hash ?: $policyHash,
             'lifecycle_state' => $data['session_id'] === 'unpaired' ? 'pending_pairing' : 'online',
-        ]);
+        ];
+        if (isset($data['os_build']) && is_string($data['os_build']) && trim($data['os_build']) !== '') {
+            $update['os_build'] = trim($data['os_build']);
+        }
+
+        $device->update($update);
 
         return response()->json(['status' => 'ack']);
     }
