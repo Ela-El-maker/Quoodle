@@ -113,6 +113,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - control_plane_storage:/var/www/storage
     networks:
       - quoodle-net
 
@@ -185,6 +187,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    volumes:
+      - gateway_data:/app/data
     networks:
       - quoodle-net
 
@@ -195,3 +199,5 @@ networks:
 volumes:
   db_data:
   redis_data:
+  control_plane_storage:
+  gateway_data:
