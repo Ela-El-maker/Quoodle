@@ -17,6 +17,7 @@ use App\Http\Controllers\Policy\PolicyController;
 use App\Http\Controllers\Compliance\ComplianceController;
 use App\Http\Controllers\Audit\AuditTrailController;
 use App\Http\Controllers\Telemetry\TelemetryController;
+use App\Http\Controllers\Telemetry\TelemetryQueryController;
 use App\Http\Controllers\Updates\UpdateController;
 use Illuminate\Support\Facades\Route;
 
@@ -84,6 +85,11 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
         // Telemetry (read-only)
         Route::get('/devices/{device_id}/telemetry/latest', [TelemetryController::class, 'latest']);
         Route::get('/devices/{device_id}/telemetry/history', [TelemetryController::class, 'history']);
+        Route::get('/telemetry/devices/{device_id}/latest', [TelemetryQueryController::class, 'latest']);
+        Route::get('/telemetry/devices/{device_id}/history', [TelemetryQueryController::class, 'history']);
+        Route::get('/telemetry/fleet/summary', [TelemetryQueryController::class, 'fleetSummary']);
+        Route::get('/telemetry/fleet/timeseries', [TelemetryQueryController::class, 'fleetTimeseries']);
+        Route::get('/telemetry/activity', [TelemetryQueryController::class, 'activity']);
 
         // Updates info (read-only)
         Route::get('/devices/{device_id}/updates', [UpdateController::class, 'list']);

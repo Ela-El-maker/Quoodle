@@ -25,6 +25,13 @@ class TelemetryWebhookController extends Controller
             'device_id' => ['required', 'string'],
             'timestamp' => ['required', 'string'],
             'rollup' => ['required', 'array'],
+            'telemetry_scope' => ['nullable', 'string'],
+            'schema_version' => ['nullable', 'string'],
+            'session_id' => ['nullable', 'string'],
+            'seq' => ['nullable', 'integer'],
+            'metrics' => ['nullable', 'array'],
+            'masked_fields' => ['nullable', 'array'],
+            'source' => ['nullable', 'string'],
         ]);
 
         if ($validator->fails()) {
