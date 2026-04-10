@@ -1,8 +1,9 @@
 import uuid
-from typing import Any, Dict
+from typing import Any, Dict, Iterable
+import logging
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, ValidationError
 
 from app.api.schemas import (
     CommandDispatchRequest,
@@ -10,6 +11,8 @@ from app.api.schemas import (
     PolicyPushRequest,
     OTAPublishRequest,
     QuarantineRequest,
+    TelemetryHeartbeatRequest,
+    TelemetryBatchRequest,
 )
 from app.config import settings
 from app.state import (
@@ -20,13 +23,42 @@ from app.state import (
     quarantine_handler,
     webhook_outbox,
 )
+from app.ws.webhooks import fire_and_forget, forward_telemetry_summary
 from app.ws.connection_manager import ConnectionManager
 from app.ws.protocol import iso_timestamp, compute_sig
+from app.ws.auth import validate_auth_jwt
+
+logger = logging.getLogger("quoodle.api.telemetry")
 
 RUNTIME_SUPPORTED_METHODS = {
     "ping",
     "reboot_device",
     "shutdown_device",
+}
+
+TELEMETRY_ALLOWLIST_COMMON = {
+    "cpu",
+    "ram",
+    "disk_usage",
+    "network_tx",
+    "network_rx",
+    "risk_score",
+    "battery_pct",
+    "os_version",
+    "os_build",
+    "agent_version",
+    "patch_level",
+    "policy_in_sync",
+    "compliance_status",
+    "geo_hash",
+}
+TELEMETRY_ALLOWLIST_KERNEL = {"kernel_event"}
+TELEMETRY_COUNTERS = {
+    "accepted": 0,
+    "rejected": 0,
+    "partial_accept": 0,
+    "auth_fail": 0,
+    "schema_fail": 0,
 }
 
 
@@ -97,6 +129,86 @@ def build_dispatch_response(status: str, device_id: str, command_id: str, reason
     }
 
 
+def _filter_metrics(metrics: Dict[str, Any], scope: str) -> tuple[Dict[str, Any], list[str]]:
+    allowed: Iterable[str] = TELEMETRY_ALLOWLIST_COMMON
+    if scope == "kernel_event":
+        allowed = TELEMETRY_ALLOWLIST_KERNEL
+
+    filtered: Dict[str, Any] = {}
+    masked: list[str] = []
+    for key, value in metrics.items():
+        if key in allowed:
+            filtered[key] = value
+        else:
+            masked.append(key)
+    return filtered, masked
+
+
+def _parse_percent_or_number(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        candidate = value.strip().replace("%", "")
+        try:
+            return float(candidate)
+        except ValueError:
+            return None
+    return None
+
+
+def _build_rollup(metrics: Dict[str, Any], policy_hash: str | None, risk_score: float | None, scope: str) -> Dict[str, Any]:
+    rollup: Dict[str, Any] = {
+        "avg_cpu": _parse_percent_or_number(metrics.get("cpu")),
+        "avg_ram": _parse_percent_or_number(metrics.get("ram")),
+        "avg_disk": _parse_percent_or_number(metrics.get("disk_usage")),
+        "avg_tx": _parse_percent_or_number(metrics.get("network_tx")),
+        "avg_rx": _parse_percent_or_number(metrics.get("network_rx")),
+        "max_cpu": _parse_percent_or_number(metrics.get("cpu")),
+        "risk_score_avg": risk_score,
+        "policy_hash": policy_hash,
+        "presence_state": "online",
+        "connection_mode": "http_heartbeat" if scope in {"telemetry_basic", "telemetry_extended"} else "wss",
+    }
+    if scope == "kernel_event" and isinstance(metrics.get("kernel_event"), dict):
+        rollup["kernel_event"] = metrics.get("kernel_event")
+    return rollup
+
+
+def _inc_counter(name: str) -> None:
+    TELEMETRY_COUNTERS[name] = TELEMETRY_COUNTERS.get(name, 0) + 1
+
+
+async def _require_telemetry_bearer(request: Request, expected_device_id: str) -> Dict[str, Any]:
+    auth_header = request.headers.get("authorization", "").strip()
+    if not auth_header or not auth_header.lower().startswith("bearer "):
+        _inc_counter("auth_fail")
+        raise HTTPException(status_code=401, detail={"reason": "auth_missing_bearer"})
+
+    token = auth_header[7:].strip()
+    if not token:
+        _inc_counter("auth_fail")
+        raise HTTPException(status_code=401, detail={"reason": "auth_missing_token"})
+
+    try:
+        claims = await validate_auth_jwt(token)
+    except Exception:
+        _inc_counter("auth_fail")
+        raise HTTPException(status_code=401, detail={"reason": "auth_invalid_token"})
+
+    if claims.get("scope") != "agent":
+        _inc_counter("auth_fail")
+        raise HTTPException(status_code=403, detail={"reason": "auth_invalid_scope"})
+
+    subject = str(claims.get("sub") or "")
+    if subject and subject != expected_device_id:
+        _inc_counter("auth_fail")
+        raise HTTPException(status_code=403, detail={"reason": "auth_device_mismatch"})
+
+    return claims
+
+
 def create_router(manager: ConnectionManager) -> APIRouter:
     router = APIRouter(prefix="/api/v1")
 
@@ -116,6 +228,130 @@ def create_router(manager: ConnectionManager) -> APIRouter:
                 }
                 for e in entries
             ]
+        }
+
+    @router.post("/telemetry/heartbeat")
+    async def telemetry_heartbeat(payload_raw: Dict[str, Any], request: Request):
+        try:
+            payload = TelemetryHeartbeatRequest.model_validate(payload_raw)
+        except ValidationError as exc:
+            _inc_counter("schema_fail")
+            raise HTTPException(status_code=422, detail={"reason": "invalid_schema", "errors": exc.errors()})
+
+        await _require_telemetry_bearer(request, payload.device_id)
+        filtered_metrics, dropped = _filter_metrics(payload.metrics, payload.telemetry_scope)
+        risk = risk_scorer.score(filtered_metrics)
+        rollup = _build_rollup(filtered_metrics, payload.policy_hash, risk, payload.telemetry_scope)
+
+        await event_bus.emit_telemetry(
+            payload.device_id,
+            {
+                "schema_version": payload.schema_version,
+                "session_id": payload.session_id,
+                "timestamp": payload.timestamp,
+                "seq": payload.seq,
+                "telemetry_scope": payload.telemetry_scope,
+                "metrics": filtered_metrics,
+                "masked_fields": sorted(set((payload.masked_fields or []) + dropped)),
+            },
+        )
+
+        fire_and_forget(
+            forward_telemetry_summary(
+                payload.device_id,
+                filtered_metrics,
+                payload.timestamp,
+                risk_score=risk,
+                policy_hash=payload.policy_hash,
+                telemetry_scope=payload.telemetry_scope,
+                schema_version=payload.schema_version,
+                session_id=payload.session_id,
+                seq=payload.seq,
+                masked_fields=sorted(set((payload.masked_fields or []) + dropped)),
+            )
+        )
+
+        _inc_counter("accepted")
+        logger.debug("telemetry heartbeat accepted device=%s scope=%s seq=%s", payload.device_id, payload.telemetry_scope, payload.seq)
+        return {
+            "status": "accepted",
+            "device_id": payload.device_id,
+            "timestamp": payload.timestamp,
+            "telemetry_scope": payload.telemetry_scope,
+            "masked_fields": sorted(set((payload.masked_fields or []) + dropped)),
+            "rollup": rollup,
+            "counters": TELEMETRY_COUNTERS,
+        }
+
+    @router.post("/telemetry/batch")
+    async def telemetry_batch(payload_raw: Dict[str, Any], request: Request):
+        try:
+            payload = TelemetryBatchRequest.model_validate(payload_raw)
+        except ValidationError as exc:
+            _inc_counter("schema_fail")
+            raise HTTPException(status_code=422, detail={"reason": "invalid_schema", "errors": exc.errors()})
+
+        await _require_telemetry_bearer(request, payload.device_id)
+        accepted = 0
+        rejected = 0
+        errors: list[dict[str, Any]] = []
+        latest_rollup: Dict[str, Any] | None = None
+
+        for index, entry in enumerate(payload.entries):
+            if entry.device_id != payload.device_id:
+                rejected += 1
+                errors.append({"index": index, "reason": "device_id_mismatch"})
+                continue
+
+            filtered_metrics, dropped = _filter_metrics(entry.metrics, entry.telemetry_scope)
+            risk = risk_scorer.score(filtered_metrics)
+            latest_rollup = _build_rollup(filtered_metrics, entry.policy_hash, risk, entry.telemetry_scope)
+
+            await event_bus.emit_telemetry(
+                entry.device_id,
+                {
+                    "schema_version": entry.schema_version,
+                    "session_id": entry.session_id,
+                    "timestamp": entry.timestamp,
+                    "seq": entry.seq,
+                    "telemetry_scope": entry.telemetry_scope,
+                    "metrics": filtered_metrics,
+                    "masked_fields": sorted(set((entry.masked_fields or []) + dropped)),
+                },
+            )
+            fire_and_forget(
+                forward_telemetry_summary(
+                    entry.device_id,
+                    filtered_metrics,
+                    entry.timestamp,
+                    risk_score=risk,
+                    policy_hash=entry.policy_hash,
+                    telemetry_scope=entry.telemetry_scope,
+                    schema_version=entry.schema_version,
+                    session_id=entry.session_id,
+                    seq=entry.seq,
+                    masked_fields=sorted(set((entry.masked_fields or []) + dropped)),
+                )
+            )
+            accepted += 1
+
+        status = "accepted" if rejected == 0 else ("partial_accept" if accepted > 0 else "rejected")
+        _inc_counter(status)
+        logger.debug(
+            "telemetry batch processed device=%s accepted=%s rejected=%s status=%s",
+            payload.device_id,
+            accepted,
+            rejected,
+            status,
+        )
+        return {
+            "status": status,
+            "device_id": payload.device_id,
+            "accepted": accepted,
+            "rejected": rejected,
+            "errors": errors,
+            "latest_rollup": latest_rollup,
+            "counters": TELEMETRY_COUNTERS,
         }
 
     @router.post("/command/dispatch")

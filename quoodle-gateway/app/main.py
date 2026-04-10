@@ -255,16 +255,22 @@ async def agent_ws(websocket: WebSocket):
                     except ValueError:
                         await websocket.close(code=4400)
                         break
-                    metrics = message.get("body", {}).get("metrics", {})
-                    policy_hash = message.get("body", {}).get("policy_hash")
+                    body = message.get("body", {})
+                    metrics = body.get("metrics", {})
+                    policy_hash = body.get("policy_hash")
                     risk = risk_scorer.score(metrics)
                     fire_and_forget(
                         forward_telemetry_summary(
                             device_id,
                             metrics,
-                            message.get("timestamp", iso_timestamp()),
+                            body.get("timestamp", message.get("timestamp", iso_timestamp())),
                             risk_score=risk,
                             policy_hash=policy_hash if isinstance(policy_hash, str) else None,
+                            telemetry_scope=body.get("telemetry_scope"),
+                            schema_version=body.get("schema_version", "v1"),
+                            session_id=body.get("session_id", message.get("session_id")),
+                            seq=body.get("seq", extract_seq_from_message(message)),
+                            masked_fields=body.get("masked_fields"),
                         )
                     )
                     continue

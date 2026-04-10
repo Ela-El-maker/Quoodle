@@ -59,11 +59,20 @@ async def forward_telemetry_summary(
     timestamp: str,
     risk_score: float | None = None,
     policy_hash: str | None = None,
+    telemetry_scope: str | None = None,
+    schema_version: str | None = None,
+    session_id: str | None = None,
+    seq: int | None = None,
+    masked_fields: list[str] | None = None,
 ) -> None:
     try:
         kernel_event = metrics.get("kernel_event") if isinstance(metrics, dict) else None
-        def _percent(val: str | None) -> float | None:
-            if not val:
+        def _percent(val: Any) -> float | None:
+            if val is None:
+                return None
+            if isinstance(val, (int, float)):
+                return float(val)
+            if not isinstance(val, str):
                 return None
             stripped = val.replace("%", "")
             try:
@@ -96,6 +105,13 @@ async def forward_telemetry_summary(
     payload = {
         "device_id": device_id,
         "timestamp": timestamp,
+        "telemetry_scope": telemetry_scope or ("kernel_event" if isinstance(metrics, dict) and metrics.get("kernel_event") else "telemetry_extended"),
+        "schema_version": schema_version or "v1",
+        "session_id": session_id,
+        "seq": seq,
+        "metrics": metrics if isinstance(metrics, dict) else {},
+        "masked_fields": masked_fields or [],
+        "source": "gateway",
         "rollup": rollup,
     }
     await _post("telemetry/summary", payload, "telemetry_summary")

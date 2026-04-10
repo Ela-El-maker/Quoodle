@@ -168,11 +168,26 @@ def validate_telemetry(payload: Dict[str, Any], expected_session: str) -> None:
     if "metrics" not in body or "telemetry_scope" not in body or "timestamp" not in body:
         raise ValueError("Telemetry body missing required fields")
 
+    for required in ["schema_version", "seq", "session_id", "masked_fields"]:
+        if required not in body:
+            raise ValueError(f"Telemetry body missing {required}")
+
     # Optional policy anchor.
     if "policy_hash" in body and body.get("policy_hash") is not None and not isinstance(body.get("policy_hash"), str):
         raise ValueError("Telemetry body.policy_hash must be a string")
+    if not isinstance(body.get("masked_fields"), list):
+        raise ValueError("Telemetry body.masked_fields must be an array")
+    if body.get("session_id") != payload.get("session_id"):
+        raise ValueError("Telemetry body.session_id mismatch envelope session_id")
+    if body.get("seq") != payload.get("seq"):
+        raise ValueError("Telemetry body.seq mismatch envelope seq")
+    schema_version = body.get("schema_version", "v1")
+    if schema_version != "v1":
+        raise ValueError("Telemetry unsupported schema_version")
     metrics = body.get("metrics") or {}
     telemetry_scope = body.get("telemetry_scope")
+    if telemetry_scope not in {"telemetry_basic", "telemetry_extended", "kernel_event"}:
+        raise ValueError("Telemetry unsupported telemetry_scope")
     if telemetry_scope == "kernel_event":
         kernel_event = metrics.get("kernel_event")
         if not isinstance(kernel_event, dict):

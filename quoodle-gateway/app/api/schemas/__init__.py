@@ -4,6 +4,8 @@ from .requests import (
     PolicyPushRequest,
     OTAPublishRequest,
     QuarantineRequest,
+    TelemetryHeartbeatRequest,
+    TelemetryBatchRequest,
 )
 
 __all__ = [
@@ -12,4 +14,6 @@ __all__ = [
     "PolicyPushRequest",
     "OTAPublishRequest",
     "QuarantineRequest",
+    "TelemetryHeartbeatRequest",
+    "TelemetryBatchRequest",
 ]

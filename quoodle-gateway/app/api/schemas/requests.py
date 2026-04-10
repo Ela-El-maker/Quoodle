@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -54,3 +54,47 @@ class DevicePairedRequest(BaseModel):
     paired_at: str
     agent_jwt: str | None = None
     agent_jwt_expires_at: str | None = None
+
+
+class TelemetryHeartbeatRequest(BaseModel):
+    schema_version: str = "v1"
+    device_id: str
+    session_id: str
+    timestamp: str
+    seq: int
+    telemetry_scope: str = "telemetry_extended"
+    metrics: Dict[str, Any] = Field(default_factory=dict)
+    policy_hash: Optional[str] = None
+    machine_secret_hash: Optional[str] = None
+    masked_fields: List[str] = Field(default_factory=list)
+
+    @field_validator("schema_version")
+    def schema_supported(cls, v: str) -> str:
+        if v != "v1":
+            raise ValueError("unsupported_schema_version")
+        return v
+
+    @field_validator("telemetry_scope")
+    def scope_supported(cls, v: str) -> str:
+        if v not in {"telemetry_basic", "telemetry_extended", "kernel_event"}:
+            raise ValueError("unsupported_telemetry_scope")
+        return v
+
+    @field_validator("seq")
+    def seq_positive(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("seq_must_be_positive")
+        return v
+
+
+class TelemetryBatchRequest(BaseModel):
+    device_id: str
+    entries: List[TelemetryHeartbeatRequest] = Field(default_factory=list)
+
+    @field_validator("entries")
+    def entries_not_empty(cls, v: List[TelemetryHeartbeatRequest]) -> List[TelemetryHeartbeatRequest]:
+        if not v:
+            raise ValueError("entries_required")
+        if len(v) > 200:
+            raise ValueError("entries_too_many")
+        return v
