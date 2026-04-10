@@ -2,8 +2,10 @@
 #include "../telemetry/telemetry_collector.hpp"
 #include <chrono>
 #include <cstdlib>
+#include <nlohmann/json.hpp>
 #include <random>
 #include <sstream>
+#include <vector>
 
 #include "../utils/json_canonicalizer.hpp"
 
@@ -547,7 +549,10 @@ std::string build_command_result_json(const std::string &device_id,
                                       const std::string &artifact_url,
                                       const std::string &artifact_checksum,
                                       int error_code,
-                                      const std::string &error_message)
+                                      const std::string &error_message,
+                                      const std::string &output_text,
+                                      const std::string &data_json,
+                                      const std::string &meta_json)
 {
     using utils::canonical_object;
     using utils::escape_json;
@@ -561,12 +566,53 @@ std::string build_command_result_json(const std::string &device_id,
     env.timestamp = iso_timestamp();
     env.sig = "";
 
-    std::string result_obj = canonical_object({
+    std::vector<std::pair<std::string, std::string>> result_fields{
         {"artifact_checksum", artifact_checksum.empty() ? "null" : "\"" + escape_json(artifact_checksum) + "\""},
         {"artifact_url", artifact_url.empty() ? "null" : "\"" + escape_json(artifact_url) + "\""},
-        {"notes", "\"" + escape_json(notes) + "\""},
-        {"status", "\"" + escape_json(result_status) + "\""},
-    });
+    };
+
+    if (!data_json.empty())
+    {
+        try
+        {
+            const auto parsed = nlohmann::json::parse(data_json);
+            if (parsed.is_object() || parsed.is_array())
+            {
+                result_fields.emplace_back("data", parsed.dump());
+            }
+        }
+        catch (const std::exception &)
+        {
+            // Ignore invalid optional data payload.
+        }
+    }
+
+    if (!meta_json.empty())
+    {
+        try
+        {
+            const auto parsed = nlohmann::json::parse(meta_json);
+            if (parsed.is_object())
+            {
+                result_fields.emplace_back("meta", parsed.dump());
+            }
+        }
+        catch (const std::exception &)
+        {
+            // Ignore invalid optional meta payload.
+        }
+    }
+
+    result_fields.emplace_back("notes", "\"" + escape_json(notes) + "\"");
+
+    if (!output_text.empty())
+    {
+        result_fields.emplace_back("output_text", "\"" + escape_json(output_text) + "\"");
+    }
+
+    result_fields.emplace_back("status", "\"" + escape_json(result_status) + "\"");
+
+    std::string result_obj = canonical_object(result_fields);
 
     std::string error_code_val = error_code == 0 ? "null" : std::to_string(error_code);
     std::string error_message_val = error_message.empty() ? "null" : "\"" + escape_json(error_message) + "\"";

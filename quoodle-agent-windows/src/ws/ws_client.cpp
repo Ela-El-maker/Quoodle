@@ -148,6 +148,52 @@ static bool is_kernel_http_payload(const std::string &payload_json)
   }
 }
 
+struct ParsedCommandOutput
+{
+  std::string notes;
+  std::string output_text;
+  std::string data_json;
+};
+
+static ParsedCommandOutput parse_command_output_payload(const std::string &raw_result)
+{
+  ParsedCommandOutput parsed{};
+  if (raw_result.empty())
+  {
+    parsed.notes = "command completed";
+    return parsed;
+  }
+
+  parsed.notes = raw_result;
+  try
+  {
+    const auto value = nlohmann::json::parse(raw_result);
+    if (value.is_object() || value.is_array())
+    {
+      parsed.notes = "structured result";
+      parsed.data_json = value.dump();
+      return parsed;
+    }
+
+    if (value.is_string())
+    {
+      parsed.output_text = value.get<std::string>();
+      parsed.notes = parsed.output_text;
+      return parsed;
+    }
+
+    parsed.output_text = value.dump();
+    parsed.notes = parsed.output_text;
+    return parsed;
+  }
+  catch (const std::exception &)
+  {
+    parsed.output_text = raw_result;
+    parsed.notes = raw_result;
+    return parsed;
+  }
+}
+
 WsClient::WsClient(const AgentConfig &config)
     : config_(config),
       state_impl_(config.device_id),
@@ -1102,30 +1148,51 @@ bool WsClient::try_connect()
                             params_obj.dump(),
                             command_message_id);
 
+                        nlohmann::json result_meta = nlohmann::json::object();
+                        if (!res.request_id.empty()) {
+                            result_meta["request_id"] = res.request_id;
+                        }
+                        if (!res.kernel_exec_id.empty()) {
+                            result_meta["kernel_exec_id"] = res.kernel_exec_id;
+                        }
+                        if (!res.timestamp.empty()) {
+                            result_meta["kernel_timestamp"] = res.timestamp;
+                        }
+                        result_meta["transport"] = "kernel_ioctl";
+                        const std::string meta_json = result_meta.empty() ? std::string() : result_meta.dump();
+
                         if (res.status == "ok") {
-                            auto result_payload = res.result.empty() ? "command completed" : res.result;
+                            const auto parsed_output = parse_command_output_payload(res.result);
                             {
                                 std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
                                 auto result_msg = build_command_result_json(
                                     config_.device_id, session_id, command_message_id, trace_id,
-                                    "completed", "ok", result_payload, "", "",
-                                    res.error_code, res.error_message);
+                                    "completed", "ok", parsed_output.notes, "", "",
+                                    res.error_code, res.error_message,
+                                    parsed_output.output_text, parsed_output.data_json, meta_json);
                                 if (!result_msg.empty()) {
                                     socket.sendText(result_msg);
                                 }
                             }
                         } else {
                             const bool unsupported = (res.status == "invalid_opcode" || res.error_code == 4004 || res.error_code == 4002);
+                            const auto parsed_output = parse_command_output_payload(res.result);
+                            const std::string notes = res.error_message.empty()
+                                ? (parsed_output.notes.empty() ? "command execution failed" : parsed_output.notes)
+                                : res.error_message;
                             {
                                 std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
                                 auto result_msg = build_command_result_json(
                                     config_.device_id, session_id, command_message_id, trace_id,
                                     "failed",
                                     unsupported ? "unsupported" : "kernel_transport_error",
-                                    res.error_message.empty() ? "command execution failed" : res.error_message,
+                                    notes,
                                     "", "",
                                     res.error_code,
-                                    res.error_message);
+                                    res.error_message,
+                                    parsed_output.output_text,
+                                    parsed_output.data_json,
+                                    meta_json);
                                 if (!result_msg.empty()) {
                                     socket.sendText(result_msg);
                                 }
