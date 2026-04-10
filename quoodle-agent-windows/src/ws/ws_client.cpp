@@ -5,6 +5,7 @@
 #include <iostream>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <algorithm>
 #include <cstdlib>
 #include <mutex>
@@ -110,6 +111,36 @@ static bool parse_ws_telemetry_to_http_payload(
     seq_out = payload["seq"].is_number_integer() ? payload["seq"].get<std::int64_t>() : 0;
     http_payload_json = payload.dump();
     return true;
+  }
+  catch (const std::exception &)
+  {
+    return false;
+  }
+}
+
+static bool starts_with(const std::string &value, const char *prefix)
+{
+  return value.rfind(prefix, 0) == 0;
+}
+
+static std::string to_lower_copy(std::string value)
+{
+  std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch)
+                 { return static_cast<char>(std::tolower(ch)); });
+  return value;
+}
+
+static bool is_kernel_reason(const std::string &reason)
+{
+  return starts_with(reason, "kernel_");
+}
+
+static bool is_kernel_http_payload(const std::string &payload_json)
+{
+  try
+  {
+    const auto payload = nlohmann::json::parse(payload_json);
+    return payload.value("telemetry_scope", "") == "kernel_event";
   }
   catch (const std::exception &)
   {
@@ -301,17 +332,30 @@ bool WsClient::send_telemetry_http(const std::string &endpoint_path,
 
 void WsClient::queue_telemetry_payload(const std::string &payload_json, std::int64_t seq, const std::string &reason)
 {
+  const bool kernel_payload = is_kernel_reason(reason) || is_kernel_http_payload(payload_json);
   if (!telemetry_queue_.is_open())
   {
     telemetry_stats_.dropped += 1;
+    if (kernel_payload)
+    {
+      telemetry_stats_.kernel_dropped += 1;
+    }
     Logger::log(LogLevel::Warn, "telemetry dropped (queue unavailable): " + reason);
     return;
   }
   const std::int32_t dropped_now = telemetry_queue_.enqueue(seq, payload_json, reason);
   telemetry_stats_.queued += 1;
+  if (kernel_payload)
+  {
+    telemetry_stats_.kernel_queued += 1;
+  }
   if (dropped_now > 0)
   {
     telemetry_stats_.dropped += static_cast<std::uint64_t>(dropped_now);
+    if (kernel_payload)
+    {
+      telemetry_stats_.kernel_dropped += static_cast<std::uint64_t>(dropped_now);
+    }
     Logger::log(LogLevel::Warn, "telemetry queue drop policy triggered (dropped=" + std::to_string(dropped_now) + ")");
   }
 }
@@ -335,12 +379,14 @@ bool WsClient::replay_queued_telemetry()
   nlohmann::json batch = nlohmann::json::object();
   nlohmann::json entries = nlohmann::json::array();
   std::string device_id = config_.device_id;
+  std::unordered_map<std::int64_t, bool> pending_is_kernel;
 
   for (const auto &item : pending)
   {
     try
     {
       const auto payload = nlohmann::json::parse(item.payload_json);
+      pending_is_kernel[item.id] = payload.value("telemetry_scope", "") == "kernel_event";
       if (payload.contains("device_id") && payload["device_id"].is_string())
       {
         device_id = payload["device_id"].get<std::string>();
@@ -355,6 +401,10 @@ bool WsClient::replay_queued_telemetry()
                                                                        .count() +
                                                                    config_.telemetry_retry_backoff_s * 1000ULL));
       telemetry_stats_.retry_count += 1;
+      if (pending_is_kernel[item.id])
+      {
+        telemetry_stats_.kernel_retry += 1;
+      }
     }
   }
   if (entries.empty())
@@ -417,6 +467,10 @@ bool WsClient::replay_queued_telemetry()
               static_cast<std::uint64_t>(config_.telemetry_retry_backoff_max_s));
           telemetry_queue_.mark_failed(pending[i].id, it->second, now_ms + static_cast<std::int64_t>(backoff_s * 1000ULL));
           telemetry_stats_.retry_count += 1;
+          if (pending_is_kernel[pending[i].id])
+          {
+            telemetry_stats_.kernel_retry += 1;
+          }
         }
       }
       else if (status == "rejected")
@@ -432,6 +486,10 @@ bool WsClient::replay_queued_telemetry()
               static_cast<std::uint64_t>(config_.telemetry_retry_backoff_max_s));
           telemetry_queue_.mark_failed(item.id, "batch_rejected", now_ms + static_cast<std::int64_t>(backoff_s * 1000ULL));
           telemetry_stats_.retry_count += 1;
+          if (pending_is_kernel[item.id])
+          {
+            telemetry_stats_.kernel_retry += 1;
+          }
         }
       }
     }
@@ -450,7 +508,16 @@ bool WsClient::replay_queued_telemetry()
 
     if (!success_ids.empty() && telemetry_queue_.delete_ids(success_ids))
     {
+      std::uint64_t kernel_replayed = 0;
+      for (const auto id : success_ids)
+      {
+        if (pending_is_kernel[id])
+        {
+          kernel_replayed += 1;
+        }
+      }
       telemetry_stats_.replayed += static_cast<std::uint64_t>(success_ids.size());
+      telemetry_stats_.kernel_replayed += kernel_replayed;
       Logger::log(LogLevel::Info, "telemetry replayed via HTTP batch: " + std::to_string(success_ids.size()));
       return true;
     }
@@ -467,9 +534,157 @@ bool WsClient::replay_queued_telemetry()
         static_cast<std::uint64_t>(config_.telemetry_retry_backoff_max_s));
     telemetry_queue_.mark_failed(item.id, error, now_ms + static_cast<std::int64_t>(backoff_s * 1000ULL));
     telemetry_stats_.retry_count += 1;
+    if (pending_is_kernel[item.id])
+    {
+      telemetry_stats_.kernel_retry += 1;
+    }
   }
   Logger::log(LogLevel::Warn, "telemetry replay failed: " + error);
   return false;
+}
+
+bool WsClient::kernel_category_enabled(const std::string &category) const
+{
+  const std::string normalized = to_lower_copy(category);
+  if (normalized == "exec")
+  {
+    return config_.kernel_enable_exec;
+  }
+  if (normalized == "integrity")
+  {
+    return config_.kernel_enable_integrity;
+  }
+  if (normalized == "attestation")
+  {
+    return config_.kernel_enable_attestation;
+  }
+  if (normalized == "update")
+  {
+    return config_.kernel_enable_update;
+  }
+  if (normalized == "runtime")
+  {
+    return config_.kernel_enable_runtime;
+  }
+  return false;
+}
+
+bool WsClient::kernel_category_sampled(const std::string &category)
+{
+  const std::string normalized = to_lower_copy(category);
+  std::uint32_t threshold = 100;
+  if (normalized == "exec")
+    threshold = config_.kernel_sample_exec_pct;
+  else if (normalized == "integrity")
+    threshold = config_.kernel_sample_integrity_pct;
+  else if (normalized == "attestation")
+    threshold = config_.kernel_sample_attestation_pct;
+  else if (normalized == "update")
+    threshold = config_.kernel_sample_update_pct;
+  else if (normalized == "runtime")
+    threshold = config_.kernel_sample_runtime_pct;
+
+  if (threshold >= 100)
+  {
+    return true;
+  }
+  if (threshold == 0)
+  {
+    return false;
+  }
+  std::uniform_int_distribution<int> dist(1, 100);
+  return static_cast<std::uint32_t>(dist(rng_)) <= threshold;
+}
+
+std::string WsClient::normalize_kernel_payload_json(const std::string &payload_json, std::string &category_out, bool &masked)
+{
+  masked = false;
+  category_out = "exec";
+  try
+  {
+    auto parsed = nlohmann::json::parse(payload_json);
+    if (!parsed.is_object())
+    {
+      return payload_json;
+    }
+
+    const std::unordered_set<std::string> allowed_categories = {
+        "exec", "integrity", "attestation", "update", "runtime"};
+    std::string category = to_lower_copy(parsed.value("category", std::string("exec")));
+    if (allowed_categories.find(category) == allowed_categories.end())
+    {
+      category = "exec";
+    }
+    category_out = category;
+
+    parsed["category"] = category;
+    if (!parsed.contains("subtype"))
+      parsed["subtype"] = "opcode";
+    if (!parsed.contains("severity"))
+    {
+      const bool has_error = parsed.value("error_code", 0) != 0 || to_lower_copy(parsed.value("status", std::string("ok"))) != "ok";
+      parsed["severity"] = has_error ? "high" : "info";
+    }
+    if (!parsed.contains("decision"))
+    {
+      const std::string status = to_lower_copy(parsed.value("status", std::string("ok")));
+      parsed["decision"] = (status == "ok" || status == "completed") ? "allow" : "deny";
+    }
+    if (!parsed.contains("reason_code"))
+    {
+      parsed["reason_code"] = to_lower_copy(parsed.value("status", std::string("ok")));
+    }
+
+    if (!parsed.contains("duration_ms"))
+      parsed["duration_ms"] = 0;
+    if (!parsed.contains("queue_depth"))
+      parsed["queue_depth"] = 0;
+    if (!parsed.contains("drop_count") && parsed.contains("dropped_events"))
+      parsed["drop_count"] = parsed["dropped_events"];
+    if (!parsed.contains("drop_count"))
+      parsed["drop_count"] = 0;
+    if (!parsed.contains("policy_ref"))
+      parsed["policy_ref"] = state_impl_.policy_hash();
+    if (!parsed.contains("masked_fields") || !parsed["masked_fields"].is_array())
+      parsed["masked_fields"] = nlohmann::json::array();
+
+    if (!config_.kernel_allow_raw_sensitive)
+    {
+      const std::unordered_set<std::string> sensitive_keys = {
+          "path", "raw_path", "process_path", "command_line", "arguments", "args", "raw_identifier"};
+      for (const auto &key : sensitive_keys)
+      {
+        if (parsed.contains(key) && !parsed[key].is_null())
+        {
+          parsed[key] = "[masked]";
+          parsed["masked_fields"].push_back(key);
+          masked = true;
+        }
+      }
+      if (parsed.contains("masked_fields") && parsed["masked_fields"].is_array())
+      {
+        std::unordered_set<std::string> seen;
+        nlohmann::json deduped = nlohmann::json::array();
+        for (const auto &entry : parsed["masked_fields"])
+        {
+          if (!entry.is_string())
+            continue;
+          const auto value = entry.get<std::string>();
+          if (seen.insert(value).second)
+          {
+            deduped.push_back(value);
+          }
+        }
+        parsed["masked_fields"] = deduped;
+      }
+    }
+
+    return parsed.dump();
+  }
+  catch (const std::exception &)
+  {
+    return payload_json;
+  }
 }
 
 void WsClient::run_disconnected_telemetry_tick(bool extended_scope)
@@ -572,6 +787,11 @@ void WsClient::run()
                 " replayed=" + std::to_string(telemetry_stats_.replayed) +
                 " dropped=" + std::to_string(telemetry_stats_.dropped) +
                 " retries=" + std::to_string(telemetry_stats_.retry_count) +
+                " kernel_sent=" + std::to_string(telemetry_stats_.kernel_sent) +
+                " kernel_queued=" + std::to_string(telemetry_stats_.kernel_queued) +
+                " kernel_replayed=" + std::to_string(telemetry_stats_.kernel_replayed) +
+                " kernel_dropped=" + std::to_string(telemetry_stats_.kernel_dropped) +
+                " kernel_retry=" + std::to_string(telemetry_stats_.kernel_retry) +
                 (telemetry_stats_.last_success_ts.empty() ? "" : (" last_success=" + telemetry_stats_.last_success_ts)));
       }
 
@@ -613,6 +833,18 @@ bool WsClient::try_connect()
 
   KernelEventListener kernel_listener;
   std::atomic<bool> kernel_listener_started{false};
+  auto queue_kernel_ws_payload = [&](const std::string &ws_telemetry, const std::string &reason) {
+    std::string payload;
+    std::int64_t seq = 0;
+    if (parse_ws_telemetry_to_http_payload(ws_telemetry, payload, seq))
+    {
+      queue_telemetry_payload(payload, seq, reason);
+      return;
+    }
+    telemetry_stats_.dropped += 1;
+    telemetry_stats_.kernel_dropped += 1;
+    Logger::log(LogLevel::Warn, "kernel telemetry dropped: invalid envelope for fallback conversion");
+  };
 
   socket.setOnMessageCallback([&](const ix::WebSocketMessagePtr &msg)
                               {
@@ -700,17 +932,54 @@ bool WsClient::try_connect()
                         if (is_kernel_driver_enabled() && !kernel_listener_started.load()) {
                             const std::string session_id_copy = session_id;
                             bool started = kernel_listener.start([&, session_id_copy](const KernelEvent &evt) {
-                                std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
+                                bool payload_masked = false;
+                                std::string kernel_category;
+                                const auto normalized_payload = normalize_kernel_payload_json(evt.payload_json, kernel_category, payload_masked);
+                                if (!kernel_category_enabled(kernel_category))
+                                {
+                                    Logger::log(LogLevel::Debug, "kernel telemetry skipped by tier/category policy: " + kernel_category);
+                                    return;
+                                }
+                                if (!kernel_category_sampled(kernel_category))
+                                {
+                                    return;
+                                }
+                                kernel_category_seen_[kernel_category] += 1;
+
                                 auto tel = build_signed_kernel_event_telemetry_json(
                                     config_.device_id,
                                     session_id_copy,
                                     evt.event_id,
                                     evt.event_type,
                                     evt.timestamp_unix,
-                                    evt.payload_json);
-                                if (!tel.empty()) {
-                                    socket.sendText(tel);
+                                    normalized_payload);
+                                if (tel.empty()) {
+                                    telemetry_stats_.dropped += 1;
+                                    telemetry_stats_.kernel_dropped += 1;
+                                    Logger::log(LogLevel::Warn, "kernel telemetry dropped: failed to build signed payload");
+                                    return;
                                 }
+                                if (payload_masked)
+                                {
+                                  Logger::log(LogLevel::Debug, "kernel telemetry payload masked before send");
+                                }
+                                const bool ws_ready =
+                                    connection_opened.load(std::memory_order_acquire) &&
+                                    !connection_closed.load(std::memory_order_acquire) &&
+                                    !connection_error.load(std::memory_order_acquire) &&
+                                    authenticated.load(std::memory_order_acquire);
+                                if (ws_ready) {
+                                    try {
+                                        std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
+                                        socket.sendText(tel);
+                                        telemetry_stats_.sent += 1;
+                                        telemetry_stats_.kernel_sent += 1;
+                                        return;
+                                    } catch (const std::exception &) {
+                                        Logger::log(LogLevel::Warn, "kernel telemetry WSS send failed; queueing for replay");
+                                    }
+                                }
+                                queue_kernel_ws_payload(tel, ws_ready ? "kernel_ws_send_failed" : "kernel_ws_unavailable");
                             });
                             if (started) {
                                 kernel_listener_started.store(true);
@@ -981,6 +1250,29 @@ bool WsClient::try_connect()
         {
           replay_queued_telemetry();
           last_replay_tick = now;
+        }
+
+        if (now - last_metrics_log_ >= std::chrono::seconds(60))
+        {
+          last_metrics_log_ = now;
+          Logger::log(
+              LogLevel::Info,
+              "telemetry stats: sent=" + std::to_string(telemetry_stats_.sent) +
+                  " queued=" + std::to_string(telemetry_stats_.queued) +
+                  " replayed=" + std::to_string(telemetry_stats_.replayed) +
+                  " dropped=" + std::to_string(telemetry_stats_.dropped) +
+                  " retries=" + std::to_string(telemetry_stats_.retry_count) +
+                  " kernel_sent=" + std::to_string(telemetry_stats_.kernel_sent) +
+                  " kernel_queued=" + std::to_string(telemetry_stats_.kernel_queued) +
+                  " kernel_replayed=" + std::to_string(telemetry_stats_.kernel_replayed) +
+                  " kernel_dropped=" + std::to_string(telemetry_stats_.kernel_dropped) +
+                  " kernel_retry=" + std::to_string(telemetry_stats_.kernel_retry) +
+                  " kernel_exec=" + std::to_string(kernel_category_seen_["exec"]) +
+                  " kernel_integrity=" + std::to_string(kernel_category_seen_["integrity"]) +
+                  " kernel_attestation=" + std::to_string(kernel_category_seen_["attestation"]) +
+                  " kernel_update=" + std::to_string(kernel_category_seen_["update"]) +
+                  " kernel_runtime=" + std::to_string(kernel_category_seen_["runtime"]) +
+                  (telemetry_stats_.last_success_ts.empty() ? "" : (" last_success=" + telemetry_stats_.last_success_ts)));
         }
       }
     }

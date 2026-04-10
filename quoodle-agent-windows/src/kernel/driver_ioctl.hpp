@@ -53,6 +53,10 @@
 
 enum QuoodleKernelEventType : uint32_t {
   QKEVENT_TYPE_OPCODE = 1,
+  QKEVENT_TYPE_RUNTIME = 2,
+  QKEVENT_TYPE_INTEGRITY = 3,
+  QKEVENT_TYPE_ATTESTATION = 4,
+  QKEVENT_TYPE_UPDATE = 5,
 };
 
 enum QuoodleOpcode : uint32_t {

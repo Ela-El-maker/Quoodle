@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <cctype>
+#include <algorithm>
 #include <string>
 #include <fstream>
 #include <filesystem>
@@ -128,8 +129,60 @@ struct ConfigManager
             cfg.telemetry_retry_backoff_s = static_cast<std::uint32_t>(std::stoul(val));
         if (const char *val = std::getenv("AGENT_TELEMETRY_RETRY_BACKOFF_MAX_S"))
             cfg.telemetry_retry_backoff_max_s = static_cast<std::uint32_t>(std::stoul(val));
+        if (const char *val = std::getenv("AGENT_KERNEL_TELEMETRY_TIER"))
+            cfg.kernel_telemetry_tier = val;
+        if (const char *val = std::getenv("AGENT_KERNEL_TELEMETRY_ENABLE_EXEC"))
+            cfg.kernel_enable_exec = detail::ParseBool(val, cfg.kernel_enable_exec);
+        if (const char *val = std::getenv("AGENT_KERNEL_TELEMETRY_ENABLE_INTEGRITY"))
+            cfg.kernel_enable_integrity = detail::ParseBool(val, cfg.kernel_enable_integrity);
+        if (const char *val = std::getenv("AGENT_KERNEL_TELEMETRY_ENABLE_ATTESTATION"))
+            cfg.kernel_enable_attestation = detail::ParseBool(val, cfg.kernel_enable_attestation);
+        if (const char *val = std::getenv("AGENT_KERNEL_TELEMETRY_ENABLE_UPDATE"))
+            cfg.kernel_enable_update = detail::ParseBool(val, cfg.kernel_enable_update);
+        if (const char *val = std::getenv("AGENT_KERNEL_TELEMETRY_ENABLE_RUNTIME"))
+            cfg.kernel_enable_runtime = detail::ParseBool(val, cfg.kernel_enable_runtime);
+        if (const char *val = std::getenv("AGENT_KERNEL_TELEMETRY_SAMPLE_EXEC_PCT"))
+            cfg.kernel_sample_exec_pct = static_cast<std::uint32_t>(std::stoul(val));
+        if (const char *val = std::getenv("AGENT_KERNEL_TELEMETRY_SAMPLE_INTEGRITY_PCT"))
+            cfg.kernel_sample_integrity_pct = static_cast<std::uint32_t>(std::stoul(val));
+        if (const char *val = std::getenv("AGENT_KERNEL_TELEMETRY_SAMPLE_ATTESTATION_PCT"))
+            cfg.kernel_sample_attestation_pct = static_cast<std::uint32_t>(std::stoul(val));
+        if (const char *val = std::getenv("AGENT_KERNEL_TELEMETRY_SAMPLE_UPDATE_PCT"))
+            cfg.kernel_sample_update_pct = static_cast<std::uint32_t>(std::stoul(val));
+        if (const char *val = std::getenv("AGENT_KERNEL_TELEMETRY_SAMPLE_RUNTIME_PCT"))
+            cfg.kernel_sample_runtime_pct = static_cast<std::uint32_t>(std::stoul(val));
+        if (const char *val = std::getenv("AGENT_KERNEL_TELEMETRY_ALLOW_RAW_SENSITIVE"))
+            cfg.kernel_allow_raw_sensitive = detail::ParseBool(val, cfg.kernel_allow_raw_sensitive);
         if (const char *val = std::getenv("AGENT_CONNECTION_TIMEOUT_MS"))
             cfg.connection_timeout_ms = static_cast<std::uint32_t>(std::stoul(val));
+
+        std::string tier = cfg.kernel_telemetry_tier;
+        std::transform(tier.begin(), tier.end(), tier.begin(), [](unsigned char ch)
+                       { return static_cast<char>(std::tolower(ch)); });
+        if (tier == "balanced")
+        {
+            cfg.kernel_enable_integrity = true;
+            cfg.kernel_enable_attestation = true;
+        }
+        else if (tier == "deep")
+        {
+            cfg.kernel_enable_integrity = true;
+            cfg.kernel_enable_attestation = true;
+            cfg.kernel_enable_update = true;
+        }
+        else
+        {
+            cfg.kernel_telemetry_tier = "core";
+            cfg.kernel_enable_integrity = false;
+            cfg.kernel_enable_attestation = false;
+            cfg.kernel_enable_update = false;
+        }
+
+        cfg.kernel_sample_exec_pct = std::min<std::uint32_t>(100, cfg.kernel_sample_exec_pct);
+        cfg.kernel_sample_integrity_pct = std::min<std::uint32_t>(100, cfg.kernel_sample_integrity_pct);
+        cfg.kernel_sample_attestation_pct = std::min<std::uint32_t>(100, cfg.kernel_sample_attestation_pct);
+        cfg.kernel_sample_update_pct = std::min<std::uint32_t>(100, cfg.kernel_sample_update_pct);
+        cfg.kernel_sample_runtime_pct = std::min<std::uint32_t>(100, cfg.kernel_sample_runtime_pct);
 
         return cfg;
     }

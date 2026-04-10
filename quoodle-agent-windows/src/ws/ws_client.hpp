@@ -6,6 +6,7 @@
 #include <random>
 #include <string>
 #include <cstdint>
+#include <unordered_map>
 
 #include "../agent_state.hpp"
 #include "../config/config.hpp"
@@ -96,6 +97,11 @@ private:
     std::uint64_t replayed{0};
     std::uint64_t dropped{0};
     std::uint64_t retry_count{0};
+    std::uint64_t kernel_sent{0};
+    std::uint64_t kernel_queued{0};
+    std::uint64_t kernel_replayed{0};
+    std::uint64_t kernel_dropped{0};
+    std::uint64_t kernel_retry{0};
     std::string last_success_ts;
   };
 
@@ -159,4 +165,8 @@ private:
                            int *status_code = nullptr);
   void queue_telemetry_payload(const std::string &payload_json, std::int64_t seq, const std::string &reason);
   bool replay_queued_telemetry();
+  bool kernel_category_enabled(const std::string &category) const;
+  bool kernel_category_sampled(const std::string &category);
+  std::string normalize_kernel_payload_json(const std::string &payload_json, std::string &category_out, bool &masked);
+  std::unordered_map<std::string, std::uint64_t> kernel_category_seen_;
 };

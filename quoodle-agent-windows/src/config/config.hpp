@@ -63,6 +63,26 @@ struct AgentConfig
     /// Max retry backoff (seconds) for telemetry replay failures.
     std::uint32_t telemetry_retry_backoff_max_s{300};
 
+    /// Kernel telemetry tier policy (core|balanced|deep).
+    std::string kernel_telemetry_tier{"core"};
+
+    /// Kernel telemetry category toggles (defaults are tier-derived).
+    bool kernel_enable_exec{true};
+    bool kernel_enable_integrity{false};
+    bool kernel_enable_attestation{false};
+    bool kernel_enable_update{false};
+    bool kernel_enable_runtime{true};
+
+    /// Kernel telemetry per-category sample rates (0..100).
+    std::uint32_t kernel_sample_exec_pct{100};
+    std::uint32_t kernel_sample_integrity_pct{100};
+    std::uint32_t kernel_sample_attestation_pct{100};
+    std::uint32_t kernel_sample_update_pct{100};
+    std::uint32_t kernel_sample_runtime_pct{100};
+
+    /// Allow raw-sensitive kernel fields (default false for mask-by-default).
+    bool kernel_allow_raw_sensitive{false};
+
     /// Connection timeout (milliseconds)
     std::uint32_t connection_timeout_ms{10000};
 };
