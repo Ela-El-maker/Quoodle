@@ -1,62 +1,49 @@
-
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../routes/app_routes.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:secure_device_control/app/router/app_navigator.dart';
+import 'package:secure_device_control/features/dashboard/presentation/providers/dashboard_providers.dart';
+import 'package:secure_device_control/features/dashboard/presentation/providers/dashboard_state.dart';
+
 import '../../theme/app_theme.dart';
 import '../../widgets/app_bar_widget.dart';
 import '../../widgets/app_navigation.dart';
 import '../../widgets/loading_skeleton_widget.dart';
+import '../../widgets/deferred_loader_widget.dart';
 import './widgets/dashboard_activity_feed_widget.dart';
 import './widgets/dashboard_at_risk_widget.dart';
 import './widgets/dashboard_fleet_chart_widget.dart';
 import './widgets/dashboard_kpi_grid_widget.dart';
 
-class DashboardScreen extends StatefulWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  State<DashboardScreen> createState() => _DashboardScreenState();
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
-  // TODO: Replace with Riverpod/Bloc for production
-  bool _isLoading = true;
-  bool _isRefreshing = false;
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   int _currentNavIndex = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    await Future.delayed(const Duration(milliseconds: 900));
-    if (mounted) setState(() => _isLoading = false);
-  }
-
   Future<void> _onRefresh() async {
-    setState(() => _isRefreshing = true);
-    await Future.delayed(const Duration(milliseconds: 1200));
-    if (mounted) setState(() => _isRefreshing = false);
+    await ref.read(dashboardControllerProvider.notifier).refresh();
   }
 
   void _onNavTap(int index) {
-    final routes = [
-      AppRoutes.dashboardScreen,
-      AppRoutes.devicesScreen,
-      AppRoutes.commandTimelineScreen,
-      AppRoutes.alertsScreen,
-      AppRoutes.authenticationScreen,
-    ];
     if (index != _currentNavIndex) {
       setState(() => _currentNavIndex = index);
-      Navigator.pushNamedAndRemoveUntil(context, routes[index], (r) => false);
+      AppNavigator.navigateToTab(
+        context,
+        index,
+        profileTabTarget: ProfileTabTarget.settings,
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final dashboardState = ref.watch(dashboardControllerProvider);
     final isTablet = MediaQuery.of(context).size.width >= 600;
 
     return Scaffold(
@@ -113,13 +100,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ],
             ),
-            onPressed: () =>
-                Navigator.pushNamed(context, AppRoutes.alertsScreen),
+            onPressed: () => AppNavigator.push(context, AppRoute.alerts),
           ),
           const SizedBox(width: 8),
         ],
       ),
-      body: isTablet ? _buildTabletLayout() : _buildPhoneLayout(),
+      body: isTablet
+          ? _buildTabletLayout(dashboardState)
+          : _buildPhoneLayout(dashboardState),
       bottomNavigationBar: AppNavigation(
         currentIndex: _currentNavIndex,
         onTap: _onNavTap,
@@ -127,8 +115,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildPhoneLayout() {
-    if (_isLoading) return _buildSkeleton();
+  Widget _buildPhoneLayout(DashboardState state) {
+    if (state.isLoading) return _buildSkeleton();
+    if (state.status == DashboardStatus.error) {
+      return Center(
+        child: Text(
+          state.errorMessage ?? 'Failed to load dashboard.',
+          style: GoogleFonts.ibmPlexSans(color: AppTheme.error),
+        ),
+      );
+    }
     return RefreshIndicator(
       onRefresh: _onRefresh,
       color: AppTheme.primary,
@@ -151,12 +147,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            sliver: const SliverToBoxAdapter(child: DashboardAtRiskWidget()),
+            sliver: SliverToBoxAdapter(
+              child: DeferredLoader(
+                delay: const Duration(milliseconds: 600),
+                builder: () => const DashboardAtRiskWidget(),
+              ),
+            ),
           ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-            sliver: const SliverToBoxAdapter(
-              child: DashboardActivityFeedWidget(),
+            sliver: SliverToBoxAdapter(
+              child: DeferredLoader(
+                delay: const Duration(milliseconds: 800),
+                builder: () => const DashboardActivityFeedWidget(),
+              ),
             ),
           ),
         ],
@@ -164,8 +168,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildTabletLayout() {
-    if (_isLoading) return _buildSkeleton();
+  Widget _buildTabletLayout(DashboardState state) {
+    if (state.isLoading) return _buildSkeleton();
+    if (state.status == DashboardStatus.error) {
+      return Center(
+        child: Text(
+          state.errorMessage ?? 'Failed to load dashboard.',
+          style: GoogleFonts.ibmPlexSans(color: AppTheme.error),
+        ),
+      );
+    }
     return Row(
       children: [
         Expanded(
@@ -218,8 +230,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final greeting = hour < 12
         ? 'Good morning'
         : hour < 17
-        ? 'Good afternoon'
-        : 'Good evening';
+            ? 'Good afternoon'
+            : 'Good evening';
     return Row(
       children: [
         Expanded(
@@ -228,12 +240,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               Text(
                 '$greeting, Operator',
-                style: Theme.of(context).textTheme.titleLarge,
+                style: GoogleFonts.ibmPlexSans(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textPrimary,
+                ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 4),
               Text(
                 'Last updated: just now  ·  3 items need attention',
-                style: Theme.of(context).textTheme.bodySmall,
+                style: GoogleFonts.ibmPlexSans(
+                  fontSize: 12,
+                  color: AppTheme.textMuted,
+                ),
               ),
             ],
           ),
@@ -242,23 +261,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
             color: AppTheme.errorMuted,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppTheme.error.withAlpha(102), width: 1),
+            borderRadius: BorderRadius.circular(8.0),
+            border: Border.all(color: AppTheme.error.withAlpha(80), width: 1),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
-                Icons.warning_amber_rounded,
-                color: AppTheme.error,
-                size: 13,
+              Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: AppTheme.error,
+                  shape: BoxShape.circle,
+                ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 6),
               Text(
                 '3 ALERTS',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                style: GoogleFonts.ibmPlexSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                   color: AppTheme.error,
-                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],

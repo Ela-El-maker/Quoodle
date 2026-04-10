@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:secure_device_control/app/router/app_navigator.dart';
 import '../../../theme/app_theme.dart';
-import '../../../routes/app_routes.dart';
 import '../../../widgets/status_badge_widget.dart';
 import '../../../widgets/empty_state_widget.dart';
 
@@ -145,9 +145,9 @@ class DeviceCommandsTabWidget extends StatelessWidget {
               final cmd = _commandMaps[i];
               return _CommandHistoryCard(
                 command: cmd,
-                onTap: () => Navigator.pushNamed(
+                onTap: () => AppNavigator.push(
                   ctx,
-                  AppRoutes.commandTimelineScreen,
+                  AppRoute.commandTimeline,
                   arguments: cmd,
                 ),
               );
@@ -160,13 +160,11 @@ class DeviceCommandsTabWidget extends StatelessWidget {
 
   Widget _buildSummaryBar(BuildContext context) {
     final total = _commandMaps.length;
-    final completed = _commandMaps
-        .where((c) => c['status'] == 'completed')
-        .length;
+    final completed =
+        _commandMaps.where((c) => c['status'] == 'completed').length;
     final failed = _commandMaps.where((c) => c['status'] == 'failed').length;
-    final executing = _commandMaps
-        .where((c) => c['status'] == 'executing')
-        .length;
+    final executing =
+        _commandMaps.where((c) => c['status'] == 'executing').length;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -188,8 +186,7 @@ class DeviceCommandsTabWidget extends StatelessWidget {
             _SummaryChip(label: '$failed Failed', color: AppTheme.error),
           const Spacer(),
           GestureDetector(
-            onTap: () =>
-                Navigator.pushNamed(context, AppRoutes.sendCommandScreen),
+            onTap: () => AppNavigator.push(context, AppRoute.sendCommand),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
@@ -351,10 +348,7 @@ class _CommandHistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isFailed = command['status'] == 'failed';
-    final isExecuting = command['status'] == 'executing';
-    final hasResult =
-        (command['resultType'] as String?) != null &&
+    final hasResult = (command['resultType'] as String?) != null &&
         command['status'] == 'completed';
 
     return InkWell(
@@ -367,19 +361,7 @@ class _CommandHistoryCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppTheme.surfaceVariant,
           borderRadius: BorderRadius.circular(14),
-          border: Border(
-            left: BorderSide(
-              color: isFailed
-                  ? AppTheme.error
-                  : isExecuting
-                  ? AppTheme.warning
-                  : AppTheme.border,
-              width: isFailed || isExecuting ? 3 : 1,
-            ),
-            top: const BorderSide(color: AppTheme.border, width: 1),
-            right: const BorderSide(color: AppTheme.border, width: 1),
-            bottom: const BorderSide(color: AppTheme.border, width: 1),
-          ),
+          border: Border.all(color: AppTheme.border, width: 1),
         ),
         child: Row(
           children: [

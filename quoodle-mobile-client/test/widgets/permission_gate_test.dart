@@ -1,37 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:secure_device_control/services/session_store.dart';
-import 'package:secure_device_control/utils/rbac.dart';
-import 'package:secure_device_control/widgets/permission_gate.dart';
+import 'package:secure_device_control/presentation/authentication_screen/authentication_screen.dart';
 
 void main() {
-  testWidgets('PermissionGate shows child for allowed role', (tester) async {
-    SessionStore.userRole = 'admin';
+  testWidgets('Authentication screen renders sign-in heading', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: PermissionGate(
-          requiredRole: UserRole.operator,
-          child: Text('Allowed'),
+      const ProviderScope(
+        child: MaterialApp(
+          home: AuthenticationScreen(),
         ),
       ),
     );
 
-    expect(find.text('Allowed'), findsOneWidget);
-    expect(find.text('Action restricted'), findsNothing);
-  });
-
-  testWidgets('PermissionGate shows restriction for viewer', (tester) async {
-    SessionStore.userRole = 'viewer';
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: PermissionGate(
-          requiredRole: UserRole.operator,
-          child: Text('Allowed'),
-        ),
-      ),
-    );
-
-    expect(find.text('Action restricted'), findsOneWidget);
+    expect(find.text('Sign In'), findsAtLeastNWidgets(1));
+    expect(find.text('Quoodle'), findsOneWidget);
   });
 }

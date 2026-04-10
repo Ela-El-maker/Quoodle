@@ -61,7 +61,6 @@ class AlertCardWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isAcked = alert['acknowledged'] as bool;
-    final isCritical = _severity == AlertSeverity.critical;
 
     return Dismissible(
       key: Key(alert['id'] as String),
@@ -99,40 +98,14 @@ class AlertCardWidget extends StatelessWidget {
         return false; // Don't actually remove from list — just ack
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
+        margin: const EdgeInsets.only(bottom: 8),
         decoration: BoxDecoration(
-          color: isAcked ? AppTheme.surface : AppTheme.surfaceVariant,
-          borderRadius: BorderRadius.circular(16),
-          border: Border(
-            left: BorderSide(
-              color: isAcked ? AppTheme.border : _severityColor,
-              width: isAcked ? 1 : (isCritical ? 4 : 3),
-            ),
-            top: BorderSide(
-              color: isAcked ? AppTheme.borderLight : AppTheme.border,
-              width: 1,
-            ),
-            right: BorderSide(
-              color: isAcked ? AppTheme.borderLight : AppTheme.border,
-              width: 1,
-            ),
-            bottom: BorderSide(
-              color: isAcked ? AppTheme.borderLight : AppTheme.border,
-              width: 1,
-            ),
-          ),
-          boxShadow: isCritical && !isAcked
-              ? [
-                  BoxShadow(
-                    color: AppTheme.critical.withAlpha(31),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
-              : null,
+          color: isAcked ? AppTheme.background : AppTheme.surface,
+          borderRadius: BorderRadius.circular(12.0),
+          border: Border.all(color: AppTheme.border, width: 1),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -144,9 +117,9 @@ class AlertCardWidget extends StatelessWidget {
                     height: 32,
                     decoration: BoxDecoration(
                       color: isAcked
-                          ? AppTheme.surface
-                          : _severityColor.withAlpha(31),
-                      borderRadius: BorderRadius.circular(9),
+                          ? AppTheme.surfaceVariant
+                          : _severityColor.withAlpha(25),
+                      borderRadius: BorderRadius.circular(8.0),
                     ),
                     child: Icon(
                       _categoryIcon,
@@ -160,33 +133,32 @@ class AlertCardWidget extends StatelessWidget {
                   Expanded(
                     child: Text(
                       alert['deviceName'] as String,
-                      style: GoogleFonts.ibmPlexMono(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: isAcked
-                            ? AppTheme.textMuted
-                            : AppTheme.textPrimary,
+                      style: GoogleFonts.ibmPlexSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color:
+                            isAcked ? AppTheme.textMuted : AppTheme.textPrimary,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   Text(
                     alert['timestamp'] as String,
-                    style: GoogleFonts.ibmPlexMono(
-                      fontSize: 9,
+                    style: GoogleFonts.ibmPlexSans(
+                      fontSize: 12,
                       color: AppTheme.textMuted,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               // Message
               Text(
                 alert['message'] as String,
                 style: GoogleFonts.ibmPlexSans(
-                  fontSize: 12,
+                  fontSize: 14,
                   color: isAcked ? AppTheme.textMuted : AppTheme.textSecondary,
-                  height: 1.4,
+                  height: 1.5,
                 ),
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
@@ -200,14 +172,14 @@ class AlertCardWidget extends StatelessWidget {
                       children: [
                         const Icon(
                           Icons.check_circle_rounded,
-                          size: 12,
+                          size: 14,
                           color: AppTheme.statusOnline,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           'Acknowledged',
                           style: GoogleFonts.ibmPlexSans(
-                            fontSize: 10,
+                            fontSize: 12,
                             color: AppTheme.statusOnline,
                           ),
                         ),
@@ -216,24 +188,24 @@ class AlertCardWidget extends StatelessWidget {
                   else
                     InkWell(
                       onTap: onAcknowledge,
-                      borderRadius: BorderRadius.circular(7),
+                      borderRadius: BorderRadius.circular(6.0),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
+                          horizontal: 12,
+                          vertical: 6,
                         ),
                         decoration: BoxDecoration(
                           color: AppTheme.primaryDim,
-                          borderRadius: BorderRadius.circular(7),
+                          borderRadius: BorderRadius.circular(6.0),
                           border: Border.all(
-                            color: AppTheme.primary.withAlpha(77),
+                            color: AppTheme.primary.withAlpha(60),
                             width: 1,
                           ),
                         ),
                         child: Text(
                           'Acknowledge',
                           style: GoogleFonts.ibmPlexSans(
-                            fontSize: 10,
+                            fontSize: 12,
                             fontWeight: FontWeight.w600,
                             color: AppTheme.primary,
                           ),

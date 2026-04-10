@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:secure_device_control/app/router/app_navigator.dart';
 import '../../../theme/app_theme.dart';
-import '../../../routes/app_routes.dart';
 import '../../../widgets/status_badge_widget.dart';
 
 class DashboardAtRiskWidget extends StatelessWidget {
@@ -39,13 +39,20 @@ class DashboardAtRiskWidget extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('At Risk', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'At Risk',
+              style: GoogleFonts.ibmPlexSans(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
+              ),
+            ),
             TextButton(
-              onPressed: () =>
-                  Navigator.pushNamed(context, AppRoutes.devicesScreen),
+              onPressed: () => AppNavigator.push(context, AppRoute.devices),
               style: TextButton.styleFrom(
                 padding: EdgeInsets.zero,
                 minimumSize: const Size(0, 0),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               child: Text(
                 'View all',
@@ -61,9 +68,7 @@ class DashboardAtRiskWidget extends StatelessWidget {
         ...atRisk.map(
           (d) => _AtRiskCard(
             device: d,
-            onTap: () {
-              Navigator.pushNamed(context, AppRoutes.deviceDetailScreen);
-            },
+            onTap: () => AppNavigator.push(context, AppRoute.deviceDetail),
           ),
         ),
       ],
@@ -101,16 +106,11 @@ class _AtRiskCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppTheme.surfaceVariant,
-          borderRadius: BorderRadius.circular(14),
-          border: Border(
-            left: BorderSide(color: _riskColor, width: 3),
-            top: BorderSide(color: AppTheme.border, width: 1),
-            right: BorderSide(color: AppTheme.border, width: 1),
-            bottom: BorderSide(color: AppTheme.border, width: 1),
-          ),
+          color: AppTheme.surface,
+          borderRadius: BorderRadius.circular(12.0),
+          border: Border.all(color: AppTheme.border, width: 1),
         ),
         child: Row(
           children: [
@@ -120,10 +120,15 @@ class _AtRiskCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Text(
-                        device.name,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: AppTheme.textPrimary,
+                      Flexible(
+                        child: Text(
+                          device.name,
+                          style: GoogleFonts.ibmPlexSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: AppTheme.textPrimary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -133,27 +138,30 @@ class _AtRiskCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     device.reason,
-                    style: Theme.of(context).textTheme.bodySmall,
+                    style: GoogleFonts.ibmPlexSans(
+                      fontSize: 12,
+                      color: AppTheme.textMuted,
+                    ),
                   ),
                 ],
               ),
             ),
+            const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
                   '${device.riskScore}',
-                  style: GoogleFonts.ibmPlexMono(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
+                  style: GoogleFonts.ibmPlexSans(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
                     color: _riskColor,
-                    fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
                 Text(
                   'risk',
                   style: GoogleFonts.ibmPlexSans(
-                    fontSize: 9,
+                    fontSize: 12,
                     color: AppTheme.textMuted,
                   ),
                 ),

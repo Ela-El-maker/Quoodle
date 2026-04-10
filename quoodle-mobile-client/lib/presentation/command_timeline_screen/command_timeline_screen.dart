@@ -1,172 +1,145 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:secure_device_control/features/commands/domain/entities/command_execution_status.dart';
+import 'package:secure_device_control/features/commands/presentation/providers/command_timeline_providers.dart';
 
 import '../../theme/app_theme.dart';
 import '../../widgets/status_badge_widget.dart';
 import './widgets/command_audit_widget.dart';
 import './widgets/command_result_widget.dart';
 import './widgets/command_timeline_widget.dart';
+import 'package:secure_device_control/app/router/app_navigator.dart';
+import '../../widgets/app_navigation.dart';
 
-class CommandTimelineScreen extends StatefulWidget {
+class CommandTimelineScreen extends ConsumerStatefulWidget {
   const CommandTimelineScreen({super.key});
 
   @override
-  State<CommandTimelineScreen> createState() => _CommandTimelineScreenState();
+  ConsumerState<CommandTimelineScreen> createState() =>
+      _CommandTimelineScreenState();
 }
 
-class _CommandTimelineScreenState extends State<CommandTimelineScreen> {
-  // TODO: Replace with Riverpod/Bloc polling service for production
-  Timer? _pollTimer;
-  int _pollCount = 0;
-  int _secondsSinceUpdate = 0;
+class _CommandTimelineScreenState extends ConsumerState<CommandTimelineScreen> {
+  bool _initialized = false;
 
-  // Simulated command — starts executing, completes after a few polls
-  static const Map<String, dynamic> _commandBase = {
-    'id': 'cmd-0091',
-    'method': 'policy_sync',
-    'deviceId': 'dev-007',
-    'deviceName': 'WKS-FINANCE-07',
-    'initiator': 'L. Nakamura',
-    'role': 'operator',
-    'sensitive': false,
-    'params': '{"force": true, "version": "1.0.4"}',
-    'policyDecision': 'allow',
-    'queuedAt': '2026-04-06T10:41:03Z',
-    'dispatchedAt': '2026-04-06T10:41:04Z',
-    'ackedAt': '2026-04-06T10:41:05Z',
-    'executingAt': '2026-04-06T10:41:06Z',
-  };
+  int _currentNavIndex = 2; // Commands tab
 
-  late Map<String, dynamic> _command;
-  CommandStatus _currentStatus = CommandStatus.executing;
-
-  // Method-to-result-type mapping
-  static const Map<String, String> _methodResultTypes = {
-    'screenshot_capture': 'screenshot',
-    'process_list': 'process_list',
-    'system_info': 'system_info',
-    'running_apps': 'running_apps',
-    'filesystem': 'filesystem',
-    'network_info': 'network_info',
-    'upload_file': 'file_op',
-    'create_file': 'file_op',
-    'collect_telemetry': 'telemetry',
-  };
-
-  @override
-  void initState() {
-    super.initState();
-    // Accept arguments from navigation (from command history or send command)
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final args = ModalRoute.of(context)?.settings.arguments;
-      if (args is Map<String, dynamic>) {
-        setState(() {
-          _command = {
-            ..._commandBase,
-            if (args.containsKey('method')) 'method': args['method'],
-            if (args.containsKey('params')) 'params': args['params'],
-            if (args.containsKey('sensitive')) 'sensitive': args['sensitive'],
-            if (args.containsKey('id')) 'id': args['id'],
-            if (args.containsKey('initiator')) 'initiator': args['initiator'],
-          };
-        });
-      }
-    });
-    _command = Map.from(_commandBase);
-    _startPolling();
-  }
-
-  void _startPolling() {
-    // TODO: Replace with real GET /api/commands/{id} polling for production
-    Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) {
-        t.cancel();
-        return;
-      }
-      setState(() => _secondsSinceUpdate++);
-    });
-
-    _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-      if (!mounted) return;
-      _pollCount++;
-      // Simulate progression: executing → completed after 3 polls
-      if (_pollCount >= 3 && _currentStatus == CommandStatus.executing) {
-        final method = _command['method'] as String? ?? 'policy_sync';
-        final resultType = _methodResultTypes[method];
-        setState(() {
-          _currentStatus = CommandStatus.completed;
-          _command = {
-            ..._command,
-            'completedAt': '2026-04-06T10:41:14Z',
-            'executionTimeMs': 8210,
-            'resultStatus': 'success',
-            'resultNotes': 'Command executed successfully.',
-            if (resultType != null) 'resultType': resultType,
-          };
-          _secondsSinceUpdate = 0;
-        });
-        _pollTimer?.cancel();
-      }
-    });
+  void _onNavTap(int index) {
+    if (index != _currentNavIndex) {
+      setState(() => _currentNavIndex = index);
+      AppNavigator.navigateToTab(
+        context,
+        index,
+        profileTabTarget: ProfileTabTarget.settings,
+      );
+    }
   }
 
   @override
-  void dispose() {
-    _pollTimer?.cancel();
-    super.dispose();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) {
+      return;
+    }
+
+    _initialized = true;
+    final args = ModalRoute.of(context)?.settings.arguments;
+    Future<void>.microtask(
+      () =>
+          ref.read(commandTimelineControllerProvider.notifier).initialize(args),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isTerminal =
-        _currentStatus == CommandStatus.completed ||
-        _currentStatus == CommandStatus.failed ||
-        _currentStatus == CommandStatus.expired;
+    final timelineState = ref.watch(commandTimelineControllerProvider);
+    final command = timelineState.command;
+    final currentStatus = _toLegacyStatus(timelineState.status);
+    final isTerminal = timelineState.isTerminal;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      appBar: _buildAppBar(context, isTerminal),
+      extendBody: true,
+      appBar: _buildAppBar(context, command, currentStatus),
       body: CustomScrollView(
         slivers: [
-          // Command header card
+          if (timelineState.loadedFromCache)
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              sliver: SliverToBoxAdapter(child: _buildCachedBanner()),
+            ),
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            sliver: SliverToBoxAdapter(child: _buildCommandHeaderCard(context)),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              timelineState.loadedFromCache ? 8 : 16,
+              16,
+              0,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: _buildCommandHeaderCard(context, command),
+            ),
           ),
-          // Polling status
           if (!isTerminal)
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              sliver: SliverToBoxAdapter(child: _buildPollingIndicator()),
+              sliver: SliverToBoxAdapter(
+                child: _buildPollingIndicator(timelineState.secondsSinceUpdate),
+              ),
             ),
-          // Timeline
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             sliver: SliverToBoxAdapter(
               child: CommandTimelineWidget(
-                currentStatus: _currentStatus,
-                command: _command,
+                currentStatus: currentStatus,
+                command: command,
               ),
             ),
           ),
-          // Result section (terminal states only)
           if (isTerminal)
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               sliver: SliverToBoxAdapter(
                 child: CommandResultWidget(
-                  command: _command,
-                  status: _currentStatus,
+                  command: command,
+                  status: currentStatus,
                 ),
               ),
             ),
-          // Audit section
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-            sliver: SliverToBoxAdapter(
-              child: CommandAuditWidget(command: _command),
+            sliver:
+                SliverToBoxAdapter(child: CommandAuditWidget(command: command)),
+          ),
+        ],
+      ),
+      bottomNavigationBar: AppNavigation(
+        currentIndex: _currentNavIndex,
+        onTap: _onNavTap,
+      ),
+    );
+  }
+
+  Widget _buildCachedBanner() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryDim,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.primary.withAlpha(77), width: 1),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.storage_rounded, size: 14, color: AppTheme.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Restored from local storage - available offline',
+              style: GoogleFonts.ibmPlexSans(
+                fontSize: 11,
+                color: AppTheme.primary,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -174,7 +147,11 @@ class _CommandTimelineScreenState extends State<CommandTimelineScreen> {
     );
   }
 
-  PreferredSizeWidget _buildAppBar(BuildContext context, bool isTerminal) {
+  PreferredSizeWidget _buildAppBar(
+    BuildContext context,
+    Map<String, dynamic> command,
+    CommandStatus status,
+  ) {
     return AppBar(
       backgroundColor: AppTheme.surface,
       elevation: 0,
@@ -187,7 +164,7 @@ class _CommandTimelineScreenState extends State<CommandTimelineScreen> {
           size: 18,
           color: AppTheme.textPrimary,
         ),
-        onPressed: () => Navigator.pop(context),
+        onPressed: () => Navigator.maybePop(context),
       ),
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -201,7 +178,7 @@ class _CommandTimelineScreenState extends State<CommandTimelineScreen> {
             ),
           ),
           Text(
-            _command['id'] as String,
+            command['id']?.toString() ?? 'cmd-unknown',
             style: GoogleFonts.ibmPlexMono(
               fontSize: 10,
               color: AppTheme.textMuted,
@@ -212,13 +189,24 @@ class _CommandTimelineScreenState extends State<CommandTimelineScreen> {
       actions: [
         Padding(
           padding: const EdgeInsets.only(right: 16),
-          child: StatusBadgeWidget.command(_currentStatus),
+          child: StatusBadgeWidget.command(status),
         ),
       ],
     );
   }
 
-  Widget _buildCommandHeaderCard(BuildContext context) {
+  Widget _buildCommandHeaderCard(
+    BuildContext context,
+    Map<String, dynamic> command,
+  ) {
+    final method = command['method']?.toString() ?? 'unknown_method';
+    final deviceName = command['deviceName']?.toString() ?? 'Unknown Device';
+    final initiator = command['initiator']?.toString() ?? 'Unknown';
+    final params = command['params']?.toString() ?? '{}';
+    final policyDecision = command['policyDecision']?.toString() ?? 'unknown';
+    final deviceId = command['deviceId']?.toString() ?? 'dev-unknown';
+    final isSensitive = command['sensitive'] == true;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -253,7 +241,7 @@ class _CommandTimelineScreenState extends State<CommandTimelineScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _command['method'] as String,
+                      method,
                       style: GoogleFonts.ibmPlexMono(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -262,7 +250,7 @@ class _CommandTimelineScreenState extends State<CommandTimelineScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${_command['deviceName']}  ·  ${_command['initiator']}',
+                      '$deviceName  ·  $initiator',
                       style: GoogleFonts.ibmPlexSans(
                         fontSize: 12,
                         color: AppTheme.textMuted,
@@ -296,7 +284,7 @@ class _CommandTimelineScreenState extends State<CommandTimelineScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  _command['params'] as String,
+                  params,
                   style: GoogleFonts.ibmPlexMono(
                     fontSize: 12,
                     color: AppTheme.primary,
@@ -306,27 +294,26 @@ class _CommandTimelineScreenState extends State<CommandTimelineScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
               _HeaderTag(
                 icon: Icons.policy_rounded,
-                label: 'Policy: ${_command['policyDecision']}',
+                label: 'Policy: $policyDecision',
                 color: AppTheme.secondary,
               ),
-              const SizedBox(width: 8),
               _HeaderTag(
                 icon: Icons.devices_rounded,
-                label: _command['deviceId'] as String,
+                label: deviceId,
                 color: AppTheme.primary,
               ),
-              if (_command['sensitive'] as bool) ...[
-                const SizedBox(width: 8),
-                _HeaderTag(
+              if (isSensitive)
+                const _HeaderTag(
                   icon: Icons.security_rounded,
                   label: 'Sensitive',
                   color: AppTheme.warning,
                 ),
-              ],
             ],
           ),
         ],
@@ -334,7 +321,7 @@ class _CommandTimelineScreenState extends State<CommandTimelineScreen> {
     );
   }
 
-  Widget _buildPollingIndicator() {
+  Widget _buildPollingIndicator(int secondsSinceUpdate) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -344,7 +331,7 @@ class _CommandTimelineScreenState extends State<CommandTimelineScreen> {
       ),
       child: Row(
         children: [
-          SizedBox(
+          const SizedBox(
             width: 14,
             height: 14,
             child: CircularProgressIndicator(
@@ -354,7 +341,7 @@ class _CommandTimelineScreenState extends State<CommandTimelineScreen> {
           ),
           const SizedBox(width: 10),
           Text(
-            'Polling for updates…  Last refresh: ${_secondsSinceUpdate}s ago',
+            'Polling for updates...  Last refresh: ${secondsSinceUpdate}s ago',
             style: GoogleFonts.ibmPlexSans(
               fontSize: 11,
               color: AppTheme.warning,
@@ -363,6 +350,25 @@ class _CommandTimelineScreenState extends State<CommandTimelineScreen> {
         ],
       ),
     );
+  }
+
+  CommandStatus _toLegacyStatus(CommandExecutionStatus status) {
+    switch (status) {
+      case CommandExecutionStatus.queued:
+        return CommandStatus.queued;
+      case CommandExecutionStatus.dispatched:
+        return CommandStatus.dispatched;
+      case CommandExecutionStatus.acked:
+        return CommandStatus.acked;
+      case CommandExecutionStatus.executing:
+        return CommandStatus.executing;
+      case CommandExecutionStatus.completed:
+        return CommandStatus.completed;
+      case CommandExecutionStatus.failed:
+        return CommandStatus.failed;
+      case CommandExecutionStatus.expired:
+        return CommandStatus.expired;
+    }
   }
 }
 

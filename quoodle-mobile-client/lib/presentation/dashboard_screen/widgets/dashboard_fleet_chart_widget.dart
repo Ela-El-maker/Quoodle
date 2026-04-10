@@ -48,67 +48,77 @@ class _DashboardFleetChartWidgetState extends State<DashboardFleetChartWidget> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceVariant,
-        borderRadius: BorderRadius.circular(16),
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(12.0),
         border: Border.all(color: AppTheme.border, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Fleet Health',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  Text(
-                    'Online device ratio over time',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-              Row(
-                children: List.generate(_windows.length, (i) {
-                  final isSelected = i == _selectedWindow;
-                  return GestureDetector(
-                    onTap: () => setState(() => _selectedWindow = i),
-                    child: Container(
-                      margin: const EdgeInsets.only(left: 6),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? AppTheme.primaryDim
-                            : AppTheme.surface,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: isSelected
-                              ? AppTheme.primary.withAlpha(102)
-                              : AppTheme.border,
-                          width: 1,
-                        ),
-                      ),
-                      child: Text(
-                        _windows[i],
-                        style: GoogleFonts.ibmPlexSans(
-                          fontSize: 11,
-                          fontWeight: isSelected
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                          color: isSelected
-                              ? AppTheme.primary
-                              : AppTheme.textMuted,
-                        ),
-                      ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Fleet Health',
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
-                  );
-                }),
+                    Text(
+                      'Online device ratio over time',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    alignment: WrapAlignment.end,
+                    children: List.generate(_windows.length, (i) {
+                      final isSelected = i == _selectedWindow;
+                      return GestureDetector(
+                        onTap: () => setState(() => _selectedWindow = i),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppTheme.primaryDim
+                                : AppTheme.surfaceVariant,
+                            borderRadius: BorderRadius.circular(6.0),
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppTheme.primary.withAlpha(80)
+                                  : AppTheme.border,
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            _windows[i],
+                            style: GoogleFonts.ibmPlexSans(
+                              fontSize: 12,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                              color: isSelected
+                                  ? AppTheme.primary
+                                  : AppTheme.textMuted,
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
               ),
             ],
           ),
@@ -172,7 +182,7 @@ class _DashboardFleetChartWidgetState extends State<DashboardFleetChartWidget> {
                 ),
                 lineTouchData: LineTouchData(
                   touchTooltipData: LineTouchTooltipData(
-                    tooltipBgColor: AppTheme.surfaceElevated,
+                    getTooltipColor: (_) => AppTheme.surfaceElevated,
                     tooltipRoundedRadius: 8,
                     tooltipBorder: const BorderSide(
                       color: AppTheme.border,

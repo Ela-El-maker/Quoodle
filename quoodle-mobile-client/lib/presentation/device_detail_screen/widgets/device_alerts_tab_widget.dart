@@ -47,9 +47,8 @@ class _DeviceAlertsTabWidgetState extends State<DeviceAlertsTabWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final unacked = _alertMaps
-        .where((a) => !(a['acknowledged'] as bool))
-        .length;
+    final unacked =
+        _alertMaps.where((a) => !(a['acknowledged'] as bool)).length;
     if (_alertMaps.isEmpty) {
       return const EmptyStateWidget(
         icon: Icons.notifications_off_rounded,
@@ -91,9 +90,8 @@ class _DeviceAlertsTabWidgetState extends State<DeviceAlertsTabWidget> {
           final alert = _alertMaps[i];
           return _DeviceAlertCard(
             alert: alert,
-            onAcknowledge: (alert['acknowledged'] as bool)
-                ? null
-                : () => _acknowledge(i),
+            onAcknowledge:
+                (alert['acknowledged'] as bool) ? null : () => _acknowledge(i),
           );
         }),
       ],
@@ -119,19 +117,6 @@ class _DeviceAlertCard extends StatelessWidget {
     }
   }
 
-  Color get _severityColor {
-    switch (_severity) {
-      case AlertSeverity.critical:
-        return AppTheme.critical;
-      case AlertSeverity.high:
-        return AppTheme.error;
-      case AlertSeverity.warning:
-        return AppTheme.warning;
-      case AlertSeverity.info:
-        return AppTheme.primary;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final isAcked = alert['acknowledged'] as bool;
@@ -141,15 +126,7 @@ class _DeviceAlertCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: isAcked ? AppTheme.surface : AppTheme.surfaceVariant,
         borderRadius: BorderRadius.circular(14),
-        border: Border(
-          left: BorderSide(
-            color: isAcked ? AppTheme.border : _severityColor,
-            width: isAcked ? 1 : 3,
-          ),
-          top: const BorderSide(color: AppTheme.border, width: 1),
-          right: const BorderSide(color: AppTheme.border, width: 1),
-          bottom: const BorderSide(color: AppTheme.border, width: 1),
-        ),
+        border: Border.all(color: AppTheme.border, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

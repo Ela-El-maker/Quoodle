@@ -12,7 +12,6 @@ class DashboardKpiGridWidget extends StatelessWidget {
         label: 'Online',
         value: '19',
         subtext: 'of 24 devices',
-        icon: Icons.circle_rounded,
         color: AppTheme.statusOnline,
         trend: '+2',
         trendUp: true,
@@ -21,7 +20,6 @@ class DashboardKpiGridWidget extends StatelessWidget {
         label: 'Offline',
         value: '5',
         subtext: 'need attention',
-        icon: Icons.circle_outlined,
         color: AppTheme.statusQuarantined,
         trend: '+1',
         trendUp: false,
@@ -30,7 +28,6 @@ class DashboardKpiGridWidget extends StatelessWidget {
         label: 'Active Cmds',
         value: '3',
         subtext: 'in progress',
-        icon: Icons.terminal_rounded,
         color: AppTheme.warning,
         trend: null,
         trendUp: true,
@@ -39,7 +36,6 @@ class DashboardKpiGridWidget extends StatelessWidget {
         label: 'Alerts',
         value: '3',
         subtext: 'unacknowledged',
-        icon: Icons.notifications_rounded,
         color: AppTheme.critical,
         trend: '+3',
         trendUp: false,
@@ -48,7 +44,6 @@ class DashboardKpiGridWidget extends StatelessWidget {
         label: 'Compliance',
         value: '87%',
         subtext: '21/24 compliant',
-        icon: Icons.verified_rounded,
         color: AppTheme.secondary,
         trend: '-4%',
         trendUp: false,
@@ -57,7 +52,6 @@ class DashboardKpiGridWidget extends StatelessWidget {
         label: 'Policy Sync',
         value: '92%',
         subtext: '22/24 synced',
-        icon: Icons.sync_rounded,
         color: AppTheme.primary,
         trend: '+1%',
         trendUp: true,
@@ -69,21 +63,22 @@ class DashboardKpiGridWidget extends StatelessWidget {
       children: [
         Text(
           'Fleet Metrics',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+          style: GoogleFonts.ibmPlexSans(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
             color: AppTheme.textMuted,
-            letterSpacing: 0.8,
-            fontSize: 11,
+            letterSpacing: 0.5,
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 1.7,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: 1.3,
           ),
           itemCount: kpis.length,
           itemBuilder: (ctx, i) => _KpiCard(data: kpis[i]),
@@ -95,7 +90,6 @@ class DashboardKpiGridWidget extends StatelessWidget {
 
 class _KpiData {
   final String label, value, subtext;
-  final IconData icon;
   final Color color;
   final String? trend;
   final bool trendUp;
@@ -104,7 +98,6 @@ class _KpiData {
     required this.label,
     required this.value,
     required this.subtext,
-    required this.icon,
     required this.color,
     required this.trend,
     required this.trendUp,
@@ -118,18 +111,11 @@ class _KpiCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceVariant,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: data.color.withAlpha(51), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: data.color.withAlpha(15),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(12.0),
+        border: Border.all(color: AppTheme.border, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -138,13 +124,13 @@ class _KpiCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: data.color.withAlpha(31),
-                  borderRadius: BorderRadius.circular(8),
+              Text(
+                data.label,
+                style: GoogleFonts.ibmPlexSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: AppTheme.textMuted,
                 ),
-                child: Icon(data.icon, size: 14, color: data.color),
               ),
               if (data.trend != null)
                 Container(
@@ -154,14 +140,14 @@ class _KpiCard extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: data.trendUp
-                        ? AppTheme.secondary.withAlpha(26)
-                        : AppTheme.error.withAlpha(26),
-                    borderRadius: BorderRadius.circular(4),
+                        ? AppTheme.secondary.withAlpha(25)
+                        : AppTheme.error.withAlpha(25),
+                    borderRadius: BorderRadius.circular(4.0),
                   ),
                   child: Text(
                     data.trend!,
-                    style: GoogleFonts.ibmPlexMono(
-                      fontSize: 9,
+                    style: GoogleFonts.ibmPlexSans(
+                      fontSize: 11,
                       fontWeight: FontWeight.w600,
                       color: data.trendUp ? AppTheme.secondary : AppTheme.error,
                     ),
@@ -174,20 +160,20 @@ class _KpiCard extends StatelessWidget {
             children: [
               Text(
                 data.value,
-                style: GoogleFonts.ibmPlexMono(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 22,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                   color: data.color,
-                  fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
+              const SizedBox(height: 2),
               Text(
-                data.label,
+                data.subtext,
                 style: GoogleFonts.ibmPlexSans(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: AppTheme.textSecondary,
+                  fontSize: 12,
+                  color: AppTheme.textMuted,
                 ),
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),

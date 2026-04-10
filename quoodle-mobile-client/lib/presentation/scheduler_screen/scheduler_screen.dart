@@ -1,79 +1,60 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:secure_device_control/app/router/app_navigator.dart';
+import 'package:secure_device_control/features/scheduler/data/services/scheduler_service.dart';
+import 'package:secure_device_control/features/scheduler/presentation/providers/scheduler_providers.dart';
 
-import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_bar_widget.dart';
 import '../../widgets/app_navigation.dart';
 import '../../widgets/empty_state_widget.dart';
-import '../../services/scheduler_service.dart';
 
-class SchedulerScreen extends StatefulWidget {
+class SchedulerScreen extends ConsumerStatefulWidget {
   const SchedulerScreen({super.key});
 
   @override
-  State<SchedulerScreen> createState() => _SchedulerScreenState();
+  ConsumerState<SchedulerScreen> createState() => _SchedulerScreenState();
 }
 
-class _SchedulerScreenState extends State<SchedulerScreen>
+class _SchedulerScreenState extends ConsumerState<SchedulerScreen>
     with SingleTickerProviderStateMixin {
-  final SchedulerService _scheduler = SchedulerService();
   late TabController _tabController;
   int _currentNavIndex = 2;
-  bool _initialized = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _initScheduler();
-  }
-
-  Future<void> _initScheduler() async {
-    await _scheduler.initialize();
-    if (mounted) setState(() => _initialized = true);
-    _scheduler.addListener(_onSchedulerUpdate);
-  }
-
-  void _onSchedulerUpdate() {
-    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    _scheduler.removeListener(_onSchedulerUpdate);
     _tabController.dispose();
     super.dispose();
   }
 
   void _onNavTap(int index) {
-    final routes = [
-      AppRoutes.dashboardScreen,
-      AppRoutes.devicesScreen,
-      AppRoutes.commandTimelineScreen,
-      AppRoutes.alertsScreen,
-      AppRoutes.settingsScreen,
-    ];
     if (index != _currentNavIndex) {
       setState(() => _currentNavIndex = index);
-      Navigator.pushNamedAndRemoveUntil(
+      AppNavigator.navigateToTab(
         context,
-        routes[index],
-        (route) => false,
+        index,
+        profileTabTarget: ProfileTabTarget.settings,
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final jobs = _scheduler.jobs;
-    final activeJobs = jobs
-        .where((j) => j.status == ScheduledJobStatus.active)
-        .toList();
-    final pausedJobs = jobs
-        .where((j) => j.status == ScheduledJobStatus.paused)
-        .toList();
+    final scheduler = ref.watch(schedulerServiceProvider);
+    final schedulerInit = ref.watch(schedulerInitializationProvider);
+    final jobs = scheduler.jobs;
+    final activeJobs =
+        jobs.where((j) => j.status == ScheduledJobStatus.active).toList();
+    final pausedJobs =
+        jobs.where((j) => j.status == ScheduledJobStatus.paused).toList();
     final historyJobs = jobs
         .where(
           (j) =>
@@ -96,9 +77,20 @@ class _SchedulerScreenState extends State<SchedulerScreen>
             child: TabBarView(
               controller: _tabController,
               children: [
-                _buildJobList(activeJobs, 'active'),
-                _buildJobList(pausedJobs, 'paused'),
-                _buildHistoryList(historyJobs),
+                _buildJobList(
+                  activeJobs,
+                  'active',
+                  isInitializing: schedulerInit.isLoading,
+                ),
+                _buildJobList(
+                  pausedJobs,
+                  'paused',
+                  isInitializing: schedulerInit.isLoading,
+                ),
+                _buildHistoryList(
+                  historyJobs,
+                  isInitializing: schedulerInit.isLoading,
+                ),
               ],
             ),
           ),
@@ -126,89 +118,99 @@ class _SchedulerScreenState extends State<SchedulerScreen>
   }
 
   Widget _buildStatsRow(List<ScheduledJob> jobs) {
-    final active = jobs
-        .where((j) => j.status == ScheduledJobStatus.active)
-        .length;
-    final paused = jobs
-        .where((j) => j.status == ScheduledJobStatus.paused)
-        .length;
+    final active =
+        jobs.where((j) => j.status == ScheduledJobStatus.active).length;
+    final paused =
+        jobs.where((j) => j.status == ScheduledJobStatus.paused).length;
     final totalRuns = jobs.fold(0, (s, j) => s + j.runCount);
     final successRuns = jobs.fold(0, (s, j) => s + j.successCount);
-    final successRate = totalRuns > 0
-        ? (successRuns / totalRuns * 100).round()
-        : 0;
+    final successRate =
+        totalRuns > 0 ? (successRuns / totalRuns * 100).round() : 0;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: Row(
-        children: [
-          _statChip(
-            Icons.play_circle_rounded,
-            '$active',
-            'Active',
-            AppTheme.secondary,
-          ),
-          const SizedBox(width: 8),
-          _statChip(
-            Icons.pause_circle_rounded,
-            '$paused',
-            'Paused',
-            AppTheme.warning,
-          ),
-          const SizedBox(width: 8),
-          _statChip(
-            Icons.check_circle_rounded,
-            '$successRate%',
-            'Success',
-            AppTheme.primary,
-          ),
-          const SizedBox(width: 8),
-          _statChip(
-            Icons.history_rounded,
-            '$totalRuns',
-            'Runs',
-            AppTheme.textSecondary,
-          ),
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            SizedBox(
+              width: 92,
+              child: _statChip(
+                Icons.play_circle_rounded,
+                '$active',
+                'Active',
+                AppTheme.secondary,
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 92,
+              child: _statChip(
+                Icons.pause_circle_rounded,
+                '$paused',
+                'Paused',
+                AppTheme.warning,
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 92,
+              child: _statChip(
+                Icons.check_circle_rounded,
+                '$successRate%',
+                'Success',
+                AppTheme.primary,
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 92,
+              child: _statChip(
+                Icons.history_rounded,
+                '$totalRuns',
+                'Runs',
+                AppTheme.textSecondary,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _statChip(IconData icon, String value, String label, Color color) {
-    return Expanded(
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12.0),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-            decoration: BoxDecoration(
-              color: AppTheme.glassSurface,
-              borderRadius: BorderRadius.circular(12.0),
-              border: Border.all(color: AppTheme.border, width: 1),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 16, color: color),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: GoogleFonts.ibmPlexMono(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: color,
-                  ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12.0),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+          decoration: BoxDecoration(
+            color: AppTheme.glassSurface,
+            borderRadius: BorderRadius.circular(12.0),
+            border: Border.all(color: AppTheme.border, width: 1),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: GoogleFonts.ibmPlexMono(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: color,
                 ),
-                Text(
-                  label,
-                  style: GoogleFonts.ibmPlexSans(
-                    fontSize: 9,
-                    color: AppTheme.textMuted,
-                  ),
+              ),
+              Text(
+                label,
+                style: GoogleFonts.ibmPlexSans(
+                  fontSize: 9,
+                  color: AppTheme.textMuted,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -252,8 +254,12 @@ class _SchedulerScreenState extends State<SchedulerScreen>
     );
   }
 
-  Widget _buildJobList(List<ScheduledJob> jobs, String type) {
-    if (!_initialized) {
+  Widget _buildJobList(
+    List<ScheduledJob> jobs,
+    String type, {
+    required bool isInitializing,
+  }) {
+    if (isInitializing) {
       return const Center(
         child: CircularProgressIndicator(color: AppTheme.primary),
       );
@@ -274,17 +280,21 @@ class _SchedulerScreenState extends State<SchedulerScreen>
       itemCount: jobs.length,
       itemBuilder: (ctx, i) => _JobCard(
         job: jobs[i],
-        onPause: () => _scheduler.pauseJob(jobs[i].id),
-        onResume: () => _scheduler.resumeJob(jobs[i].id),
+        onPause: () => ref.read(schedulerServiceProvider).pauseJob(jobs[i].id),
+        onResume: () =>
+            ref.read(schedulerServiceProvider).resumeJob(jobs[i].id),
         onCancel: () => _confirmCancel(jobs[i]),
-        onRunNow: () => _scheduler.runNow(jobs[i].id),
+        onRunNow: () => ref.read(schedulerServiceProvider).runNow(jobs[i].id),
         onViewHistory: () => _showJobHistory(jobs[i]),
       ),
     );
   }
 
-  Widget _buildHistoryList(List<ScheduledJob> jobs) {
-    if (!_initialized) {
+  Widget _buildHistoryList(
+    List<ScheduledJob> jobs, {
+    required bool isInitializing,
+  }) {
+    if (isInitializing) {
       return const Center(
         child: CircularProgressIndicator(color: AppTheme.primary),
       );
@@ -353,7 +363,7 @@ class _SchedulerScreenState extends State<SchedulerScreen>
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
-              _scheduler.cancelJob(job.id);
+              ref.read(schedulerServiceProvider).cancelJob(job.id);
             },
             child: Text(
               'Cancel Job',
@@ -442,7 +452,7 @@ class _SchedulerScreenState extends State<SchedulerScreen>
       isScrollControlled: true,
       builder: (ctx) => _CreateJobSheet(
         onCreated: (job) {
-          _scheduler.addJob(job);
+          ref.read(schedulerServiceProvider).addJob(job);
           Navigator.pop(ctx);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -919,17 +929,6 @@ class _CreateJobSheetState extends State<_CreateJobSheet> {
     {'id': 'dev-021', 'name': 'EDGE-NODE-021'},
   ];
 
-  static const List<String> _dayNames = [
-    '',
-    'Mon',
-    'Tue',
-    'Wed',
-    'Thu',
-    'Fri',
-    'Sat',
-    'Sun',
-  ];
-
   @override
   void dispose() {
     _nameCtrl.dispose();
@@ -997,7 +996,7 @@ class _CreateJobSheetState extends State<_CreateJobSheet> {
                       Icons.close_rounded,
                       color: AppTheme.textMuted,
                     ),
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () => Navigator.maybePop(context),
                   ),
                 ],
               ),
@@ -1237,14 +1236,14 @@ class _CreateJobSheetState extends State<_CreateJobSheet> {
   }
 
   Widget _sectionLabel(String label) => Text(
-    label,
-    style: GoogleFonts.ibmPlexSans(
-      fontSize: 11,
-      fontWeight: FontWeight.w600,
-      color: AppTheme.textMuted,
-      letterSpacing: 0.8,
-    ),
-  );
+        label,
+        style: GoogleFonts.ibmPlexSans(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: AppTheme.textMuted,
+          letterSpacing: 0.8,
+        ),
+      );
 
   void _submit() {
     if (_nameCtrl.text.trim().isEmpty) {
