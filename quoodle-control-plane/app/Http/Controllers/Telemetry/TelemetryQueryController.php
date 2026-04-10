@@ -52,6 +52,9 @@ class TelemetryQueryController extends Controller
         }
 
         $metrics = is_array($latest->metrics) ? $latest->metrics : [];
+        if (array_key_exists('kernel_event', $metrics) && is_array($metrics['kernel_event'])) {
+            $metrics['kernel_event'] = $this->normalizeKernelEventForResponse($metrics['kernel_event']);
+        }
         if (! array_key_exists('os_build', $metrics) || ! is_string($metrics['os_build']) || trim((string) $metrics['os_build']) === '') {
             $metrics['os_build'] = $resolvedOsBuild;
         }
@@ -110,6 +113,9 @@ class TelemetryQueryController extends Controller
             'to' => $to->toIso8601String(),
             'points' => $events->map(function (TelemetryEvent $event): array {
                 $metrics = $event->metrics ?? [];
+                if (array_key_exists('kernel_event', $metrics) && is_array($metrics['kernel_event'])) {
+                    $metrics['kernel_event'] = $this->normalizeKernelEventForResponse($metrics['kernel_event']);
+                }
                 return [
                     'timestamp' => optional($event->timestamp)->toIso8601String(),
                     'telemetry_scope' => $event->telemetry_scope,
@@ -263,7 +269,9 @@ class TelemetryQueryController extends Controller
                     'scope' => $event->telemetry_scope,
                     'presence_state' => $event->presence_state,
                     'risk_score' => $event->risk_score,
-                    'kernel_event' => is_array($event->metrics) ? ($event->metrics['kernel_event'] ?? null) : null,
+                    'kernel_event' => is_array($event->metrics)
+                        ? $this->normalizeKernelEventForResponse($event->metrics['kernel_event'] ?? null)
+                        : null,
                 ],
             ]);
 
@@ -407,5 +415,64 @@ class TelemetryQueryController extends Controller
         }
 
         return hash_equals($expected, $reported);
+    }
+
+    private function normalizeKernelEventForResponse(mixed $value): ?array
+    {
+        if (! is_array($value)) {
+            return null;
+        }
+
+        $event = $value;
+        $payload = is_array($event['payload'] ?? null) ? $event['payload'] : null;
+        if (! $payload) {
+            $raw = is_string($event['payload_json'] ?? null) ? $event['payload_json'] : '';
+            if ($raw !== '') {
+                $decoded = json_decode($raw, true);
+                if (is_array($decoded)) {
+                    $payload = $decoded;
+                }
+            }
+        }
+        if (! $payload) {
+            $payload = [];
+        }
+
+        $status = isset($payload['status']) && is_string($payload['status']) ? strtolower(trim($payload['status'])) : '';
+        $errorCode = is_numeric($payload['error_code'] ?? null) ? (int) $payload['error_code'] : 0;
+        $category = isset($payload['category']) && is_string($payload['category'])
+            ? strtolower(trim($payload['category']))
+            : 'exec';
+        if (! in_array($category, ['exec', 'integrity', 'attestation', 'update', 'runtime'], true)) {
+            $category = 'exec';
+        }
+
+        $payload['category'] = $category;
+        $payload['subtype'] = (isset($payload['subtype']) && is_string($payload['subtype']) && trim($payload['subtype']) !== '')
+            ? strtolower(trim($payload['subtype']))
+            : 'opcode';
+        $payload['severity'] = (isset($payload['severity']) && is_string($payload['severity']) && trim($payload['severity']) !== '')
+            ? strtolower(trim($payload['severity']))
+            : (($status !== '' && $status !== 'ok') || $errorCode > 0 ? 'high' : 'info');
+        $payload['decision'] = (isset($payload['decision']) && is_string($payload['decision']) && trim($payload['decision']) !== '')
+            ? strtolower(trim($payload['decision']))
+            : (($status === 'ok' || $status === 'completed') ? 'allow' : 'deny');
+        $payload['reason_code'] = (isset($payload['reason_code']) && is_string($payload['reason_code']) && trim($payload['reason_code']) !== '')
+            ? strtolower(trim($payload['reason_code']))
+            : ($status !== '' ? $status : 'ok');
+        $payload['duration_ms'] = is_numeric($payload['duration_ms'] ?? null) ? (float) $payload['duration_ms'] : 0.0;
+        $payload['queue_depth'] = is_numeric($payload['queue_depth'] ?? null) ? (int) $payload['queue_depth'] : 0;
+        $payload['drop_count'] = is_numeric($payload['drop_count'] ?? null)
+            ? (int) $payload['drop_count']
+            : (is_numeric($payload['dropped_events'] ?? null) ? (int) $payload['dropped_events'] : 0);
+        $payload['policy_ref'] = isset($payload['policy_ref']) && is_string($payload['policy_ref']) ? $payload['policy_ref'] : '';
+        $payload['masked_fields'] = is_array($payload['masked_fields'] ?? null) ? $payload['masked_fields'] : [];
+
+        $event['payload'] = $payload;
+        if (! isset($event['payload_json']) || ! is_string($event['payload_json'])) {
+            $event['payload_json'] = json_encode($payload, JSON_UNESCAPED_SLASHES) ?: '{}';
+        }
+
+        return $event;
     }
 }

@@ -32,6 +32,8 @@ class TelemetryIngestService
                 $presenceState = $this->normalizePresenceState($this->asNullableString($rollup['presence_state'] ?? $payload['presence_state'] ?? null));
                 $connectionMode = $this->asNullableString($rollup['connection_mode'] ?? $payload['connection_mode'] ?? null);
                 $maskedFields = is_array($payload['masked_fields'] ?? null) ? $payload['masked_fields'] : [];
+                $source = (string) ($payload['source'] ?? 'gateway');
+                $existingLatest = DeviceTelemetryLatest::query()->where('device_id', $deviceId)->first();
 
                 $canonicalMetrics = $this->normalizeMetrics($rollup, $metrics);
                 $telemetryOsBuild = $this->asNullableString($canonicalMetrics['os_build'] ?? null);
@@ -49,7 +51,7 @@ class TelemetryIngestService
                     'risk_score' => $riskScore,
                     'presence_state' => $presenceState,
                     'connection_mode' => $connectionMode,
-                    'source' => (string) ($payload['source'] ?? 'gateway'),
+                    'source' => $source,
                 ]);
 
                 DeviceTelemetryLatest::updateOrCreate(
@@ -110,6 +112,18 @@ class TelemetryIngestService
 
                 Cache::add('telemetry:ingest:accepted', 0, now()->addDay());
                 Cache::increment('telemetry:ingest:accepted');
+                if ($existingLatest && $existingLatest->seq !== null && $seq !== null && $seq <= (int) $existingLatest->seq) {
+                    Cache::add('telemetry:divergence:seq_non_monotonic', 0, now()->addDay());
+                    Cache::increment('telemetry:divergence:seq_non_monotonic');
+                    Log::warning('telemetry.seq_non_monotonic', [
+                        'device_id' => $deviceId,
+                        'previous_seq' => (int) $existingLatest->seq,
+                        'incoming_seq' => $seq,
+                        'scope' => $scope,
+                        'session_id' => $sessionId,
+                        'source' => $source,
+                    ]);
+                }
                 Log::debug('telemetry.ingest.accepted', [
                     'device_id' => $deviceId,
                     'scope' => $scope,
@@ -119,6 +133,7 @@ class TelemetryIngestService
                     'presence_state' => $presenceState,
                     'connection_mode' => $connectionMode,
                     'resolved_os_build' => $telemetryOsBuild,
+                    'source' => $source,
                 ]);
 
                 return [
@@ -159,6 +174,8 @@ class TelemetryIngestService
 
     private function normalizeMetrics(array $rollup, array $metrics): array
     {
+        $kernelEvent = is_array($metrics['kernel_event'] ?? null) ? $metrics['kernel_event'] : ($rollup['kernel_event'] ?? null);
+        $normalizedKernelEvent = $this->normalizeKernelEvent($kernelEvent);
         $normalized = [
             'cpu' => $this->toFloat($metrics['cpu'] ?? $rollup['avg_cpu'] ?? null),
             'ram' => $this->toFloat($metrics['ram'] ?? $rollup['avg_ram'] ?? null),
@@ -167,7 +184,7 @@ class TelemetryIngestService
             'network_rx' => $this->toFloat($metrics['network_rx'] ?? $rollup['avg_rx'] ?? null),
             'risk_score' => $this->toFloat($metrics['risk_score'] ?? $rollup['risk_score_avg'] ?? null),
             'policy_hash' => $this->asNullableString($metrics['policy_hash'] ?? $rollup['policy_hash'] ?? null),
-            'kernel_event' => is_array($metrics['kernel_event'] ?? null) ? $metrics['kernel_event'] : ($rollup['kernel_event'] ?? null),
+            'kernel_event' => $normalizedKernelEvent,
         ];
 
         foreach ($metrics as $key => $value) {
@@ -177,6 +194,67 @@ class TelemetryIngestService
         }
 
         return $normalized;
+    }
+
+    private function normalizeKernelEvent(mixed $value): ?array
+    {
+        if (! is_array($value)) {
+            return null;
+        }
+
+        $payloadJson = isset($value['payload_json']) && is_string($value['payload_json']) ? $value['payload_json'] : '';
+        $payload = [];
+        if ($payloadJson !== '') {
+            $decoded = json_decode($payloadJson, true);
+            if (is_array($decoded)) {
+                $payload = $decoded;
+            }
+        }
+
+        $status = isset($payload['status']) && is_string($payload['status']) ? trim($payload['status']) : '';
+        $errorCode = $this->toFloat($payload['error_code'] ?? null);
+        $category = isset($payload['category']) && is_string($payload['category']) ? strtolower(trim($payload['category'])) : '';
+        if ($category === '' || ! in_array($category, ['exec', 'integrity', 'attestation', 'update', 'runtime'], true)) {
+            $category = 'exec';
+        }
+
+        if (! isset($payload['category']) || ! is_string($payload['category'])) {
+            $payload['category'] = $category;
+        }
+        if (! isset($payload['subtype']) || ! is_string($payload['subtype']) || trim($payload['subtype']) === '') {
+            $payload['subtype'] = 'opcode';
+        }
+        if (! isset($payload['severity']) || ! is_string($payload['severity']) || trim($payload['severity']) === '') {
+            $payload['severity'] = ($status !== '' && strtolower($status) !== 'ok') || ($errorCode !== null && $errorCode > 0)
+                ? 'high'
+                : 'info';
+        }
+        if (! isset($payload['decision']) || ! is_string($payload['decision']) || trim($payload['decision']) === '') {
+            $payload['decision'] = (strtolower($status) === 'ok' || strtolower($status) === 'completed') ? 'allow' : 'deny';
+        }
+        if (! isset($payload['reason_code']) || ! is_string($payload['reason_code']) || trim($payload['reason_code']) === '') {
+            $payload['reason_code'] = strtolower($status ?: 'ok');
+        }
+        if (! isset($payload['duration_ms']) || ! is_numeric($payload['duration_ms'])) {
+            $payload['duration_ms'] = 0;
+        }
+        if (! isset($payload['queue_depth']) || ! is_numeric($payload['queue_depth'])) {
+            $payload['queue_depth'] = 0;
+        }
+        if (! isset($payload['drop_count']) || ! is_numeric($payload['drop_count'])) {
+            $payload['drop_count'] = is_numeric($payload['dropped_events'] ?? null) ? (int) $payload['dropped_events'] : 0;
+        }
+        if (! isset($payload['policy_ref']) || ! is_string($payload['policy_ref'])) {
+            $payload['policy_ref'] = '';
+        }
+        if (! isset($payload['masked_fields']) || ! is_array($payload['masked_fields'])) {
+            $payload['masked_fields'] = [];
+        }
+
+        $value['payload_json'] = json_encode($payload, JSON_UNESCAPED_SLASHES) ?: $payloadJson;
+        $value['payload'] = $payload;
+
+        return $value;
     }
 
     private function upsertRollup(string $deviceId, Carbon $timestamp, array $metrics, ?string $presenceState): void

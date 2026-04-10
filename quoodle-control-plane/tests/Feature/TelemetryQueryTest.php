@@ -123,4 +123,83 @@ class TelemetryQueryTest extends TestCase
             ->getJson('/api/telemetry/devices/dev-viewer-other/history')
             ->assertStatus(404);
     }
+
+    /** @test */
+    public function activity_feed_includes_kernel_event_payload_when_present(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        Device::create([
+            'device_id' => 'dev-kernel-activity',
+            'user_id' => $admin->id,
+            'device_name' => 'Kernel Activity Device',
+            'lifecycle_state' => 'active',
+        ]);
+
+        TelemetryEvent::create([
+            'device_id' => 'dev-kernel-activity',
+            'telemetry_scope' => 'kernel_event',
+            'schema_version' => 'v1',
+            'timestamp' => now(),
+            'metrics' => [
+                'kernel_event' => [
+                    'event_id' => 7,
+                    'event_type' => 1,
+                    'event_timestamp_unix' => 1775820000,
+                    'payload_json' => '{"opcode":"PING","status":"ok","error_code":0}',
+                ],
+            ],
+            'presence_state' => 'online',
+            'source' => 'gateway',
+        ]);
+
+        $jwt = $this->issueJwtFor($admin);
+
+        $this->withHeaders(['Authorization' => 'Bearer '.$jwt])
+            ->getJson('/api/telemetry/activity?device_id=dev-kernel-activity&limit=10')
+            ->assertOk()
+            ->assertJsonPath('events.0.event_type', 'telemetry')
+            ->assertJsonPath('events.0.detail.scope', 'kernel_event')
+            ->assertJsonPath('events.0.detail.kernel_event.event_id', 7);
+    }
+
+    /** @test */
+    public function latest_telemetry_normalizes_legacy_kernel_payload_category_fields(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        Device::create([
+            'device_id' => 'dev-kernel-latest',
+            'user_id' => $admin->id,
+            'device_name' => 'Kernel Latest Device',
+            'lifecycle_state' => 'active',
+        ]);
+
+        DeviceTelemetryLatest::create([
+            'device_id' => 'dev-kernel-latest',
+            'telemetry_scope' => 'kernel_event',
+            'schema_version' => 'v1',
+            'timestamp' => now(),
+            'metrics' => [
+                'kernel_event' => [
+                    'event_id' => 12,
+                    'event_type' => 5,
+                    'event_timestamp_unix' => 1775821111,
+                    'payload_json' => '{"opcode":"PING","status":"ok","error_code":0}',
+                ],
+            ],
+            'presence_state' => 'online',
+            'connection_mode' => 'wss',
+            'source' => 'gateway',
+            'updated_at' => now(),
+        ]);
+
+        $jwt = $this->issueJwtFor($admin);
+
+        $this->withHeaders(['Authorization' => 'Bearer '.$jwt])
+            ->getJson('/api/telemetry/devices/dev-kernel-latest/latest')
+            ->assertOk()
+            ->assertJsonPath('metrics.kernel_event.event_id', 12)
+            ->assertJsonPath('metrics.kernel_event.payload.category', 'exec')
+            ->assertJsonPath('metrics.kernel_event.payload.subtype', 'opcode')
+            ->assertJsonPath('metrics.kernel_event.payload.decision', 'allow');
+    }
 }
