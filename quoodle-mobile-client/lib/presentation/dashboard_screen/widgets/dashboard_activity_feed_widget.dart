@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:secure_device_control/app/router/app_navigator.dart';
 import '../../../theme/app_theme.dart';
-import '../../../routes/app_routes.dart';
 import '../../../widgets/status_badge_widget.dart';
 
 class DashboardActivityFeedWidget extends StatelessWidget {
@@ -12,6 +12,7 @@ class DashboardActivityFeedWidget extends StatelessWidget {
     final activities = [
       _ActivityItem(
         commandMethod: 'lock_screen',
+        commandLabel: 'Lock Screen',
         deviceName: 'WKS-HR-003',
         status: CommandStatus.completed,
         timestamp: '10:52 AM',
@@ -19,6 +20,7 @@ class DashboardActivityFeedWidget extends StatelessWidget {
       ),
       _ActivityItem(
         commandMethod: 'collect_telemetry',
+        commandLabel: 'Collect Telemetry',
         deviceName: 'PROD-SRV-014',
         status: CommandStatus.failed,
         timestamp: '10:44 AM',
@@ -26,6 +28,7 @@ class DashboardActivityFeedWidget extends StatelessWidget {
       ),
       _ActivityItem(
         commandMethod: 'policy_sync',
+        commandLabel: 'Policy Sync',
         deviceName: 'WKS-FINANCE-07',
         status: CommandStatus.executing,
         timestamp: '10:41 AM',
@@ -33,6 +36,7 @@ class DashboardActivityFeedWidget extends StatelessWidget {
       ),
       _ActivityItem(
         commandMethod: 'reboot',
+        commandLabel: 'Reboot',
         deviceName: 'EDGE-NODE-021',
         status: CommandStatus.queued,
         timestamp: '10:38 AM',
@@ -40,6 +44,7 @@ class DashboardActivityFeedWidget extends StatelessWidget {
       ),
       _ActivityItem(
         commandMethod: 'screenshot_capture',
+        commandLabel: 'Screenshot',
         deviceName: 'WKS-DEVOPS-11',
         status: CommandStatus.completed,
         timestamp: '10:22 AM',
@@ -55,17 +60,22 @@ class DashboardActivityFeedWidget extends StatelessWidget {
           children: [
             Text(
               'Recent Activity',
-              style: Theme.of(context).textTheme.titleMedium,
+              style: GoogleFonts.ibmPlexSans(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
+              ),
             ),
             TextButton(
               onPressed: () =>
-                  Navigator.pushNamed(context, AppRoutes.commandTimelineScreen),
+                  AppNavigator.push(context, AppRoute.commandTimeline),
               style: TextButton.styleFrom(
                 padding: EdgeInsets.zero,
                 minimumSize: const Size(0, 0),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               child: Text(
-                'All commands',
+                'View all',
                 style: GoogleFonts.ibmPlexSans(
                   fontSize: 12,
                   color: AppTheme.primary,
@@ -77,8 +87,8 @@ class DashboardActivityFeedWidget extends StatelessWidget {
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: AppTheme.surfaceVariant,
-            borderRadius: BorderRadius.circular(16),
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(12.0),
             border: Border.all(color: AppTheme.border, width: 1),
           ),
           child: Column(
@@ -88,18 +98,15 @@ class DashboardActivityFeedWidget extends StatelessWidget {
                 children: [
                   _ActivityRow(
                     item: item,
-                    onTap: () {
-                      Navigator.pushNamed(
-                        context,
-                        AppRoutes.commandTimelineScreen,
-                      );
-                    },
+                    onTap: () =>
+                        AppNavigator.push(context, AppRoute.commandTimeline),
                   ),
                   if (i < activities.length - 1)
                     const Divider(
                       height: 1,
                       color: AppTheme.borderLight,
-                      indent: 52,
+                      indent: 16,
+                      endIndent: 16,
                     ),
                 ],
               );
@@ -112,10 +119,11 @@ class DashboardActivityFeedWidget extends StatelessWidget {
 }
 
 class _ActivityItem {
-  final String commandMethod, deviceName, timestamp, initiator;
+  final String commandMethod, commandLabel, deviceName, timestamp, initiator;
   final CommandStatus status;
   const _ActivityItem({
     required this.commandMethod,
+    required this.commandLabel,
     required this.deviceName,
     required this.status,
     required this.timestamp,
@@ -149,47 +157,48 @@ class _ActivityRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      splashColor: AppTheme.primaryDim,
+      borderRadius: BorderRadius.circular(12.0),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
             Container(
-              width: 36,
-              height: 36,
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
-                color: AppTheme.surface,
-                borderRadius: BorderRadius.circular(10),
+                color: AppTheme.surfaceVariant,
+                borderRadius: BorderRadius.circular(8.0),
                 border: Border.all(color: AppTheme.border, width: 1),
               ),
-              child: Icon(_methodIcon, size: 16, color: AppTheme.textSecondary),
+              child: Icon(_methodIcon, size: 15, color: AppTheme.textSecondary),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        item.commandMethod,
-                        style: GoogleFonts.ibmPlexMono(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.textPrimary,
-                        ),
-                      ),
-                    ],
+                  Text(
+                    item.commandLabel,
+                    style: GoogleFonts.ibmPlexSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: AppTheme.textPrimary,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),
                   Text(
                     '${item.deviceName} · ${item.initiator}',
-                    style: Theme.of(context).textTheme.bodySmall,
+                    style: GoogleFonts.ibmPlexSans(
+                      fontSize: 12,
+                      color: AppTheme.textMuted,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ),
+            const SizedBox(width: 8),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -197,7 +206,10 @@ class _ActivityRow extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   item.timestamp,
-                  style: Theme.of(context).textTheme.labelSmall,
+                  style: GoogleFonts.ibmPlexSans(
+                    fontSize: 12,
+                    color: AppTheme.textMuted,
+                  ),
                 ),
               ],
             ),

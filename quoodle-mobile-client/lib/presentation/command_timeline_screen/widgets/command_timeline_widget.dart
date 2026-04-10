@@ -96,8 +96,8 @@ class _CommandTimelineWidgetState extends State<CommandTimelineWidget>
     final effectiveOrder = status == CommandStatus.failed
         ? [...statusOrder.sublist(0, 4), CommandStatus.failed]
         : status == CommandStatus.expired
-        ? [...statusOrder.sublist(0, 4), CommandStatus.expired]
-        : statusOrder;
+            ? [...statusOrder.sublist(0, 4), CommandStatus.expired]
+            : statusOrder;
 
     final timestamps = {
       CommandStatus.queued: cmd['queuedAt'] as String?,
@@ -146,14 +146,12 @@ class _CommandTimelineWidgetState extends State<CommandTimelineWidget>
     return List.generate(effectiveOrder.length, (i) {
       final s = effectiveOrder[i];
       final info = labels[s]!;
-      final isDone =
-          i < currentIndex ||
+      final isDone = i < currentIndex ||
           (i == currentIndex &&
               (status == CommandStatus.completed ||
                   status == CommandStatus.failed ||
                   status == CommandStatus.expired));
-      final isActive =
-          i == currentIndex &&
+      final isActive = i == currentIndex &&
           status != CommandStatus.completed &&
           status != CommandStatus.failed &&
           status != CommandStatus.expired;
@@ -245,16 +243,21 @@ class _TimelineStageRow extends StatelessWidget {
                       color: stage.isDone
                           ? _stageColor.withAlpha(38)
                           : stage.isActive
-                          ? _stageColor.withOpacity(
-                              0.1 + 0.15 * pulseAnimation.value,
-                            )
-                          : AppTheme.surface,
+                              ? _stageColor.withAlpha(
+                                  (255 * (0.1 + 0.15 * pulseAnimation.value))
+                                      .round(),
+                                )
+                              : AppTheme.surface,
                       shape: BoxShape.circle,
                       border: Border.all(
                         color: stage.isPending
                             ? AppTheme.border
-                            : _stageColor.withOpacity(
-                                stage.isActive ? pulseAnimation.value : 1.0,
+                            : _stageColor.withAlpha(
+                                (255 *
+                                        (stage.isActive
+                                            ? pulseAnimation.value
+                                            : 1.0))
+                                    .round(),
                               ),
                         width: stage.isActive ? 2 : 1.5,
                       ),
