@@ -43,6 +43,11 @@ export interface ListDeviceApi {
   kernel_guard?: boolean | null;
   ip_address?: string | null;
   session_id?: string | null;
+  resolved_os_build?: string | null;
+  resolved_presence_state?: string | null;
+  resolved_connection_mode?: string | null;
+  resolved_compliance_status?: string | null;
+  resolved_policy_in_sync?: boolean | null;
 }
 
 export interface DetailDeviceApi {
@@ -61,6 +66,11 @@ export interface DetailDeviceApi {
   ip_address?: string | null;
   session_id?: string | null;
   kernel_guard?: boolean | null;
+  resolved_os_build?: string | null;
+  resolved_presence_state?: string | null;
+  resolved_connection_mode?: string | null;
+  resolved_compliance_status?: string | null;
+  resolved_policy_in_sync?: boolean | null;
 }
 
 export interface DeviceCommandRowApi {
@@ -202,17 +212,22 @@ export function parseStatusCsv(value: string | null): DeviceStatus[] {
 }
 
 export function mapListDevice(item: ListDeviceApi): Device {
+  const resolvedOsBuild = item.resolved_os_build?.trim();
+  const resolvedCompliance = item.resolved_compliance_status?.trim();
+  const resolvedPolicySync = typeof item.resolved_policy_in_sync === 'boolean' ? item.resolved_policy_in_sync : null;
+  const resolvedPresence = item.resolved_presence_state?.trim();
+
   return {
     id: item.device_id,
     hostname: item.device_name?.trim() || item.device_id,
-    osBuild: item.os_build?.trim() || '-',
+    osBuild: resolvedOsBuild || item.os_build?.trim() || '-',
     owner: item.owner_email?.trim() || 'Unknown',
-    status: normalizeStatus(item.lifecycle_state),
+    status: normalizeStatus(resolvedPresence || item.lifecycle_state),
     riskScore: normalizeRisk(item.risk_score),
-    compliance: normalizeCompliance(item.compliance_status),
+    compliance: normalizeCompliance(resolvedCompliance || item.compliance_status),
     lastSeen: formatDateTime(item.last_seen),
     agentVersion: item.agent_version?.trim() || '-',
-    policySync: typeof item.policy_in_sync === 'boolean' ? item.policy_in_sync : null,
+    policySync: resolvedPolicySync ?? (typeof item.policy_in_sync === 'boolean' ? item.policy_in_sync : null),
     kernelGuard: typeof item.kernel_guard === 'boolean' ? item.kernel_guard : null,
     ipAddress: item.ip_address?.trim() || null,
     sessionId: item.session_id?.trim() || null,
@@ -221,17 +236,22 @@ export function mapListDevice(item: ListDeviceApi): Device {
 
 export function mergeDeviceDetail(base: Device, detail: DetailDeviceApi): Device {
   const detailLastSeen = formatDateTime(detail.last_seen);
+  const resolvedOsBuild = detail.resolved_os_build?.trim();
+  const resolvedCompliance = detail.resolved_compliance_status?.trim();
+  const resolvedPolicySync = typeof detail.resolved_policy_in_sync === 'boolean' ? detail.resolved_policy_in_sync : null;
+  const resolvedPresence = detail.resolved_presence_state?.trim();
+
   return {
     ...base,
     hostname: detail.device_name?.trim() || base.hostname,
-    osBuild: detail.os_build?.trim() || base.osBuild,
+    osBuild: resolvedOsBuild || detail.os_build?.trim() || base.osBuild,
     owner: detail.owner_email?.trim() || base.owner,
-    status: normalizeStatus(detail.lifecycle_state ?? base.status),
-    compliance: normalizeCompliance(detail.compliance?.status ?? detail.compliance_status ?? base.compliance),
+    status: normalizeStatus(resolvedPresence || (detail.lifecycle_state ?? base.status)),
+    compliance: normalizeCompliance(resolvedCompliance || (detail.compliance?.status ?? detail.compliance_status ?? base.compliance)),
     riskScore: normalizeRisk(detail.risk_score ?? detail.telemetry_latest?.risk_score ?? base.riskScore),
     lastSeen: detailLastSeen !== '-' ? detailLastSeen : base.lastSeen,
     agentVersion: detail.agent_version?.trim() || base.agentVersion,
-    policySync: typeof detail.policy_in_sync === 'boolean' ? detail.policy_in_sync : base.policySync,
+    policySync: resolvedPolicySync ?? (typeof detail.policy_in_sync === 'boolean' ? detail.policy_in_sync : base.policySync),
     kernelGuard: typeof detail.kernel_guard === 'boolean' ? detail.kernel_guard : base.kernelGuard,
     ipAddress: detail.ip_address?.trim() || base.ipAddress,
     sessionId: detail.session_id?.trim() || base.sessionId,
