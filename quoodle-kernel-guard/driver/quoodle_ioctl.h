@@ -68,7 +68,11 @@ typedef unsigned long long uint64_t;
 #define QERR_NOT_SUPPORTED 4004
 
 typedef enum QUOODLE_KERNEL_EVENT_TYPE {
-  QKEVENT_TYPE_OPCODE = 1
+  QKEVENT_TYPE_OPCODE = 1,
+  QKEVENT_TYPE_RUNTIME = 2,
+  QKEVENT_TYPE_INTEGRITY = 3,
+  QKEVENT_TYPE_ATTESTATION = 4,
+  QKEVENT_TYPE_UPDATE = 5
 } QUOODLE_KERNEL_EVENT_TYPE;
 
 // Opcodes (keep aligned with spec allowlist)

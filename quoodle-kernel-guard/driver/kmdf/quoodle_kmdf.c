@@ -12,6 +12,8 @@ static volatile LONGLONG g_last_seq = 0;
 static LONG g_exec_counter = 0;
 static volatile LONGLONG g_event_counter = 0;
 static volatile LONGLONG g_event_dropped = 0;
+static volatile LONGLONG g_validation_rejects = 0;
+static volatile LONGLONG g_runtime_internal_errors = 0;
 
 #define QUOODLE_EVENT_RING_SIZE 16
 static QUOODLE_KERNEL_EVENT g_event_ring[QUOODLE_EVENT_RING_SIZE];
@@ -573,6 +575,7 @@ static void DeliverOrQueueKernelEvent(const QUOODLE_KERNEL_EVENT* evt) {
         WdfRequestCompleteWithInformation(wait_request, STATUS_SUCCESS, sizeof(QUOODLE_KERNEL_EVENT));
         return;
       }
+      InterlockedIncrement64(&g_runtime_internal_errors);
       WdfRequestComplete(wait_request, STATUS_INVALID_PARAMETER);
     }
   }
@@ -599,17 +602,151 @@ static const char* OpcodeToString(QUOODLE_OPCODE opcode) {
   }
 }
 
-static void EmitOpcodeEvent(QUOODLE_OPCODE opcode, const QUOODLE_IOCTL_RESPONSE* resp) {
+static const char* OpcodeCategory(QUOODLE_OPCODE opcode) {
+  switch (opcode) {
+    case QOP_EXEC_RUN_ATTESTATION:
+      return "attestation";
+    case QOP_EXEC_RUN_TAMPER_CHECK:
+    case QOP_EXEC_SELF_REPAIR:
+      return "integrity";
+    case QOP_EXEC_VALIDATE_UPDATE_PACKAGE:
+    case QOP_STAGE_UPDATE:
+    case QOP_COMMIT_UPDATE:
+    case QOP_ROLLBACK_UPDATE:
+      return "update";
+    default:
+      return "exec";
+  }
+}
+
+static const char* OpcodeSubtype(QUOODLE_OPCODE opcode) {
+  switch (opcode) {
+    case QOP_EXEC_RUN_ATTESTATION:
+      return "attestation_check";
+    case QOP_EXEC_RUN_TAMPER_CHECK:
+    case QOP_EXEC_SELF_REPAIR:
+      return "integrity_check";
+    case QOP_EXEC_VALIDATE_UPDATE_PACKAGE:
+      return "update_validate";
+    case QOP_STAGE_UPDATE:
+      return "update_stage";
+    case QOP_COMMIT_UPDATE:
+      return "update_commit";
+    case QOP_ROLLBACK_UPDATE:
+      return "update_rollback";
+    default:
+      return "opcode";
+  }
+}
+
+static QUOODLE_KERNEL_EVENT_TYPE EventTypeForOpcode(QUOODLE_OPCODE opcode) {
+  switch (opcode) {
+    case QOP_EXEC_RUN_ATTESTATION:
+      return QKEVENT_TYPE_ATTESTATION;
+    case QOP_EXEC_RUN_TAMPER_CHECK:
+    case QOP_EXEC_SELF_REPAIR:
+      return QKEVENT_TYPE_INTEGRITY;
+    case QOP_EXEC_VALIDATE_UPDATE_PACKAGE:
+    case QOP_STAGE_UPDATE:
+    case QOP_COMMIT_UPDATE:
+    case QOP_ROLLBACK_UPDATE:
+      return QKEVENT_TYPE_UPDATE;
+    default:
+      return QKEVENT_TYPE_OPCODE;
+  }
+}
+
+static ULONG CurrentQueueDepth(VOID) {
+  ULONG depth = 0;
+  if (!g_event_lock) {
+    return 0;
+  }
+  WdfSpinLockAcquire(g_event_lock);
+  depth = g_event_count;
+  WdfSpinLockRelease(g_event_lock);
+  return depth;
+}
+
+static void EmitKernelCategoryEvent(
+    QUOODLE_KERNEL_EVENT_TYPE event_type,
+    const char* category,
+    const char* subtype,
+    const char* severity,
+    const char* decision,
+    const char* reason_code,
+    const char* opcode,
+    ULONG error_code,
+    ULONGLONG duration_ms,
+    const char* policy_ref) {
   CHAR payload[QUOODLE_MAX_EVENT_PAYLOAD];
+  ULONGLONG dropped = (ULONGLONG)InterlockedCompareExchange64(&g_event_dropped, 0, 0);
+  ULONGLONG validation_rejects = (ULONGLONG)InterlockedCompareExchange64(&g_validation_rejects, 0, 0);
+  ULONGLONG runtime_internal_errors = (ULONGLONG)InterlockedCompareExchange64(&g_runtime_internal_errors, 0, 0);
+  ULONG queue_depth = CurrentQueueDepth();
+
+  if (!category) category = "runtime";
+  if (!subtype) subtype = "event";
+  if (!severity) severity = "info";
+  if (!decision) decision = "observe";
+  if (!reason_code) reason_code = "none";
+  if (!opcode) opcode = "UNKNOWN";
+  if (!policy_ref) policy_ref = "";
+
+  (void)RtlStringCchPrintfA(payload, sizeof(payload),
+                            "{\"category\":\"%s\",\"subtype\":\"%s\",\"severity\":\"%s\",\"decision\":\"%s\","
+                            "\"reason_code\":\"%s\",\"opcode\":\"%s\",\"error_code\":%u,\"duration_ms\":%I64u,"
+                            "\"queue_depth\":%u,\"drop_count\":%I64u,\"validation_reject_count\":%I64u,"
+                            "\"runtime_error_count\":%I64u,\"policy_ref\":\"%s\",\"masked_fields\":[]}",
+                            category, subtype, severity, decision, reason_code,
+                            opcode, error_code, duration_ms, queue_depth, dropped,
+                            validation_rejects, runtime_internal_errors, policy_ref);
+  QUOODLE_KERNEL_EVENT evt;
+  InitKernelEvent(&evt, event_type, payload);
+  DeliverOrQueueKernelEvent(&evt);
+}
+
+static void EmitOpcodeEvent(
+    QUOODLE_OPCODE opcode,
+    const QUOODLE_IOCTL_RESPONSE* resp,
+    ULONGLONG duration_ms,
+    const char* policy_ref) {
   const char* status = resp->status == 0 ? "ok" : "error";
   const char* opcode_str = OpcodeToString(opcode);
-  ULONGLONG dropped = (ULONGLONG)InterlockedCompareExchange64(&g_event_dropped, 0, 0);
-  (void)RtlStringCchPrintfA(payload, sizeof(payload),
-                            "{\"opcode\":\"%s\",\"status\":\"%s\",\"error_code\":%u,\"dropped_events\":%I64u}",
-                            opcode_str, status, resp->error_code, dropped);
-  QUOODLE_KERNEL_EVENT evt;
-  InitKernelEvent(&evt, QKEVENT_TYPE_OPCODE, payload);
-  DeliverOrQueueKernelEvent(&evt);
+  const char* category = OpcodeCategory(opcode);
+  const char* subtype = OpcodeSubtype(opcode);
+  const char* severity = resp->status == 0 ? "info" : "high";
+  const char* decision = resp->status == 0 ? "allow" : "deny";
+  EmitKernelCategoryEvent(
+      EventTypeForOpcode(opcode),
+      category,
+      subtype,
+      severity,
+      decision,
+      status,
+      opcode_str,
+      resp->error_code,
+      duration_ms,
+      policy_ref);
+}
+
+static void EmitValidationRejectEvent(
+    QUOODLE_OPCODE opcode,
+    const QUOODLE_IOCTL_RESPONSE* resp,
+    const char* reason_code,
+    ULONGLONG duration_ms,
+    const char* policy_ref) {
+  const char* opcode_str = OpcodeToString(opcode);
+  EmitKernelCategoryEvent(
+      QKEVENT_TYPE_RUNTIME,
+      "runtime",
+      "validation_reject",
+      "medium",
+      "reject",
+      reason_code,
+      opcode_str,
+      resp->error_code,
+      duration_ms,
+      policy_ref);
 }
 
 static void InitResponse(QUOODLE_IOCTL_RESPONSE* resp, const char* request_id) {
@@ -761,32 +898,43 @@ static VOID QuoodleEvtIoDeviceControl(_In_ WDFQUEUE Queue,
   InitResponse(resp, req_copy.request_id);
 
   BOOLEAN should_emit_event = FALSE;
+  const CHAR* runtime_reason_code = NULL;
   QUOODLE_OPCODE opcode = (QUOODLE_OPCODE)req_copy.opcode;
+  LARGE_INTEGER perfFreq = {0};
+  LARGE_INTEGER perfStart = KeQueryPerformanceCounter(&perfFreq);
 
   if (req_copy.version != QUOODLE_IOCTL_VERSION) {
     resp->error_code = QERR_INVALID_VERSION;
     RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), "invalid_version");
+    runtime_reason_code = "invalid_version";
   } else if (!ValidateRequestPayload(&req_copy)) {
     resp->error_code = QERR_BAD_PAYLOAD;
     RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), "bad_payload");
+    runtime_reason_code = "bad_payload";
   } else if (!IsTimestampFresh(req_copy.timestamp_unix)) {
     resp->error_code = QERR_TIMESTAMP_SKEW;
     RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), "timestamp_skew");
+    runtime_reason_code = "timestamp_skew";
   } else if (!UpdateSequenceIfNew(req_copy.agent_sequence)) {
     resp->error_code = QERR_SEQ_REPLAY;
     RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), "seq_replay");
+    runtime_reason_code = "seq_replay";
   } else if (!g_hmac_ready || g_hmac_key_len == 0) {
     resp->error_code = QERR_SIGNATURE_INVALID;
     RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), "signature_invalid");
+    runtime_reason_code = "signature_invalid";
   } else if (req_copy.signature_length == 0) {
     resp->error_code = QERR_SIGNATURE_MISSING;
     RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), "signature_missing");
+    runtime_reason_code = "signature_missing";
   } else if (req_copy.signature_length >= QUOODLE_MAX_SIG_B64 || req_copy.signature_b64[req_copy.signature_length] != '\0') {
     resp->error_code = QERR_BAD_PAYLOAD;
     RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), "bad_payload");
+    runtime_reason_code = "bad_payload";
   } else if (!VerifyRequestSignature(&req_copy)) {
     resp->error_code = QERR_SIGNATURE_INVALID;
     RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), "signature_invalid");
+    runtime_reason_code = "signature_invalid";
   } else {
     switch (opcode) {
       case QOP_EXEC_PING:
@@ -818,14 +966,24 @@ static VOID QuoodleEvtIoDeviceControl(_In_ WDFQUEUE Queue,
       default:
         resp->error_code = QERR_INVALID_OPCODE;
         RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), "invalid_opcode");
+        should_emit_event = TRUE;
         break;
     }
+  }
+
+  LARGE_INTEGER perfEnd = KeQueryPerformanceCounter(NULL);
+  ULONGLONG duration_ms = 0;
+  if (perfFreq.QuadPart > 0 && perfEnd.QuadPart >= perfStart.QuadPart) {
+    duration_ms = (ULONGLONG)(((perfEnd.QuadPart - perfStart.QuadPart) * 1000ULL) / perfFreq.QuadPart);
   }
 
   SignResponse(resp);
 
   if (should_emit_event) {
-    EmitOpcodeEvent(opcode, resp);
+    EmitOpcodeEvent(opcode, resp, duration_ms, req_copy.policy_hash);
+  } else if (runtime_reason_code != NULL) {
+    InterlockedIncrement64(&g_validation_rejects);
+    EmitValidationRejectEvent(opcode, resp, runtime_reason_code, duration_ms, req_copy.policy_hash);
   }
 
   WdfRequestCompleteWithInformation(Request, STATUS_SUCCESS, sizeof(QUOODLE_IOCTL_RESPONSE));
