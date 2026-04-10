@@ -21,6 +21,7 @@ from app.state import (
     ota_manager,
     policy_resolver,
     quarantine_handler,
+    risk_scorer,
     webhook_outbox,
 )
 from app.ws.webhooks import fire_and_forget, forward_telemetry_summary
@@ -268,6 +269,8 @@ def create_router(manager: ConnectionManager) -> APIRouter:
                 session_id=payload.session_id,
                 seq=payload.seq,
                 masked_fields=sorted(set((payload.masked_fields or []) + dropped)),
+                presence_state="online",
+                connection_mode="http_heartbeat" if payload.telemetry_scope in {"telemetry_basic", "telemetry_extended"} else "wss",
             )
         )
 
@@ -331,6 +334,8 @@ def create_router(manager: ConnectionManager) -> APIRouter:
                     session_id=entry.session_id,
                     seq=entry.seq,
                     masked_fields=sorted(set((entry.masked_fields or []) + dropped)),
+                    presence_state="online",
+                    connection_mode="http_heartbeat" if entry.telemetry_scope in {"telemetry_basic", "telemetry_extended"} else "wss",
                 )
             )
             accepted += 1

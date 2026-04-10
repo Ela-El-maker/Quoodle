@@ -64,6 +64,8 @@ async def forward_telemetry_summary(
     session_id: str | None = None,
     seq: int | None = None,
     masked_fields: list[str] | None = None,
+    presence_state: str | None = None,
+    connection_mode: str | None = None,
 ) -> None:
     try:
         kernel_event = metrics.get("kernel_event") if isinstance(metrics, dict) else None
@@ -87,6 +89,8 @@ async def forward_telemetry_summary(
             "max_cpu": _percent(metrics.get("cpu")) or 0.0,
             "risk_score_avg": risk_score or 0.0,
             "policy_hash": policy_hash,
+            "presence_state": presence_state,
+            "connection_mode": connection_mode,
         }
         if kernel_event:
             rollup["kernel_event"] = kernel_event
@@ -98,6 +102,8 @@ async def forward_telemetry_summary(
             "max_cpu": 0.0,
             "risk_score_avg": 0.0,
             "policy_hash": policy_hash,
+            "presence_state": presence_state,
+            "connection_mode": connection_mode,
         }
         if isinstance(metrics, dict) and metrics.get("kernel_event"):
             rollup["kernel_event"] = metrics.get("kernel_event")
@@ -111,6 +117,8 @@ async def forward_telemetry_summary(
         "seq": seq,
         "metrics": metrics if isinstance(metrics, dict) else {},
         "masked_fields": masked_fields or [],
+        "presence_state": presence_state,
+        "connection_mode": connection_mode,
         "source": "gateway",
         "rollup": rollup,
     }

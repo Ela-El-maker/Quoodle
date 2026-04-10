@@ -237,7 +237,14 @@ async def agent_ws(websocket: WebSocket):
                     if agent_pubkey_b64 is None:
                         raise SignatureError("Missing cached pubkey")
                     verify_ed25519_signature(message, agent_pubkey_b64)
-                except (ReplayError, SignatureError):
+                except (ReplayError, SignatureError) as exc:
+                    logger.warning(
+                        "closing ws 4401 for device=%s reason=%s type=%s seq=%s",
+                        device_id,
+                        str(exc),
+                        message.get("type"),
+                        extract_seq_from_message(message),
+                    )
                     await websocket.close(code=4401)
                     break
 
@@ -271,6 +278,8 @@ async def agent_ws(websocket: WebSocket):
                             session_id=body.get("session_id", message.get("session_id")),
                             seq=body.get("seq", extract_seq_from_message(message)),
                             masked_fields=body.get("masked_fields"),
+                            presence_state="online",
+                            connection_mode="wss",
                         )
                     )
                     continue
