@@ -17,6 +17,7 @@ class Command extends Model
     protected $fillable = [
         'client_message_id',
         'device_id',
+        'user_id',
         'method',
         'params',
         'sensitive',

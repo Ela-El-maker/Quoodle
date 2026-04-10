@@ -114,6 +114,7 @@ class CommandService
         $command = Command::create([
             'client_message_id' => $payload['client_message_id'],
             'device_id' => $payload['device_id'],
+            'user_id' => $payload['user_id'] ?? null,
             'method' => $payload['method'],
             'params' => $payload['params'] ?? [],
             'sensitive' => $payload['sensitive'] ?? false,

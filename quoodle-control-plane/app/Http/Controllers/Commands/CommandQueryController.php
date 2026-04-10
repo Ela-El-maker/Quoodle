@@ -25,7 +25,7 @@ class CommandQueryController extends Controller
         $before = $request->query('before');
 
         $query = $this->visibleCommandsQuery($request)
-            ->with('user:id,email')
+            ->with(['user:id,email', 'device:device_id,device_name'])
             ->orderByDesc('queued_at')
             ->orderByDesc('id');
 
@@ -94,6 +94,7 @@ class CommandQueryController extends Controller
         }
 
         $this->expireIfNeeded($command);
+        $command->loadMissing(['user:id,email', 'device:device_id,device_name']);
 
         return response()->json($this->formatCommand($command));
     }
@@ -115,7 +116,7 @@ class CommandQueryController extends Controller
 
         $limit = min((int) $request->query('limit', 20), 100);
         $commands = Command::where('device_id', $device_id)
-            ->with('user:id,email')
+            ->with(['user:id,email', 'device:device_id,device_name'])
             ->orderByDesc('queued_at')
             ->limit($limit)
             ->get();
@@ -160,15 +161,26 @@ class CommandQueryController extends Controller
 
     private function listRow(Command $cmd): array
     {
+        $result = $this->resultObject($cmd);
+        $resultSummary = $this->resultSummary($result);
+
         return [
             'command_id' => $cmd->id,
             'device_id' => $cmd->device_id,
+            'device_name' => $cmd->device?->device_name,
             'method' => $cmd->method,
             'params' => $cmd->params ?? [],
             'state' => $cmd->state,
+            'execution_state' => $cmd->execution_state,
             'queued_at' => optional($cmd->queued_at)?->toIso8601String(),
+            'dispatched_at' => optional($cmd->dispatched_at)?->toIso8601String(),
             'completed_at' => optional($cmd->completed_at)?->toIso8601String(),
-            'result_status' => is_array($cmd->result) ? ($cmd->result['status'] ?? null) : null,
+            'trace_id' => $cmd->trace_id,
+            'result' => $result,
+            'result_status' => $resultSummary['result_status'],
+            'result_notes' => $resultSummary['result_notes'],
+            'artifact_url' => $resultSummary['artifact_url'],
+            'artifact_checksum' => $resultSummary['artifact_checksum'],
             'error_code' => $cmd->error_code,
             'error_message' => $cmd->error_message,
             'reason' => $cmd->reason,
@@ -178,34 +190,51 @@ class CommandQueryController extends Controller
 
     private function formatCommand(Command $cmd): array
     {
-        $result = $cmd->result ?? [];
-        $standardKeys = ['status', 'notes', 'artifact_url', 'artifact_checksum'];
-        $extra = array_diff_key($result, array_flip($standardKeys));
+        $result = $this->resultObject($cmd);
+        $resultSummary = $this->resultSummary($result);
 
         return [
             'command_id' => $cmd->id,
             'device_id' => $cmd->device_id,
+            'device_name' => $cmd->device?->device_name,
             'method' => $cmd->method,
             'params' => $cmd->params ?? [],
             'state' => $cmd->state,
+            'execution_state' => $cmd->execution_state,
             'queued_at' => optional($cmd->queued_at)?->toIso8601String(),
+            'dispatched_at' => optional($cmd->dispatched_at)?->toIso8601String(),
             'completed_at' => optional($cmd->completed_at)?->toIso8601String(),
+            'trace_id' => $cmd->trace_id,
+            'actor_email' => $cmd->user?->email,
             'audit' => [
                 'server_seq' => $cmd->server_seq,
                 'request_sig' => $cmd->request_sig,
                 'envelope_sig' => $cmd->envelope_sig,
                 'envelope' => $cmd->envelope,
             ],
-            'result' => [
-                'status' => $result['status'] ?? null,
-                'notes' => $result['notes'] ?? null,
-                'artifact_url' => $result['artifact_url'] ?? null,
-                'artifact_checksum' => $result['artifact_checksum'] ?? null,
-                'data' => $extra,
-            ],
+            'result' => $result,
+            'result_status' => $resultSummary['result_status'],
+            'result_notes' => $resultSummary['result_notes'],
+            'artifact_url' => $resultSummary['artifact_url'],
+            'artifact_checksum' => $resultSummary['artifact_checksum'],
             'error_code' => $cmd->error_code,
             'error_message' => $cmd->error_message,
             'reason' => $cmd->reason,
+        ];
+    }
+
+    private function resultObject(Command $command): array
+    {
+        return is_array($command->result) ? $command->result : [];
+    }
+
+    private function resultSummary(array $result): array
+    {
+        return [
+            'result_status' => $result['status'] ?? null,
+            'result_notes' => $result['notes'] ?? null,
+            'artifact_url' => $result['artifact_url'] ?? null,
+            'artifact_checksum' => $result['artifact_checksum'] ?? null,
         ];
     }
 

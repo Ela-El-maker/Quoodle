@@ -40,7 +40,17 @@ class CommandController extends Controller
             ], 422);
         }
 
-        $result = $this->commandService->enqueue($validator->validated());
+        $validated = $validator->validated();
+        $user = $request->user();
+        if ($user) {
+            $validated['user_id'] = (string) $user->id;
+            $validated['user_role'] = (string) ($user->role ?? 'viewer');
+        } else {
+            $validated['user_id'] = isset($validated['user_id']) ? (string) $validated['user_id'] : null;
+            $validated['user_role'] = (string) ($validated['user_role'] ?? 'viewer');
+        }
+
+        $result = $this->commandService->enqueue($validated);
 
         if ($result['status'] !== 'accepted') {
             return response()->json([
