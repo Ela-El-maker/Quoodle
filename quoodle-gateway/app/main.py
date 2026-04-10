@@ -37,6 +37,16 @@ from app.ws.webhooks import (
 from app.middleware.laravel_signature import LaravelSignatureMiddleware
 
 logger = logging.getLogger(__name__)
+WS_TELEMETRY_COUNTERS = {
+    "accepted": 0,
+    "rejected": 0,
+    "kernel_accepted": 0,
+    "kernel_rejected": 0,
+}
+
+
+def _inc_ws_counter(name: str) -> None:
+    WS_TELEMETRY_COUNTERS[name] = WS_TELEMETRY_COUNTERS.get(name, 0) + 1
 
 
 @asynccontextmanager
@@ -109,6 +119,7 @@ async def health():
     return {
         "status": "ok",
         "redis": "connected" if redis_ok else "disconnected",
+        "ws_telemetry_counters": WS_TELEMETRY_COUNTERS,
     }
 
 
@@ -260,11 +271,18 @@ async def agent_ws(websocket: WebSocket):
                     try:
                         validate_telemetry(message, session_id_assigned)
                     except ValueError:
+                        _inc_ws_counter("rejected")
+                        body = message.get("body", {})
+                        if body.get("telemetry_scope") == "kernel_event":
+                            _inc_ws_counter("kernel_rejected")
                         await websocket.close(code=4400)
                         break
                     body = message.get("body", {})
                     metrics = body.get("metrics", {})
                     policy_hash = body.get("policy_hash")
+                    _inc_ws_counter("accepted")
+                    if body.get("telemetry_scope") == "kernel_event":
+                        _inc_ws_counter("kernel_accepted")
                     risk = risk_scorer.score(metrics)
                     fire_and_forget(
                         forward_telemetry_summary(
@@ -311,7 +329,11 @@ async def agent_ws(websocket: WebSocket):
                 logger.warning("ws message processing error for %s: %s", device_id, exc)
                 continue
     finally:
-        entry = await manager.unregister(device_id)
+        entry = await manager.unregister(
+            device_id,
+            session_id=session_id_assigned,
+            websocket=websocket,
+        )
         fire_and_forget(
             notify_device_offline(
                 device_id=device_id,

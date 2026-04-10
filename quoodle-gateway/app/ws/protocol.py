@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict
+import json
 
 from app.config import settings
 import hashlib
@@ -189,17 +190,63 @@ def validate_telemetry(payload: Dict[str, Any], expected_session: str) -> None:
     if telemetry_scope not in {"telemetry_basic", "telemetry_extended", "kernel_event"}:
         raise ValueError("Telemetry unsupported telemetry_scope")
     if telemetry_scope == "kernel_event":
-        kernel_event = metrics.get("kernel_event")
-        if not isinstance(kernel_event, dict):
-            raise ValueError("Telemetry metrics.kernel_event required for kernel_event scope")
-        for field in ["event_id", "event_type", "event_timestamp_unix", "payload_json"]:
-            if field not in kernel_event:
-                raise ValueError(f"Telemetry kernel_event missing {field}")
+        validate_kernel_event_metrics(metrics)
         return
 
     for field in ["cpu", "ram", "disk_usage", "network_tx", "network_rx"]:
         if field not in metrics:
             raise ValueError(f"Telemetry metrics missing {field}")
+
+
+def validate_kernel_event_metrics(metrics: Dict[str, Any]) -> None:
+    kernel_event = metrics.get("kernel_event")
+    if not isinstance(kernel_event, dict):
+        raise ValueError("kernel_event_missing")
+    for field in ["event_id", "event_type", "event_timestamp_unix", "payload_json"]:
+        if field not in kernel_event:
+            raise ValueError(f"kernel_event_missing_{field}")
+
+    for numeric_field in ["event_id", "event_type", "event_timestamp_unix"]:
+        raw = kernel_event.get(numeric_field)
+        if not isinstance(raw, int) or raw < 0:
+            raise ValueError(f"kernel_event_invalid_{numeric_field}")
+
+    payload_json = kernel_event.get("payload_json")
+    if not isinstance(payload_json, str) or payload_json.strip() == "":
+        raise ValueError("kernel_event_invalid_payload_json")
+
+    try:
+        parsed = json.loads(payload_json)
+    except Exception:
+        raise ValueError("kernel_payload_not_json")
+
+    if not isinstance(parsed, dict):
+        raise ValueError("kernel_payload_not_object")
+
+    category_raw = parsed.get("category")
+    if category_raw is not None:
+        if not isinstance(category_raw, str):
+            raise ValueError("kernel_payload_invalid_category")
+        category = category_raw.strip().lower()
+        if category not in {"exec", "integrity", "attestation", "update", "runtime"}:
+            raise ValueError("kernel_payload_invalid_category")
+
+    optional_string_fields = ["subtype", "severity", "decision", "reason_code", "policy_ref"]
+    for field in optional_string_fields:
+        if field in parsed and parsed[field] is not None and not isinstance(parsed[field], str):
+            raise ValueError(f"kernel_payload_invalid_{field}")
+
+    optional_number_fields = ["duration_ms", "queue_depth", "drop_count"]
+    for field in optional_number_fields:
+        value = parsed.get(field)
+        if value is None:
+            continue
+        if not isinstance(value, (int, float)) or value < 0:
+            raise ValueError(f"kernel_payload_invalid_{field}")
+
+    masked_fields = parsed.get("masked_fields")
+    if masked_fields is not None and not isinstance(masked_fields, list):
+        raise ValueError("kernel_payload_invalid_masked_fields")
 
 
 def validate_command_result(payload: Dict[str, Any], expected_session: str) -> None:
