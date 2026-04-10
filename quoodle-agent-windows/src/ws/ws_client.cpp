@@ -583,6 +583,7 @@ bool WsClient::try_connect()
   std::atomic<bool> connection_error{false};
   std::atomic<bool> authenticated{false};
   std::mutex session_mutex;
+  std::mutex outbound_send_mutex;
   std::string active_session_id;
   std::string close_reason;
   auto last_heartbeat_tick = std::chrono::steady_clock::now();
@@ -629,7 +630,10 @@ bool WsClient::try_connect()
                 return;
             }
 
-            socket.sendText(auth_message);
+            {
+                std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
+                socket.sendText(auth_message);
+            }
             
         } else if (msg->type == ix::WebSocketMessageType::Message) {
             Logger::log(LogLevel::Debug, std::string("received: ") + msg->str);
@@ -651,25 +655,34 @@ bool WsClient::try_connect()
                             state_impl_.set_policy_hash(ack_policy_hash);
                         }
                         if (!heartbeat_sent_) {
+                            std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
                             auto hb = build_signed_heartbeat_json(config_.device_id, session_id, "alive", 120, "ok");
-                            socket.sendText(hb);
-                            heartbeat_sent_ = true;
-                            telemetry_stats_.sent += 1;
+                            if (!hb.empty()) {
+                                socket.sendText(hb);
+                                heartbeat_sent_ = true;
+                                telemetry_stats_.sent += 1;
+                            }
                         }
                         if (!telemetry_sent_) {
-                            auto tel = build_signed_telemetry_json(
-                                config_.device_id,
-                                session_id,
-                                "telemetry_extended",
-                                state_impl_.policy_hash());
-                            socket.sendText(tel);
-                            telemetry_sent_ = true;
-                            telemetry_stats_.sent += 1;
+                            {
+                                std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
+                                auto tel = build_signed_telemetry_json(
+                                    config_.device_id,
+                                    session_id,
+                                    "telemetry_extended",
+                                    state_impl_.policy_hash());
+                                if (!tel.empty()) {
+                                    socket.sendText(tel);
+                                    telemetry_sent_ = true;
+                                    telemetry_stats_.sent += 1;
+                                }
+                            }
                             replay_queued_telemetry();
                         }
                         if (is_kernel_driver_enabled() && !kernel_listener_started.load()) {
                             const std::string session_id_copy = session_id;
                             bool started = kernel_listener.start([&, session_id_copy](const KernelEvent &evt) {
+                                std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
                                 auto tel = build_signed_kernel_event_telemetry_json(
                                     config_.device_id,
                                     session_id_copy,
@@ -712,19 +725,29 @@ bool WsClient::try_connect()
                                            verify_result.error_code + " - " + verify_result.error_message);
                                 
                                 // Send rejection ACK with reason
-                                auto rejected_ack = build_command_ack_json(config_.device_id, session_id, command_message_id, 
-                                                                           "rejected", verify_result.error_code);
-                                socket.sendText(rejected_ack);
+                                {
+                                    std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
+                                    auto rejected_ack = build_command_ack_json(config_.device_id, session_id, command_message_id, 
+                                                                               "rejected", verify_result.error_code);
+                                    if (!rejected_ack.empty()) {
+                                        socket.sendText(rejected_ack);
+                                    }
+                                }
                                 
                                 // Send error result
                                 int error_code = 4003;
                                 if (verify_result.error_code == "TTL_EXPIRED") error_code = 4005;
                                 else if (verify_result.error_code == "SEQ_REPLAY") error_code = 4006;
                                 
-                                auto denied = build_command_result_json(config_.device_id, session_id, command_message_id,
-                                                                        trace_id, "failed", verify_result.error_code,
-                                                                        verify_result.error_message, "", "", error_code, "");
-                                socket.sendText(denied);
+                                {
+                                    std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
+                                    auto denied = build_command_result_json(config_.device_id, session_id, command_message_id,
+                                                                            trace_id, "failed", verify_result.error_code,
+                                                                            verify_result.error_message, "", "", error_code, "");
+                                    if (!denied.empty()) {
+                                        socket.sendText(denied);
+                                    }
+                                }
                                 return;
                             }
                             
@@ -737,23 +760,38 @@ bool WsClient::try_connect()
                             Logger::log(LogLevel::Debug, "COMMAND_DELIVERY signature verified successfully");
                         }
                         
-                        auto ack = build_command_ack_json(config_.device_id, session_id, command_message_id, "received", "");
-                        socket.sendText(ack);
+                        {
+                            std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
+                            auto ack = build_command_ack_json(config_.device_id, session_id, command_message_id, "received", "");
+                            if (!ack.empty()) {
+                                socket.sendText(ack);
+                            }
+                        }
 
                         if (quarantine_.is_quarantined() && !quarantine_.is_allowed(method)) {
-                            auto denied = build_command_result_json(config_.device_id, session_id, command_message_id,
-                                                                    trace_id, "failed", "denied",
-                                                                    "quarantined", "", "", 4001,
-                                                                    quarantine_.reason());
-                            socket.sendText(denied);
+                            {
+                                std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
+                                auto denied = build_command_result_json(config_.device_id, session_id, command_message_id,
+                                                                        trace_id, "failed", "denied",
+                                                                        "quarantined", "", "", 4001,
+                                                                        quarantine_.reason());
+                                if (!denied.empty()) {
+                                    socket.sendText(denied);
+                                }
+                            }
                             return;
                         }
 
                         if (!policy_hash.empty() && !state_impl_.policy_hash().empty() && policy_hash != state_impl_.policy_hash()) {
-                            auto denied = build_command_result_json(config_.device_id, session_id, command_message_id,
-                                                                    trace_id, "failed", "policy_mismatch",
-                                                                    "policy hash mismatch", "", "", 4002, "");
-                            socket.sendText(denied);
+                            {
+                                std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
+                                auto denied = build_command_result_json(config_.device_id, session_id, command_message_id,
+                                                                        trace_id, "failed", "policy_mismatch",
+                                                                        "policy hash mismatch", "", "", 4002, "");
+                                if (!denied.empty()) {
+                                    socket.sendText(denied);
+                                }
+                            }
                             return;
                         }
 
@@ -768,22 +806,32 @@ bool WsClient::try_connect()
 
                         if (res.status == "ok") {
                             auto result_payload = res.result.empty() ? "command completed" : res.result;
-                            auto result_msg = build_command_result_json(
-                                config_.device_id, session_id, command_message_id, trace_id,
-                                "completed", "ok", result_payload, "", "",
-                                res.error_code, res.error_message);
-                            socket.sendText(result_msg);
+                            {
+                                std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
+                                auto result_msg = build_command_result_json(
+                                    config_.device_id, session_id, command_message_id, trace_id,
+                                    "completed", "ok", result_payload, "", "",
+                                    res.error_code, res.error_message);
+                                if (!result_msg.empty()) {
+                                    socket.sendText(result_msg);
+                                }
+                            }
                         } else {
                             const bool unsupported = (res.status == "invalid_opcode" || res.error_code == 4004 || res.error_code == 4002);
-                            auto result_msg = build_command_result_json(
-                                config_.device_id, session_id, command_message_id, trace_id,
-                                "failed",
-                                unsupported ? "unsupported" : "kernel_transport_error",
-                                res.error_message.empty() ? "command execution failed" : res.error_message,
-                                "", "",
-                                res.error_code,
-                                res.error_message);
-                            socket.sendText(result_msg);
+                            {
+                                std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
+                                auto result_msg = build_command_result_json(
+                                    config_.device_id, session_id, command_message_id, trace_id,
+                                    "failed",
+                                    unsupported ? "unsupported" : "kernel_transport_error",
+                                    res.error_message.empty() ? "command execution failed" : res.error_message,
+                                    "", "",
+                                    res.error_code,
+                                    res.error_message);
+                                if (!result_msg.empty()) {
+                                    socket.sendText(result_msg);
+                                }
+                            }
                         }
                     }
                 } else if (mtype == "UPDATE_ANNOUNCE") {
@@ -797,9 +845,14 @@ bool WsClient::try_connect()
                         manifest["version"] = version;
                         ota_.set_manifest(manifest);
                         state_impl_.set_release(release_id);
-                        auto status_msg = build_update_status_json(
-                            config_.device_id, session_id, release_id, "precheck", version, 0, "acknowledged", 0, "", "");
-                        socket.sendText(status_msg);
+                        {
+                            std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
+                            auto status_msg = build_update_status_json(
+                                config_.device_id, session_id, release_id, "precheck", version, 0, "acknowledged", 0, "", "");
+                            if (!status_msg.empty()) {
+                                socket.sendText(status_msg);
+                            }
+                        }
                     }
                 }
             } catch (const std::exception& e) {
@@ -869,6 +922,7 @@ bool WsClient::try_connect()
       {
         if (now - last_heartbeat_tick >= std::chrono::seconds(config_.heartbeat_interval_s))
         {
+          std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
           const auto hb = build_signed_heartbeat_json(config_.device_id, session_id, "alive", 120, "ok");
           if (!hb.empty())
           {
@@ -880,6 +934,7 @@ bool WsClient::try_connect()
 
         if (now - last_telemetry_tick >= std::chrono::seconds(config_.telemetry_interval_s))
         {
+          std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
           const auto telemetry = build_signed_telemetry_json(
               config_.device_id,
               session_id,

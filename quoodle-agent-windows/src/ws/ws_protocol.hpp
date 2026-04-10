@@ -8,7 +8,7 @@ struct AgentInfo
     std::string agent_version{"0.0.1"};
     std::string attestation_hash;
     std::string hwid_hash;
-    std::string os_build{"19045"};
+    std::string os_build;
 };
 
 struct AuthBody

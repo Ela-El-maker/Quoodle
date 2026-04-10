@@ -151,12 +151,39 @@ std::string TelemetryCollector::get_os_build()
         size = sizeof(value);
         rc = RegQueryValueExA(hKey, "CurrentBuild", nullptr, nullptr, reinterpret_cast<LPBYTE>(value), &size);
     }
-    RegCloseKey(hKey);
+
     if (rc != ERROR_SUCCESS)
     {
+        RegCloseKey(hKey);
         return "";
     }
-    return std::string(value);
+
+    const std::string build = std::string(value);
+    if (build.empty())
+    {
+        RegCloseKey(hKey);
+        return "";
+    }
+
+    DWORD ubr = 0;
+    DWORD ubrSize = sizeof(ubr);
+    DWORD ubrType = REG_DWORD;
+    rc = RegQueryValueExA(
+        hKey,
+        "UBR",
+        nullptr,
+        &ubrType,
+        reinterpret_cast<LPBYTE>(&ubr),
+        &ubrSize
+    );
+    RegCloseKey(hKey);
+
+    if (rc == ERROR_SUCCESS && ubrType == REG_DWORD)
+    {
+        return build + "." + std::to_string(ubr);
+    }
+
+    return build;
 }
 
 TelemetrySample TelemetryCollector::collect()

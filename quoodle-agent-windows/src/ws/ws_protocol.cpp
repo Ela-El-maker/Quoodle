@@ -109,6 +109,11 @@ AuthEnvelope build_auth_envelope(const std::string &device_id, const std::string
     {
         env.body.agent_info.os_build = os_build;
     }
+    else
+    {
+        const auto sample = g_collector.collect();
+        env.body.agent_info.os_build = sample.os_build;
+    }
     env.sig = "";
     return env;
 }
@@ -122,7 +127,7 @@ std::string canonical_auth_without_sig(const AuthEnvelope &env)
         {"agent_version", "\"" + escape_json(env.body.agent_info.agent_version) + "\""},
         {"attestation_hash", "\"" + escape_json(env.body.agent_info.attestation_hash) + "\""},
         {"hwid_hash", "\"" + escape_json(env.body.agent_info.hwid_hash) + "\""},
-        {"os_build", "\"" + escape_json(env.body.agent_info.os_build) + "\""},
+        {"os_build", env.body.agent_info.os_build.empty() ? "null" : "\"" + escape_json(env.body.agent_info.os_build) + "\""},
     });
 
     std::string auth = canonical_object({
@@ -175,7 +180,7 @@ std::string build_signed_auth_json(AuthEnvelope envelope)
         {"agent_version", "\"" + escape_json(envelope.body.agent_info.agent_version) + "\""},
         {"attestation_hash", "\"" + escape_json(envelope.body.agent_info.attestation_hash) + "\""},
         {"hwid_hash", "\"" + escape_json(envelope.body.agent_info.hwid_hash) + "\""},
-        {"os_build", "\"" + escape_json(envelope.body.agent_info.os_build) + "\""},
+        {"os_build", envelope.body.agent_info.os_build.empty() ? "null" : "\"" + escape_json(envelope.body.agent_info.os_build) + "\""},
     });
 
     std::string auth = canonical_object({
@@ -362,9 +367,10 @@ std::string build_signed_telemetry_json(const std::string &device_id,
         {"risk_score", sample.risk_score.empty() ? "null" : sample.risk_score},
     });
 
+    // Body keys must be lexicographic to match gateway canonicalization.
     std::string body = canonical_object({
-        {"metrics", metrics},
         {"masked_fields", "[]"},
+        {"metrics", metrics},
         {"policy_hash", policy_hash.empty() ? "null" : "\"" + escape_json(policy_hash) + "\""},
         {"schema_version", "\"v1\""},
         {"seq", std::to_string(env.seq)},
@@ -433,9 +439,10 @@ std::string build_signed_kernel_event_telemetry_json(const std::string &device_i
         {"kernel_event", kernel_event},
     });
 
+    // Body keys must be lexicographic to match gateway canonicalization.
     std::string body = canonical_object({
-        {"metrics", metrics},
         {"masked_fields", "[]"},
+        {"metrics", metrics},
         {"policy_hash", "null"},
         {"schema_version", "\"v1\""},
         {"seq", std::to_string(env.seq)},
