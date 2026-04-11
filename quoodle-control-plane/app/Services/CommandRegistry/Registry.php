@@ -96,8 +96,8 @@ class Registry
             ),
 
             // Visibility & Reconnaissance
-            'sysinfo' => new CommandDefinition(
-                name: 'sysinfo',
+            'collect_system_info' => new CommandDefinition(
+                name: 'collect_system_info',
                 riskLevel: 'low',
                 minRole: 'user',
                 requires2fa: false,

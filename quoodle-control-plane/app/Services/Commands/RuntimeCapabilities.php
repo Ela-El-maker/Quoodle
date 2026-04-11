@@ -13,6 +13,7 @@ class RuntimeCapabilities
         'ping',
         'reboot_device',
         'shutdown_device',
+        'collect_system_info',
     ];
 
     public function __construct(private readonly Registry $registry)
@@ -58,4 +59,3 @@ class RuntimeCapabilities
         return $reasons;
     }
 }
-
