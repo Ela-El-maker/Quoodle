@@ -32,11 +32,11 @@ public:
         {
             return ioctl_.lock_screen(request_id, state, command_message_id);
         }
-        if (method == "reboot" || method == "EXEC_REBOOT")
+        if (method == "reboot" || method == "reboot_device" || method == "EXEC_REBOOT")
         {
             return ioctl_.reboot(request_id, state, command_message_id);
         }
-        if (method == "shutdown" || method == "EXEC_SHUTDOWN")
+        if (method == "shutdown" || method == "shutdown_device" || method == "EXEC_SHUTDOWN")
         {
             return ioctl_.shutdown(request_id, state, command_message_id);
         }

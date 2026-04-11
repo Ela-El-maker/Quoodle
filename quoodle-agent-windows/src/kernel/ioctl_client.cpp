@@ -6,6 +6,7 @@
 #include "../logging/logger.hpp"
 #include "../utils/time_utils.hpp"
 #include "../utils/sha256.hpp"
+#include <nlohmann/json.hpp>
 
 #include <sstream>
 #include <string>
@@ -18,13 +19,26 @@
 #endif
 #include <mutex>
 #include <ctime>
+#include <chrono>
 #include <vector>
 #include <algorithm>
 #include <cctype>
 
+static std::uint64_t initial_sequence_seed()
+{
+  const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          std::chrono::system_clock::now().time_since_epoch())
+                          .count();
+  if (now_ms <= 0)
+  {
+    return 1;
+  }
+  return static_cast<std::uint64_t>(now_ms);
+}
+
 // Thread-safe sequence counter
 static std::mutex s_sequence_mutex;
-static std::uint64_t s_sequence_counter{0};
+static std::uint64_t s_sequence_counter{initial_sequence_seed()};
 
 // Environment variable to control kernel response signature verification (default: enabled)
 static bool is_kernel_response_verification_required()
@@ -423,6 +437,7 @@ bool IoctlClient::ensure_connection()
 #ifdef _WIN32
   last_transport_error_code_ = -1;
   last_transport_error_message_ = "ipc_failure";
+  last_transport_win32_error_ = 0;
 
   // Prefer kernel driver if enabled and available.
   const char *preferDriver = std::getenv("QUOODLE_USE_KERNEL_DRIVER");
@@ -446,6 +461,7 @@ bool IoctlClient::ensure_connection()
       useDevice = true;
       last_transport_error_code_ = 4101;
       last_transport_error_message_ = "driver_unavailable_fail_closed";
+      last_transport_win32_error_ = 0;
       Logger::log(LogLevel::Error, "Kernel driver unavailable and fallback disabled");
       return false;
     }
@@ -484,6 +500,7 @@ bool IoctlClient::ensure_connection()
   {
     last_transport_error_code_ = 4102;
     last_transport_error_message_ = "driver_and_pipe_unavailable";
+    last_transport_win32_error_ = 0;
   }
 #endif
   return false;
@@ -492,6 +509,43 @@ bool IoctlClient::ensure_connection()
 KernelExecResult IoctlClient::parse_result_from_json(const std::string &json)
 {
   KernelExecResult resp;
+  try
+  {
+    const auto parsed = nlohmann::json::parse(json);
+    resp.request_id = parsed.value("request_id", "");
+    resp.status = parsed.value("status", "");
+    resp.kernel_exec_id = parsed.value("kernel_exec_id", "");
+    resp.timestamp = parsed.value("timestamp", "");
+    resp.error_message = parsed.value("error_message", "");
+    resp.error_code = parsed.value("error_code", 0);
+    if (parsed.contains("result"))
+    {
+      const auto &result = parsed["result"];
+      if (result.is_string())
+      {
+        resp.result = result.get<std::string>();
+      }
+      else if (result.is_null())
+      {
+        resp.result.clear();
+      }
+      else
+      {
+        resp.result = result.dump();
+      }
+    }
+    resp.sig = parsed.value("sig", "");
+    if (resp.sig.empty())
+    {
+      resp.sig = parsed.value("signature", "");
+    }
+    return resp;
+  }
+  catch (const std::exception &)
+  {
+    // Fallback parser for malformed/legacy responses.
+  }
+
   resp.request_id = extract_json_string(json, "request_id");
   resp.status = extract_json_string(json, "status");
   resp.kernel_exec_id = extract_json_string(json, "kernel_exec_id");
@@ -499,13 +553,45 @@ KernelExecResult IoctlClient::parse_result_from_json(const std::string &json)
   resp.result = extract_json_string(json, "result");
   resp.error_message = extract_json_string(json, "error_message");
   resp.error_code = extract_json_int(json, "error_code");
-  // Try both 'sig' and 'signature' field names
   resp.sig = extract_json_string(json, "sig");
   if (resp.sig.empty())
   {
     resp.sig = extract_json_string(json, "signature");
   }
   return resp;
+}
+
+bool IoctlClient::using_driver_transport() const
+{
+#ifdef _WIN32
+  return useDevice && hDevice != INVALID_HANDLE_VALUE;
+#else
+  return false;
+#endif
+}
+
+bool IoctlClient::using_pipe_transport() const
+{
+#ifdef _WIN32
+  return !useDevice && hPipe != INVALID_HANDLE_VALUE;
+#else
+  return false;
+#endif
+}
+
+int IoctlClient::last_transport_error_code() const
+{
+  return last_transport_error_code_;
+}
+
+std::string IoctlClient::last_transport_error_message() const
+{
+  return last_transport_error_message_;
+}
+
+int IoctlClient::last_transport_win32_error() const
+{
+  return last_transport_win32_error_;
 }
 
 /**
@@ -622,6 +708,7 @@ std::string IoctlClient::execute_request(const std::string &opcode, const std::s
 {
   last_transport_error_code_ = -1;
   last_transport_error_message_ = "ipc_failure";
+  last_transport_win32_error_ = 0;
 
   if (!ensure_connection())
   {
@@ -663,6 +750,7 @@ std::string IoctlClient::execute_request(const std::string &opcode, const std::s
     {
       last_transport_error_code_ = QERR_SIGNATURE_INVALID;
       last_transport_error_message_ = "driver_request_" + sign_error;
+      last_transport_win32_error_ = 0;
       Logger::log(LogLevel::Error, "Failed to sign driver request: " + sign_error);
       return "";
     }
@@ -678,10 +766,24 @@ std::string IoctlClient::execute_request(const std::string &opcode, const std::s
         sizeof(resp),
         &bytesReturned,
         NULL);
-    if (!ok || bytesReturned < sizeof(QuoodleIoctlResponse))
+    if (!ok)
+    {
+      const DWORD win32_error = GetLastError();
+      last_transport_error_code_ = 4103;
+      last_transport_win32_error_ = static_cast<int>(win32_error);
+      last_transport_error_message_ = "driver_ioctl_failure_win32_" + std::to_string(win32_error);
+      Logger::log(LogLevel::Error, "Driver IOCTL failed. win32_error=" + std::to_string(win32_error) +
+                                       " bytesReturned=" + std::to_string(bytesReturned));
+      disconnect();
+      return "";
+    }
+    if (bytesReturned < sizeof(QuoodleIoctlResponse))
     {
       last_transport_error_code_ = 4103;
-      last_transport_error_message_ = "driver_ioctl_failure";
+      last_transport_win32_error_ = 0;
+      last_transport_error_message_ = "driver_ioctl_short_read_" + std::to_string(bytesReturned);
+      Logger::log(LogLevel::Error, "Driver IOCTL returned short response. bytesReturned=" + std::to_string(bytesReturned) +
+                                       " expected=" + std::to_string(sizeof(QuoodleIoctlResponse)));
       disconnect();
       return "";
     }
@@ -691,6 +793,7 @@ std::string IoctlClient::execute_request(const std::string &opcode, const std::s
     {
       last_transport_error_code_ = QERR_SIGNATURE_INVALID;
       last_transport_error_message_ = "kernel_signature_" + verify_error;
+      last_transport_win32_error_ = 0;
       Logger::log(LogLevel::Warn, "Kernel driver response signature verification failed: " + verify_error);
       return "";
     }
@@ -767,6 +870,7 @@ std::string IoctlClient::execute_request(const std::string &opcode, const std::s
   // If we reach here, the communication failed or timed out
   last_transport_error_code_ = -1;
   last_transport_error_message_ = "pipe_timeout_or_failure";
+  last_transport_win32_error_ = 0;
   disconnect();
 #endif
   return "";

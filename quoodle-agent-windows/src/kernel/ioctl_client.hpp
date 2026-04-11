@@ -82,6 +82,15 @@ public:
                                const std::string &component = "",
                                const std::string &command_message_id = "");
 
+  // True when the most recent connected execution path is the kernel driver IOCTL transport.
+  bool using_driver_transport() const;
+  // True when the most recent connected execution path is the named pipe fallback transport.
+  bool using_pipe_transport() const;
+  // Last transport-layer error code/message emitted by the client path.
+  int last_transport_error_code() const;
+  std::string last_transport_error_message() const;
+  int last_transport_win32_error() const;
+
 private:
   bool ensure_connection(); // Helper to reconnect if pipe drops
   void disconnect();
@@ -113,4 +122,5 @@ private:
 #endif
   int last_transport_error_code_{-1};
   std::string last_transport_error_message_{"ipc_failure"};
+  int last_transport_win32_error_{0};
 };

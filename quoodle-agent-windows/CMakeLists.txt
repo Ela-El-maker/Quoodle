@@ -175,6 +175,27 @@ if(HAVE_SODIUM)
   target_compile_definitions(agent PRIVATE HAVE_SODIUM=1 SODIUM_STATIC=1)
 endif()
 
+# Local harness for strict device-side collect_system_info soak validation.
+add_executable(collect_system_info_soak
+  src/tools/collect_system_info_soak.cpp
+  src/kernel/ioctl_client.cpp
+  src/crypto/ed25519_sign.cpp
+  src/crypto/json_canonicalizer.cpp
+  src/crypto/kernel_response_verifier.cpp
+  src/utils/sha256.cpp
+  src/utils/dpapi_loader.cpp
+)
+target_include_directories(collect_system_info_soak PRIVATE src)
+target_link_libraries(collect_system_info_soak PRIVATE nlohmann_json::nlohmann_json)
+if(WIN32)
+  target_link_libraries(collect_system_info_soak PRIVATE crypt32 advapi32)
+endif()
+if(HAVE_SODIUM)
+  target_include_directories(collect_system_info_soak PRIVATE ${SODIUM_INCLUDE_DIR})
+  target_link_libraries(collect_system_info_soak PRIVATE ${SODIUM_LIB})
+  target_compile_definitions(collect_system_info_soak PRIVATE HAVE_SODIUM=1 SODIUM_STATIC=1)
+endif()
+
 # Integration tests
 add_executable(ioctl_integration_test
   tests/integration/ioctl_pipe_test.cpp
@@ -205,12 +226,14 @@ add_executable(ws_protocol_signing_test
 )
 
 target_include_directories(ioctl_integration_test PRIVATE src)
+target_link_libraries(ioctl_integration_test PRIVATE nlohmann_json::nlohmann_json)
 if(HAVE_SODIUM)
   target_include_directories(ioctl_integration_test PRIVATE ${SODIUM_INCLUDE_DIR})
   target_link_libraries(ioctl_integration_test PRIVATE ${SODIUM_LIB})
   target_compile_definitions(ioctl_integration_test PRIVATE HAVE_SODIUM=1 SODIUM_STATIC=1)
 endif()
 
+target_link_libraries(ioctl_signed_test PRIVATE nlohmann_json::nlohmann_json)
 if(HAVE_SODIUM)
   target_include_directories(ioctl_signed_test PRIVATE ${SODIUM_INCLUDE_DIR})
   target_link_libraries(ioctl_signed_test PRIVATE ${SODIUM_LIB})
