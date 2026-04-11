@@ -25,8 +25,16 @@
     <None Include="Queue.c" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Canonical hardened implementation. Template split files are parked scaffolding for later migration. -->
+    <!-- Canonical hardened implementation with opcode handlers split by file. -->
     <ClCompile Include="..\quoodle_kmdf.c" />
+    <ClCompile Include="..\core\kmdf_event_pipeline.c" />
+    <ClCompile Include="..\core\kmdf_request_security.c" />
+    <ClCompile Include="..\opcodes\kmdf_opcode_common.c" />
+    <ClCompile Include="..\opcodes\ping.c" />
+    <ClCompile Include="..\opcodes\reboot.c" />
+    <ClCompile Include="..\opcodes\shutdown.c" />
+    <ClCompile Include="..\opcodes\collect_system_info.c" />
+    <ClCompile Include="..\opcodes\not_supported.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Device.h" />
@@ -34,6 +42,10 @@
     <ClInclude Include="Public.h" />
     <ClInclude Include="Queue.h" />
     <ClInclude Include="Trace.h" />
+    <ClInclude Include="..\core\kmdf_event_pipeline.h" />
+    <ClInclude Include="..\core\kmdf_request_security.h" />
+    <ClInclude Include="..\opcodes\kmdf_opcode_common.h" />
+    <ClInclude Include="..\opcodes\kmdf_opcode_handlers.h" />
   </ItemGroup>
   <ItemGroup>
     <Inf Include="quoodle_kmdf.inf" />
