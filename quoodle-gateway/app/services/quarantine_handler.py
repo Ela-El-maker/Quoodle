@@ -11,7 +11,7 @@ class QuarantineHandler:
             "collect_diagnostics",
             "ping",
             "health_check",
-            "sysinfo",
+            "collect_system_info",
             "lock_screen",
             "enable_input",
             "show_message",

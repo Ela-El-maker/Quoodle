@@ -134,3 +134,19 @@ def test_dispatch_blocks_runtime_unsupported_method(client):
         assert body["reason"] == "not_supported_runtime"
     finally:
         settings.require_laravel_signature = old_require
+
+
+def test_dispatch_allows_collect_system_info_method(client):
+    old_require = settings.require_laravel_signature
+    try:
+        settings.require_laravel_signature = False
+        payload = _sample_dispatch_payload()
+        payload["method"] = "collect_system_info"
+        payload["envelope"]["body"]["method"] = "collect_system_info"
+
+        resp = client.post("/api/v1/command/dispatch", json=payload)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["reason"] != "not_supported_runtime"
+    finally:
+        settings.require_laravel_signature = old_require

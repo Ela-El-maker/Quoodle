@@ -35,6 +35,7 @@ RUNTIME_SUPPORTED_METHODS = {
     "ping",
     "reboot_device",
     "shutdown_device",
+    "collect_system_info",
 }
 
 TELEMETRY_ALLOWLIST_COMMON = {
