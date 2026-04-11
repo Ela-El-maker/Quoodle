@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
-from app.api_controller import create_router, build_command_delivery
+from app.api_controller import create_router, build_command_delivery, TELEMETRY_COUNTERS
 from app.config import settings
 from app.state import manager, offline_queue, ota_manager, policy_resolver, risk_scorer, eventbus, presence, webhook_outbox
 from app.ws.auth import validate_auth_jwt
@@ -42,6 +42,10 @@ WS_TELEMETRY_COUNTERS = {
     "rejected": 0,
     "kernel_accepted": 0,
     "kernel_rejected": 0,
+    "seq_replay_soft_drop": 0,
+    "seq_replay_soft_drop_heartbeat": 0,
+    "seq_replay_soft_drop_telemetry": 0,
+    "seq_replay_soft_drop_kernel_event": 0,
 }
 
 
@@ -120,6 +124,7 @@ async def health():
         "status": "ok",
         "redis": "connected" if redis_ok else "disconnected",
         "ws_telemetry_counters": WS_TELEMETRY_COUNTERS,
+        "http_telemetry_counters": TELEMETRY_COUNTERS,
     }
 
 
@@ -241,25 +246,71 @@ async def agent_ws(websocket: WebSocket):
                 except json.JSONDecodeError:
                     continue
 
+                mtype = message.get("type")
+
                 # Mandatory security checks for every inbound message.
                 try:
                     replay.validate_timestamp(message.get("timestamp", ""))
-                    await replay.check_and_update_seq(device_id, extract_seq_from_message(message))
                     if agent_pubkey_b64 is None:
                         raise SignatureError("Missing cached pubkey")
                     verify_ed25519_signature(message, agent_pubkey_b64)
-                except (ReplayError, SignatureError) as exc:
+                except ReplayError as exc:
                     logger.warning(
                         "closing ws 4401 for device=%s reason=%s type=%s seq=%s",
                         device_id,
                         str(exc),
-                        message.get("type"),
+                        mtype,
+                        extract_seq_from_message(message),
+                    )
+                    await websocket.close(code=4401)
+                    break
+                except SignatureError as exc:
+                    logger.warning(
+                        "closing ws 4401 for device=%s reason=%s type=%s seq=%s",
+                        device_id,
+                        str(exc),
+                        mtype,
                         extract_seq_from_message(message),
                     )
                     await websocket.close(code=4401)
                     break
 
-                mtype = message.get("type")
+                seq = extract_seq_from_message(message)
+                if mtype in {"HEARTBEAT", "TELEMETRY"}:
+                    try:
+                        await replay.check_and_update_seq(device_id, seq)
+                    except ReplayError as exc:
+                        _inc_ws_counter("seq_replay_soft_drop")
+                        if mtype == "HEARTBEAT":
+                            _inc_ws_counter("seq_replay_soft_drop_heartbeat")
+                        else:
+                            _inc_ws_counter("seq_replay_soft_drop_telemetry")
+                            body = message.get("body", {})
+                            telemetry_scope = body.get("telemetry_scope") if isinstance(body, dict) else None
+                            if telemetry_scope == "kernel_event":
+                                _inc_ws_counter("seq_replay_soft_drop_kernel_event")
+                        logger.info(
+                            "soft-drop replay telemetry frame for device=%s reason=%s type=%s seq=%s",
+                            device_id,
+                            str(exc),
+                            mtype,
+                            seq,
+                        )
+                        continue
+                else:
+                    try:
+                        await replay.check_and_update_seq(device_id, seq)
+                    except ReplayError as exc:
+                        logger.warning(
+                            "closing ws 4401 for device=%s reason=%s type=%s seq=%s",
+                            device_id,
+                            str(exc),
+                            mtype,
+                            seq,
+                        )
+                        await websocket.close(code=4401)
+                        break
+
                 if mtype == "HEARTBEAT":
                     try:
                         validate_heartbeat(message, session_id_assigned)
