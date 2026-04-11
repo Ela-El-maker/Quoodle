@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { X, Monitor, Terminal, Shield, Activity, Clock, Cpu, HardDrive, Wifi, ChevronRight, AlertTriangle, CheckCircle, XCircle, RotateCcw, Bell, Layers, ExternalLink, Radio, Loader2, Network, Users, Camera, Folder, Info, Lock } from 'lucide-react';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { formatLocalTime } from '@/lib/dateTime';
+import { resolveCommandMethod } from '@/lib/commandMethodResolver';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import {
@@ -115,10 +116,11 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
   const commandBlockedReason = useCallback(
     (method: string): string | null => {
       if (capabilities.canonical_methods.length === 0) return null;
+      const resolvedMethod = resolveCommandMethod(method);
       const canonical = new Set(capabilities.canonical_methods);
       const runtimeSupported = new Set(capabilities.runtime_supported_methods);
-      if (!canonical.has(method)) return 'unknown_command';
-      if (!runtimeSupported.has(method)) return capabilities.rejection_reasons[method] ?? 'not_supported_runtime';
+      if (!canonical.has(resolvedMethod)) return 'unknown_command';
+      if (!runtimeSupported.has(resolvedMethod)) return capabilities.rejection_reasons[resolvedMethod] ?? 'not_supported_runtime';
       return null;
     },
     [capabilities],
@@ -251,6 +253,7 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
   }, [device, loadBundle]);
 
   const dispatchAndWait = useCallback(async (method: string, cmdLabel: string, params: Record<string, unknown> = {}, sensitive = false) => {
+    const dispatchMethod = resolveCommandMethod(method);
     if (currentDevice.status !== 'online') {
       toast.error(`${currentDevice.hostname} is ${currentDevice.status} - cannot dispatch commands`);
       return;
@@ -267,9 +270,9 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          client_message_id: `drawer-${currentDevice.id}-${method}-${crypto.randomUUID()}`,
+          client_message_id: `drawer-${currentDevice.id}-${dispatchMethod}-${crypto.randomUUID()}`,
           device_id: currentDevice.id,
-          method,
+          method: dispatchMethod,
           params,
           sensitive,
         }),

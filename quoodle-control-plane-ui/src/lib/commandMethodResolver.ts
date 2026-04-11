@@ -1,0 +1,31 @@
+const LEGACY_METHOD_ALIASES: Record<string, string> = {
+  'system-info': 'collect_system_info',
+  'hardware-info': 'collect_system_info',
+  'performance-metrics': 'collect_system_info',
+  'uptime': 'collect_system_info',
+  'screenshot-capture': 'screenshot',
+  'display-info': 'get_active_window',
+  'filesystem': 'list_files',
+  'download-file': 'download_file',
+  'upload-file': 'upload_file',
+  'delete-file': 'delete_file',
+  'delete-folder': 'delete_file',
+  'process-list': 'list_processes',
+  'network-info': 'network_info',
+  'netstat': 'list_connections',
+  'dns-lookup': 'network_info',
+  'services-list': 'list_services',
+  'service-start': 'start_service',
+  'service-stop': 'stop_service',
+  'service-restart': 'restart_service',
+  'event-logs': 'collect_logs',
+  'security-logs': 'collect_logs',
+  'application-logs': 'collect_logs',
+  'users-list': 'get_users',
+  'active-sessions': 'list_sessions',
+  'power-info': 'collect_system_info',
+};
+
+export function resolveCommandMethod(method: string): string {
+  return LEGACY_METHOD_ALIASES[method] ?? method;
+}

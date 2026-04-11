@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { formatLocalDateTime, formatLocalTime } from '@/lib/dateTime';
+import { resolveCommandMethod } from '@/lib/commandMethodResolver';
 import {
   mapCommandListRow,
   type NormalizedCommandResult,
@@ -899,10 +900,11 @@ export default function DeviceDetailPageContent() {
   );
 
   const getCommandBlockReason = useCallback((method: string): CommandBlockReason | null => {
-    if (!canonicalMethods.has(method)) {
+    const resolvedMethod = resolveCommandMethod(method);
+    if (!canonicalMethods.has(resolvedMethod)) {
       return 'unknown_command';
     }
-    if (!runtimeSupportedMethods.has(method)) {
+    if (!runtimeSupportedMethods.has(resolvedMethod)) {
       return 'not_supported_runtime';
     }
     return null;
@@ -989,6 +991,7 @@ export default function DeviceDetailPageContent() {
     label: string,
     sensitive = false,
   ) => {
+    const dispatchMethod = resolveCommandMethod(method);
     const blockReason = getCommandBlockReason(method);
     if (blockReason) {
       toast.error(`${label} blocked: ${reasonToText(blockReason)}`);
@@ -1005,7 +1008,7 @@ export default function DeviceDetailPageContent() {
         body: JSON.stringify({
           client_message_id: crypto.randomUUID(),
           device_id: device.id,
-          method,
+          method: dispatchMethod,
           params,
           sensitive,
         }),
@@ -1024,15 +1027,15 @@ export default function DeviceDetailPageContent() {
 
       setLiveResults({
         commandId,
-        method,
+        method: dispatchMethod,
         state: 'queued',
         output: '',
-        traceSteps: buildTraceSteps(method, 'queued'),
+        traceSteps: buildTraceSteps(dispatchMethod, 'queued'),
       });
       setActiveTab('Trace');
       toast.success(`${label} dispatched (${commandId})`);
 
-      await pollCommandUntilTerminal(commandId, method);
+      await pollCommandUntilTerminal(commandId, dispatchMethod);
       await loadDeviceData();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Command dispatch failed';
