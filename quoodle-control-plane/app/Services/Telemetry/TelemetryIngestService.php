@@ -9,6 +9,7 @@ use App\Models\TelemetryIngestError;
 use App\Models\TelemetryRollup;
 use App\Models\TelemetrySnapshot;
 use Illuminate\Support\Carbon;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -16,6 +17,8 @@ use Throwable;
 
 class TelemetryIngestService
 {
+    private const NETWORK_METRIC_MAX = 1000000000000.0; // 1 TB/s safety ceiling
+
     public function ingest(string $deviceId, array $payload): array
     {
         try {
@@ -35,7 +38,33 @@ class TelemetryIngestService
                 $source = (string) ($payload['source'] ?? 'gateway');
                 $existingLatest = DeviceTelemetryLatest::query()->where('device_id', $deviceId)->first();
 
-                $canonicalMetrics = $this->normalizeMetrics($rollup, $metrics);
+                if ($scope === 'kernel_event') {
+                    $presenceState = $presenceState ?? 'online';
+                    $connectionMode = $connectionMode ?? 'wss';
+                }
+
+                $duplicateEvent = $this->findDuplicateEvent($deviceId, $scope, $sessionId, $seq);
+                if ($duplicateEvent) {
+                    Cache::add('telemetry:ingest:duplicate_prevented', 0, now()->addDay());
+                    Cache::increment('telemetry:ingest:duplicate_prevented');
+                    Log::info('telemetry.ingest.duplicate_prevented', [
+                        'device_id' => $deviceId,
+                        'scope' => $scope,
+                        'session_id' => $sessionId,
+                        'seq' => $seq,
+                        'existing_event_id' => $duplicateEvent->id,
+                    ]);
+
+                    return [
+                        'status' => 'duplicate_ignored',
+                        'reason' => 'duplicate_event',
+                        'event_id' => $duplicateEvent->id,
+                        'timestamp' => optional($duplicateEvent->timestamp)->toIso8601String(),
+                        'presence_state' => $duplicateEvent->presence_state ?? $presenceState,
+                    ];
+                }
+
+                $canonicalMetrics = $this->sanitizeMetricsForPersistence($this->normalizeMetrics($rollup, $metrics));
                 $telemetryOsBuild = $this->asNullableString($canonicalMetrics['os_build'] ?? null);
 
                 $event = TelemetryEvent::create([
@@ -145,13 +174,15 @@ class TelemetryIngestService
                 ];
             });
         } catch (Throwable $e) {
+            [$reason, $errorMeta] = $this->classifyIngestError($e);
             TelemetryIngestError::create([
                 'device_id' => $deviceId,
                 'timestamp' => now(),
-                'reason' => 'ingest_exception',
+                'reason' => $reason,
                 'details' => [
                     'message' => $e->getMessage(),
                     'payload' => $payload,
+                    'error' => $errorMeta,
                 ],
                 'source' => (string) ($payload['source'] ?? 'gateway'),
             ]);
@@ -160,13 +191,14 @@ class TelemetryIngestService
             Cache::increment('telemetry:ingest:rejected');
             Log::warning('telemetry.ingest.rejected', [
                 'device_id' => $deviceId,
-                'reason' => 'ingest_exception',
+                'reason' => $reason,
                 'message' => $e->getMessage(),
+                'error_meta' => $errorMeta,
             ]);
 
             return [
                 'status' => 'rejected',
-                'reason' => 'ingest_exception',
+                'reason' => $reason,
                 'timestamp' => now()->toIso8601String(),
             ];
         }
@@ -260,28 +292,159 @@ class TelemetryIngestService
     private function upsertRollup(string $deviceId, Carbon $timestamp, array $metrics, ?string $presenceState): void
     {
         $bucketStart = $timestamp->copy()->second(0)->minute((int) (floor($timestamp->minute / 5) * 5));
-        $rollup = TelemetryRollup::firstOrNew([
-            'device_id' => $deviceId,
-            'bucket_start' => $bucketStart,
-            'bucket_minutes' => 5,
-        ]);
+        $attempts = 0;
 
-        $prevSamples = (int) ($rollup->samples ?? 0);
-        $nextSamples = $prevSamples + 1;
-        $rollup->samples = $nextSamples;
-        $rollup->avg_cpu = $this->weightedAvg($rollup->avg_cpu, $prevSamples, $this->toFloat($metrics['cpu'] ?? null));
-        $rollup->avg_ram = $this->weightedAvg($rollup->avg_ram, $prevSamples, $this->toFloat($metrics['ram'] ?? null));
-        $rollup->avg_disk_usage = $this->weightedAvg($rollup->avg_disk_usage, $prevSamples, $this->toFloat($metrics['disk_usage'] ?? null));
-        $rollup->avg_network_tx = $this->weightedAvg($rollup->avg_network_tx, $prevSamples, $this->toFloat($metrics['network_tx'] ?? null));
-        $rollup->avg_network_rx = $this->weightedAvg($rollup->avg_network_rx, $prevSamples, $this->toFloat($metrics['network_rx'] ?? null));
-        $rollup->avg_risk_score = $this->weightedAvg($rollup->avg_risk_score, $prevSamples, $this->toFloat($metrics['risk_score'] ?? null));
-        $candidateCpu = $this->toFloat($metrics['cpu'] ?? null);
-        if ($candidateCpu !== null) {
-            $existingMax = $this->toFloat($rollup->max_cpu);
-            $rollup->max_cpu = $existingMax === null ? $candidateCpu : max($existingMax, $candidateCpu);
+        while ($attempts < 3) {
+            $attempts++;
+            try {
+                $rollup = TelemetryRollup::query()
+                    ->where('device_id', $deviceId)
+                    ->where('bucket_start', $bucketStart)
+                    ->where('bucket_minutes', 5)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $rollup) {
+                    TelemetryRollup::create([
+                        'device_id' => $deviceId,
+                        'bucket_start' => $bucketStart,
+                        'bucket_minutes' => 5,
+                        'samples' => 1,
+                        'avg_cpu' => $this->toFloat($metrics['cpu'] ?? null),
+                        'avg_ram' => $this->toFloat($metrics['ram'] ?? null),
+                        'avg_disk_usage' => $this->toFloat($metrics['disk_usage'] ?? null),
+                        'avg_network_tx' => $this->sanitizeNetworkMetric($this->toFloat($metrics['network_tx'] ?? null)),
+                        'avg_network_rx' => $this->sanitizeNetworkMetric($this->toFloat($metrics['network_rx'] ?? null)),
+                        'avg_risk_score' => $this->toFloat($metrics['risk_score'] ?? null),
+                        'max_cpu' => $this->toFloat($metrics['cpu'] ?? null),
+                        'presence_state' => $presenceState,
+                    ]);
+                    return;
+                }
+
+                $prevSamples = (int) ($rollup->samples ?? 0);
+                $nextSamples = $prevSamples + 1;
+                $rollup->samples = $nextSamples;
+                $rollup->avg_cpu = $this->weightedAvg($rollup->avg_cpu, $prevSamples, $this->toFloat($metrics['cpu'] ?? null));
+                $rollup->avg_ram = $this->weightedAvg($rollup->avg_ram, $prevSamples, $this->toFloat($metrics['ram'] ?? null));
+                $rollup->avg_disk_usage = $this->weightedAvg($rollup->avg_disk_usage, $prevSamples, $this->toFloat($metrics['disk_usage'] ?? null));
+                $rollup->avg_network_tx = $this->weightedAvg(
+                    $rollup->avg_network_tx,
+                    $prevSamples,
+                    $this->sanitizeNetworkMetric($this->toFloat($metrics['network_tx'] ?? null))
+                );
+                $rollup->avg_network_rx = $this->weightedAvg(
+                    $rollup->avg_network_rx,
+                    $prevSamples,
+                    $this->sanitizeNetworkMetric($this->toFloat($metrics['network_rx'] ?? null))
+                );
+                $rollup->avg_risk_score = $this->weightedAvg($rollup->avg_risk_score, $prevSamples, $this->toFloat($metrics['risk_score'] ?? null));
+                $candidateCpu = $this->toFloat($metrics['cpu'] ?? null);
+                if ($candidateCpu !== null) {
+                    $existingMax = $this->toFloat($rollup->max_cpu);
+                    $rollup->max_cpu = $existingMax === null ? $candidateCpu : max($existingMax, $candidateCpu);
+                }
+                $rollup->presence_state = $presenceState;
+                $rollup->save();
+                return;
+            } catch (QueryException $e) {
+                if ($this->isRollupConflict($e)) {
+                    Cache::add('telemetry:rollup:upsert_conflict_handled', 0, now()->addDay());
+                    Cache::increment('telemetry:rollup:upsert_conflict_handled');
+                    if ($attempts < 3) {
+                        continue;
+                    }
+                }
+                throw $e;
+            }
         }
-        $rollup->presence_state = $presenceState;
-        $rollup->save();
+    }
+
+    private function findDuplicateEvent(string $deviceId, string $scope, ?string $sessionId, ?int $seq): ?TelemetryEvent
+    {
+        if ($seq === null) {
+            return null;
+        }
+
+        $query = TelemetryEvent::query()
+            ->where('device_id', $deviceId)
+            ->where('telemetry_scope', $scope)
+            ->where('seq', $seq);
+
+        if ($sessionId === null || trim($sessionId) === '') {
+            $query->whereNull('session_id');
+        } else {
+            $query->where('session_id', $sessionId);
+        }
+
+        return $query->orderByDesc('timestamp')->first();
+    }
+
+    private function sanitizeMetricsForPersistence(array $metrics): array
+    {
+        foreach (['network_tx', 'network_rx'] as $networkKey) {
+            $value = $this->toFloat($metrics[$networkKey] ?? null);
+            $sanitized = $this->sanitizeNetworkMetric($value);
+            if ($value !== null && $sanitized !== $value) {
+                Cache::add('telemetry:rollup:network_clamped', 0, now()->addDay());
+                Cache::increment('telemetry:rollup:network_clamped');
+                Log::warning('telemetry.network_metric_clamped', [
+                    'field' => $networkKey,
+                    'raw' => $value,
+                    'sanitized' => $sanitized,
+                ]);
+            }
+            $metrics[$networkKey] = $sanitized;
+        }
+
+        return $metrics;
+    }
+
+    private function sanitizeNetworkMetric(?float $value): ?float
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if ($value < 0) {
+            return 0.0;
+        }
+
+        return min($value, self::NETWORK_METRIC_MAX);
+    }
+
+    private function isRollupConflict(QueryException $e): bool
+    {
+        $driverCode = (int) ($e->errorInfo[1] ?? 0);
+        $message = strtolower($e->getMessage());
+        return $driverCode === 1062 && str_contains($message, 'telemetry_rollups_unique_bucket');
+    }
+
+    private function classifyIngestError(Throwable $e): array
+    {
+        if ($e instanceof QueryException) {
+            $sqlState = (string) ($e->errorInfo[0] ?? '');
+            $driverCode = (int) ($e->errorInfo[1] ?? 0);
+            $message = strtolower($e->getMessage());
+
+            if ($sqlState === '22003' || str_contains($message, 'out of range')) {
+                return ['numeric_overflow', ['sql_state' => $sqlState, 'driver_code' => $driverCode]];
+            }
+
+            if ($driverCode === 1062) {
+                if (str_contains($message, 'telemetry_rollups_unique_bucket')) {
+                    return ['rollup_conflict', ['sql_state' => $sqlState, 'driver_code' => $driverCode]];
+                }
+                if (str_contains($message, 'telemetry_events')) {
+                    return ['duplicate_event', ['sql_state' => $sqlState, 'driver_code' => $driverCode]];
+                }
+                if (str_contains($message, 'device_telemetry_latest')) {
+                    return ['latest_projection_conflict', ['sql_state' => $sqlState, 'driver_code' => $driverCode]];
+                }
+            }
+        }
+
+        return ['ingest_exception', ['class' => get_class($e)]];
     }
 
     private function weightedAvg(mixed $existing, int $samples, ?float $next): ?float

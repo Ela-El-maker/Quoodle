@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 
 class TelemetryQueryController extends Controller
 {
@@ -50,6 +51,16 @@ class TelemetryQueryController extends Controller
                 'resolved_policy_in_sync' => $resolvedPolicyInSync,
             ]);
         }
+        $latestPresenceState = $latest->presence_state ?? $resolvedPresenceState;
+        $latestConnectionMode = $latest->connection_mode ?? $resolvedConnectionMode;
+        if ($latest->telemetry_scope === 'kernel_event') {
+            if (! is_string($latestPresenceState) || trim($latestPresenceState) === '') {
+                $latestPresenceState = 'online';
+            }
+            if (! is_string($latestConnectionMode) || trim($latestConnectionMode) === '') {
+                $latestConnectionMode = 'wss';
+            }
+        }
 
         $metrics = is_array($latest->metrics) ? $latest->metrics : [];
         if (array_key_exists('kernel_event', $metrics) && is_array($metrics['kernel_event'])) {
@@ -72,8 +83,8 @@ class TelemetryQueryController extends Controller
             'session_id' => $latest->session_id,
             'seq' => $latest->seq,
             'telemetry_scope' => $latest->telemetry_scope,
-            'presence_state' => $latest->presence_state ?? $resolvedPresenceState,
-            'connection_mode' => $latest->connection_mode ?? $resolvedConnectionMode,
+            'presence_state' => $latestPresenceState,
+            'connection_mode' => $latestConnectionMode,
             'policy_hash' => $latest->policy_hash,
             'risk_score' => $latest->risk_score === null ? null : (float) $latest->risk_score,
             'metrics' => $metrics,
@@ -106,6 +117,7 @@ class TelemetryQueryController extends Controller
             ->orderBy('timestamp')
             ->limit($limit)
             ->get();
+        $events = $this->dedupeKernelEvents($events);
 
         return response()->json([
             'device_id' => $device_id,
@@ -116,10 +128,13 @@ class TelemetryQueryController extends Controller
                 if (array_key_exists('kernel_event', $metrics) && is_array($metrics['kernel_event'])) {
                     $metrics['kernel_event'] = $this->normalizeKernelEventForResponse($metrics['kernel_event']);
                 }
+                $presenceState = $this->resolvedTelemetryPresenceState($event);
+                $connectionMode = $this->resolvedTelemetryConnectionMode($event);
                 return [
                     'timestamp' => optional($event->timestamp)->toIso8601String(),
                     'telemetry_scope' => $event->telemetry_scope,
-                    'presence_state' => $event->presence_state,
+                    'presence_state' => $presenceState,
+                    'connection_mode' => $connectionMode,
                     'risk_score' => $event->risk_score === null ? null : (float) $event->risk_score,
                     'policy_hash' => $event->policy_hash,
                     'metrics' => $metrics,
@@ -267,13 +282,18 @@ class TelemetryQueryController extends Controller
                 'timestamp' => optional($event->timestamp)->toIso8601String(),
                 'detail' => [
                     'scope' => $event->telemetry_scope,
-                    'presence_state' => $event->presence_state,
+                    'presence_state' => $this->resolvedTelemetryPresenceState($event),
+                    'connection_mode' => $this->resolvedTelemetryConnectionMode($event),
                     'risk_score' => $event->risk_score,
                     'kernel_event' => is_array($event->metrics)
                         ? $this->normalizeKernelEventForResponse($event->metrics['kernel_event'] ?? null)
                         : null,
                 ],
-            ]);
+            ])
+            ->unique(fn (array $event) => $event['detail']['kernel_event']
+                ? $this->kernelEventKeyFromArray($event['detail']['kernel_event'], $event['id'])
+                : $event['id'])
+            ->values();
 
         $alerts = Alert::query()
             ->whereIn('device_id', $deviceIds)
@@ -319,6 +339,41 @@ class TelemetryQueryController extends Controller
 
         return response()->json([
             'events' => $events,
+        ]);
+    }
+
+    public function opsHealth(Request $request): JsonResponse
+    {
+        if (! $this->isAdmin($request)) {
+            return response()->json(['message' => 'forbidden'], 403);
+        }
+
+        $recentErrors = \App\Models\TelemetryIngestError::query()
+            ->where('timestamp', '>=', now()->subHour())
+            ->selectRaw('reason, COUNT(*) as total')
+            ->groupBy('reason')
+            ->pluck('total', 'reason');
+
+        return response()->json([
+            'generated_at' => now()->utc()->toIso8601String(),
+            'ingest' => [
+                'accepted' => (int) Cache::get('telemetry:ingest:accepted', 0),
+                'rejected' => (int) Cache::get('telemetry:ingest:rejected', 0),
+                'duplicate_prevented' => (int) Cache::get('telemetry:ingest:duplicate_prevented', 0),
+            ],
+            'rollups' => [
+                'upsert_conflict_handled' => (int) Cache::get('telemetry:rollup:upsert_conflict_handled', 0),
+                'network_clamped' => (int) Cache::get('telemetry:rollup:network_clamped', 0),
+            ],
+            'commands' => [
+                'stale_reconciled' => (int) Cache::get('commands:stale_reconciled', 0),
+                'active_non_terminal' => Command::query()->whereIn('state', ['queued', 'dispatched', 'sent', 'ack_received'])->count(),
+            ],
+            'divergence' => [
+                'os_build' => (int) Cache::get('telemetry:divergence:os_build', 0),
+                'seq_non_monotonic' => (int) Cache::get('telemetry:divergence:seq_non_monotonic', 0),
+            ],
+            'errors_last_hour' => $recentErrors,
         ]);
     }
 
@@ -474,5 +529,62 @@ class TelemetryQueryController extends Controller
         }
 
         return $event;
+    }
+
+    private function dedupeKernelEvents(\Illuminate\Support\Collection $events): \Illuminate\Support\Collection
+    {
+        return $events->unique(function (TelemetryEvent $event): string {
+            if ($event->telemetry_scope !== 'kernel_event') {
+                return 'event:'.$event->id;
+            }
+
+            $metrics = is_array($event->metrics) ? $event->metrics : [];
+            $kernel = $this->normalizeKernelEventForResponse($metrics['kernel_event'] ?? null);
+            if (is_array($kernel)) {
+                return $this->kernelEventKeyFromArray($kernel, (string) $event->id);
+            }
+
+            return 'kernel-fallback:'.$event->device_id.':'.($event->session_id ?? 'none').':'.((string) ($event->seq ?? 'none'));
+        })->values();
+    }
+
+    private function kernelEventKeyFromArray(array $kernelEvent, string $fallback): string
+    {
+        $eventId = (string) ($kernelEvent['event_id'] ?? '');
+        $eventType = (string) ($kernelEvent['event_type'] ?? '');
+        $eventTs = (string) ($kernelEvent['event_timestamp_unix'] ?? '');
+        if ($eventId === '' && $eventType === '' && $eventTs === '') {
+            return $fallback;
+        }
+
+        return implode(':', ['kernel', $eventId, $eventType, $eventTs]);
+    }
+
+    private function resolvedTelemetryPresenceState(TelemetryEvent $event): ?string
+    {
+        $presenceState = is_string($event->presence_state) ? trim($event->presence_state) : '';
+        if ($presenceState !== '') {
+            return $presenceState;
+        }
+
+        if ($event->telemetry_scope === 'kernel_event') {
+            return 'online';
+        }
+
+        return null;
+    }
+
+    private function resolvedTelemetryConnectionMode(TelemetryEvent $event): ?string
+    {
+        $connectionMode = is_string($event->connection_mode) ? trim($event->connection_mode) : '';
+        if ($connectionMode !== '') {
+            return $connectionMode;
+        }
+
+        if ($event->telemetry_scope === 'kernel_event') {
+            return 'wss';
+        }
+
+        return null;
     }
 }

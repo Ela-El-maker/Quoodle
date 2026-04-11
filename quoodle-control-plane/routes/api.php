@@ -90,6 +90,7 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
         Route::get('/telemetry/fleet/summary', [TelemetryQueryController::class, 'fleetSummary']);
         Route::get('/telemetry/fleet/timeseries', [TelemetryQueryController::class, 'fleetTimeseries']);
         Route::get('/telemetry/activity', [TelemetryQueryController::class, 'activity']);
+        Route::get('/telemetry/ops/health', [TelemetryQueryController::class, 'opsHealth']);
 
         // Updates info (read-only)
         Route::get('/devices/{device_id}/updates', [UpdateController::class, 'list']);

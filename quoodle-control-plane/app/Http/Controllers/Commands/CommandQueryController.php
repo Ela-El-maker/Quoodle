@@ -251,10 +251,11 @@ class CommandQueryController extends Controller
 
         $grace = (int) config('security.command_expiry_grace_seconds', 120);
         if (now()->greaterThan($expiresAt->copy()->addSeconds($grace))) {
+            $reason = $command->state === 'queued' ? 'dispatch_timeout' : 'execution_timeout';
             $command->update([
                 'state' => 'expired',
                 'execution_state' => 'expired',
-                'reason' => $command->reason ?: 'ttl_expired',
+                'reason' => $command->reason ?: $reason,
                 'completed_at' => now(),
             ]);
         }

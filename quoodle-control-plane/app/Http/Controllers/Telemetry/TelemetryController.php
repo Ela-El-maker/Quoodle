@@ -25,6 +25,16 @@ class TelemetryController extends Controller
         $resolvedPolicyInSync = $this->resolvedPolicyInSync($device, $latest);
 
         if ($latest) {
+            $latestPresenceState = $latest->presence_state ?? $resolvedPresenceState;
+            $latestConnectionMode = $latest->connection_mode ?? $resolvedConnectionMode;
+            if ($latest->telemetry_scope === 'kernel_event') {
+                if (! is_string($latestPresenceState) || trim($latestPresenceState) === '') {
+                    $latestPresenceState = 'online';
+                }
+                if (! is_string($latestConnectionMode) || trim($latestConnectionMode) === '') {
+                    $latestConnectionMode = 'wss';
+                }
+            }
             $metrics = is_array($latest->metrics) ? $latest->metrics : [];
             if (! array_key_exists('os_build', $metrics) || ! is_string($metrics['os_build']) || trim((string) $metrics['os_build']) === '') {
                 $metrics['os_build'] = $resolvedOsBuild;
@@ -40,8 +50,8 @@ class TelemetryController extends Controller
                 'device_id' => $device_id,
                 'timestamp' => optional($latest->timestamp)?->toIso8601String(),
                 'telemetry_scope' => $latest->telemetry_scope,
-                'presence_state' => $latest->presence_state ?? $resolvedPresenceState,
-                'connection_mode' => $latest->connection_mode ?? $resolvedConnectionMode,
+                'presence_state' => $latestPresenceState,
+                'connection_mode' => $latestConnectionMode,
                 'metrics' => $metrics,
                 'resolved_os_build' => $resolvedOsBuild,
                 'resolved_presence_state' => $resolvedPresenceState,
@@ -98,15 +108,38 @@ class TelemetryController extends Controller
             ->orderBy('timestamp')
             ->limit(5000)
             ->get();
+        $events = $events->unique(function (TelemetryEvent $event): string {
+            if ($event->telemetry_scope !== 'kernel_event') {
+                return 'event:'.$event->id;
+            }
+            $metrics = is_array($event->metrics) ? $event->metrics : [];
+            $kernel = is_array($metrics['kernel_event'] ?? null) ? $metrics['kernel_event'] : [];
+            $eventId = (string) ($kernel['event_id'] ?? '');
+            $eventType = (string) ($kernel['event_type'] ?? '');
+            $eventTs = (string) ($kernel['event_timestamp_unix'] ?? '');
+            if ($eventId === '' && $eventType === '' && $eventTs === '') {
+                return 'kernel-fallback:'.$event->id;
+            }
+            return implode(':', ['kernel', $eventId, $eventType, $eventTs]);
+        })->values();
 
         if ($events->isNotEmpty()) {
             $points = $events->map(function (TelemetryEvent $event) {
                 $metrics = $event->metrics ?? [];
+                $presenceState = $event->presence_state;
+                $connectionMode = $event->connection_mode;
+                if ((! is_string($presenceState) || trim($presenceState) === '') && $event->telemetry_scope === 'kernel_event') {
+                    $presenceState = 'online';
+                }
+                if ((! is_string($connectionMode) || trim($connectionMode) === '') && $event->telemetry_scope === 'kernel_event') {
+                    $connectionMode = 'wss';
+                }
 
                 return [
                     'timestamp' => optional($event->timestamp)?->toIso8601String(),
                     'telemetry_scope' => $event->telemetry_scope,
-                    'presence_state' => $event->presence_state,
+                    'presence_state' => $presenceState,
+                    'connection_mode' => $connectionMode,
                     'avg_cpu' => (float) ($metrics['cpu'] ?? 0),
                     'avg_ram' => (float) ($metrics['ram'] ?? 0),
                     'avg_disk_usage' => (float) ($metrics['disk_usage'] ?? 0),

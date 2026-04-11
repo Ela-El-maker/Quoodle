@@ -34,10 +34,12 @@ final class ExpireCommandJob implements ShouldQueue
             return;
         }
 
+        $reason = $command->state === 'queued' ? 'dispatch_timeout' : 'execution_timeout';
+
         $command->update([
             'state' => 'expired',
             'execution_state' => 'expired',
-            'reason' => $command->reason ?: 'ttl_expired',
+            'reason' => $command->reason ?: $reason,
             'completed_at' => now(),
         ]);
     }
