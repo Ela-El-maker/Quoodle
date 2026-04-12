@@ -21,6 +21,14 @@ typedef struct _QUOODLE_COLLECT_INFO_CONTEXT {
   CHAR computer_name[96];
   BOOLEAN has_machine_guid;
   CHAR machine_guid[96];
+  BOOLEAN has_smbios_uuid;
+  CHAR smbios_uuid[96];
+  BOOLEAN has_system_serial;
+  CHAR system_serial[96];
+  BOOLEAN has_baseboard_serial;
+  CHAR baseboard_serial[96];
+  BOOLEAN has_bios_vendor;
+  CHAR bios_vendor[96];
   BOOLEAN has_os_product_name;
   CHAR os_product_name[128];
   BOOLEAN has_os_version;
@@ -43,16 +51,167 @@ typedef struct _QUOODLE_COLLECT_INFO_CONTEXT {
   ULONGLONG uptime_sec;
   BOOLEAN has_ioctl_contract_version;
   ULONG ioctl_contract_version;
+  BOOLEAN has_loaded_driver_count;
+  ULONG loaded_driver_count;
+  BOOLEAN has_security_code_integrity;
+  BOOLEAN security_code_integrity;
+  BOOLEAN has_security_test_signing;
+  BOOLEAN security_test_signing;
+  BOOLEAN has_security_hvci_enabled;
+  BOOLEAN security_hvci_enabled;
+  BOOLEAN has_security_dse_enabled;
+  BOOLEAN security_dse_enabled;
+  BOOLEAN has_security_vbs_enabled;
+  BOOLEAN security_vbs_enabled;
+  BOOLEAN has_security_memory_integrity;
+  BOOLEAN security_memory_integrity;
 } QUOODLE_COLLECT_INFO_CONTEXT;
+
+#ifndef Q_SYSTEM_CODEINTEGRITY_INFORMATION_CLASS
+#define Q_SYSTEM_CODEINTEGRITY_INFORMATION_CLASS 103u
+#endif
+
+#ifndef Q_SYSTEM_MODULE_INFORMATION_CLASS
+#define Q_SYSTEM_MODULE_INFORMATION_CLASS 11u
+#endif
+
+#define QUOODLE_COLLECT_MODULE_POOL_TAG 'mIcQ'
+
+#ifndef NonPagedPoolNx
+#define NonPagedPoolNx NonPagedPool
+#endif
+
+NTSYSAPI NTSTATUS NTAPI ZwQuerySystemInformation(
+    _In_ ULONG SystemInformationClass,
+    _Out_writes_bytes_to_opt_(SystemInformationLength, *ReturnLength) PVOID SystemInformation,
+    _In_ ULONG SystemInformationLength,
+    _Out_opt_ PULONG ReturnLength);
+
+#ifndef CODEINTEGRITY_OPTION_ENABLED
+#define CODEINTEGRITY_OPTION_ENABLED 0x01
+#endif
+
+#ifndef CODEINTEGRITY_OPTION_TESTSIGN
+#define CODEINTEGRITY_OPTION_TESTSIGN 0x02
+#endif
+
+#ifndef CODEINTEGRITY_OPTION_HVCI_KMCI_ENABLED
+#define CODEINTEGRITY_OPTION_HVCI_KMCI_ENABLED 0x400
+#endif
+
+#ifndef CODEINTEGRITY_OPTION_HVCI_KMCI_AUDITMODE_ENABLED
+#define CODEINTEGRITY_OPTION_HVCI_KMCI_AUDITMODE_ENABLED 0x800
+#endif
+
+typedef struct _QUOODLE_SYSTEM_CODEINTEGRITY_INFORMATION {
+  ULONG Length;
+  ULONG CodeIntegrityOptions;
+} QUOODLE_SYSTEM_CODEINTEGRITY_INFORMATION, *PQUOODLE_SYSTEM_CODEINTEGRITY_INFORMATION;
+
+typedef struct _QUOODLE_SYSTEM_MODULE_ENTRY {
+  HANDLE Section;
+  PVOID MappedBase;
+  PVOID ImageBase;
+  ULONG ImageSize;
+  ULONG Flags;
+  USHORT LoadOrderIndex;
+  USHORT InitOrderIndex;
+  USHORT LoadCount;
+  USHORT OffsetToFileName;
+  UCHAR FullPathName[256];
+} QUOODLE_SYSTEM_MODULE_ENTRY, *PQUOODLE_SYSTEM_MODULE_ENTRY;
+
+typedef struct _QUOODLE_SYSTEM_MODULE_INFORMATION {
+  ULONG NumberOfModules;
+  QUOODLE_SYSTEM_MODULE_ENTRY Modules[1];
+} QUOODLE_SYSTEM_MODULE_INFORMATION, *PQUOODLE_SYSTEM_MODULE_INFORMATION;
+
+static VOID q_collect_loaded_driver_count(_Inout_ QUOODLE_COLLECT_INFO_CONTEXT* ctx) {
+  NTSTATUS status;
+  ULONG required_len = 0;
+  PQUOODLE_SYSTEM_MODULE_INFORMATION module_info = NULL;
+
+  if (!ctx) {
+    return;
+  }
+
+  status = ZwQuerySystemInformation(
+      Q_SYSTEM_MODULE_INFORMATION_CLASS,
+      NULL,
+      0,
+      &required_len);
+  if (status != STATUS_INFO_LENGTH_MISMATCH || required_len < sizeof(QUOODLE_SYSTEM_MODULE_INFORMATION)) {
+    return;
+  }
+
+  module_info = (PQUOODLE_SYSTEM_MODULE_INFORMATION)ExAllocatePool2(
+      POOL_FLAG_NON_PAGED,
+      required_len,
+      QUOODLE_COLLECT_MODULE_POOL_TAG);
+  if (!module_info) {
+    return;
+  }
+
+  status = ZwQuerySystemInformation(
+      Q_SYSTEM_MODULE_INFORMATION_CLASS,
+      module_info,
+      required_len,
+      &required_len);
+  if (NT_SUCCESS(status)) {
+    ctx->has_loaded_driver_count = TRUE;
+    ctx->loaded_driver_count = module_info->NumberOfModules;
+  }
+
+  ExFreePoolWithTag(module_info, QUOODLE_COLLECT_MODULE_POOL_TAG);
+}
+
+static VOID q_collect_security_integrity(_Inout_ QUOODLE_COLLECT_INFO_CONTEXT* ctx) {
+  QUOODLE_SYSTEM_CODEINTEGRITY_INFORMATION ci_info;
+  NTSTATUS status;
+  ULONG options = 0;
+  BOOLEAN hvci_enabled = FALSE;
+
+  if (!ctx) {
+    return;
+  }
+
+  RtlZeroMemory(&ci_info, sizeof(ci_info));
+  ci_info.Length = sizeof(ci_info);
+  status = ZwQuerySystemInformation(
+      Q_SYSTEM_CODEINTEGRITY_INFORMATION_CLASS,
+      &ci_info,
+      sizeof(ci_info),
+      NULL);
+  if (!NT_SUCCESS(status)) {
+    return;
+  }
+
+  options = ci_info.CodeIntegrityOptions;
+  hvci_enabled = ((options & CODEINTEGRITY_OPTION_HVCI_KMCI_ENABLED) != 0) ||
+                 ((options & CODEINTEGRITY_OPTION_HVCI_KMCI_AUDITMODE_ENABLED) != 0);
+
+  ctx->has_security_code_integrity = TRUE;
+  ctx->security_code_integrity = ((options & CODEINTEGRITY_OPTION_ENABLED) != 0);
+  ctx->has_security_dse_enabled = TRUE;
+  ctx->security_dse_enabled = ctx->security_code_integrity;
+  ctx->has_security_test_signing = TRUE;
+  ctx->security_test_signing = ((options & CODEINTEGRITY_OPTION_TESTSIGN) != 0);
+  ctx->has_security_hvci_enabled = TRUE;
+  ctx->security_hvci_enabled = hvci_enabled;
+  ctx->has_security_vbs_enabled = TRUE;
+  ctx->security_vbs_enabled = hvci_enabled;
+  ctx->has_security_memory_integrity = TRUE;
+  ctx->security_memory_integrity = hvci_enabled;
+}
 
 static VOID q_selection_set_defaults(_Out_ QUOODLE_COLLECT_INFO_SELECTION* sel) {
   sel->identity = TRUE;
   sel->os = TRUE;
   sel->hardware = TRUE;
   sel->runtime = TRUE;
-  sel->storage = FALSE;
-  sel->network = FALSE;
-  sel->security = FALSE;
+  sel->storage = TRUE;
+  sel->network = TRUE;
+  sel->security = TRUE;
 }
 
 static VOID q_selection_set_all(_Out_ QUOODLE_COLLECT_INFO_SELECTION* sel) {
@@ -296,6 +455,7 @@ static VOID q_collect_info_init_context(
   const WCHAR* os_key = L"\\Registry\\Machine\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion";
   const WCHAR* hostname_key = L"\\Registry\\Machine\\SYSTEM\\CurrentControlSet\\Control\\ComputerName\\ComputerName";
   const WCHAR* machine_guid_key = L"\\Registry\\Machine\\SOFTWARE\\Microsoft\\Cryptography";
+  const WCHAR* firmware_key = L"\\Registry\\Machine\\HARDWARE\\DESCRIPTION\\System\\BIOS";
 
   if (!ctx) {
     return;
@@ -307,6 +467,10 @@ static VOID q_collect_info_init_context(
   ctx->has_hostname = QueryRegistryStringValue(hostname_key, L"ComputerName", ctx->hostname, sizeof(ctx->hostname));
   ctx->has_computer_name = QueryRegistryStringValue(hostname_key, L"ComputerName", ctx->computer_name, sizeof(ctx->computer_name));
   ctx->has_machine_guid = QueryRegistryStringValue(machine_guid_key, L"MachineGuid", ctx->machine_guid, sizeof(ctx->machine_guid));
+  ctx->has_smbios_uuid = QueryRegistryStringValue(firmware_key, L"SystemUUID", ctx->smbios_uuid, sizeof(ctx->smbios_uuid));
+  ctx->has_system_serial = QueryRegistryStringValue(firmware_key, L"SystemSerialNumber", ctx->system_serial, sizeof(ctx->system_serial));
+  ctx->has_baseboard_serial = QueryRegistryStringValue(firmware_key, L"BaseBoardSerialNumber", ctx->baseboard_serial, sizeof(ctx->baseboard_serial));
+  ctx->has_bios_vendor = QueryRegistryStringValue(firmware_key, L"BIOSVendor", ctx->bios_vendor, sizeof(ctx->bios_vendor));
   ctx->has_os_build = QueryRegistryStringValue(os_key, L"CurrentBuildNumber", ctx->os_build, sizeof(ctx->os_build));
   ctx->has_os_version = QueryRegistryStringValue(os_key, L"DisplayVersion", ctx->os_version, sizeof(ctx->os_version));
   if (!ctx->has_os_version) {
@@ -335,6 +499,9 @@ static VOID q_collect_info_init_context(
   } else {
     ctx->policy_hash[0] = '\0';
   }
+
+  q_collect_loaded_driver_count(ctx);
+  q_collect_security_integrity(ctx);
 }
 
 static VOID q_copy_string_bounded(_Out_writes_(dest_len) CHAR* dest, _In_ size_t dest_len, _In_z_ const CHAR* src) {
@@ -390,6 +557,22 @@ static VOID FillIdentitySectionBinary(
   if (include_section && ctx->has_machine_guid) {
     q_copy_string_bounded(payload->machine_guid, sizeof(payload->machine_guid), ctx->machine_guid);
     payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_MACHINE_GUID;
+  }
+  if (include_section && ctx->has_smbios_uuid) {
+    q_copy_string_bounded(payload->smbios_uuid, sizeof(payload->smbios_uuid), ctx->smbios_uuid);
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_FIRMWARE_SMBIOS_UUID;
+  }
+  if (include_section && ctx->has_system_serial) {
+    q_copy_string_bounded(payload->system_serial, sizeof(payload->system_serial), ctx->system_serial);
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_FIRMWARE_SYSTEM_SERIAL;
+  }
+  if (include_section && ctx->has_baseboard_serial) {
+    q_copy_string_bounded(payload->baseboard_serial, sizeof(payload->baseboard_serial), ctx->baseboard_serial);
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_FIRMWARE_BASEBOARD_SERIAL;
+  }
+  if (include_section && ctx->has_bios_vendor) {
+    q_copy_string_bounded(payload->bios_vendor, sizeof(payload->bios_vendor), ctx->bios_vendor);
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_FIRMWARE_BIOS_VENDOR;
   }
 }
 
@@ -485,8 +668,61 @@ static VOID FillSecuritySectionBinary(
     _In_ const QUOODLE_COLLECT_INFO_CONTEXT* ctx,
     _In_ BOOLEAN include_section,
     _Inout_ QUOODLE_COLLECT_INFO_BINARY_V1* payload) {
-  UNREFERENCED_PARAMETER(ctx);
-  if (include_section) {
+  BOOLEAN has_security_data = FALSE;
+
+  if (!include_section) {
+    return;
+  }
+
+  if (ctx->has_security_code_integrity) {
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_SECURITY_CODE_INTEGRITY;
+    if (ctx->security_code_integrity) {
+      payload->flags |= QUOODLE_COLLECT_FLAG_SECURITY_CODE_INTEGRITY_TRUE;
+    }
+    has_security_data = TRUE;
+  }
+  if (ctx->has_security_test_signing) {
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_SECURITY_TEST_SIGNING;
+    if (ctx->security_test_signing) {
+      payload->flags |= QUOODLE_COLLECT_FLAG_SECURITY_TEST_SIGNING_TRUE;
+    }
+    has_security_data = TRUE;
+  }
+  if (ctx->has_security_hvci_enabled) {
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_SECURITY_HVCI_ENABLED;
+    if (ctx->security_hvci_enabled) {
+      payload->flags |= QUOODLE_COLLECT_FLAG_SECURITY_HVCI_ENABLED_TRUE;
+    }
+    has_security_data = TRUE;
+  }
+  if (ctx->has_security_dse_enabled) {
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_SECURITY_DSE_ENABLED;
+    if (ctx->security_dse_enabled) {
+      payload->flags |= QUOODLE_COLLECT_FLAG_SECURITY_DSE_ENABLED_TRUE;
+    }
+    has_security_data = TRUE;
+  }
+  if (ctx->has_security_vbs_enabled) {
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_SECURITY_VBS_ENABLED;
+    if (ctx->security_vbs_enabled) {
+      payload->flags |= QUOODLE_COLLECT_FLAG_SECURITY_VBS_ENABLED_TRUE;
+    }
+    has_security_data = TRUE;
+  }
+  if (ctx->has_security_memory_integrity) {
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_SECURITY_MEMORY_INTEGRITY;
+    if (ctx->security_memory_integrity) {
+      payload->flags |= QUOODLE_COLLECT_FLAG_SECURITY_MEMORY_INTEGRITY_TRUE;
+    }
+    has_security_data = TRUE;
+  }
+  if (ctx->has_loaded_driver_count) {
+    payload->loaded_driver_count = ctx->loaded_driver_count;
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_SECURITY_LOADED_DRIVER_COUNT;
+    has_security_data = TRUE;
+  }
+
+  if (!has_security_data) {
     payload->flags |= QUOODLE_COLLECT_FLAG_SECURITY_NOT_IMPLEMENTED;
   }
 }
