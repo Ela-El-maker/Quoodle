@@ -21,6 +21,8 @@ QuoodleOpcode MapOpcodeToCode(const std::string &opcode)
     return QOP_EXEC_GET_PROCESS_LIST;
   if (opcode == "EXEC_VALIDATE_UPDATE_PACKAGE" || opcode == "VALIDATE_UPDATE_PACKAGE")
     return QOP_EXEC_VALIDATE_UPDATE_PACKAGE;
+  if (opcode == "EXEC_CAPTURE_SCREENSHOT" || opcode == "CAPTURE_SCREENSHOT" || opcode == "screenshot")
+    return QOP_EXEC_CAPTURE_SCREENSHOT;
   if (opcode == "STAGE_UPDATE")
     return QOP_STAGE_UPDATE;
   if (opcode == "COMMIT_UPDATE")

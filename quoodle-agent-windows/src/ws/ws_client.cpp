@@ -17,6 +17,7 @@
 #include "../kernel/kernel_event_listener.hpp"
 #include "../crypto/command_verifier.hpp"
 #include "../command/dispatcher.hpp"
+#include "../command/screenshot_command.hpp"
 #include "ws_protocol.hpp"
 
 // Environment variable to control signature verification (default: enabled)
@@ -1140,12 +1141,79 @@ bool WsClient::try_connect()
                         }
 
                         nlohmann::json params_obj = envelope["body"].value("params", nlohmann::json::object());
+                        const std::string params_json = params_obj.dump();
+
+                        if (command::IsScreenshotMethod(method)) {
+                            {
+                                std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
+                                auto progress_msg = build_command_result_json(
+                                    config_.device_id,
+                                    session_id,
+                                    command_message_id,
+                                    trace_id,
+                                    "executing",
+                                    "in_progress",
+                                    "screenshot capture started");
+                                if (!progress_msg.empty()) {
+                                    socket.sendText(progress_msg);
+                                }
+                            }
+
+                            const auto shot = command::ExecuteScreenshotCommand(
+                                config_,
+                                state_impl_,
+                                command_message_id,
+                                params_json);
+                            if (shot.success) {
+                                std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
+                                auto result_msg = build_command_result_json(
+                                    config_.device_id,
+                                    session_id,
+                                    command_message_id,
+                                    trace_id,
+                                    "completed",
+                                    "ok",
+                                    shot.notes.empty() ? "screenshot captured" : shot.notes,
+                                    shot.artifact_url,
+                                    shot.artifact_checksum,
+                                    0,
+                                    "",
+                                    shot.output_text,
+                                    shot.data_json,
+                                    shot.meta_json);
+                                if (!result_msg.empty()) {
+                                    socket.sendText(result_msg);
+                                }
+                            } else {
+                                std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
+                                auto result_msg = build_command_result_json(
+                                    config_.device_id,
+                                    session_id,
+                                    command_message_id,
+                                    trace_id,
+                                    "failed",
+                                    "failed",
+                                    shot.notes.empty() ? "screenshot capture failed" : shot.notes,
+                                    "",
+                                    "",
+                                    shot.error_code,
+                                    shot.reason,
+                                    shot.output_text,
+                                    shot.data_json,
+                                    shot.meta_json);
+                                if (!result_msg.empty()) {
+                                    socket.sendText(result_msg);
+                                }
+                            }
+                            return;
+                        }
+
                         CommandDispatcher dispatcher;
                         auto res = dispatcher.dispatch(
                             method,
                             command_message_id,
                             state_impl_,
-                            params_obj.dump(),
+                            params_json,
                             command_message_id);
 
                         nlohmann::json result_meta = nlohmann::json::object();

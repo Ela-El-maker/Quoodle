@@ -54,6 +54,10 @@ public:
         {
             return ioctl_.collect_system_info(request_id, state, command_message_id, params_json);
         }
+        if (method == "screenshot" || method == "screenshot-capture" || method == "CAPTURE_SCREENSHOT" || method == "EXEC_CAPTURE_SCREENSHOT")
+        {
+            return ioctl_.capture_screenshot_authorize(request_id, state, command_message_id, params_json);
+        }
         if (method == "get_process_list" || method == "GET_PROCESS_LIST")
         {
             return ioctl_.get_process_list(request_id, state, command_message_id);

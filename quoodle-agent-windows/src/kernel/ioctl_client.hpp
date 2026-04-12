@@ -62,6 +62,9 @@ public:
   KernelExecResult collect_system_info(const std::string &request_id, const AgentState &state,
                                        const std::string &command_message_id = "",
                                        const std::string &params_json = "{}");
+  KernelExecResult capture_screenshot_authorize(const std::string &request_id, const AgentState &state,
+                                                const std::string &command_message_id = "",
+                                                const std::string &params_json = "{}");
   KernelExecResult get_process_list(const std::string &request_id, const AgentState &state,
                                     const std::string &command_message_id = "");
   KernelExecResult validate_update_package(const std::string &request_id, const AgentState &state,

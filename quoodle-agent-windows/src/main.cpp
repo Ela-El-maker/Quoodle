@@ -14,6 +14,7 @@
 #include "ws/ws_client.hpp"
 #include "config/config_manager.hpp"
 #include "comm/communicator.hpp"
+#include "command/screenshot_helper.hpp"
 #include "crypto/ed25519_sign.hpp"
 #include "logging/logger.hpp"
 
@@ -264,6 +265,12 @@ static bool try_run_service_dispatcher()
 
 int main(int argc, char **argv)
 {
+    const int helper_mode_rc = command::TryRunScreenshotHelper(argc, argv);
+    if (helper_mode_rc >= 0)
+    {
+        return helper_mode_rc;
+    }
+
 #ifdef _WIN32
     HANDLE instance_mutex = CreateMutexA(nullptr, FALSE, "Global\\QuoodleAgentSingleton");
     if (!instance_mutex)

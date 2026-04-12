@@ -119,6 +119,8 @@ struct ConfigManager
             cfg.telemetry_http_fallback = detail::ParseBool(val, cfg.telemetry_http_fallback);
         if (const char *val = std::getenv("AGENT_TELEMETRY_FALLBACK_URL"))
             cfg.telemetry_fallback_url = val;
+        if (const char *val = std::getenv("AGENT_ARTIFACT_API_BASE_URL"))
+            cfg.artifact_api_base_url = val;
         if (const char *val = std::getenv("AGENT_TELEMETRY_QUEUE_DB_PATH"))
             cfg.telemetry_queue_db_path = val;
         if (const char *val = std::getenv("AGENT_TELEMETRY_BATCH_SIZE"))
