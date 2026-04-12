@@ -172,6 +172,7 @@ services:
       # Integration
       LARAVEL_WEBHOOK_BASE: ${LARAVEL_WEBHOOK_BASE:-http://control-plane:80/api/v1/webhook}
       JWKS_URL: ${JWKS_URL:-http://control-plane:80/.well-known/jwks.json}
+      CONTROL_PLANE_API_BASE: ${CONTROL_PLANE_API_BASE:-http://control-plane:80}
 
       # Security (Dev Defaults)
       REQUIRE_ED25519: ${REQUIRE_ED25519:-true}
