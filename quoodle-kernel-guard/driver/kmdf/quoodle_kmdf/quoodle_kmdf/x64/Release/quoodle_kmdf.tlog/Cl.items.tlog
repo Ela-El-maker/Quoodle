@@ -1,4 +1,9 @@
 C:\Users\felix\Work-Force\Quoodle\quoodle-kernel-guard\driver\kmdf\quoodle_kmdf.c;C:\Users\felix\Work-Force\Quoodle\quoodle-kernel-guard\driver\kmdf\quoodle_kmdf\quoodle_kmdf\x64\Release\quoodle_kmdf.obj
 C:\Users\felix\Work-Force\Quoodle\quoodle-kernel-guard\driver\kmdf\core\kmdf_event_pipeline.c;C:\Users\felix\Work-Force\Quoodle\quoodle-kernel-guard\driver\kmdf\quoodle_kmdf\quoodle_kmdf\x64\Release\kmdf_event_pipeline.obj
 C:\Users\felix\Work-Force\Quoodle\quoodle-kernel-guard\driver\kmdf\core\kmdf_request_security.c;C:\Users\felix\Work-Force\Quoodle\quoodle-kernel-guard\driver\kmdf\quoodle_kmdf\quoodle_kmdf\x64\Release\kmdf_request_security.obj
-C:\Users\felix\Work-Force\Quoodle\quoodle-kernel-guard\driver\kmdf\opcodes\kmdf_opcode_handlers.c;C:\Users\felix\Work-Force\Quoodle\quoodle-kernel-guard\driver\kmdf\quoodle_kmdf\quoodle_kmdf\x64\Release\kmdf_opcode_handlers.obj
+C:\Users\felix\Work-Force\Quoodle\quoodle-kernel-guard\driver\kmdf\opcodes\kmdf_opcode_common.c;C:\Users\felix\Work-Force\Quoodle\quoodle-kernel-guard\driver\kmdf\quoodle_kmdf\quoodle_kmdf\x64\Release\kmdf_opcode_common.obj
+C:\Users\felix\Work-Force\Quoodle\quoodle-kernel-guard\driver\kmdf\opcodes\ping.c;C:\Users\felix\Work-Force\Quoodle\quoodle-kernel-guard\driver\kmdf\quoodle_kmdf\quoodle_kmdf\x64\Release\ping.obj
+C:\Users\felix\Work-Force\Quoodle\quoodle-kernel-guard\driver\kmdf\opcodes\reboot.c;C:\Users\felix\Work-Force\Quoodle\quoodle-kernel-guard\driver\kmdf\quoodle_kmdf\quoodle_kmdf\x64\Release\reboot.obj
+C:\Users\felix\Work-Force\Quoodle\quoodle-kernel-guard\driver\kmdf\opcodes\shutdown.c;C:\Users\felix\Work-Force\Quoodle\quoodle-kernel-guard\driver\kmdf\quoodle_kmdf\quoodle_kmdf\x64\Release\shutdown.obj
+C:\Users\felix\Work-Force\Quoodle\quoodle-kernel-guard\driver\kmdf\opcodes\collect_system_info.c;C:\Users\felix\Work-Force\Quoodle\quoodle-kernel-guard\driver\kmdf\quoodle_kmdf\quoodle_kmdf\x64\Release\collect_system_info.obj
+C:\Users\felix\Work-Force\Quoodle\quoodle-kernel-guard\driver\kmdf\opcodes\not_supported.c;C:\Users\felix\Work-Force\Quoodle\quoodle-kernel-guard\driver\kmdf\quoodle_kmdf\quoodle_kmdf\x64\Release\not_supported.obj
