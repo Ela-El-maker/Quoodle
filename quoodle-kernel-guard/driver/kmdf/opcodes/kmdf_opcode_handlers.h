@@ -10,4 +10,7 @@ VOID QuoodleOpcodeHandleShutdown(_Out_ QUOODLE_IOCTL_RESPONSE* resp);
 VOID QuoodleOpcodeHandleCollectSystemInfo(
     _Out_ QUOODLE_IOCTL_RESPONSE* resp,
     _In_opt_ const QUOODLE_IOCTL_REQUEST* req);
+VOID QuoodleOpcodeHandleCaptureScreenshot(
+    _Out_ QUOODLE_IOCTL_RESPONSE* resp,
+    _In_opt_ const QUOODLE_IOCTL_REQUEST* req);
 VOID QuoodleOpcodeHandleNotSupported(_Out_ QUOODLE_IOCTL_RESPONSE* resp);

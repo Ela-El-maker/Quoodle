@@ -179,6 +179,10 @@ static VOID QuoodleEvtIoDeviceControl(_In_ WDFQUEUE Queue,
         QuoodleOpcodeHandleCollectSystemInfo(resp, &req_copy);
         should_emit_event = TRUE;
         break;
+      case QOP_EXEC_CAPTURE_SCREENSHOT:
+        QuoodleOpcodeHandleCaptureScreenshot(resp, &req_copy);
+        should_emit_event = TRUE;
+        break;
       default:
         resp->error_code = QERR_INVALID_OPCODE;
         RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), "invalid_opcode");

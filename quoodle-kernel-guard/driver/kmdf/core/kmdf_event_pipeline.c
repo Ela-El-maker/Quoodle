@@ -112,6 +112,8 @@ static const CHAR* qep_opcode_to_string(_In_ QUOODLE_OPCODE opcode) {
       return "GET_PROCESS_LIST";
     case QOP_EXEC_VALIDATE_UPDATE_PACKAGE:
       return "VALIDATE_UPDATE_PACKAGE";
+    case QOP_EXEC_CAPTURE_SCREENSHOT:
+      return "CAPTURE_SCREENSHOT";
     case QOP_STAGE_UPDATE:
       return "STAGE_UPDATE";
     case QOP_COMMIT_UPDATE:

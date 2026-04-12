@@ -34,6 +34,7 @@
     <ClCompile Include="..\opcodes\reboot.c" />
     <ClCompile Include="..\opcodes\shutdown.c" />
     <ClCompile Include="..\opcodes\collect_system_info.c" />
+    <ClCompile Include="..\opcodes\capture_screenshot.c" />
     <ClCompile Include="..\opcodes\not_supported.c" />
   </ItemGroup>
   <ItemGroup>

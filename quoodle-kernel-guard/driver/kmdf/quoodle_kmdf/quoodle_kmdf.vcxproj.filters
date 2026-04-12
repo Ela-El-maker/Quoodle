@@ -80,6 +80,9 @@
     <ClCompile Include="..\opcodes\collect_system_info.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\opcodes\capture_screenshot.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\opcodes\not_supported.c">
       <Filter>Source Files</Filter>
     </ClCompile>
