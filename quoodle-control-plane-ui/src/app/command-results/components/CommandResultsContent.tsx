@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatLocalDateTime } from '@/lib/dateTime';
+import CommandResultPresentation from '@/components/results/CommandResultPresentation';
 import {
   mapCommandListRow,
   mergeCommandDetail,
@@ -53,7 +54,9 @@ const knownMethodLabels: Record<string, string> = {
   reboot_device: 'Reboot Device',
   shutdown_device: 'Shutdown Device',
   process_list: 'Process List',
+  list_processes: 'Process List',
   system_info: 'System Info',
+  collect_system_info: 'System Info',
   telemetry_snapshot: 'Telemetry Snapshot',
 };
 
@@ -78,7 +81,6 @@ export default function CommandResultsContent() {
   const [results, setResults] = useState<NormalizedCommandResult[]>([]);
   const [details, setDetails] = useState<Record<string, NormalizedCommandResult>>({});
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [rawIds, setRawIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [deviceFilter, setDeviceFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<ResultStatusFilter>('all');
@@ -228,18 +230,6 @@ export default function CommandResultsContent() {
     }
   };
 
-  const toggleRaw = (commandId: string) => {
-    setRawIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(commandId)) {
-        next.delete(commandId);
-      } else {
-        next.add(commandId);
-      }
-      return next;
-    });
-  };
-
   return (
     <div className="space-y-4 fade-in">
       <div className="flex items-center justify-between">
@@ -327,10 +317,7 @@ export default function CommandResultsContent() {
         <div className="space-y-3">
           {filtered.map((row) => {
             const expanded = expandedIds.has(row.commandId);
-            const showRaw = rawIds.has(row.commandId);
             const StatusIcon = statusConfig[row.state].icon;
-            const outputText = typeof row.result?.output_text === 'string' ? row.result.output_text : '';
-            const structured = row.result?.data;
             const timeline = timelineRows(row);
 
             return (
@@ -396,37 +383,7 @@ export default function CommandResultsContent() {
                       <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-2">Result Summary</p>
                       <p className="text-xs">{resultPreview(row)}</p>
                     </div>
-
-                    {structured != null && (
-                      <div className="bg-muted/20 border border-border rounded-lg p-3">
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-2">Structured Result</p>
-                        <pre className="text-xs font-mono bg-zinc-950 rounded-md p-3 overflow-x-auto text-green-400">{JSON.stringify(structured, null, 2)}</pre>
-                      </div>
-                    )}
-
-                    {(row.artifactUrl || row.artifactChecksum) && (
-                      <div className="bg-muted/20 border border-border rounded-lg p-3">
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-2">Artifact</p>
-                        <div className="space-y-1 text-xs">
-                          <p>URL: {row.artifactUrl || 'No data available'}</p>
-                          <p>Checksum: {row.artifactChecksum || 'No data available'}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {(outputText || showRaw) && (
-                      <div className="space-y-2">
-                        <button
-                          onClick={() => toggleRaw(row.commandId)}
-                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          {showRaw ? 'Show rendered output' : 'Show raw JSON'}
-                        </button>
-                        <pre className="bg-zinc-950 border border-border rounded-lg px-4 py-3 text-xs font-mono text-green-400 overflow-x-auto whitespace-pre-wrap max-h-64">
-                          {showRaw ? toRawResultJson(row) : (outputText || resultPreview(row))}
-                        </pre>
-                      </div>
-                    )}
+                    <CommandResultPresentation key={`render-${row.commandId}`} row={row} />
                   </div>
                 )}
               </div>

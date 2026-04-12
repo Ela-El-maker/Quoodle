@@ -4,6 +4,7 @@ import { Monitor, Terminal, Activity, Shield, Clock, Cpu, HardDrive, Wifi, Chevr
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import StatusBadge from '@/components/ui/StatusBadge';
+import CommandResultPresentation from '@/components/results/CommandResultPresentation';
 import { formatLocalDateTime, formatLocalTime } from '@/lib/dateTime';
 import { resolveCommandMethod } from '@/lib/commandMethodResolver';
 import {
@@ -1422,7 +1423,7 @@ export default function DeviceDetailPageContent() {
               View all results <ChevronRight size={12} />
             </Link>
           </div>
-          {liveResults?.output ? (
+          {liveResults?.output && liveResults.state !== 'completed' ? (
             <div className="bg-card border border-border rounded-lg p-4">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-sm font-semibold">{liveResults.commandId} - {liveResults.method}</p>
@@ -1430,24 +1431,11 @@ export default function DeviceDetailPageContent() {
               </div>
               <pre className="text-xs font-mono bg-muted/40 rounded-lg p-3 overflow-x-auto text-green-400">{liveResults.output}</pre>
             </div>
-          ) : recentResults.length > 0 ? (
+          ) : null}
+
+          {recentResults.length > 0 ? (
             <div className="bg-card border border-border rounded-lg p-4">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-semibold">{recentResults[0].commandId} - {recentResults[0].method}</p>
-                <StatusBadge variant={recentResults[0].state} />
-              </div>
-              <pre className="text-xs font-mono bg-muted/40 rounded-lg p-3 overflow-x-auto text-green-400">
-                {JSON.stringify({
-                  result_status: recentResults[0].resultStatus,
-                  result_notes: recentResults[0].resultNotes,
-                  output_text: recentResults[0].result?.output_text ?? null,
-                  data: recentResults[0].result?.data ?? null,
-                  artifact_url: recentResults[0].artifactUrl,
-                  artifact_checksum: recentResults[0].artifactChecksum,
-                  error_code: recentResults[0].errorCode,
-                  error_message: recentResults[0].errorMessage,
-                }, null, 2)}
-              </pre>
+              <CommandResultPresentation key={`device-result-${recentResults[0].commandId}`} row={recentResults[0]} compact />
             </div>
           ) : (
             <div className="bg-card border border-border rounded-lg p-8 text-center">
