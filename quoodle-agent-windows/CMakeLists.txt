@@ -158,6 +158,9 @@ add_executable(agent
   src/utils/json_canonicalizer.cpp
   src/utils/sha256.cpp
   src/kernel/ioctl_client.cpp
+  src/kernel/opcodes/collect_system_info_codec.cpp
+  src/kernel/opcodes/basic_control_opcodes.cpp
+  src/kernel/opcodes/opcode_map.cpp
   src/kernel/kernel_event_listener.cpp
   src/utils/dpapi_loader.cpp
   src/storage/sqlite_queue.cpp
@@ -179,6 +182,9 @@ endif()
 add_executable(collect_system_info_soak
   src/tools/collect_system_info_soak.cpp
   src/kernel/ioctl_client.cpp
+  src/kernel/opcodes/collect_system_info_codec.cpp
+  src/kernel/opcodes/basic_control_opcodes.cpp
+  src/kernel/opcodes/opcode_map.cpp
   src/crypto/ed25519_sign.cpp
   src/crypto/json_canonicalizer.cpp
   src/crypto/kernel_response_verifier.cpp
@@ -200,6 +206,9 @@ endif()
 add_executable(ioctl_integration_test
   tests/integration/ioctl_pipe_test.cpp
   src/kernel/ioctl_client.cpp
+  src/kernel/opcodes/collect_system_info_codec.cpp
+  src/kernel/opcodes/basic_control_opcodes.cpp
+  src/kernel/opcodes/opcode_map.cpp
   src/crypto/kernel_response_verifier.cpp
   src/utils/sha256.cpp
 )
@@ -207,6 +216,9 @@ add_executable(ioctl_integration_test
 add_executable(ioctl_signed_test
   tests/integration/ioctl_signed_test.cpp
   src/kernel/ioctl_client.cpp
+  src/kernel/opcodes/collect_system_info_codec.cpp
+  src/kernel/opcodes/basic_control_opcodes.cpp
+  src/kernel/opcodes/opcode_map.cpp
   src/crypto/ed25519_sign.cpp
   src/crypto/json_canonicalizer.cpp
   src/crypto/kernel_response_verifier.cpp

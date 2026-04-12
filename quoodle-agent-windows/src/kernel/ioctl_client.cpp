@@ -6,6 +6,8 @@
 #include "../logging/logger.hpp"
 #include "../utils/time_utils.hpp"
 #include "../utils/sha256.hpp"
+#include "opcodes/collect_system_info_codec.hpp"
+#include "opcodes/opcode_map.hpp"
 #include <nlohmann/json.hpp>
 
 #include <sstream>
@@ -58,7 +60,28 @@ static bool is_pipe_fallback_allowed()
 static std::string get_driver_hmac_key()
 {
   const char *env = std::getenv("QUOODLE_DRIVER_HMAC_KEY");
-  return (env && *env) ? std::string(env) : std::string();
+  if (env && *env)
+  {
+    return std::string(env);
+  }
+#ifdef _WIN32
+  HKEY key = nullptr;
+  constexpr const char *kRegPath = "SYSTEM\\CurrentControlSet\\Services\\QuoodleKernel\\Parameters";
+  if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, kRegPath, 0, KEY_READ, &key) == ERROR_SUCCESS)
+  {
+    char buffer[256] = {};
+    DWORD type = 0;
+    DWORD size = static_cast<DWORD>(sizeof(buffer));
+    if (RegQueryValueExA(key, "HmacKey", nullptr, &type, reinterpret_cast<LPBYTE>(buffer), &size) == ERROR_SUCCESS &&
+        (type == REG_SZ || type == REG_EXPAND_SZ) && size > 1)
+    {
+      RegCloseKey(key);
+      return std::string(buffer);
+    }
+    RegCloseKey(key);
+  }
+#endif
+  return {};
 }
 
 static bool is_hex_char(char c)
@@ -204,14 +227,15 @@ static std::string build_driver_response_canonical(const QuoodleIoctlResponse &r
   size_t req_len = bounded_len(resp.request_id, sizeof(resp.request_id));
   size_t kexec_len = bounded_len(resp.kernel_exec_id, sizeof(resp.kernel_exec_id));
   size_t err_len = bounded_len(resp.error_message, sizeof(resp.error_message));
-  size_t result_len = std::min(static_cast<size_t>(resp.result_length), sizeof(resp.result_json) - 1);
+  size_t result_len = std::min(static_cast<size_t>(resp.result_length), sizeof(resp.result_json));
+  const std::string result_b64 = base64_encode_binary(std::string(resp.result_json, result_len));
 
   oss << "v1\n";
   oss << "status=" << resp.status << "\n";
   oss << "error=" << resp.error_code << "\n";
   oss << "kexec=" << kexec_len << ":" << std::string(resp.kernel_exec_id, kexec_len) << "\n";
   oss << "req=" << req_len << ":" << std::string(resp.request_id, req_len) << "\n";
-  oss << "result=" << result_len << ":" << std::string(resp.result_json, result_len) << "\n";
+  oss << "result=" << result_len << ":" << result_b64.size() << ":" << result_b64 << "\n";
   oss << "msg=" << err_len << ":" << std::string(resp.error_message, err_len) << "\n";
   oss << "ts=" << resp.timestamp_unix << "\n";
   return oss.str();
@@ -650,50 +674,46 @@ std::string IoctlClient::build_canonical_payload(const std::string &request_id, 
   return crypto::canonical_object(fields);
 }
 
-static QuoodleOpcode map_opcode_to_code(const std::string &opcode)
-{
-  if (opcode == "EXEC_LOCK_SCREEN")
-    return QOP_EXEC_LOCK_SCREEN;
-  if (opcode == "EXEC_REBOOT")
-    return QOP_EXEC_REBOOT;
-  if (opcode == "EXEC_SHUTDOWN")
-    return QOP_EXEC_SHUTDOWN;
-  if (opcode == "EXEC_LOGOUT")
-    return QOP_EXEC_LOGOUT;
-  if (opcode == "EXEC_PING_KERNEL" || opcode == "ping")
-    return QOP_EXEC_PING;
-  if (opcode == "EXEC_COLLECT_SYSTEM_INFO" || opcode == "COLLECT_SYSTEM_INFO")
-    return QOP_EXEC_COLLECT_SYSTEM_INFO;
-  if (opcode == "EXEC_GET_PROCESS_LIST" || opcode == "GET_PROCESS_LIST")
-    return QOP_EXEC_GET_PROCESS_LIST;
-  if (opcode == "EXEC_VALIDATE_UPDATE_PACKAGE" || opcode == "VALIDATE_UPDATE_PACKAGE")
-    return QOP_EXEC_VALIDATE_UPDATE_PACKAGE;
-  if (opcode == "STAGE_UPDATE")
-    return QOP_STAGE_UPDATE;
-  if (opcode == "COMMIT_UPDATE")
-    return QOP_COMMIT_UPDATE;
-  if (opcode == "ROLLBACK_UPDATE")
-    return QOP_ROLLBACK_UPDATE;
-  if (opcode == "EXEC_RUN_ATTESTATION" || opcode == "RUN_ATTESTATION")
-    return QOP_EXEC_RUN_ATTESTATION;
-  if (opcode == "EXEC_RUN_TAMPER_CHECK" || opcode == "RUN_TAMPER_CHECK")
-    return QOP_EXEC_RUN_TAMPER_CHECK;
-  if (opcode == "EXEC_SELF_REPAIR" || opcode == "SELF_REPAIR")
-    return QOP_EXEC_SELF_REPAIR;
-  return QOP_UNKNOWN;
-}
-
-static KernelExecResult parse_device_response(const QuoodleIoctlResponse &resp)
+static KernelExecResult parse_device_response(const QuoodleIoctlResponse &resp, QuoodleOpcode expected_opcode)
 {
   KernelExecResult result;
+  const size_t raw_len = std::min(static_cast<size_t>(resp.result_length), sizeof(resp.result_json));
   result.request_id = resp.request_id;
   result.status = resp.status == 0 ? "ok" : "error";
   result.kernel_exec_id = resp.kernel_exec_id;
   result.timestamp = std::to_string(resp.timestamp_unix);
-  result.result = resp.result_json;
+  if (expected_opcode == QOP_EXEC_COLLECT_SYSTEM_INFO)
+  {
+    std::string translated_json;
+    if (kernel::opcodes::TryTranslateCollectSystemInfoBinaryResult(resp, translated_json))
+    {
+      result.result = translated_json;
+    }
+    else
+    {
+      std::string raw(resp.result_json, raw_len);
+      const size_t null_pos = raw.find('\0');
+      if (null_pos != std::string::npos)
+      {
+        raw.resize(null_pos);
+      }
+      result.result = raw;
+    }
+  }
+  else
+  {
+    std::string raw(resp.result_json, raw_len);
+    const size_t null_pos = raw.find('\0');
+    if (null_pos != std::string::npos)
+    {
+      raw.resize(null_pos);
+    }
+    result.result = raw;
+  }
   result.error_code = static_cast<int>(resp.error_code);
   result.error_message = resp.error_message;
-  result.sig = resp.signature_b64;
+  const size_t sig_len = std::min(static_cast<size_t>(resp.signature_length), sizeof(resp.signature_b64) - 1);
+  result.sig = std::string(resp.signature_b64, sig_len);
   return result;
 }
 
@@ -725,7 +745,7 @@ std::string IoctlClient::execute_request(const std::string &opcode, const std::s
   {
     QuoodleIoctlRequest req{};
     req.version = QUOODLE_IOCTL_VERSION;
-    req.opcode = static_cast<uint32_t>(map_opcode_to_code(opcode));
+    req.opcode = static_cast<uint32_t>(kernel::opcodes::MapOpcodeToCode(opcode));
     req.flags = 0;
     req.agent_sequence = next_sequence();
     req.timestamp_unix = static_cast<uint64_t>(std::time(nullptr));
@@ -791,14 +811,14 @@ std::string IoctlClient::execute_request(const std::string &opcode, const std::s
     std::string verify_error;
     if (!verify_driver_response_signature(resp, verify_error))
     {
-      last_transport_error_code_ = QERR_SIGNATURE_INVALID;
+      last_transport_error_code_ = (verify_error == "signature_missing") ? QERR_SIGNATURE_MISSING : QERR_SIGNATURE_INVALID;
       last_transport_error_message_ = "kernel_signature_" + verify_error;
       last_transport_win32_error_ = 0;
       Logger::log(LogLevel::Warn, "Kernel driver response signature verification failed: " + verify_error);
       return "";
     }
 
-    KernelExecResult result = parse_device_response(resp);
+    KernelExecResult result = parse_device_response(resp, static_cast<QuoodleOpcode>(req.opcode));
     // Serialize minimal JSON so existing parsing path can be reused.
     std::ostringstream oss;
     oss << "{";
@@ -909,72 +929,14 @@ KernelExecResult IoctlClient::parse_and_verify_response(const std::string &json,
 }
 
 /**
- * PUBLIC API: lock_screen
- */
-KernelExecResult IoctlClient::lock_screen(const std::string &request_id, const AgentState &state,
-                                          const std::string &command_message_id)
-{
-  std::string json = execute_request("EXEC_LOCK_SCREEN", request_id, "{}", state, command_message_id);
-  if (json.empty())
-    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
-  return parse_and_verify_response(json, request_id);
-}
-
-/**
- * PUBLIC API: ping
- */
-KernelExecResult IoctlClient::ping(const std::string &request_id, const AgentState &state,
-                                   const std::string &command_message_id)
-{
-  std::string json = execute_request("ping", request_id, "{}", state, command_message_id);
-  if (json.empty())
-    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
-  return parse_and_verify_response(json, request_id);
-}
-
-/**
- * PUBLIC API: reboot
- */
-KernelExecResult IoctlClient::reboot(const std::string &request_id, const AgentState &state,
-                                     const std::string &command_message_id)
-{
-  std::string json = execute_request("EXEC_REBOOT", request_id, "{}", state, command_message_id);
-  if (json.empty())
-    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
-  return parse_and_verify_response(json, request_id);
-}
-
-/**
- * PUBLIC API: shutdown
- */
-KernelExecResult IoctlClient::shutdown(const std::string &request_id, const AgentState &state,
-                                       const std::string &command_message_id)
-{
-  std::string json = execute_request("EXEC_SHUTDOWN", request_id, "{}", state, command_message_id);
-  if (json.empty())
-    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
-  return parse_and_verify_response(json, request_id);
-}
-
-/**
- * PUBLIC API: logout
- */
-KernelExecResult IoctlClient::logout(const std::string &request_id, const AgentState &state,
-                                     const std::string &command_message_id)
-{
-  std::string json = execute_request("EXEC_LOGOUT", request_id, "{}", state, command_message_id);
-  if (json.empty())
-    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
-  return parse_and_verify_response(json, request_id);
-}
-
-/**
  * PUBLIC API: collect_system_info
  */
 KernelExecResult IoctlClient::collect_system_info(const std::string &request_id, const AgentState &state,
-                                                  const std::string &command_message_id)
+                                                  const std::string &command_message_id,
+                                                  const std::string &params_json)
 {
-  std::string json = execute_request("COLLECT_SYSTEM_INFO", request_id, "{}", state, command_message_id);
+  const std::string effective_params = params_json.empty() ? "{}" : params_json;
+  std::string json = execute_request("COLLECT_SYSTEM_INFO", request_id, effective_params, state, command_message_id);
   if (json.empty())
     return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
   return parse_and_verify_response(json, request_id);

@@ -52,7 +52,7 @@ public:
         }
         if (method == "collect_system_info" || method == "COLLECT_SYSTEM_INFO")
         {
-            return ioctl_.collect_system_info(request_id, state, command_message_id);
+            return ioctl_.collect_system_info(request_id, state, command_message_id, params_json);
         }
         if (method == "get_process_list" || method == "GET_PROCESS_LIST")
         {

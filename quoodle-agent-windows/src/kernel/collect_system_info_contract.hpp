@@ -1,0 +1,64 @@
+#pragma once
+
+// collect_system_info (opcode 11) binary payload contract.
+// This header is intentionally opcode-scoped so driver_ioctl.hpp stays lean.
+// It expects QUOODLE_MAX_* constants to be defined by the including header.
+
+#define QUOODLE_COLLECT_INFO_BINARY_MAGIC 0x51434932u /* "QCI2" */
+#define QUOODLE_COLLECT_INFO_BINARY_VERSION 1u
+
+#define QUOODLE_COLLECT_SECTION_IDENTITY 0x00000001u
+#define QUOODLE_COLLECT_SECTION_OS 0x00000002u
+#define QUOODLE_COLLECT_SECTION_HARDWARE 0x00000004u
+#define QUOODLE_COLLECT_SECTION_RUNTIME 0x00000008u
+#define QUOODLE_COLLECT_SECTION_STORAGE 0x00000010u
+#define QUOODLE_COLLECT_SECTION_NETWORK 0x00000020u
+#define QUOODLE_COLLECT_SECTION_SECURITY 0x00000040u
+
+#define QUOODLE_COLLECT_PRESENT_HOSTNAME 0x00000001u
+#define QUOODLE_COLLECT_PRESENT_COMPUTER_NAME 0x00000002u
+#define QUOODLE_COLLECT_PRESENT_MACHINE_GUID 0x00000004u
+#define QUOODLE_COLLECT_PRESENT_OS_PRODUCT_NAME 0x00000008u
+#define QUOODLE_COLLECT_PRESENT_OS_VERSION 0x00000010u
+#define QUOODLE_COLLECT_PRESENT_OS_BUILD 0x00000020u
+#define QUOODLE_COLLECT_PRESENT_OS_UBR 0x00000040u
+#define QUOODLE_COLLECT_PRESENT_ARCH 0x00000080u
+#define QUOODLE_COLLECT_PRESENT_CPU_MODEL 0x00000100u
+#define QUOODLE_COLLECT_PRESENT_CPU_LOGICAL_CORES 0x00000200u
+#define QUOODLE_COLLECT_PRESENT_RAM_TOTAL_MB 0x00000400u
+#define QUOODLE_COLLECT_PRESENT_RAM_AVAILABLE_MB 0x00000800u
+#define QUOODLE_COLLECT_PRESENT_UPTIME_SEC 0x00001000u
+#define QUOODLE_COLLECT_PRESENT_POLICY_HASH 0x00002000u
+#define QUOODLE_COLLECT_PRESENT_IOCTL_CONTRACT_VERSION 0x00004000u
+
+#define QUOODLE_COLLECT_FLAG_RAM_AVAILABLE_NOT_COLLECTABLE 0x00000001u
+#define QUOODLE_COLLECT_FLAG_STORAGE_NOT_IMPLEMENTED 0x00000002u
+#define QUOODLE_COLLECT_FLAG_NETWORK_NOT_IMPLEMENTED 0x00000004u
+#define QUOODLE_COLLECT_FLAG_SECURITY_NOT_IMPLEMENTED 0x00000008u
+
+#pragma pack(push, 1)
+struct QuoodleCollectInfoBinaryV1 {
+  uint32_t magic;
+  uint16_t version;
+  uint16_t reserved;
+  uint32_t sections_mask;
+  uint32_t fields_present_mask;
+  uint32_t flags;
+  uint64_t collection_ts_unix;
+  char policy_hash[QUOODLE_MAX_POLICY_HASH];
+  char hostname[96];
+  char computer_name[96];
+  char machine_guid[96];
+  char os_product_name[128];
+  char os_version[64];
+  char os_build[64];
+  uint32_t os_ubr;
+  char arch[32];
+  char cpu_model[96];
+  uint32_t cpu_logical_cores;
+  uint64_t ram_total_mb;
+  uint64_t ram_available_mb;
+  uint64_t uptime_sec;
+  uint32_t ioctl_contract_version;
+};
+#pragma pack(pop)

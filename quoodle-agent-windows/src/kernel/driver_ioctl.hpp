@@ -53,6 +53,8 @@
 #define QERR_COLLECT_INFO_FAILED 5101
 #define QERR_COLLECT_INFO_PAYLOAD_TOO_LARGE 5102
 
+#include "collect_system_info_contract.hpp"
+
 enum QuoodleKernelEventType : uint32_t {
   QKEVENT_TYPE_OPCODE = 1,
   QKEVENT_TYPE_RUNTIME = 2,

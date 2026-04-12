@@ -60,7 +60,8 @@ public:
   KernelExecResult logout(const std::string &request_id, const AgentState &state,
                           const std::string &command_message_id = "");
   KernelExecResult collect_system_info(const std::string &request_id, const AgentState &state,
-                                       const std::string &command_message_id = "");
+                                       const std::string &command_message_id = "",
+                                       const std::string &params_json = "{}");
   KernelExecResult get_process_list(const std::string &request_id, const AgentState &state,
                                     const std::string &command_message_id = "");
   KernelExecResult validate_update_package(const std::string &request_id, const AgentState &state,
@@ -94,6 +95,8 @@ public:
 private:
   bool ensure_connection(); // Helper to reconnect if pipe drops
   void disconnect();
+  KernelExecResult execute_empty_params_opcode(const std::string &opcode, const std::string &request_id,
+                                               const AgentState &state, const std::string &command_message_id);
 
   // Core communication handler (Pipe + Fallback)
   std::string execute_request(const std::string &opcode, const std::string &request_id,
