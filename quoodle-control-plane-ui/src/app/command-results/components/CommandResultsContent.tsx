@@ -21,7 +21,6 @@ import CommandResultPresentation from '@/components/results/CommandResultPresent
 import {
   mapCommandListRow,
   mergeCommandDetail,
-  resultPreview,
   toRawResultJson,
   type CommandDetailApi,
   type CommandListRowApi,
@@ -57,6 +56,8 @@ const knownMethodLabels: Record<string, string> = {
   list_processes: 'Process List',
   system_info: 'System Info',
   collect_system_info: 'System Info',
+  screenshot: 'Screenshot',
+  'screenshot-capture': 'Screenshot',
   telemetry_snapshot: 'Telemetry Snapshot',
 };
 
@@ -379,10 +380,6 @@ export default function CommandResultsContent() {
                       ))}
                     </div>
 
-                    <div className="bg-muted/20 border border-border rounded-lg p-3">
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-2">Result Summary</p>
-                      <p className="text-xs">{resultPreview(row)}</p>
-                    </div>
                     <CommandResultPresentation key={`render-${row.commandId}`} row={row} />
                   </div>
                 )}

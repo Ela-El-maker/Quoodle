@@ -5,7 +5,7 @@ import {
   type NormalizedCommandResult,
 } from '@/lib/commandResults';
 
-export type ResultWidgetType = 'stats' | 'kv' | 'table' | 'log' | 'diagnostics';
+export type ResultWidgetType = 'stats' | 'kv' | 'table' | 'log' | 'diagnostics' | 'artifact';
 
 export interface ResultShellMeta {
   commandId: string;
@@ -47,6 +47,12 @@ export interface ResultTableDefinition {
   rows: Array<Record<string, string>>;
 }
 
+export interface ResultArtifactDefinition {
+  url: string | null;
+  checksum: string | null;
+  contentType?: string | null;
+}
+
 export interface ResultSectionDefinition {
   id: string;
   title: string;
@@ -57,6 +63,7 @@ export interface ResultSectionDefinition {
   table?: ResultTableDefinition;
   logText?: string;
   diagnostics?: ResultDiagnosticsItem[];
+  artifact?: ResultArtifactDefinition;
   collapsedByDefault?: boolean;
   emptySummary?: string | null;
 }
@@ -93,6 +100,7 @@ const methodTitleMap: Record<string, string> = {
   collect_system_info: 'System Snapshot',
   ping: 'Ping Result',
   list_processes: 'Process Inventory',
+  screenshot: 'Screenshot Capture',
 };
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -439,6 +447,114 @@ function buildListProcesses(row: NormalizedCommandResult): ResultViewModel {
   return model;
 }
 
+function buildScreenshot(row: NormalizedCommandResult): ResultViewModel {
+  const model = buildBaseModel(row, 'screenshot', methodTitleMap.screenshot);
+  const data = extractStructuredData(row);
+  const payload = isObject(data) ? data : {};
+  const capture = isObject(payload.capture) ? payload.capture : {};
+  const authorization = isObject(payload.authorization) ? payload.authorization : {};
+  const artifactUrl =
+    (typeof row.artifactUrl === 'string' && row.artifactUrl.trim() !== '' ? row.artifactUrl : null) ??
+    (typeof row.result?.artifact_url === 'string' && row.result.artifact_url.trim() !== '' ? row.result.artifact_url : null);
+  const artifactChecksum =
+    (typeof row.artifactChecksum === 'string' && row.artifactChecksum.trim() !== '' ? row.artifactChecksum : null) ??
+    (typeof row.result?.artifact_checksum === 'string' && row.result.artifact_checksum.trim() !== ''
+      ? row.result.artifact_checksum
+      : null);
+
+  const width = typeof capture.width === 'number' ? String(capture.width) : null;
+  const height = typeof capture.height === 'number' ? String(capture.height) : null;
+  const dimensions = width && height ? `${width} x ${height}` : 'Unknown';
+  const captureFormatRaw =
+    typeof capture.format === 'string'
+      ? capture.format
+      : typeof payload.format === 'string'
+        ? payload.format
+        : 'png';
+  const captureFormat = captureFormatRaw.toLowerCase();
+  const captureContentType =
+    captureFormat === 'jpeg' || captureFormat === 'jpg' ? 'image/jpeg' : 'image/png';
+  const captureWithoutPath = { ...capture };
+  delete captureWithoutPath.output_path;
+
+  model.hero = [
+    {
+      label: 'State',
+      value: toLabel(row.state),
+      tone: row.state === 'completed' ? 'success' : row.state === 'failed' ? 'danger' : 'info',
+    },
+    {
+      label: 'Format',
+      value: toDisplayValue(payload.format ?? capture.format ?? 'png'),
+      tone: 'info',
+    },
+    {
+      label: 'Resolution',
+      value: toDisplayValue(payload.resolution ?? capture.resolution ?? dimensions),
+    },
+    {
+      label: 'Artifact',
+      value: artifactUrl ? 'Uploaded' : 'Unavailable',
+      tone: artifactUrl ? 'success' : 'warning',
+    },
+  ];
+
+  const captureBlock = objectEntries(captureWithoutPath, { hideNull: true });
+  const authBlock = objectEntries(authorization, { hideNull: true });
+  model.diagnostics = buildDiagnosticsFromRow(row);
+  if (!artifactUrl) {
+    model.diagnostics.push({
+      severity: 'warning',
+      reason: 'artifact_missing',
+      message: 'Screenshot artifact URL was not returned.',
+    });
+  }
+
+  model.sections = [
+    {
+      id: 'overview',
+      title: 'Overview',
+      widget: 'stats',
+      stats: model.hero,
+    },
+    {
+      id: 'artifact',
+      title: 'Artifact',
+      widget: 'artifact',
+      artifact: {
+        url: artifactUrl,
+        checksum: artifactChecksum,
+        contentType: captureContentType,
+      },
+      emptySummary: artifactUrl ? null : 'Artifact not available for this command result.',
+    },
+    {
+      id: 'capture',
+      title: 'Capture Metadata',
+      widget: 'kv',
+      keyValues: captureBlock.keyValues,
+      emptySummary: captureBlock.keyValues.length === 0 ? 'No capture metadata returned' : null,
+    },
+    {
+      id: 'authorization',
+      title: 'Kernel Authorization',
+      widget: 'kv',
+      keyValues: authBlock.keyValues,
+      emptySummary: authBlock.keyValues.length === 0 ? 'No authorization metadata returned' : null,
+      collapsedByDefault: authBlock.keyValues.length === 0,
+    },
+    {
+      id: 'diagnostics',
+      title: 'Diagnostics',
+      widget: 'diagnostics',
+      diagnostics: model.diagnostics,
+      emptySummary: model.diagnostics.length === 0 ? 'No diagnostics reported' : null,
+    },
+  ];
+
+  return model;
+}
+
 function buildGeneric(row: NormalizedCommandResult, method: string): ResultViewModel {
   const model = buildBaseModel(row, method, methodTitleMap[method] ?? toLabel(method));
   const data = extractStructuredData(row);
@@ -538,6 +654,11 @@ const renderDefinitions: Record<string, ResultRenderDefinition> = {
     title: methodTitleMap.list_processes,
     build: buildListProcesses,
   },
+  screenshot: {
+    method: 'screenshot',
+    title: methodTitleMap.screenshot,
+    build: buildScreenshot,
+  },
 };
 
 function safeFallback(row: NormalizedCommandResult, method: string, error: unknown): ResultViewModel {
@@ -568,4 +689,3 @@ export function renderResult(method: string, row: NormalizedCommandResult): Resu
 export function isResultsRendererV2Enabled(): boolean {
   return process.env.NEXT_PUBLIC_RESULTS_RENDERER_V2 !== '0';
 }
-

@@ -107,3 +107,73 @@ export async function proxyAuthedRequest(
 export async function proxyAuthedGet(request: NextRequest, upstreamPath: string): Promise<NextResponse> {
   return proxyAuthedRequest(request, upstreamPath, { method: 'GET' });
 }
+
+export async function proxyAuthedBinaryGet(request: NextRequest, upstreamPath: string): Promise<NextResponse> {
+  const jwt = request.cookies.get(AUTH_COOKIE.jwt)?.value ?? '';
+  const refreshToken = request.cookies.get(AUTH_COOKIE.refreshToken)?.value ?? '';
+  const sessionId = request.cookies.get(AUTH_COOKIE.sessionId)?.value ?? '';
+  const role = normalizeRole(request.cookies.get(AUTH_COOKIE.role)?.value);
+
+  if (!jwt) {
+    const response = NextResponse.json({ message: 'unauthenticated' }, { status: 401 });
+    clearAuthCookies(response);
+    return response;
+  }
+
+  let activeJwt = jwt;
+  let activeRefreshToken = refreshToken;
+  let didRefresh = false;
+
+  let upstreamResponse = await fetch(controlPlaneApiUrl(upstreamPath), {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${activeJwt}`,
+    },
+    cache: 'no-store',
+  });
+
+  if (upstreamResponse.status === 401 && refreshToken && sessionId) {
+    const refreshed = await refreshJwt(refreshToken);
+    if (refreshed) {
+      didRefresh = true;
+      activeJwt = refreshed.jwt;
+      activeRefreshToken = refreshed.refreshToken;
+      upstreamResponse = await fetch(controlPlaneApiUrl(upstreamPath), {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${activeJwt}`,
+        },
+        cache: 'no-store',
+      });
+    }
+  }
+
+  if (upstreamResponse.status === 401) {
+    const response = NextResponse.json({ message: 'unauthenticated' }, { status: 401 });
+    clearAuthCookies(response);
+    return response;
+  }
+
+  const body = await upstreamResponse.arrayBuffer();
+  const response = new NextResponse(body, {
+    status: upstreamResponse.status,
+  });
+
+  const contentType = upstreamResponse.headers.get('content-type');
+  const contentDisposition = upstreamResponse.headers.get('content-disposition');
+  const cacheControl = upstreamResponse.headers.get('cache-control');
+  if (contentType) response.headers.set('content-type', contentType);
+  if (contentDisposition) response.headers.set('content-disposition', contentDisposition);
+  if (cacheControl) response.headers.set('cache-control', cacheControl);
+
+  if (didRefresh && activeRefreshToken && sessionId) {
+    attachTokenCookies(response, {
+      jwt: activeJwt,
+      refreshToken: activeRefreshToken,
+      sessionId,
+      role,
+    });
+  }
+
+  return response;
+}

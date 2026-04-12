@@ -196,6 +196,54 @@ export default function CommandResultPresentation({ row, compact = false }: Comm
         setSortBy: changeSort,
       });
     }
+    if (section.widget === 'artifact') {
+      const artifact = section.artifact;
+      const artifactUrl = artifact?.url?.trim() || '';
+      const checksum = artifact?.checksum?.trim() || '';
+      const contentType = artifact?.contentType?.toLowerCase() || '';
+      const isImage = contentType.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(artifactUrl);
+      return (
+        <div className="space-y-3">
+          {!artifactUrl ? (
+            <p className="text-xs text-muted-foreground">{section.emptySummary ?? 'No artifact available.'}</p>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <a
+                  href={artifactUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2 py-1 text-xs text-foreground hover:bg-muted/60 transition-colors"
+                >
+                  Open Artifact
+                </a>
+                <a
+                  href={artifactUrl}
+                  download
+                  className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2 py-1 text-xs text-foreground hover:bg-muted/60 transition-colors"
+                >
+                  Download
+                </a>
+                {checksum ? (
+                  <span className="text-[11px] text-muted-foreground break-all">Checksum: {checksum}</span>
+                ) : null}
+              </div>
+              {isImage ? (
+                <div className="rounded-lg border border-border bg-black/30 p-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={artifactUrl}
+                    alt="Screenshot artifact preview"
+                    loading="lazy"
+                    className="max-h-80 w-auto rounded object-contain"
+                  />
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
+      );
+    }
     if (section.widget === 'diagnostics') {
       const diagnostics = section.diagnostics ?? [];
       return (

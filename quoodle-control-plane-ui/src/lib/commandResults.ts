@@ -101,6 +101,28 @@ function toNumber(value: number | string | null | undefined): number | null {
   return null;
 }
 
+function normalizeArtifactUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const raw = value.trim();
+  if (!raw) return null;
+
+  if (raw.startsWith('/api/artifact/')) {
+    return raw;
+  }
+
+  try {
+    const parsed = new URL(raw);
+    const match = parsed.pathname.match(/\/api\/artifact\/([^/?#]+)/i);
+    if (match?.[1]) {
+      return `/api/artifact/${match[1]}`;
+    }
+  } catch {
+    // Keep non-URL strings as-is.
+  }
+
+  return raw;
+}
+
 export function mapCommandListRow(row: CommandListRowApi): NormalizedCommandResult {
   const result = normalizeResultObject(row.result);
   const commandId = row.command_id?.trim() || 'unknown';
@@ -123,7 +145,9 @@ export function mapCommandListRow(row: CommandListRowApi): NormalizedCommandResu
     result,
     resultStatus: row.result_status?.trim() || (typeof result?.status === 'string' ? result.status : null),
     resultNotes: row.result_notes?.trim() || (typeof result?.notes === 'string' ? result.notes : null),
-    artifactUrl: row.artifact_url?.trim() || (typeof result?.artifact_url === 'string' ? result.artifact_url : null),
+    artifactUrl:
+      normalizeArtifactUrl(row.artifact_url) ??
+      normalizeArtifactUrl(result?.artifact_url),
     artifactChecksum:
       row.artifact_checksum?.trim() || (typeof result?.artifact_checksum === 'string' ? result.artifact_checksum : null),
     errorCode: toNumber(row.error_code),
