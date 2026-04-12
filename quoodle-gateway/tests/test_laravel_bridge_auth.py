@@ -150,3 +150,19 @@ def test_dispatch_allows_collect_system_info_method(client):
         assert body["reason"] != "not_supported_runtime"
     finally:
         settings.require_laravel_signature = old_require
+
+
+def test_dispatch_allows_screenshot_method(client):
+    old_require = settings.require_laravel_signature
+    try:
+        settings.require_laravel_signature = False
+        payload = _sample_dispatch_payload()
+        payload["method"] = "screenshot"
+        payload["envelope"]["body"]["method"] = "screenshot"
+
+        resp = client.post("/api/v1/command/dispatch", json=payload)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["reason"] != "not_supported_runtime"
+    finally:
+        settings.require_laravel_signature = old_require

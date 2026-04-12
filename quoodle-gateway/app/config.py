@@ -12,6 +12,7 @@ class Settings(BaseModel):
     controller_id: str = os.getenv("CONTROLLER_ID", "controller")
     policy_version: str | None = os.getenv("POLICY_VERSION")
     laravel_webhook_base: str = os.getenv("LARAVEL_WEBHOOK_BASE", "http://localhost:8000/api/v1/webhook")
+    control_plane_api_base: str = os.getenv("CONTROL_PLANE_API_BASE", "http://control-plane:80")
 
     # Redis configuration
     redis_url: str | None = os.getenv("REDIS_URL")

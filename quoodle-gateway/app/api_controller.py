@@ -2,7 +2,9 @@ import uuid
 from typing import Any, Dict, Iterable
 import logging
 
+import httpx
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ValidationError
 
 from app.api.schemas import (
@@ -36,6 +38,7 @@ RUNTIME_SUPPORTED_METHODS = {
     "reboot_device",
     "shutdown_device",
     "collect_system_info",
+    "screenshot",
 }
 
 TELEMETRY_ALLOWLIST_COMMON = {
@@ -241,6 +244,37 @@ async def _require_telemetry_bearer(request: Request, expected_device_id: str) -
     return claims
 
 
+async def _require_agent_bearer(request: Request) -> tuple[str, Dict[str, Any]]:
+    auth_header = request.headers.get("authorization", "").strip()
+    if not auth_header or not auth_header.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail={"reason": "auth_missing_bearer"})
+
+    token = auth_header[7:].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail={"reason": "auth_missing_token"})
+
+    try:
+        claims = await validate_auth_jwt(token)
+    except Exception:
+        raise HTTPException(status_code=401, detail={"reason": "auth_invalid_token"})
+
+    if claims.get("scope") != "agent":
+        raise HTTPException(status_code=403, detail={"reason": "auth_invalid_scope"})
+
+    return token, claims
+
+
+def _control_plane_artifact_url(path: str) -> str:
+    base = settings.control_plane_api_base.rstrip("/")
+    suffix = path if path.startswith("/") else f"/{path}"
+    return f"{base}{suffix}"
+
+
+def _gateway_upload_url(request: Request) -> str:
+    base = str(request.base_url).rstrip("/")
+    return f"{base}/api/v1/agent/artifact/upload"
+
+
 def create_router(manager: ConnectionManager) -> APIRouter:
     router = APIRouter(prefix="/api/v1")
 
@@ -413,6 +447,77 @@ def create_router(manager: ConnectionManager) -> APIRouter:
             "latest_rollup": latest_rollup,
             "counters": TELEMETRY_COUNTERS,
         }
+
+    @router.post("/agent/artifact/request")
+    async def agent_artifact_request(request: Request):
+        token, _claims = await _require_agent_bearer(request)
+        raw_body = await request.body()
+
+        headers = {"Authorization": f"Bearer {token}"}
+        content_type = request.headers.get("content-type")
+        if content_type:
+            headers["Content-Type"] = content_type
+
+        try:
+            async with httpx.AsyncClient() as client:
+                upstream = await client.post(
+                    _control_plane_artifact_url("/api/artifact/request"),
+                    content=raw_body,
+                    headers=headers,
+                    timeout=20.0,
+                )
+        except httpx.HTTPError:
+            raise HTTPException(status_code=502, detail={"reason": "artifact_request_upstream_unreachable"})
+
+        try:
+            payload = upstream.json()
+        except ValueError:
+            return Response(
+                content=upstream.content,
+                status_code=upstream.status_code,
+                media_type=upstream.headers.get("content-type"),
+            )
+
+        if (
+            isinstance(payload, dict)
+            and upstream.status_code >= 200
+            and upstream.status_code < 300
+            and payload.get("status") == "ok"
+        ):
+            payload["upload_url"] = _gateway_upload_url(request)
+
+        return JSONResponse(payload, status_code=upstream.status_code)
+
+    @router.post("/agent/artifact/upload")
+    async def agent_artifact_upload(request: Request):
+        token, _claims = await _require_agent_bearer(request)
+        raw_body = await request.body()
+
+        headers = {"Authorization": f"Bearer {token}"}
+        content_type = request.headers.get("content-type")
+        if content_type:
+            headers["Content-Type"] = content_type
+
+        try:
+            async with httpx.AsyncClient() as client:
+                upstream = await client.post(
+                    _control_plane_artifact_url("/api/artifact/upload"),
+                    content=raw_body,
+                    headers=headers,
+                    timeout=90.0,
+                )
+        except httpx.HTTPError:
+            raise HTTPException(status_code=502, detail={"reason": "artifact_upload_upstream_unreachable"})
+
+        try:
+            payload = upstream.json()
+            return JSONResponse(payload, status_code=upstream.status_code)
+        except ValueError:
+            return Response(
+                content=upstream.content,
+                status_code=upstream.status_code,
+                media_type=upstream.headers.get("content-type"),
+            )
 
     @router.post("/command/dispatch")
     async def dispatch_command(payload: CommandDispatchRequest):
