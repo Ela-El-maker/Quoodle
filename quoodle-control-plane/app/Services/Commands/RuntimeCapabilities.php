@@ -14,6 +14,7 @@ class RuntimeCapabilities
         'reboot_device',
         'shutdown_device',
         'collect_system_info',
+        'screenshot',
     ];
 
     public function __construct(private readonly Registry $registry)

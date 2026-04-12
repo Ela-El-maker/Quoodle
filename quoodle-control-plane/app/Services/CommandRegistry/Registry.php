@@ -300,6 +300,7 @@ class Registry
                 allowedInQuarantine: false,
                 paramsRules: [
                     'resolution' => ['nullable', 'string', 'in:original,1080p,720p'],
+                    'format' => ['nullable', 'string', 'in:png,jpeg'],
                 ]
             ),
             'get_active_window' => new CommandDefinition(

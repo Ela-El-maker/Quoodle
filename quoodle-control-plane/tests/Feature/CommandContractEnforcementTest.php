@@ -60,6 +60,8 @@ class CommandContractEnforcementTest extends TestCase
             'sensitive' => false,
             'user_id' => $device->user_id,
             'user_role' => User::ROLE_ADMIN,
+            // Keep positive-path command tests compliant by default.
+            'attestation_status' => 'pass',
         ];
     }
 
@@ -124,11 +126,13 @@ class CommandContractEnforcementTest extends TestCase
             ->assertJsonPath('runtime_supported_methods.0', 'ping')
             ->assertJsonPath('runtime_supported_methods.1', 'reboot_device')
             ->assertJsonPath('runtime_supported_methods.2', 'shutdown_device')
-            ->assertJsonPath('runtime_supported_methods.3', 'collect_system_info');
+            ->assertJsonPath('runtime_supported_methods.3', 'collect_system_info')
+            ->assertJsonPath('runtime_supported_methods.4', 'screenshot');
 
         $canonical = $response->json('canonical_methods');
         $this->assertContains('logout_user', $canonical);
         $this->assertContains('collect_system_info', $canonical);
+        $this->assertContains('screenshot', $canonical);
         $this->assertContains('reboot_device', $canonical);
         $this->assertContains('shutdown_device', $canonical);
         $this->assertNotContains('sysinfo', $canonical);
@@ -177,5 +181,43 @@ class CommandContractEnforcementTest extends TestCase
             ->postJson('/api/commands', $this->commandPayload($device, 'collect_system_info'))
             ->assertCreated()
             ->assertJsonPath('status', 'accepted');
+    }
+
+    /** @test */
+    public function screenshot_is_runtime_supported_and_accepts_format_contract(): void
+    {
+        Queue::fake();
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $device = $this->createOwnedDevice($admin, 'dev-screenshot');
+
+        $payload = $this->commandPayload($device, 'screenshot');
+        $payload['params'] = [
+            'resolution' => '1080p',
+            'format' => 'jpeg',
+        ];
+
+        $this->withHeaders($this->makeHeaders($admin))
+            ->postJson('/api/commands', $payload)
+            ->assertCreated()
+            ->assertJsonPath('status', 'accepted');
+    }
+
+    /** @test */
+    public function screenshot_bypasses_non_compliant_rejection_gate(): void
+    {
+        Queue::fake();
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $device = $this->createOwnedDevice($admin, 'dev-screenshot-bypass');
+
+        $payload = $this->commandPayload($device, 'screenshot');
+        $payload['attestation_status'] = 'failed';
+
+        $this->withHeaders($this->makeHeaders($admin))
+            ->postJson('/api/commands', $payload)
+            ->assertCreated()
+            ->assertJsonPath('status', 'accepted')
+            ->assertJsonPath('compliance.status', 'non_compliant');
     }
 }

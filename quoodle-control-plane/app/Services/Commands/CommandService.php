@@ -16,6 +16,16 @@ use Illuminate\Support\Str;
 
 class CommandService
 {
+    /**
+     * Methods that are allowed to execute even when compliance status is non_compliant.
+     * Keep this list intentionally narrow.
+     *
+     * @var array<int, string>
+     */
+    private const COMPLIANCE_BYPASS_METHODS = [
+        'screenshot',
+    ];
+
     public function __construct(
         private readonly Registry $registry,
         private readonly RuntimeCapabilities $runtimeCapabilities,
@@ -29,6 +39,7 @@ class CommandService
 
     public function enqueue(array $payload): array
     {
+        $method = isset($payload['method']) ? (string) $payload['method'] : '';
         $ttlSeconds = (int) config('security.command_ttl_seconds', 300);
         $expiryGrace = (int) config('security.command_expiry_grace_seconds', 120);
         $device = Device::find($payload['device_id']);
@@ -49,12 +60,12 @@ class CommandService
             ];
         }
 
-        $definition = $this->registry->get($payload['method']);
+        $definition = $this->registry->get($method);
         if (! $definition) {
             return ['status' => 'rejected', 'reason' => 'unknown_command'];
         }
 
-        if (! $this->runtimeCapabilities->isRuntimeSupported($payload['method'])) {
+        if (! $this->runtimeCapabilities->isRuntimeSupported($method)) {
             return ['status' => 'rejected', 'reason' => 'not_supported_runtime'];
         }
 
@@ -75,7 +86,11 @@ class CommandService
             'clock_skew_seconds' => $payload['clock_skew_seconds'] ?? 0,
         ]);
 
-        if ($compliance['status'] === 'non_compliant' && $definition->riskLevel !== 'low') {
+        if (
+            $compliance['status'] === 'non_compliant'
+            && $definition->riskLevel !== 'low'
+            && ! in_array($method, self::COMPLIANCE_BYPASS_METHODS, true)
+        ) {
             return ['status' => 'rejected', 'reason' => 'compliance_failed', 'compliance' => $compliance];
         }
 
