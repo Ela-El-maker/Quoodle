@@ -5,6 +5,14 @@
 #include <cstring>
 #include <string>
 #include <cstdint>
+#include <vector>
+#include <sstream>
+#include <iomanip>
+#ifdef _WIN32
+#include <windows.h>
+#include <iphlpapi.h>
+#include <intrin.h>
+#endif
 
 namespace
 {
@@ -25,6 +33,10 @@ nlohmann::json collect_info_identity_sentinel()
       {"hostname", nullptr},
       {"computer_name", nullptr},
       {"machine_guid", nullptr},
+      {"smbios_uuid", nullptr},
+      {"system_serial", nullptr},
+      {"baseboard_serial", nullptr},
+      {"bios_vendor", nullptr},
   };
 }
 
@@ -104,6 +116,7 @@ nlohmann::json collect_info_network_sentinel()
 nlohmann::json collect_info_security_sentinel()
 {
   return {
+      {"dse_enabled", nullptr},
       {"secure_boot", nullptr},
       {"code_integrity", nullptr},
       {"memory_integrity", nullptr},
@@ -124,16 +137,21 @@ nlohmann::json collect_info_security_sentinel()
       {"last_update_state", nullptr},
       {"attestation_capable", nullptr},
       {"tamper_check_capable", nullptr},
+      {"loaded_driver_count", nullptr},
   };
 }
 
 bool decode_collect_info_binary_payload(const QuoodleIoctlResponse &resp, QuoodleCollectInfoBinaryV1 &payload)
 {
-  if (resp.result_length < sizeof(QuoodleCollectInfoBinaryV1))
+  if (resp.result_length < sizeof(payload.magic) + sizeof(payload.version))
   {
     return false;
   }
-  std::memcpy(&payload, resp.result_json, sizeof(payload));
+  std::memset(&payload, 0, sizeof(payload));
+  const size_t copy_len = (resp.result_length < sizeof(payload))
+                              ? static_cast<size_t>(resp.result_length)
+                              : sizeof(payload);
+  std::memcpy(&payload, resp.result_json, copy_len);
   return payload.magic == QUOODLE_COLLECT_INFO_BINARY_MAGIC &&
          payload.version == QUOODLE_COLLECT_INFO_BINARY_VERSION;
 }
@@ -170,6 +188,21 @@ void collect_info_set_uint_or_null(
   obj[key] = value;
 }
 
+void collect_info_set_bool_or_null(
+    nlohmann::json &obj,
+    const char *key,
+    bool include_section,
+    bool has_field,
+    bool value)
+{
+  if (!include_section || !has_field)
+  {
+    obj[key] = nullptr;
+    return;
+  }
+  obj[key] = value;
+}
+
 nlohmann::json build_collect_info_identity_json(
     const QuoodleCollectInfoBinaryV1 &payload,
     bool include_identity,
@@ -179,6 +212,10 @@ nlohmann::json build_collect_info_identity_json(
   collect_info_set_string_or_null(identity, "hostname", include_identity, (present_mask & QUOODLE_COLLECT_PRESENT_HOSTNAME) != 0, payload.hostname, sizeof(payload.hostname));
   collect_info_set_string_or_null(identity, "computer_name", include_identity, (present_mask & QUOODLE_COLLECT_PRESENT_COMPUTER_NAME) != 0, payload.computer_name, sizeof(payload.computer_name));
   collect_info_set_string_or_null(identity, "machine_guid", include_identity, (present_mask & QUOODLE_COLLECT_PRESENT_MACHINE_GUID) != 0, payload.machine_guid, sizeof(payload.machine_guid));
+  collect_info_set_string_or_null(identity, "smbios_uuid", include_identity, (present_mask & QUOODLE_COLLECT_PRESENT_FIRMWARE_SMBIOS_UUID) != 0, payload.smbios_uuid, sizeof(payload.smbios_uuid));
+  collect_info_set_string_or_null(identity, "system_serial", include_identity, (present_mask & QUOODLE_COLLECT_PRESENT_FIRMWARE_SYSTEM_SERIAL) != 0, payload.system_serial, sizeof(payload.system_serial));
+  collect_info_set_string_or_null(identity, "baseboard_serial", include_identity, (present_mask & QUOODLE_COLLECT_PRESENT_FIRMWARE_BASEBOARD_SERIAL) != 0, payload.baseboard_serial, sizeof(payload.baseboard_serial));
+  collect_info_set_string_or_null(identity, "bios_vendor", include_identity, (present_mask & QUOODLE_COLLECT_PRESENT_FIRMWARE_BIOS_VENDOR) != 0, payload.bios_vendor, sizeof(payload.bios_vendor));
   return identity;
 }
 
@@ -219,6 +256,451 @@ nlohmann::json build_collect_info_runtime_json(
   collect_info_set_string_or_null(runtime, "policy_hash", include_runtime, (present_mask & QUOODLE_COLLECT_PRESENT_POLICY_HASH) != 0, payload.policy_hash, sizeof(payload.policy_hash));
   collect_info_set_uint_or_null(runtime, "ioctl_contract_version", include_runtime, (present_mask & QUOODLE_COLLECT_PRESENT_IOCTL_CONTRACT_VERSION) != 0, payload.ioctl_contract_version);
   return runtime;
+}
+
+nlohmann::json build_collect_info_security_json(
+    const QuoodleCollectInfoBinaryV1 &payload,
+    bool include_security,
+    std::uint32_t present_mask,
+    std::uint32_t flags)
+{
+  nlohmann::json security = collect_info_security_sentinel();
+  collect_info_set_bool_or_null(
+      security,
+      "dse_enabled",
+      include_security,
+      (present_mask & QUOODLE_COLLECT_PRESENT_SECURITY_DSE_ENABLED) != 0,
+      (flags & QUOODLE_COLLECT_FLAG_SECURITY_DSE_ENABLED_TRUE) != 0);
+  collect_info_set_bool_or_null(
+      security,
+      "code_integrity",
+      include_security,
+      (present_mask & QUOODLE_COLLECT_PRESENT_SECURITY_CODE_INTEGRITY) != 0,
+      (flags & QUOODLE_COLLECT_FLAG_SECURITY_CODE_INTEGRITY_TRUE) != 0);
+  collect_info_set_bool_or_null(
+      security,
+      "test_signing",
+      include_security,
+      (present_mask & QUOODLE_COLLECT_PRESENT_SECURITY_TEST_SIGNING) != 0,
+      (flags & QUOODLE_COLLECT_FLAG_SECURITY_TEST_SIGNING_TRUE) != 0);
+  collect_info_set_bool_or_null(
+      security,
+      "hvci_enabled",
+      include_security,
+      (present_mask & QUOODLE_COLLECT_PRESENT_SECURITY_HVCI_ENABLED) != 0,
+      (flags & QUOODLE_COLLECT_FLAG_SECURITY_HVCI_ENABLED_TRUE) != 0);
+  collect_info_set_bool_or_null(
+      security,
+      "vbs_enabled",
+      include_security,
+      (present_mask & QUOODLE_COLLECT_PRESENT_SECURITY_VBS_ENABLED) != 0,
+      (flags & QUOODLE_COLLECT_FLAG_SECURITY_VBS_ENABLED_TRUE) != 0);
+  collect_info_set_bool_or_null(
+      security,
+      "memory_integrity",
+      include_security,
+      (present_mask & QUOODLE_COLLECT_PRESENT_SECURITY_MEMORY_INTEGRITY) != 0,
+      (flags & QUOODLE_COLLECT_FLAG_SECURITY_MEMORY_INTEGRITY_TRUE) != 0);
+  collect_info_set_uint_or_null(
+      security,
+      "loaded_driver_count",
+      include_security,
+      (present_mask & QUOODLE_COLLECT_PRESENT_SECURITY_LOADED_DRIVER_COUNT) != 0,
+      payload.loaded_driver_count);
+  return security;
+}
+
+#ifdef _WIN32
+bool query_available_ram_mb(std::uint64_t &out_available_mb)
+{
+  MEMORYSTATUSEX mem_status{};
+  mem_status.dwLength = sizeof(mem_status);
+  if (!GlobalMemoryStatusEx(&mem_status))
+  {
+    return false;
+  }
+  out_available_mb = static_cast<std::uint64_t>(mem_status.ullAvailPhys / (1024ULL * 1024ULL));
+  return true;
+}
+
+bool is_nonzero_ipv4(const char *ip)
+{
+  return ip != nullptr && ip[0] != '\0' && std::strcmp(ip, "0.0.0.0") != 0;
+}
+
+std::string format_mac_address(const BYTE *addr, UINT len)
+{
+  if (!addr || len == 0)
+  {
+    return {};
+  }
+  std::ostringstream oss;
+  oss << std::hex << std::setfill('0');
+  for (UINT i = 0; i < len; ++i)
+  {
+    if (i > 0)
+    {
+      oss << ":";
+    }
+    oss << std::setw(2) << static_cast<unsigned int>(addr[i]);
+  }
+  return oss.str();
+}
+
+const char *adapter_type_label(UINT adapter_type)
+{
+  switch (adapter_type)
+  {
+  case MIB_IF_TYPE_ETHERNET:
+    return "ethernet";
+  case IF_TYPE_IEEE80211:
+    return "wifi";
+  case MIB_IF_TYPE_PPP:
+    return "ppp";
+  case MIB_IF_TYPE_LOOPBACK:
+    return "loopback";
+  default:
+    return "other";
+  }
+}
+
+bool enrich_storage_section(nlohmann::json &storage)
+{
+  bool populated = false;
+  char windows_dir[MAX_PATH] = {};
+  if (!GetWindowsDirectoryA(windows_dir, MAX_PATH))
+  {
+    return false;
+  }
+  if (windows_dir[0] == '\0' || windows_dir[1] != ':')
+  {
+    return false;
+  }
+
+  const std::string system_drive = std::string(1, windows_dir[0]) + ":";
+  const std::string root_path = system_drive + "\\";
+
+  storage["system_drive"] = system_drive;
+  storage["boot_volume"] = system_drive;
+  populated = true;
+
+  ULARGE_INTEGER free_bytes_available = {};
+  ULARGE_INTEGER total_bytes = {};
+  ULARGE_INTEGER total_free_bytes = {};
+  if (GetDiskFreeSpaceExA(root_path.c_str(), &free_bytes_available, &total_bytes, &total_free_bytes))
+  {
+    const std::uint64_t total_mb = static_cast<std::uint64_t>(total_bytes.QuadPart / (1024ULL * 1024ULL));
+    const std::uint64_t free_mb = static_cast<std::uint64_t>(total_free_bytes.QuadPart / (1024ULL * 1024ULL));
+    storage["system_drive_total_mb"] = total_mb;
+    storage["system_drive_free_mb"] = free_mb;
+    storage["boot_volume_total_mb"] = total_mb;
+    storage["boot_volume_free_mb"] = free_mb;
+    populated = true;
+  }
+
+  char fs_name[MAX_PATH] = {};
+  if (GetVolumeInformationA(root_path.c_str(), nullptr, 0, nullptr, nullptr, nullptr, fs_name, MAX_PATH) && fs_name[0] != '\0')
+  {
+    storage["system_drive_fs"] = std::string(fs_name);
+    populated = true;
+  }
+
+  const DWORD logical_drives = GetLogicalDrives();
+  if (logical_drives != 0)
+  {
+    std::uint32_t count = 0;
+    DWORD bits = logical_drives;
+    while (bits != 0)
+    {
+      count += (bits & 1U);
+      bits >>= 1U;
+    }
+    storage["disk_count"] = count;
+    populated = true;
+  }
+
+  return populated;
+}
+
+bool enrich_network_section(nlohmann::json &network)
+{
+  bool populated = false;
+  ULONG adapters_len = 0;
+  DWORD rc = GetAdaptersInfo(nullptr, &adapters_len);
+  if (rc != ERROR_BUFFER_OVERFLOW || adapters_len == 0)
+  {
+    return false;
+  }
+
+  std::vector<BYTE> adapter_buf(adapters_len);
+  auto *adapters = reinterpret_cast<PIP_ADAPTER_INFO>(adapter_buf.data());
+  rc = GetAdaptersInfo(adapters, &adapters_len);
+  if (rc != NO_ERROR)
+  {
+    return false;
+  }
+
+  PIP_ADAPTER_INFO selected = nullptr;
+  for (PIP_ADAPTER_INFO cur = adapters; cur != nullptr; cur = cur->Next)
+  {
+    if (!selected)
+    {
+      selected = cur;
+    }
+    if (is_nonzero_ipv4(cur->IpAddressList.IpAddress.String))
+    {
+      selected = cur;
+      break;
+    }
+  }
+
+  if (!selected)
+  {
+    return false;
+  }
+
+  if (selected->AdapterName[0] != '\0')
+  {
+    network["primary_adapter_name"] = std::string(selected->AdapterName);
+    populated = true;
+  }
+  if (selected->Description[0] != '\0')
+  {
+    network["primary_adapter_desc"] = std::string(selected->Description);
+    populated = true;
+  }
+  network["primary_adapter_type"] = std::string(adapter_type_label(selected->Type));
+  populated = true;
+
+  if (is_nonzero_ipv4(selected->IpAddressList.IpAddress.String))
+  {
+    network["primary_ipv4"] = std::string(selected->IpAddressList.IpAddress.String);
+    populated = true;
+  }
+  if (is_nonzero_ipv4(selected->GatewayList.IpAddress.String))
+  {
+    network["default_gateway_ipv4"] = std::string(selected->GatewayList.IpAddress.String);
+    populated = true;
+  }
+
+  network["dhcp_enabled"] = selected->DhcpEnabled != 0;
+  populated = true;
+  if (is_nonzero_ipv4(selected->DhcpServer.IpAddress.String))
+  {
+    network["dhcp_server"] = std::string(selected->DhcpServer.IpAddress.String);
+    populated = true;
+  }
+
+  const std::string mac = format_mac_address(selected->Address, selected->AddressLength);
+  if (!mac.empty())
+  {
+    network["primary_mac"] = mac;
+    populated = true;
+  }
+
+  MIB_IFROW if_row = {};
+  if_row.dwIndex = selected->Index;
+  if (GetIfEntry(&if_row) == NO_ERROR && if_row.dwSpeed > 0)
+  {
+    network["link_speed_mbps"] = static_cast<std::uint64_t>(if_row.dwSpeed / 1000000U);
+    populated = true;
+  }
+
+  ULONG fixed_len = 0;
+  if (GetNetworkParams(nullptr, &fixed_len) == ERROR_BUFFER_OVERFLOW && fixed_len > 0)
+  {
+    std::vector<BYTE> fixed_buf(fixed_len);
+    auto *fixed_info = reinterpret_cast<PFIXED_INFO>(fixed_buf.data());
+    if (GetNetworkParams(fixed_info, &fixed_len) == NO_ERROR)
+    {
+      nlohmann::json dns = nlohmann::json::array();
+      for (IP_ADDR_STRING *cur = &fixed_info->DnsServerList; cur != nullptr; cur = cur->Next)
+      {
+        if (is_nonzero_ipv4(cur->IpAddress.String))
+        {
+          dns.push_back(std::string(cur->IpAddress.String));
+        }
+      }
+      if (!dns.empty())
+      {
+        network["dns_servers"] = std::move(dns);
+        populated = true;
+      }
+    }
+  }
+
+  return populated;
+}
+
+bool query_reg_dword(HKEY root, const char *path, const char *name, DWORD &out_value)
+{
+  DWORD value = 0;
+  DWORD value_size = sizeof(value);
+  DWORD value_type = 0;
+  const LONG status = RegGetValueA(root, path, name, RRF_RT_REG_DWORD, &value_type, &value, &value_size);
+  if (status != ERROR_SUCCESS)
+  {
+    return false;
+  }
+  out_value = value;
+  return true;
+}
+
+bool enrich_security_section(nlohmann::json &security)
+{
+  bool populated = false;
+
+  DWORD secure_boot = 0;
+  if (query_reg_dword(HKEY_LOCAL_MACHINE,
+                      "SYSTEM\\CurrentControlSet\\Control\\SecureBoot\\State",
+                      "UEFISecureBootEnabled",
+                      secure_boot))
+  {
+    security["secure_boot"] = secure_boot != 0;
+    populated = true;
+  }
+
+#if defined(_M_X64) || defined(_M_IX86) || defined(_M_AMD64)
+  int cpu_info[4] = {0, 0, 0, 0};
+  __cpuid(cpu_info, 1);
+  security["hypervisor_present"] = ((cpu_info[2] & (1 << 31)) != 0);
+  populated = true;
+#else
+  security["hypervisor_present"] = false;
+  populated = true;
+#endif
+
+  return populated;
+}
+#endif
+
+void remove_collection_failure(
+    nlohmann::json &out,
+    const std::string &field,
+    const std::string &reason)
+{
+  if (!out.contains("collection_failures") || !out["collection_failures"].is_array())
+  {
+    return;
+  }
+
+  nlohmann::json filtered_failures = nlohmann::json::array();
+  for (const auto &entry : out["collection_failures"])
+  {
+    if (!entry.is_object())
+    {
+      filtered_failures.push_back(entry);
+      continue;
+    }
+    if (entry.value("field", "") == field && entry.value("reason", "") == reason)
+    {
+      continue;
+    }
+    filtered_failures.push_back(entry);
+  }
+  out["collection_failures"] = std::move(filtered_failures);
+}
+
+void enrich_collect_info_with_local_fallbacks(nlohmann::json &out)
+{
+  if (!out.is_object())
+  {
+    return;
+  }
+  nlohmann::json *hardware = (out.contains("hardware") && out["hardware"].is_object()) ? &out["hardware"] : nullptr;
+  nlohmann::json *storage = (out.contains("storage") && out["storage"].is_object()) ? &out["storage"] : nullptr;
+  nlohmann::json *network = (out.contains("network") && out["network"].is_object()) ? &out["network"] : nullptr;
+  nlohmann::json *security = (out.contains("security") && out["security"].is_object()) ? &out["security"] : nullptr;
+
+#ifdef _WIN32
+  if (hardware)
+  {
+    const bool missing_available_ram =
+        !hardware->contains("ram_available_mb") || (*hardware)["ram_available_mb"].is_null();
+    if (missing_available_ram)
+    {
+      std::uint64_t available_mb = 0;
+      if (query_available_ram_mb(available_mb))
+      {
+        (*hardware)["ram_available_mb"] = available_mb;
+      }
+    }
+  }
+
+  if (storage)
+  {
+    const bool has_storage_data = enrich_storage_section(*storage);
+    if (has_storage_data)
+    {
+      remove_collection_failure(out, "storage", "not_implemented");
+    }
+  }
+
+  if (network)
+  {
+    const bool has_network_data = enrich_network_section(*network);
+    if (has_network_data)
+    {
+      remove_collection_failure(out, "network", "not_implemented");
+    }
+  }
+
+  if (security)
+  {
+    const bool has_security_data = enrich_security_section(*security);
+    if (has_security_data)
+    {
+      remove_collection_failure(out, "security", "not_implemented");
+    }
+  }
+#endif
+
+  const bool has_real_available_ram =
+      hardware && hardware->contains("ram_available_mb") && !(*hardware)["ram_available_mb"].is_null();
+  if (has_real_available_ram)
+  {
+    remove_collection_failure(out, "hardware.ram_available_mb", "not_collectable");
+  }
+}
+
+void prune_null_values(nlohmann::json &node)
+{
+  if (node.is_object())
+  {
+    for (auto it = node.begin(); it != node.end();)
+    {
+      prune_null_values(it.value());
+      if (it.value().is_null())
+      {
+        it = node.erase(it);
+      }
+      else
+      {
+        ++it;
+      }
+    }
+    return;
+  }
+
+  if (node.is_array())
+  {
+    for (auto &item : node)
+    {
+      prune_null_values(item);
+    }
+
+    for (auto it = node.begin(); it != node.end();)
+    {
+      if (it->is_null())
+      {
+        it = node.erase(it);
+      }
+      else
+      {
+        ++it;
+      }
+    }
+  }
 }
 
 nlohmann::json build_collect_info_included_fields(std::uint32_t sections_mask)
@@ -264,6 +746,9 @@ nlohmann::json translate_collect_info_binary_payload(const QuoodleCollectInfoBin
   const bool include_os = (sections_mask & QUOODLE_COLLECT_SECTION_OS) != 0;
   const bool include_hardware = (sections_mask & QUOODLE_COLLECT_SECTION_HARDWARE) != 0;
   const bool include_runtime = (sections_mask & QUOODLE_COLLECT_SECTION_RUNTIME) != 0;
+  const bool include_storage = (sections_mask & QUOODLE_COLLECT_SECTION_STORAGE) != 0;
+  const bool include_network = (sections_mask & QUOODLE_COLLECT_SECTION_NETWORK) != 0;
+  const bool include_security = (sections_mask & QUOODLE_COLLECT_SECTION_SECURITY) != 0;
 
   nlohmann::json out = {
       {"schema_version", "v2"},
@@ -277,10 +762,21 @@ nlohmann::json translate_collect_info_binary_payload(const QuoodleCollectInfoBin
       {"os", build_collect_info_os_json(payload, include_os, present_mask)},
       {"hardware", build_collect_info_hardware_json(payload, include_hardware, present_mask)},
       {"runtime", build_collect_info_runtime_json(payload, include_runtime, present_mask)},
-      {"storage", collect_info_storage_sentinel()},
-      {"network", collect_info_network_sentinel()},
-      {"security", collect_info_security_sentinel()},
   };
+  if (include_storage)
+  {
+    out["storage"] = collect_info_storage_sentinel();
+  }
+  if (include_network)
+  {
+    out["network"] = collect_info_network_sentinel();
+  }
+  if (include_security)
+  {
+    out["security"] = build_collect_info_security_json(payload, include_security, present_mask, payload.flags);
+  }
+  enrich_collect_info_with_local_fallbacks(out);
+  prune_null_values(out);
   return out;
 }
 
