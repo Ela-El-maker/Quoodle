@@ -4,7 +4,7 @@
 #include "kmdf_request_security.h"
 
 #define QUOODLE_TAG 'Qood'
-#define QUOODLE_MAX_CANONICAL 2048
+#define QUOODLE_MAX_CANONICAL 8192
 #define QUOODLE_HMAC_KEY_MAX 128
 
 typedef struct _QSHA256_CTX {
@@ -329,11 +329,22 @@ static NTSTATUS qrs_build_canonical_response(const QUOODLE_IOCTL_RESPONSE* resp,
   SIZE_T req_id_len = qrs_strnlen_a(resp->request_id, sizeof(resp->request_id));
   SIZE_T kexec_len = qrs_strnlen_a(resp->kernel_exec_id, sizeof(resp->kernel_exec_id));
   SIZE_T err_len = qrs_strnlen_a(resp->error_message, sizeof(resp->error_message));
+  ULONG result_len = resp->result_length;
+  CHAR result_b64[(QUOODLE_MAX_RESULT * 4 / 3) + 8];
+  ULONG result_b64_len = 0;
+
+  if (result_len > QUOODLE_MAX_RESULT) {
+    result_len = QUOODLE_MAX_RESULT;
+  }
+
+  if (!q_base64_encode((const UCHAR*)resp->result_json, result_len, result_b64, sizeof(result_b64), &result_b64_len)) {
+    return STATUS_BUFFER_TOO_SMALL;
+  }
 
   st = RtlStringCchPrintfA(
       out,
       out_cap,
-      "v1\nstatus=%u\nerror=%u\nkexec=%u:%.*s\nreq=%u:%.*s\nresult=%u:%.*s\nmsg=%u:%.*s\nts=%I64u\n",
+      "v1\nstatus=%u\nerror=%u\nkexec=%u:%.*s\nreq=%u:%.*s\nresult=%u:%u:%.*s\nmsg=%u:%.*s\nts=%I64u\n",
       resp->status,
       resp->error_code,
       (UINT32)kexec_len,
@@ -342,9 +353,10 @@ static NTSTATUS qrs_build_canonical_response(const QUOODLE_IOCTL_RESPONSE* resp,
       (UINT32)req_id_len,
       (INT)req_id_len,
       resp->request_id,
-      resp->result_length,
-      (INT)resp->result_length,
-      resp->result_json,
+      (UINT32)result_len,
+      (UINT32)result_b64_len,
+      (INT)result_b64_len,
+      result_b64,
       (UINT32)err_len,
       (INT)err_len,
       resp->error_message,

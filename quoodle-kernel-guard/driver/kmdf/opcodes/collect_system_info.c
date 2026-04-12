@@ -1,116 +1,537 @@
+#include "kmdf_opcode_common.h"
+#include "kmdf_opcode_handlers.h"
 #include <ntstrsafe.h>
 
-#include "kmdf_opcode_handlers.h"
-#include "kmdf_opcode_common.h"
+typedef struct _QUOODLE_COLLECT_INFO_SELECTION {
+  BOOLEAN identity;
+  BOOLEAN os;
+  BOOLEAN hardware;
+  BOOLEAN runtime;
+  BOOLEAN storage;
+  BOOLEAN network;
+  BOOLEAN security;
+} QUOODLE_COLLECT_INFO_SELECTION;
 
-VOID QuoodleOpcodeHandleCollectSystemInfo(_Out_ QUOODLE_IOCTL_RESPONSE* resp, _In_opt_ const CHAR* policy_hash) {
-  const WCHAR* os_key = L"\\Registry\\Machine\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion";
-  CHAR os_build[64];
-  CHAR os_version[64];
+typedef struct _QUOODLE_COLLECT_INFO_CONTEXT {
+  ULONGLONG collection_ts_unix;
+  CHAR policy_hash[QUOODLE_MAX_POLICY_HASH];
+  BOOLEAN has_hostname;
+  CHAR hostname[96];
+  BOOLEAN has_computer_name;
+  CHAR computer_name[96];
+  BOOLEAN has_machine_guid;
+  CHAR machine_guid[96];
+  BOOLEAN has_os_product_name;
   CHAR os_product_name[128];
-  CHAR arch_value[32];
+  BOOLEAN has_os_version;
+  CHAR os_version[64];
+  BOOLEAN has_os_build;
+  CHAR os_build[64];
+  BOOLEAN has_os_ubr;
+  ULONG os_ubr;
+  BOOLEAN has_arch;
+  CHAR arch[32];
+  BOOLEAN has_cpu_model;
   CHAR cpu_model[96];
-  CHAR policy_hash_value[QUOODLE_MAX_POLICY_HASH];
-  CHAR os_build_json[160];
-  CHAR os_version_json[160];
-  CHAR os_product_name_json[320];
-  CHAR arch_json[96];
-  CHAR cpu_model_json[320];
-  CHAR policy_hash_json[320];
-  CHAR os_ubr_json[64];
-  CHAR ram_total_json[64];
-  CHAR ram_available_json[64];
-  CHAR payload[4096];
-  size_t payload_len = 0;
-  ULONG os_ubr = 0;
-  ULONGLONG ram_total_mb = 0;
-  ULONGLONG uptime_sec = 0;
-  ULONGLONG collection_ts = q_opcode_unix_timestamp_seconds();
-  ULONG cpu_cores = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
-  BOOLEAN has_ubr = FALSE;
-  BOOLEAN has_ram_total = FALSE;
+  BOOLEAN has_cpu_logical_cores;
+  ULONG cpu_logical_cores;
+  BOOLEAN has_ram_total_mb;
+  ULONGLONG ram_total_mb;
+  BOOLEAN has_ram_available_mb;
+  ULONGLONG ram_available_mb;
+  BOOLEAN has_uptime_sec;
+  ULONGLONG uptime_sec;
+  BOOLEAN has_ioctl_contract_version;
+  ULONG ioctl_contract_version;
+} QUOODLE_COLLECT_INFO_CONTEXT;
 
-  RtlZeroMemory(os_build, sizeof(os_build));
-  RtlZeroMemory(os_version, sizeof(os_version));
-  RtlZeroMemory(os_product_name, sizeof(os_product_name));
-  RtlZeroMemory(cpu_model, sizeof(cpu_model));
-  RtlZeroMemory(policy_hash_value, sizeof(policy_hash_value));
+static VOID q_selection_set_defaults(_Out_ QUOODLE_COLLECT_INFO_SELECTION* sel) {
+  sel->identity = TRUE;
+  sel->os = TRUE;
+  sel->hardware = TRUE;
+  sel->runtime = TRUE;
+  sel->storage = FALSE;
+  sel->network = FALSE;
+  sel->security = FALSE;
+}
 
-  (void)QueryRegistryStringValue(os_key, L"CurrentBuildNumber", os_build, sizeof(os_build));
-  if (!QueryRegistryStringValue(os_key, L"DisplayVersion", os_version, sizeof(os_version))) {
-    (void)QueryRegistryStringValue(os_key, L"ReleaseId", os_version, sizeof(os_version));
+static VOID q_selection_set_all(_Out_ QUOODLE_COLLECT_INFO_SELECTION* sel) {
+  sel->identity = TRUE;
+  sel->os = TRUE;
+  sel->hardware = TRUE;
+  sel->runtime = TRUE;
+  sel->storage = TRUE;
+  sel->network = TRUE;
+  sel->security = TRUE;
+}
+
+static VOID q_collect_info_fail(_Out_ QUOODLE_IOCTL_RESPONSE* resp, _In_ ULONG error_code, _In_z_ const CHAR* error_message) {
+  const CHAR* reason = "collect_info_failed";
+  if (error_code == QERR_BAD_PAYLOAD) {
+    reason = "bad_payload";
+  } else if (error_code == QERR_COLLECT_INFO_PAYLOAD_TOO_LARGE) {
+    reason = "collect_info_payload_too_large";
   }
-  (void)QueryRegistryStringValue(os_key, L"ProductName", os_product_name, sizeof(os_product_name));
-  has_ubr = QueryRegistryDwordValue(os_key, L"UBR", &os_ubr);
-  has_ram_total = QueryTotalRamMb(&ram_total_mb);
-  (void)QueryCpuModel(cpu_model, sizeof(cpu_model));
-  (void)RtlStringCchCopyA(arch_value, sizeof(arch_value), KernelArchString());
-  if (policy_hash && *policy_hash) {
-    (void)RtlStringCchCopyA(policy_hash_value, sizeof(policy_hash_value), policy_hash);
-  }
-  uptime_sec = KeQueryInterruptTime() / 10000000ULL;
 
-  if (!JsonStringOrNull(os_build, sizeof(os_build), os_build_json, sizeof(os_build_json)) ||
-      !JsonStringOrNull(os_version, sizeof(os_version), os_version_json, sizeof(os_version_json)) ||
-      !JsonStringOrNull(os_product_name, sizeof(os_product_name), os_product_name_json, sizeof(os_product_name_json)) ||
-      !JsonStringOrNull(arch_value, sizeof(arch_value), arch_json, sizeof(arch_json)) ||
-      !JsonStringOrNull(cpu_model, sizeof(cpu_model), cpu_model_json, sizeof(cpu_model_json)) ||
-      !JsonStringOrNull(policy_hash_value, sizeof(policy_hash_value), policy_hash_json, sizeof(policy_hash_json))) {
-    resp->status = 1;
-    resp->error_code = QERR_COLLECT_INFO_FAILED;
-    RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), "collect_info_failed");
-    RtlStringCchCopyA(resp->result_json, sizeof(resp->result_json), "{\"status\":\"error\",\"reason\":\"collect_info_failed\"}");
-    resp->result_length = (uint32_t)q_opcode_strnlen_a(resp->result_json, sizeof(resp->result_json));
+  resp->status = 1;
+  resp->error_code = error_code;
+  (void)RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), error_message);
+  (void)RtlStringCchPrintfA(resp->result_json, sizeof(resp->result_json), "{\"status\":\"error\",\"reason\":\"%s\"}", reason);
+  resp->result_length = (uint32_t)q_opcode_strnlen_a(resp->result_json, sizeof(resp->result_json));
+}
+
+static VOID q_copy_params_json(_In_opt_ const QUOODLE_IOCTL_REQUEST* req, _Out_writes_(out_len) CHAR* out, _In_ size_t out_len) {
+  size_t copy_len = 0;
+
+  if (!out || out_len < 2) {
+    return;
+  }
+  out[0] = '\0';
+  if (!req) {
     return;
   }
 
-  JsonUIntOrNull(has_ubr, (ULONGLONG)os_ubr, os_ubr_json, sizeof(os_ubr_json));
-  JsonUIntOrNull(has_ram_total, ram_total_mb, ram_total_json, sizeof(ram_total_json));
-  JsonUIntOrNull(FALSE, 0, ram_available_json, sizeof(ram_available_json));
+  copy_len = (size_t)req->params_length;
+  if (copy_len >= out_len) {
+    copy_len = out_len - 1;
+  }
+  if (copy_len > QUOODLE_MAX_PARAMS - 1) {
+    copy_len = QUOODLE_MAX_PARAMS - 1;
+  }
+  if (copy_len > 0) {
+    RtlCopyMemory(out, req->params_json, copy_len);
+    out[copy_len] = '\0';
+  }
+}
 
-  if (!NT_SUCCESS(RtlStringCchPrintfA(
-          payload,
-          sizeof(payload),
-          "{\"schema_version\":\"v2\",\"kernel_mode\":true,\"collection_ts_unix\":%I64u,"
-          "\"os_build\":%s,\"os_ubr\":%s,\"os_version\":%s,\"os_product_name\":%s,"
-          "\"arch\":%s,\"cpu_logical_cores\":%u,\"cpu_model\":%s,"
-          "\"ram_total_mb\":%s,\"ram_available_mb\":%s,\"uptime_sec\":%I64u,"
-          "\"policy_hash\":%s}",
-          collection_ts,
-          os_build_json,
-          os_ubr_json,
-          os_version_json,
-          os_product_name_json,
-          arch_json,
-          cpu_cores,
-          cpu_model_json,
-          ram_total_json,
-          ram_available_json,
-          uptime_sec,
-          policy_hash_json))) {
-    resp->status = 1;
-    resp->error_code = QERR_COLLECT_INFO_FAILED;
-    RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), "collect_info_failed");
-    RtlStringCchCopyA(resp->result_json, sizeof(resp->result_json), "{\"status\":\"error\",\"reason\":\"collect_info_failed\"}");
-    resp->result_length = (uint32_t)q_opcode_strnlen_a(resp->result_json, sizeof(resp->result_json));
+static BOOLEAN q_is_space(_In_ CHAR c) {
+  return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+}
+
+static const CHAR* q_find_substring(
+    _In_reads_(hay_len) const CHAR* haystack,
+    _In_ size_t hay_len,
+    _In_reads_(needle_len) const CHAR* needle,
+    _In_ size_t needle_len) {
+  size_t i = 0;
+  size_t j = 0;
+
+  if (!haystack || !needle || needle_len == 0 || hay_len < needle_len) {
+    return NULL;
+  }
+
+  for (i = 0; i + needle_len <= hay_len; ++i) {
+    BOOLEAN match = TRUE;
+    for (j = 0; j < needle_len; ++j) {
+      if (haystack[i + j] != needle[j]) {
+        match = FALSE;
+        break;
+      }
+    }
+    if (match) {
+      return haystack + i;
+    }
+  }
+  return NULL;
+}
+
+static VOID q_skip_ws(_In_reads_(len) const CHAR* json, _In_ size_t len, _Inout_ size_t* idx) {
+  while (*idx < len && q_is_space(json[*idx])) {
+    (*idx)++;
+  }
+}
+
+static BOOLEAN q_parse_json_string_token(
+    _In_reads_(json_len) const CHAR* json,
+    _In_ size_t json_len,
+    _Inout_ size_t* idx,
+    _Out_writes_(token_len) CHAR* token_out,
+    _In_ size_t token_len) {
+  size_t out_idx = 0;
+
+  if (*idx >= json_len || json[*idx] != '"' || !token_out || token_len < 2) {
+    return FALSE;
+  }
+  (*idx)++;
+
+  while (*idx < json_len) {
+    CHAR ch = json[*idx];
+    if (ch == '"') {
+      token_out[out_idx] = '\0';
+      (*idx)++;
+      return TRUE;
+    }
+    if (ch == '\\') {
+      (*idx)++;
+      if (*idx >= json_len) {
+        return FALSE;
+      }
+      ch = json[*idx];
+    }
+    if (out_idx + 1 >= token_len) {
+      return FALSE;
+    }
+    token_out[out_idx++] = ch;
+    (*idx)++;
+  }
+
+  return FALSE;
+}
+
+static BOOLEAN q_apply_selector(_In_z_ const CHAR* selector, _Inout_ QUOODLE_COLLECT_INFO_SELECTION* sel) {
+  if (RtlCompareMemory(selector, "identity", 8) == 8 && selector[8] == '\0') {
+    sel->identity = TRUE;
+    return TRUE;
+  }
+  if (RtlCompareMemory(selector, "os", 2) == 2 && selector[2] == '\0') {
+    sel->os = TRUE;
+    return TRUE;
+  }
+  if (RtlCompareMemory(selector, "hardware", 8) == 8 && selector[8] == '\0') {
+    sel->hardware = TRUE;
+    return TRUE;
+  }
+  if (RtlCompareMemory(selector, "runtime", 7) == 7 && selector[7] == '\0') {
+    sel->runtime = TRUE;
+    return TRUE;
+  }
+  if (RtlCompareMemory(selector, "storage", 7) == 7 && selector[7] == '\0') {
+    sel->storage = TRUE;
+    return TRUE;
+  }
+  if (RtlCompareMemory(selector, "network", 7) == 7 && selector[7] == '\0') {
+    sel->network = TRUE;
+    return TRUE;
+  }
+  if (RtlCompareMemory(selector, "security", 8) == 8 && selector[8] == '\0') {
+    sel->security = TRUE;
+    return TRUE;
+  }
+  if (RtlCompareMemory(selector, "all", 3) == 3 && selector[3] == '\0') {
+    q_selection_set_all(sel);
+    return TRUE;
+  }
+  return FALSE;
+}
+
+static BOOLEAN q_collect_info_parse_selection(
+    _In_opt_ const QUOODLE_IOCTL_REQUEST* req,
+    _Out_ QUOODLE_COLLECT_INFO_SELECTION* sel) {
+  CHAR params_json[QUOODLE_MAX_PARAMS];
+  const CHAR fields_token[] = "\"fields\"";
+  const CHAR* fields_pos = NULL;
+  size_t json_len = 0;
+  size_t idx = 0;
+  BOOLEAN closed = FALSE;
+
+  if (!sel) {
+    return FALSE;
+  }
+  RtlZeroMemory(sel, sizeof(*sel));
+  q_selection_set_defaults(sel);
+
+  q_copy_params_json(req, params_json, sizeof(params_json));
+  if (params_json[0] == '\0') {
+    return TRUE;
+  }
+
+  fields_pos = q_find_substring(params_json, q_opcode_strnlen_a(params_json, sizeof(params_json)), fields_token, sizeof(fields_token) - 1);
+  if (!fields_pos) {
+    return TRUE;
+  }
+
+  RtlZeroMemory(sel, sizeof(*sel));
+  json_len = q_opcode_strnlen_a(params_json, sizeof(params_json));
+  idx = (size_t)(fields_pos - params_json) + (sizeof(fields_token) - 1);
+  q_skip_ws(params_json, json_len, &idx);
+  if (idx >= json_len || params_json[idx] != ':') {
+    return FALSE;
+  }
+  idx++;
+  q_skip_ws(params_json, json_len, &idx);
+  if (idx >= json_len || params_json[idx] != '[') {
+    return FALSE;
+  }
+  idx++;
+
+  while (idx < json_len) {
+    CHAR selector[32];
+    q_skip_ws(params_json, json_len, &idx);
+    if (idx >= json_len) {
+      break;
+    }
+    if (params_json[idx] == ']') {
+      closed = TRUE;
+      idx++;
+      break;
+    }
+    if (!q_parse_json_string_token(params_json, json_len, &idx, selector, sizeof(selector))) {
+      return FALSE;
+    }
+    if (!q_apply_selector(selector, sel)) {
+      return FALSE;
+    }
+    q_skip_ws(params_json, json_len, &idx);
+    if (idx >= json_len) {
+      return FALSE;
+    }
+    if (params_json[idx] == ',') {
+      idx++;
+      continue;
+    }
+    if (params_json[idx] == ']') {
+      closed = TRUE;
+      idx++;
+      break;
+    }
+    return FALSE;
+  }
+
+  return closed;
+}
+
+static VOID q_collect_info_init_context(
+    _Out_ QUOODLE_COLLECT_INFO_CONTEXT* ctx,
+    _In_opt_ const QUOODLE_IOCTL_REQUEST* req) {
+  const WCHAR* os_key = L"\\Registry\\Machine\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion";
+  const WCHAR* hostname_key = L"\\Registry\\Machine\\SYSTEM\\CurrentControlSet\\Control\\ComputerName\\ComputerName";
+  const WCHAR* machine_guid_key = L"\\Registry\\Machine\\SOFTWARE\\Microsoft\\Cryptography";
+
+  if (!ctx) {
     return;
   }
 
-  payload_len = q_opcode_strnlen_a(payload, sizeof(payload));
-  if (payload_len >= sizeof(resp->result_json)) {
-    resp->status = 1;
-    resp->error_code = QERR_COLLECT_INFO_PAYLOAD_TOO_LARGE;
-    RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), "collect_info_payload_too_large");
-    RtlStringCchCopyA(resp->result_json, sizeof(resp->result_json), "{\"status\":\"error\",\"reason\":\"collect_info_payload_too_large\"}");
-    resp->result_length = (uint32_t)q_opcode_strnlen_a(resp->result_json, sizeof(resp->result_json));
+  RtlZeroMemory(ctx, sizeof(*ctx));
+  ctx->collection_ts_unix = q_opcode_unix_timestamp_seconds();
+
+  ctx->has_hostname = QueryRegistryStringValue(hostname_key, L"ComputerName", ctx->hostname, sizeof(ctx->hostname));
+  ctx->has_computer_name = QueryRegistryStringValue(hostname_key, L"ComputerName", ctx->computer_name, sizeof(ctx->computer_name));
+  ctx->has_machine_guid = QueryRegistryStringValue(machine_guid_key, L"MachineGuid", ctx->machine_guid, sizeof(ctx->machine_guid));
+  ctx->has_os_build = QueryRegistryStringValue(os_key, L"CurrentBuildNumber", ctx->os_build, sizeof(ctx->os_build));
+  ctx->has_os_version = QueryRegistryStringValue(os_key, L"DisplayVersion", ctx->os_version, sizeof(ctx->os_version));
+  if (!ctx->has_os_version) {
+    ctx->has_os_version = QueryRegistryStringValue(os_key, L"ReleaseId", ctx->os_version, sizeof(ctx->os_version));
+  }
+  ctx->has_os_product_name = QueryRegistryStringValue(os_key, L"ProductName", ctx->os_product_name, sizeof(ctx->os_product_name));
+  ctx->has_os_ubr = QueryRegistryDwordValue(os_key, L"UBR", &ctx->os_ubr);
+
+  if (NT_SUCCESS(RtlStringCchCopyA(ctx->arch, sizeof(ctx->arch), KernelArchString()))) {
+    ctx->has_arch = ctx->arch[0] != '\0';
+  }
+  ctx->has_cpu_model = QueryCpuModel(ctx->cpu_model, sizeof(ctx->cpu_model));
+  ctx->cpu_logical_cores = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+  ctx->has_cpu_logical_cores = TRUE;
+  ctx->has_ram_total_mb = QueryTotalRamMb(&ctx->ram_total_mb);
+  ctx->has_ram_available_mb = FALSE;
+  ctx->ram_available_mb = 0;
+
+  ctx->uptime_sec = KeQueryInterruptTime() / 10000000ULL;
+  ctx->has_uptime_sec = TRUE;
+  ctx->ioctl_contract_version = QUOODLE_IOCTL_VERSION;
+  ctx->has_ioctl_contract_version = TRUE;
+
+  if (req && req->policy_hash[0] != '\0') {
+    (void)RtlStringCchCopyA(ctx->policy_hash, sizeof(ctx->policy_hash), req->policy_hash);
+  } else {
+    ctx->policy_hash[0] = '\0';
+  }
+}
+
+static VOID q_copy_string_bounded(_Out_writes_(dest_len) CHAR* dest, _In_ size_t dest_len, _In_z_ const CHAR* src) {
+  if (!dest || dest_len < 1) {
+    return;
+  }
+  if (!src) {
+    dest[0] = '\0';
+    return;
+  }
+  (void)RtlStringCchCopyA(dest, dest_len, src);
+  dest[dest_len - 1] = '\0';
+}
+
+static uint32_t q_collect_sections_mask(_In_ const QUOODLE_COLLECT_INFO_SELECTION* sel) {
+  uint32_t mask = 0;
+  if (sel->identity) mask |= QUOODLE_COLLECT_SECTION_IDENTITY;
+  if (sel->os) mask |= QUOODLE_COLLECT_SECTION_OS;
+  if (sel->hardware) mask |= QUOODLE_COLLECT_SECTION_HARDWARE;
+  if (sel->runtime) mask |= QUOODLE_COLLECT_SECTION_RUNTIME;
+  if (sel->storage) mask |= QUOODLE_COLLECT_SECTION_STORAGE;
+  if (sel->network) mask |= QUOODLE_COLLECT_SECTION_NETWORK;
+  if (sel->security) mask |= QUOODLE_COLLECT_SECTION_SECURITY;
+  return mask;
+}
+
+static VOID q_collect_fill_binary_header(
+    _In_ const QUOODLE_COLLECT_INFO_CONTEXT* ctx,
+    _In_ const QUOODLE_COLLECT_INFO_SELECTION* sel,
+    _Out_ QUOODLE_COLLECT_INFO_BINARY_V1* payload) {
+  RtlZeroMemory(payload, sizeof(*payload));
+  payload->magic = QUOODLE_COLLECT_INFO_BINARY_MAGIC;
+  payload->version = QUOODLE_COLLECT_INFO_BINARY_VERSION;
+  payload->reserved = 0;
+  payload->sections_mask = q_collect_sections_mask(sel);
+  payload->fields_present_mask = 0;
+  payload->flags = 0;
+  payload->collection_ts_unix = ctx->collection_ts_unix;
+}
+
+static VOID FillIdentitySectionBinary(
+    _In_ const QUOODLE_COLLECT_INFO_CONTEXT* ctx,
+    _In_ BOOLEAN include_section,
+    _Inout_ QUOODLE_COLLECT_INFO_BINARY_V1* payload) {
+  if (include_section && ctx->has_hostname) {
+    q_copy_string_bounded(payload->hostname, sizeof(payload->hostname), ctx->hostname);
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_HOSTNAME;
+  }
+  if (include_section && ctx->has_computer_name) {
+    q_copy_string_bounded(payload->computer_name, sizeof(payload->computer_name), ctx->computer_name);
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_COMPUTER_NAME;
+  }
+  if (include_section && ctx->has_machine_guid) {
+    q_copy_string_bounded(payload->machine_guid, sizeof(payload->machine_guid), ctx->machine_guid);
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_MACHINE_GUID;
+  }
+}
+
+static VOID FillOsSectionBinary(
+    _In_ const QUOODLE_COLLECT_INFO_CONTEXT* ctx,
+    _In_ BOOLEAN include_section,
+    _Inout_ QUOODLE_COLLECT_INFO_BINARY_V1* payload) {
+  if (include_section && ctx->has_os_product_name) {
+    q_copy_string_bounded(payload->os_product_name, sizeof(payload->os_product_name), ctx->os_product_name);
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_OS_PRODUCT_NAME;
+  }
+  if (include_section && ctx->has_os_version) {
+    q_copy_string_bounded(payload->os_version, sizeof(payload->os_version), ctx->os_version);
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_OS_VERSION;
+  }
+  if (include_section && ctx->has_os_build) {
+    q_copy_string_bounded(payload->os_build, sizeof(payload->os_build), ctx->os_build);
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_OS_BUILD;
+  }
+  if (include_section && ctx->has_os_ubr) {
+    payload->os_ubr = ctx->os_ubr;
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_OS_UBR;
+  }
+  if (include_section && ctx->has_arch) {
+    q_copy_string_bounded(payload->arch, sizeof(payload->arch), ctx->arch);
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_ARCH;
+  }
+}
+
+static VOID FillHardwareSectionBinary(
+    _In_ const QUOODLE_COLLECT_INFO_CONTEXT* ctx,
+    _In_ BOOLEAN include_section,
+    _Inout_ QUOODLE_COLLECT_INFO_BINARY_V1* payload) {
+  if (include_section && ctx->has_cpu_model) {
+    q_copy_string_bounded(payload->cpu_model, sizeof(payload->cpu_model), ctx->cpu_model);
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_CPU_MODEL;
+  }
+  if (include_section && ctx->has_cpu_logical_cores) {
+    payload->cpu_logical_cores = ctx->cpu_logical_cores;
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_CPU_LOGICAL_CORES;
+  }
+  if (include_section && ctx->has_ram_total_mb) {
+    payload->ram_total_mb = ctx->ram_total_mb;
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_RAM_TOTAL_MB;
+  }
+  if (include_section && ctx->has_ram_available_mb) {
+    payload->ram_available_mb = ctx->ram_available_mb;
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_RAM_AVAILABLE_MB;
+  } else if (include_section) {
+    payload->flags |= QUOODLE_COLLECT_FLAG_RAM_AVAILABLE_NOT_COLLECTABLE;
+  }
+}
+
+static VOID FillRuntimeSectionBinary(
+    _In_ const QUOODLE_COLLECT_INFO_CONTEXT* ctx,
+    _In_ BOOLEAN include_section,
+    _Inout_ QUOODLE_COLLECT_INFO_BINARY_V1* payload) {
+  if (include_section && ctx->policy_hash[0] != '\0') {
+    q_copy_string_bounded(payload->policy_hash, sizeof(payload->policy_hash), ctx->policy_hash);
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_POLICY_HASH;
+  }
+  if (include_section && ctx->has_uptime_sec) {
+    payload->uptime_sec = ctx->uptime_sec;
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_UPTIME_SEC;
+  }
+  if (include_section && ctx->has_ioctl_contract_version) {
+    payload->ioctl_contract_version = ctx->ioctl_contract_version;
+    payload->fields_present_mask |= QUOODLE_COLLECT_PRESENT_IOCTL_CONTRACT_VERSION;
+  }
+}
+
+static VOID FillStorageSectionBinary(
+    _In_ const QUOODLE_COLLECT_INFO_CONTEXT* ctx,
+    _In_ BOOLEAN include_section,
+    _Inout_ QUOODLE_COLLECT_INFO_BINARY_V1* payload) {
+  UNREFERENCED_PARAMETER(ctx);
+  if (include_section) {
+    payload->flags |= QUOODLE_COLLECT_FLAG_STORAGE_NOT_IMPLEMENTED;
+  }
+}
+
+static VOID FillNetworkSectionBinary(
+    _In_ const QUOODLE_COLLECT_INFO_CONTEXT* ctx,
+    _In_ BOOLEAN include_section,
+    _Inout_ QUOODLE_COLLECT_INFO_BINARY_V1* payload) {
+  UNREFERENCED_PARAMETER(ctx);
+  if (include_section) {
+    payload->flags |= QUOODLE_COLLECT_FLAG_NETWORK_NOT_IMPLEMENTED;
+  }
+}
+
+static VOID FillSecuritySectionBinary(
+    _In_ const QUOODLE_COLLECT_INFO_CONTEXT* ctx,
+    _In_ BOOLEAN include_section,
+    _Inout_ QUOODLE_COLLECT_INFO_BINARY_V1* payload) {
+  UNREFERENCED_PARAMETER(ctx);
+  if (include_section) {
+    payload->flags |= QUOODLE_COLLECT_FLAG_SECURITY_NOT_IMPLEMENTED;
+  }
+}
+
+static VOID q_collect_fill_binary_payload(
+    _In_ const QUOODLE_COLLECT_INFO_CONTEXT* ctx,
+    _In_ const QUOODLE_COLLECT_INFO_SELECTION* sel,
+    _Out_ QUOODLE_COLLECT_INFO_BINARY_V1* payload) {
+  q_collect_fill_binary_header(ctx, sel, payload);
+  FillIdentitySectionBinary(ctx, sel->identity, payload);
+  FillOsSectionBinary(ctx, sel->os, payload);
+  FillHardwareSectionBinary(ctx, sel->hardware, payload);
+  FillRuntimeSectionBinary(ctx, sel->runtime, payload);
+  FillStorageSectionBinary(ctx, sel->storage, payload);
+  FillNetworkSectionBinary(ctx, sel->network, payload);
+  FillSecuritySectionBinary(ctx, sel->security, payload);
+}
+
+VOID QuoodleOpcodeHandleCollectSystemInfo(_Out_ QUOODLE_IOCTL_RESPONSE* resp, _In_opt_ const QUOODLE_IOCTL_REQUEST* req) {
+  QUOODLE_COLLECT_INFO_SELECTION sel;
+  QUOODLE_COLLECT_INFO_CONTEXT ctx;
+  QUOODLE_COLLECT_INFO_BINARY_V1 payload;
+
+  RtlZeroMemory(&sel, sizeof(sel));
+  RtlZeroMemory(&ctx, sizeof(ctx));
+  RtlZeroMemory(&payload, sizeof(payload));
+
+  if (!q_collect_info_parse_selection(req, &sel)) {
+    q_collect_info_fail(resp, QERR_BAD_PAYLOAD, "bad_payload");
     return;
   }
 
+  if (sizeof(payload) > sizeof(resp->result_json)) {
+    q_collect_info_fail(resp, QERR_COLLECT_INFO_PAYLOAD_TOO_LARGE, "collect_info_payload_too_large");
+    return;
+  }
+
+  q_collect_info_init_context(&ctx, req);
+  q_collect_fill_binary_payload(&ctx, &sel, &payload);
+
+  RtlZeroMemory(resp->result_json, sizeof(resp->result_json));
+  RtlCopyMemory(resp->result_json, &payload, sizeof(payload));
+  resp->result_length = (uint32_t)sizeof(payload);
   resp->status = 0;
   resp->error_code = 0;
-  RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), "");
+  (void)RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), "");
   q_opcode_build_exec_id(resp->kernel_exec_id, sizeof(resp->kernel_exec_id));
-  RtlCopyMemory(resp->result_json, payload, payload_len);
-  resp->result_json[payload_len] = '\0';
-  resp->result_length = (uint32_t)payload_len;
 }

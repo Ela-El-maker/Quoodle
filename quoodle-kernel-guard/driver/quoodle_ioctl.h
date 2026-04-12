@@ -69,6 +69,8 @@ typedef unsigned long long uint64_t;
 #define QERR_COLLECT_INFO_FAILED 5101
 #define QERR_COLLECT_INFO_PAYLOAD_TOO_LARGE 5102
 
+#include "quoodle_collect_info_contract.h"
+
 typedef enum QUOODLE_KERNEL_EVENT_TYPE {
   QKEVENT_TYPE_OPCODE = 1,
   QKEVENT_TYPE_RUNTIME = 2,

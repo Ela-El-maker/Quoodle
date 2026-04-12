@@ -1,7 +1,6 @@
+#include "kmdf_opcode_common.h"
 #include <ntstrsafe.h>
 #include <intrin.h>
-
-#include "kmdf_opcode_common.h"
 
 static LONG g_exec_counter = 0;
 

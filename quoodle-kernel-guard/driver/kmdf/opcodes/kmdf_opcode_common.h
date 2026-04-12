@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ntstatus.h>
 #include <ntddk.h>
 
 #include "../../quoodle_ioctl.h"

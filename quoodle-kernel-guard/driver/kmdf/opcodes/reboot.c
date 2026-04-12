@@ -1,7 +1,6 @@
-#include <ntstrsafe.h>
-
-#include "kmdf_opcode_handlers.h"
 #include "kmdf_opcode_common.h"
+#include "kmdf_opcode_handlers.h"
+#include <ntstrsafe.h>
 
 VOID QuoodleOpcodeHandleReboot(_Out_ QUOODLE_IOCTL_RESPONSE* resp) {
   NTSTATUS status = NtShutdownSystem(QuoodleShutdownReboot);
@@ -18,3 +17,4 @@ VOID QuoodleOpcodeHandleReboot(_Out_ QUOODLE_IOCTL_RESPONSE* resp) {
     RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), "reboot_failed");
   }
 }
+

@@ -1,7 +1,6 @@
-#include <ntstrsafe.h>
-
-#include "kmdf_opcode_handlers.h"
 #include "kmdf_opcode_common.h"
+#include "kmdf_opcode_handlers.h"
+#include <ntstrsafe.h>
 
 VOID QuoodleOpcodeHandlePing(_Out_ QUOODLE_IOCTL_RESPONSE* resp) {
   resp->status = 0;

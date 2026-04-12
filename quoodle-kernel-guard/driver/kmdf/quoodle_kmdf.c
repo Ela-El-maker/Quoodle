@@ -176,7 +176,7 @@ static VOID QuoodleEvtIoDeviceControl(_In_ WDFQUEUE Queue,
         should_emit_event = TRUE;
         break;
       case QOP_EXEC_COLLECT_SYSTEM_INFO:
-        QuoodleOpcodeHandleCollectSystemInfo(resp, req_copy.policy_hash);
+        QuoodleOpcodeHandleCollectSystemInfo(resp, &req_copy);
         should_emit_event = TRUE;
         break;
       default:
