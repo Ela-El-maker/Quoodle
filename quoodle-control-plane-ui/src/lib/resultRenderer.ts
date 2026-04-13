@@ -5,7 +5,7 @@ import {
   type NormalizedCommandResult,
 } from '@/lib/commandResults';
 
-export type ResultWidgetType = 'stats' | 'kv' | 'table' | 'log' | 'diagnostics' | 'artifact';
+export type ResultWidgetType = 'stats' | 'kv' | 'table' | 'log' | 'diagnostics' | 'artifact' | 'filesystem';
 
 export interface ResultShellMeta {
   commandId: string;
@@ -53,6 +53,34 @@ export interface ResultArtifactDefinition {
   contentType?: string | null;
 }
 
+export interface ResultFilesystemEntry {
+  name: string;
+  path: string;
+  type: 'directory' | 'file' | 'other';
+  parentPath: string | null;
+  size: number | null;
+  extension: string | null;
+  modifiedAt: string | null;
+  createdAt: string | null;
+  isHidden: boolean;
+  isSystem: boolean;
+  isSymlink: boolean;
+  targetPath: string | null;
+  downloadable: boolean;
+  downloadMethod: string | null;
+}
+
+export interface ResultFilesystemDefinition {
+  rootPath: string;
+  entries: ResultFilesystemEntry[];
+  recursive: boolean;
+  maxDepth: number | null;
+  partial: boolean;
+  nextCursor: string | null;
+  canDownload: boolean;
+  downloadMethod: string | null;
+}
+
 export interface ResultSectionDefinition {
   id: string;
   title: string;
@@ -64,6 +92,7 @@ export interface ResultSectionDefinition {
   logText?: string;
   diagnostics?: ResultDiagnosticsItem[];
   artifact?: ResultArtifactDefinition;
+  filesystem?: ResultFilesystemDefinition;
   collapsedByDefault?: boolean;
   emptySummary?: string | null;
 }
@@ -105,6 +134,8 @@ const methodTitleMap: Record<string, string> = {
   list_mounts: 'Mount Inventory',
   network_info: 'Network Inventory',
   get_active_window: 'Active Window',
+  list_files: 'Filesystem Browser',
+  download_file: 'File Download',
   screenshot: 'Screenshot Capture',
 };
 
@@ -436,6 +467,122 @@ function normalizeActiveWindowPayload(data: unknown): Record<string, unknown> {
   return isObject(data) ? data : {};
 }
 
+function normalizeFileEntriesArray(data: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(data)) {
+    return data.filter((item): item is Record<string, unknown> => isObject(item));
+  }
+  if (isObject(data) && Array.isArray(data.entries)) {
+    return data.entries.filter((item): item is Record<string, unknown> => isObject(item));
+  }
+  return [];
+}
+
+function normalizePathSeparator(path: string): string {
+  return path.replace(/[\\/]+/g, '/');
+}
+
+function toCanonicalPath(path: string): string {
+  const trimmed = path.trim();
+  if (trimmed === '') return '';
+  const canonical = normalizePathSeparator(trimmed).replace(/\/+$/, '');
+  return canonical === '' ? '/' : canonical;
+}
+
+function parentPathOf(path: string): string | null {
+  const canonical = toCanonicalPath(path);
+  if (!canonical || canonical === '/') return null;
+  const parts = canonical.split('/').filter(Boolean);
+  if (parts.length <= 1) return null;
+  return parts.slice(0, -1).join('/');
+}
+
+function parseBoolean(value: unknown): boolean {
+  if (value === true) return true;
+  if (value === false || value == null) return false;
+  if (typeof value === 'number') return value === 1;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === 'true' || normalized === '1' || normalized === 'yes';
+  }
+  return false;
+}
+
+function parseOptionalNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function parseOptionalString(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed;
+}
+
+function normalizeFilesystemEntries(rows: Array<Record<string, unknown>>): ResultFilesystemEntry[] {
+  const mapped = rows.map((row) => {
+    const rawPath = parseOptionalString(row.path) ?? '';
+    const canonicalPath = toCanonicalPath(rawPath);
+    const fallbackName =
+      canonicalPath === ''
+        ? 'unknown'
+        : canonicalPath.split('/').filter(Boolean).slice(-1)[0] ?? canonicalPath;
+    const rawName = parseOptionalString(row.name) ?? fallbackName;
+    const rawType = (parseOptionalString(row.type) ?? parseOptionalString(row.entry_type) ?? 'other').toLowerCase();
+    const isDirectoryHint =
+      parseBoolean(row.is_directory) ||
+      parseBoolean(row.is_dir) ||
+      parseBoolean(row.directory) ||
+      parseBoolean(row.is_folder);
+    const isFileHint =
+      parseBoolean(row.is_file) ||
+      parseBoolean(row.file);
+    const attrHints = Array.isArray(row.attributes)
+      ? row.attributes.map((value) => String(value).toLowerCase())
+      : [];
+    const hasDirectoryAttribute = attrHints.some((value) => value.includes('directory'));
+    const hasFileAttribute = attrHints.some((value) => value.includes('archive') || value.includes('file'));
+    const type: ResultFilesystemEntry['type'] =
+      rawType === 'directory' || rawType === 'dir' || rawType === 'folder' || isDirectoryHint || hasDirectoryAttribute
+        ? 'directory'
+        : rawType === 'file' || rawType === 'regular' || rawType === 'regular_file' || isFileHint || hasFileAttribute
+          ? 'file'
+          : 'other';
+    const extension = parseOptionalString(row.extension);
+    const normalizedExtension = extension ? extension.replace(/^\./, '').toLowerCase() : null;
+
+    return {
+      name: rawName,
+      path: canonicalPath,
+      type,
+      parentPath: parentPathOf(canonicalPath),
+      size: parseOptionalNumber(row.size),
+      extension: normalizedExtension,
+      modifiedAt: parseOptionalString(row.modified_at),
+      createdAt: parseOptionalString(row.created_at),
+      isHidden: parseBoolean(row.is_hidden),
+      isSystem: parseBoolean(row.is_system),
+      isSymlink: parseBoolean(row.is_symlink),
+      targetPath: parseOptionalString(row.target_path),
+      downloadable: parseBoolean(row.downloadable),
+      downloadMethod: parseOptionalString(row.download_method),
+    };
+  });
+
+  return mapped
+    .filter((entry) => entry.path !== '')
+    .sort((a, b) => {
+      if (a.type !== b.type) {
+        if (a.type === 'directory') return -1;
+        if (b.type === 'directory') return 1;
+      }
+      return a.path.localeCompare(b.path, undefined, { sensitivity: 'base' });
+    });
+}
+
 function buildProcessTable(rows: Array<Record<string, unknown>>): ResultTableDefinition {
   const preferred = ['pid', 'name', 'cpu', 'memory', 'memory_mb', 'user', 'path', 'start_time'];
   const discovered = new Set<string>();
@@ -704,6 +851,186 @@ function buildActiveWindow(row: NormalizedCommandResult): ResultViewModel {
   return model;
 }
 
+function buildListFiles(row: NormalizedCommandResult): ResultViewModel {
+  const model = buildBaseModel(row, 'list_files', methodTitleMap.list_files);
+  const data = extractStructuredData(row);
+  const payload = isObject(data) ? data : {};
+  const entriesRaw = normalizeFileEntriesArray(payload);
+  const entries = normalizeFilesystemEntries(entriesRaw);
+  const partial = payload.partial === true;
+  const rootPath = toCanonicalPath(parseOptionalString(payload.path) ?? '');
+  const recursive = payload.recursive === true;
+  const maxDepth = parseOptionalNumber(payload.max_depth);
+  const nextCursor = parseOptionalString(payload.next_cursor);
+  const downloadConfig = isObject(payload.download) ? payload.download : {};
+  const canDownload = downloadConfig.supported === true;
+  const downloadMethod = parseOptionalString(downloadConfig.method);
+
+  const directories = entries.filter((entry) => entry.type === 'directory').length;
+  const files = entries.filter((entry) => entry.type === 'file').length;
+  const hiddenCount = entries.filter((entry) => entry.isHidden).length;
+  const systemCount = entries.filter((entry) => entry.isSystem).length;
+  const downloadableCount = entries.filter((entry) => entry.downloadable).length;
+
+  model.hero = [
+    {
+      label: 'State',
+      value: toLabel(row.state),
+      tone: row.state === 'completed' ? 'success' : row.state === 'failed' ? 'danger' : 'info',
+    },
+    { label: 'Path', value: toDisplayValue(rootPath || payload.path || 'Unknown'), tone: 'info' },
+    { label: 'Folders', value: String(directories), tone: 'success' },
+    { label: 'Files', value: String(files), tone: 'info' },
+    { label: 'Downloadable', value: String(downloadableCount), tone: canDownload ? 'success' : 'warning' },
+    { label: 'Partial', value: partial ? 'Yes' : 'No', tone: partial ? 'warning' : 'default' },
+  ];
+
+  const metadata = objectEntries(
+    {
+      path: rootPath || payload.path,
+      recursive,
+      max_depth: maxDepth,
+      count: payload.count,
+      total_seen: payload.total_seen,
+      hidden_items: hiddenCount,
+      system_items: systemCount,
+      partial,
+      next_cursor: nextCursor,
+      download_supported: canDownload,
+      download_method: downloadMethod,
+    },
+    { hideNull: true },
+  );
+
+  model.diagnostics = buildDiagnosticsFromRow(row);
+  if (partial) {
+    model.diagnostics.push({
+      severity: 'warning',
+      reason: 'partial_result',
+      message: 'Result was truncated by the current limit. Narrow path or increase limit.',
+    });
+  }
+
+  model.sections = [
+    {
+      id: 'overview',
+      title: 'Overview',
+      widget: 'stats',
+      stats: model.hero,
+      description: partial
+        ? 'Partial snapshot. Refine path or lower depth/limit for full navigation.'
+        : 'Filesystem snapshot ready. Use Explorer tab to browse like a file explorer.',
+    },
+    {
+      id: 'explorer',
+      title: 'Explorer',
+      widget: 'filesystem',
+      filesystem: {
+        rootPath: rootPath || '/',
+        entries,
+        recursive,
+        maxDepth,
+        partial,
+        nextCursor,
+        canDownload,
+        downloadMethod,
+      },
+      emptySummary: entries.length === 0 ? 'No entries were returned for this path' : null,
+    },
+    {
+      id: 'metadata',
+      title: 'Browse Metadata',
+      widget: 'kv',
+      keyValues: metadata.keyValues,
+      emptySummary: metadata.keyValues.length === 0 ? 'No metadata returned' : null,
+    },
+    {
+      id: 'diagnostics',
+      title: 'Diagnostics',
+      widget: 'diagnostics',
+      diagnostics: model.diagnostics,
+      emptySummary: model.diagnostics.length === 0 ? 'No diagnostics reported' : null,
+    },
+  ];
+
+  return model;
+}
+
+function buildDownloadFile(row: NormalizedCommandResult): ResultViewModel {
+  const model = buildBaseModel(row, 'download_file', methodTitleMap.download_file);
+  const data = extractStructuredData(row);
+  const payload = isObject(data) ? data : {};
+  const artifactUrl =
+    (typeof row.artifactUrl === 'string' && row.artifactUrl.trim() !== '' ? row.artifactUrl : null) ??
+    (typeof row.result?.artifact_url === 'string' && row.result.artifact_url.trim() !== '' ? row.result.artifact_url : null);
+  const artifactChecksum =
+    (typeof row.artifactChecksum === 'string' && row.artifactChecksum.trim() !== '' ? row.artifactChecksum : null) ??
+    (typeof row.result?.artifact_checksum === 'string' && row.result.artifact_checksum.trim() !== ''
+      ? row.result.artifact_checksum
+      : null);
+  const contentType =
+    typeof payload.content_type === 'string' && payload.content_type.trim() !== ''
+      ? payload.content_type
+      : 'application/octet-stream';
+
+  model.hero = [
+    {
+      label: 'State',
+      value: toLabel(row.state),
+      tone: row.state === 'completed' ? 'success' : row.state === 'failed' ? 'danger' : 'info',
+    },
+    { label: 'Name', value: toDisplayValue(payload.name ?? payload.path ?? 'Unknown'), tone: 'info' },
+    { label: 'Size', value: toDisplayValue(payload.size_bytes ?? 'Unknown') },
+    { label: 'Artifact', value: artifactUrl ? 'Uploaded' : 'Unavailable', tone: artifactUrl ? 'success' : 'warning' },
+  ];
+
+  const details = objectEntries(payload, { hideNull: true });
+  model.diagnostics = buildDiagnosticsFromRow(row);
+  if (!artifactUrl) {
+    model.diagnostics.push({
+      severity: 'warning',
+      reason: 'artifact_missing',
+      message: 'Download artifact URL was not returned.',
+    });
+  }
+
+  model.sections = [
+    {
+      id: 'overview',
+      title: 'Overview',
+      widget: 'stats',
+      stats: model.hero,
+    },
+    {
+      id: 'artifact',
+      title: 'Artifact',
+      widget: 'artifact',
+      artifact: {
+        url: artifactUrl,
+        checksum: artifactChecksum,
+        contentType,
+      },
+      emptySummary: artifactUrl ? null : 'Artifact not available for this command result.',
+    },
+    {
+      id: 'details',
+      title: 'File Details',
+      widget: 'kv',
+      keyValues: details.keyValues,
+      emptySummary: details.keyValues.length === 0 ? 'No file details returned' : null,
+    },
+    {
+      id: 'diagnostics',
+      title: 'Diagnostics',
+      widget: 'diagnostics',
+      diagnostics: model.diagnostics,
+      emptySummary: model.diagnostics.length === 0 ? 'No diagnostics reported' : null,
+    },
+  ];
+
+  return model;
+}
+
 function buildScreenshot(row: NormalizedCommandResult): ResultViewModel {
   const model = buildBaseModel(row, 'screenshot', methodTitleMap.screenshot);
   const data = extractStructuredData(row);
@@ -935,6 +1262,16 @@ const renderDefinitions: Record<string, ResultRenderDefinition> = {
     method: 'get_active_window',
     title: methodTitleMap.get_active_window,
     build: buildActiveWindow,
+  },
+  list_files: {
+    method: 'list_files',
+    title: methodTitleMap.list_files,
+    build: buildListFiles,
+  },
+  download_file: {
+    method: 'download_file',
+    title: methodTitleMap.download_file,
+    build: buildDownloadFile,
   },
   screenshot: {
     method: 'screenshot',

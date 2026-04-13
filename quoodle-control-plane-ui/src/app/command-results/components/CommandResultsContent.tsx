@@ -59,6 +59,8 @@ const knownMethodLabels: Record<string, string> = {
   list_mounts: 'Mounts',
   network_info: 'Network Info',
   get_active_window: 'Active Window',
+  list_files: 'List Files',
+  download_file: 'Download File',
   system_info: 'System Info',
   collect_system_info: 'System Info',
   screenshot: 'Screenshot',

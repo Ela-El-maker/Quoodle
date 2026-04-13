@@ -254,6 +254,18 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
 
   const dispatchAndWait = useCallback(async (method: string, cmdLabel: string, params: Record<string, unknown> = {}, sensitive = false) => {
     const dispatchMethod = resolveCommandMethod(method);
+    const effectiveParams: Record<string, unknown> =
+      dispatchMethod === 'list_files' && Object.keys(params).length === 0
+        ? {
+            path: 'C:\\Users',
+            recursive: false,
+            max_depth: 1,
+            limit: 200,
+            include_hidden: false,
+            include_system: false,
+            follow_symlinks: false,
+          }
+        : params;
     if (currentDevice.status !== 'online') {
       toast.error(`${currentDevice.hostname} is ${currentDevice.status} - cannot dispatch commands`);
       return;
@@ -273,7 +285,7 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
           client_message_id: `drawer-${currentDevice.id}-${dispatchMethod}-${crypto.randomUUID()}`,
           device_id: currentDevice.id,
           method: dispatchMethod,
-          params,
+          params: effectiveParams,
           sensitive,
         }),
       });

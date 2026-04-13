@@ -9,6 +9,8 @@ import { formatLocalDateTime, formatLocalTime } from '@/lib/dateTime';
 import { resolveCommandMethod } from '@/lib/commandMethodResolver';
 import {
   mapCommandListRow,
+  mergeCommandDetail,
+  type CommandDetailApi,
   type NormalizedCommandResult,
 } from '@/lib/commandResults';
 import { parseKernelTelemetryEvent, telemetryMaskedFields, telemetryPercent, telemetryText } from '@/lib/telemetry';
@@ -77,6 +79,7 @@ interface DeviceDetailApi {
   resolved_connection_mode?: string | null;
   resolved_compliance_status?: string | null;
   resolved_policy_in_sync?: boolean | null;
+  kernel_guard?: boolean | null;
   telemetry_latest?: {
     cpu?: number | null;
     ram?: number | null;
@@ -475,6 +478,22 @@ function isTerminalState(state: CommandState): boolean {
   return ['completed', 'failed', 'expired', 'rejected'].includes(state);
 }
 
+function hasRenderableResult(row: NormalizedCommandResult): boolean {
+  if (row.result && Object.keys(row.result).length > 0) {
+    return true;
+  }
+
+  return Boolean(
+    row.resultStatus ||
+    row.resultNotes ||
+    row.artifactUrl ||
+    row.artifactChecksum ||
+    row.errorCode != null ||
+    row.errorMessage ||
+    row.reason,
+  );
+}
+
 function parseTelemetryBoolean(value: unknown): boolean | null {
   if (typeof value === 'boolean') return value;
   if (typeof value === 'string') {
@@ -621,7 +640,7 @@ export default function DeviceDetailPageContent() {
         lastSeen: formatDateTime(payload.last_seen),
         agentVersion: payload.agent_version?.trim() || '-',
         policySync: resolvedPolicySync ?? (typeof payload.policy_in_sync === 'boolean' ? payload.policy_in_sync : null),
-        kernelGuard: null,
+        kernelGuard: typeof payload.kernel_guard === 'boolean' ? payload.kernel_guard : null,
         ipAddress: '-',
         sessionId: null,
         cpu: detailTelemetry.cpu == null ? 'Unknown' : `${detailTelemetry.cpu}%`,
@@ -641,9 +660,27 @@ export default function DeviceDetailPageContent() {
     if (commandsRes.status === 'fulfilled' && commandsRes.value.ok) {
       const payload = (await commandsRes.value.json()) as CommandsApiResponse;
       const normalizedRows = (payload.commands ?? []).map((cmd) => mapCommandListRow(cmd));
-      setRecentResults(normalizedRows);
+      const hydratedRows = [...normalizedRows];
+      const latest = hydratedRows[0];
+
+      if (latest && isTerminalState(latest.state) && !hasRenderableResult(latest)) {
+        try {
+          const detailResponse = await fetch(`/api/commands/${encodeURIComponent(latest.commandId)}`, {
+            credentials: 'include',
+            cache: 'no-store',
+          });
+          if (detailResponse.ok) {
+            const detailPayload = (await detailResponse.json()) as CommandDetailApi;
+            hydratedRows[0] = mergeCommandDetail(latest, detailPayload);
+          }
+        } catch (detailError) {
+          console.warn('device-detail latest command hydration failed', detailError);
+        }
+      }
+
+      setRecentResults(hydratedRows);
       setCommandHistory(
-        normalizedRows.map((cmd) => ({
+        hydratedRows.map((cmd) => ({
           id: cmd.commandId,
           method: cmd.method,
           params: cmd.params,
@@ -993,6 +1030,18 @@ export default function DeviceDetailPageContent() {
     sensitive = false,
   ) => {
     const dispatchMethod = resolveCommandMethod(method);
+    const effectiveParams: Record<string, unknown> =
+      dispatchMethod === 'list_files' && Object.keys(params).length === 0
+        ? {
+            path: 'C:\\Users',
+            recursive: false,
+            max_depth: 1,
+            limit: 200,
+            include_hidden: false,
+            include_system: false,
+            follow_symlinks: false,
+          }
+        : params;
     const blockReason = getCommandBlockReason(method);
     if (blockReason) {
       toast.error(`${label} blocked: ${reasonToText(blockReason)}`);
@@ -1010,7 +1059,7 @@ export default function DeviceDetailPageContent() {
           client_message_id: crypto.randomUUID(),
           device_id: device.id,
           method: dispatchMethod,
-          params,
+          params: effectiveParams,
           sensitive,
         }),
       });
@@ -1052,6 +1101,11 @@ export default function DeviceDetailPageContent() {
     if (['executing', 'ack_received'].includes(s)) return <Loader2 size={12} className="text-blue-400 flex-shrink-0 animate-spin" />;
     return <Clock size={12} className="text-amber-400 flex-shrink-0" />;
   };
+
+  const featuredResult = useMemo(
+    () => recentResults.find((row) => hasRenderableResult(row)) ?? recentResults[0] ?? null,
+    [recentResults],
+  );
 
   const activeCommandBlockReason = activeCommand ? getCommandBlockReason(activeCommand.id) : null;
 
@@ -1164,13 +1218,31 @@ export default function DeviceDetailPageContent() {
                   </div>
                 </div>
                 {[
-                  { label: 'Compliance', value: device.compliance.replace('_', ' '), ok: device.compliance === 'compliant' },
-                  { label: 'Policy Sync', value: device.policySync ? 'Synchronized' : 'Hash mismatch', ok: device.policySync },
-                  { label: 'Kernel Guard', value: device.kernelGuard ? 'KMDF driver active' : 'Driver not detected', ok: device.kernelGuard },
+                  {
+                    label: 'Compliance',
+                    value: device.compliance.replace('_', ' '),
+                    state: device.compliance === 'compliant' ? 'ok' : 'warn',
+                  },
+                  {
+                    label: 'Policy Sync',
+                    value: device.policySync == null ? 'Unknown' : device.policySync ? 'Synchronized' : 'Hash mismatch',
+                    state: device.policySync == null ? 'info' : device.policySync ? 'ok' : 'warn',
+                  },
+                  {
+                    label: 'Kernel Guard',
+                    value: device.kernelGuard == null ? 'Unknown' : device.kernelGuard ? 'KMDF driver active' : 'Driver not detected',
+                    state: device.kernelGuard == null ? 'info' : device.kernelGuard ? 'ok' : 'warn',
+                  },
                 ].map(item => (
                   <div key={item.label} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
                     <p className="text-xs text-muted-foreground">{item.label}</p>
-                    <span className={`text-xs font-medium ${item.ok ? 'text-green-400' : 'text-amber-400'}`}>{item.ok ? 'OK' : 'WARN'} {item.value}</span>
+                    <span
+                      className={`text-xs font-medium ${
+                        item.state === 'ok' ? 'text-green-400' : item.state === 'warn' ? 'text-amber-400' : 'text-blue-400'
+                      }`}
+                    >
+                      {item.state === 'ok' ? 'OK' : item.state === 'warn' ? 'WARN' : 'INFO'} {item.value}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -1433,9 +1505,9 @@ export default function DeviceDetailPageContent() {
             </div>
           ) : null}
 
-          {recentResults.length > 0 ? (
+          {featuredResult ? (
             <div className="bg-card border border-border rounded-lg p-4">
-              <CommandResultPresentation key={`device-result-${recentResults[0].commandId}`} row={recentResults[0]} compact />
+              <CommandResultPresentation key={`device-result-${featuredResult.commandId}`} row={featuredResult} compact />
             </div>
           ) : (
             <div className="bg-card border border-border rounded-lg p-8 text-center">

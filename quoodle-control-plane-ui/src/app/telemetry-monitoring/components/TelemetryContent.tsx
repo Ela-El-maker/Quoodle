@@ -99,6 +99,7 @@ export default function TelemetryContent() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activityError, setActivityError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [kernelCategoryFilter, setKernelCategoryFilter] = useState<'all' | ParsedKernelTelemetryEvent['category']>('all');
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -119,6 +120,7 @@ export default function TelemetryContent() {
       if (mode === 'initial') setLoading(true);
       if (mode === 'refresh') setRefreshing(true);
       if (mode !== 'silent') setError(null);
+      if (mode !== 'silent') setActivityError(null);
 
       try {
         const nextDevices = await loadDevices();
@@ -133,13 +135,14 @@ export default function TelemetryContent() {
           setLatest(null);
           setHistory([]);
           setActivity([]);
+          setActivityError(null);
           setLastUpdated(new Date().toISOString());
           return;
         }
 
         const selectedWindow = timeWindows.find((window) => window.key === timeWindow) ?? timeWindows[2];
         const from = toIsoHoursAgo(selectedWindow.hours);
-        const [latestRes, historyRes, activityRes] = await Promise.all([
+        const [latestResult, historyResult, activityResult] = await Promise.allSettled([
           fetch(`/api/telemetry/devices/${encodeURIComponent(effectiveDevice)}/latest`, { credentials: 'include', cache: 'no-store' }),
           fetch(
             `/api/telemetry/devices/${encodeURIComponent(effectiveDevice)}/history?from=${encodeURIComponent(from)}&to=${encodeURIComponent(new Date().toISOString())}&bucket=raw`,
@@ -148,21 +151,35 @@ export default function TelemetryContent() {
           fetch(`/api/telemetry/activity?device_id=${encodeURIComponent(effectiveDevice)}&limit=100`, { credentials: 'include', cache: 'no-store' }),
         ]);
 
-        if (!latestRes.ok || !historyRes.ok || !activityRes.ok) {
+        if (latestResult.status !== 'fulfilled' || historyResult.status !== 'fulfilled') {
+          throw new Error('Failed to load telemetry');
+        }
+        const latestRes = latestResult.value;
+        const historyRes = historyResult.value;
+
+        if (!latestRes.ok || !historyRes.ok) {
           throw new Error('Failed to load telemetry');
         }
 
         const latestPayload = (await latestRes.json()) as TelemetryLatestResponse;
         const historyPayload = (await historyRes.json()) as TelemetryHistoryResponse;
-        const activityPayload = (await activityRes.json()) as TelemetryActivityResponse;
 
         setLatest(latestPayload);
         setHistory(historyPayload.points ?? []);
-        setActivity(activityPayload.events ?? []);
+
+        if (activityResult.status === 'fulfilled' && activityResult.value.ok) {
+          const activityPayload = (await activityResult.value.json()) as TelemetryActivityResponse;
+          setActivity(activityPayload.events ?? []);
+          setActivityError(null);
+        } else {
+          setActivity([]);
+          setActivityError('Activity feed is temporarily unavailable.');
+        }
+
         setLastUpdated(new Date().toISOString());
       } catch (fetchError) {
         console.error('Telemetry load failed', fetchError);
-        setError('Failed to load data');
+        setError('Failed to load telemetry snapshot.');
       } finally {
         if (mode === 'initial') setLoading(false);
         if (mode === 'refresh') setRefreshing(false);
@@ -530,7 +547,8 @@ export default function TelemetryContent() {
         ))}
       </div>
 
-      {error ? <p className="text-xs text-red-400">Failed to load data</p> : null}
+      {error ? <p className="text-xs text-red-400">{error}</p> : null}
+      {!error && activityError ? <p className="text-xs text-amber-400">{activityError}</p> : null}
       {loading ? <p className="text-xs text-muted-foreground">Loading telemetry data...</p> : null}
       {!loading && !error && history.length === 0 ? <p className="text-xs text-muted-foreground">No data available</p> : null}
 
@@ -658,7 +676,7 @@ export default function TelemetryContent() {
             ) : (
               <tr>
                 <td colSpan={9} className="px-3 py-3 text-muted-foreground">
-                  {loading ? 'Loading telemetry data...' : error ? 'Failed to load data' : 'No data available'}
+                  {loading ? 'Loading telemetry data...' : error ? error : activityError ?? 'No data available'}
                 </td>
               </tr>
             )}
