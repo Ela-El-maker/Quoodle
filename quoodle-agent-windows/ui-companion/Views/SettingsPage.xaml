@@ -1,4 +1,4 @@
-﻿<Page
+<Page
     x:Class="Quoodle.Agent.UiCompanion.Views.SettingsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -8,100 +8,138 @@
     Background="{ThemeResource AppBackgroundBrush}">
 
     <ScrollViewer>
-        <Grid Padding="28" MaxWidth="1220">
-            <StackPanel Spacing="18">
-                <StackPanel Spacing="6">
+        <Grid Padding="16,8,16,16" MaxWidth="1320">
+            <StackPanel Spacing="14">
+                <StackPanel Spacing="4">
                     <TextBlock Text="Settings &amp; Configuration" Style="{StaticResource PageTitleTextStyle}" />
                     <TextBlock Text="Agent identity, transport, security, telemetry policy, and notifications." Style="{StaticResource PageSubtitleTextStyle}" />
                 </StackPanel>
 
-                <Grid ColumnSpacing="16">
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="SECTIONS" Style="{StaticResource NavSectionTextStyle}" Margin="0" />
+                        <TextBlock Text="Device Identity" FontSize="19" />
+                        <TextBlock Text="Connection &amp; Transport" FontSize="19" />
+                        <TextBlock Text="Security" FontSize="19" />
+                        <TextBlock Text="Telemetry Policy" FontSize="19" />
+                        <TextBlock Text="Notifications" FontSize="19" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource CardBorderStyle}" Padding="0">
+                    <StackPanel>
+                        <Grid Padding="16,14" ColumnSpacing="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Device Identity" Style="{StaticResource SectionTitleTextStyle}" />
+                                <TextBlock Text="Read-only enrollment data. To re-enroll, contact your administrator." Style="{StaticResource PageSubtitleTextStyle}" />
+                                <TextBlock x:Name="IdentityText" FontWeight="SemiBold" />
+                            </StackPanel>
+
+                            <Border
+                                Grid.Column="1"
+                                Background="{ThemeResource ChipSuccessBackgroundBrush}"
+                                CornerRadius="14"
+                                Padding="12,6"
+                                VerticalAlignment="Top">
+                                <TextBlock Text="Enrolled" Foreground="{ThemeResource ChipSuccessForegroundBrush}" FontWeight="SemiBold" />
+                            </Border>
+                        </Grid>
+
+                        <Border Height="1" Background="{ThemeResource BorderBrush}" />
+
+                        <Grid Padding="16" ColumnSpacing="16" RowSpacing="14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Grid.Row="0" Grid.Column="0" Spacing="6">
+                                <TextBlock Text="Device ID" FontWeight="SemiBold" />
+                                <TextBox Text="PC001" IsReadOnly="True" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="0" Grid.Column="1" Spacing="6">
+                                <TextBlock Text="Enrolled Account" FontWeight="SemiBold" />
+                                <TextBox Text="operator@corp.quoodle.io" IsReadOnly="True" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="1" Grid.Column="0" Spacing="6">
+                                <TextBlock Text="HWID Hash" FontWeight="SemiBold" />
+                                <TextBox Text="sha256:3a7f9c2b4e1d8f..." IsReadOnly="True" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="1" Spacing="6">
+                                <TextBlock Text="Attestation Hash" FontWeight="SemiBold" />
+                                <TextBox Text="sha256:7b2c5e8d1f4a0b..." IsReadOnly="True" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="2" Grid.Column="0" Spacing="6">
+                                <TextBlock Text="Agent Version" FontWeight="SemiBold" />
+                                <TextBox Text="v0.0.1" IsReadOnly="True" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="2" Grid.Column="1" Spacing="6">
+                                <TextBlock Text="OS Build" FontWeight="SemiBold" />
+                                <TextBox Text="Windows 10 Pro · 19045.4170" IsReadOnly="True" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Grid ColumnSpacing="12" RowSpacing="12">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="320" />
+                        <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
 
-                    <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}">
-                        <StackPanel Spacing="14">
-                            <TextBlock Text="Sections" Style="{StaticResource NavSectionTextStyle}" Margin="0" />
-                            <Border Background="{ThemeResource NavSelectedBackgroundBrush}" BorderBrush="{ThemeResource NavSelectedBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="12,10">
-                                <TextBlock Text="Device Identity" FontSize="17" Foreground="{ThemeResource SuccessBrush}" FontWeight="SemiBold" />
-                            </Border>
-                            <TextBlock Text="Connection &amp; Transport" FontSize="17" />
-                            <TextBlock Text="Security" FontSize="17" />
-                            <TextBlock Text="Telemetry Policy" FontSize="17" />
-                            <TextBlock Text="Notifications" FontSize="17" />
+                    <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource CardBorderStyle}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="Connection &amp; Transport" Style="{StaticResource SectionTitleTextStyle}" />
+                            <TextBlock Text="WSS endpoint connectivity and startup behavior." Style="{StaticResource PageSubtitleTextStyle}" />
+                            <ToggleSwitch x:Name="BackgroundSyncSwitch" Header="Background sync" Toggled="OnToggleChanged" />
+                            <ToggleSwitch x:Name="StartupSwitch" Header="Start with Windows" Toggled="OnToggleChanged" />
+                            <Button Content="Sync Now" HorizontalAlignment="Left" Click="OnSyncNow" Style="{StaticResource SecondaryButtonStyle}" />
                         </StackPanel>
                     </Border>
 
-                    <Border Grid.Column="1" Style="{StaticResource CardBorderStyle}">
-                        <StackPanel Spacing="18">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
+                    <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource CardBorderStyle}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="Security" Style="{StaticResource SectionTitleTextStyle}" />
+                            <TextBlock Text="Kernel bridge and attestation remain service-owned." Style="{StaticResource PageSubtitleTextStyle}" />
+                            <ToggleSwitch x:Name="DiagnosticsSwitch" Header="Collect diagnostics" Toggled="OnToggleChanged" />
+                            <TextBlock Text="Policy-gated controls will remain read-only on unsupported deployments." Style="{StaticResource MutedTextStyle}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
 
-                                <StackPanel Spacing="4">
-                                    <TextBlock Text="Device Identity" Style="{StaticResource SectionTitleTextStyle}" />
-                                    <TextBlock Text="Read-only enrollment data with live local preferences below." Style="{StaticResource PageSubtitleTextStyle}" />
-                                    <TextBlock x:Name="IdentityText" FontWeight="SemiBold" />
-                                </StackPanel>
+                    <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource CardBorderStyle}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="Telemetry Policy" Style="{StaticResource SectionTitleTextStyle}" />
+                            <TextBlock Text="Collection scopes and delivery cadence." Style="{StaticResource PageSubtitleTextStyle}" />
+                            <ToggleSwitch Header="CPU metrics" IsOn="True" IsEnabled="False" />
+                            <ToggleSwitch Header="RAM metrics" IsOn="True" IsEnabled="False" />
+                            <ToggleSwitch Header="Disk usage" IsOn="True" IsEnabled="False" />
+                            <ToggleSwitch Header="Network throughput" IsOn="True" IsEnabled="False" />
+                        </StackPanel>
+                    </Border>
 
-                                <Border
-                                    Grid.Column="1"
-                                    Background="{ThemeResource ChipSuccessBackgroundBrush}"
-                                    CornerRadius="14"
-                                    Padding="12,6"
-                                    VerticalAlignment="Top">
-                                    <TextBlock Text="Enrolled" Foreground="{ThemeResource ChipSuccessForegroundBrush}" FontWeight="SemiBold" />
-                                </Border>
-                            </Grid>
-
-                            <Grid ColumnSpacing="16" RowSpacing="14">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-
-                                <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource CardBorderStyle}" Padding="14">
-                                    <StackPanel Spacing="10">
-                                        <TextBlock Text="Connection &amp; Transport" Style="{StaticResource SectionTitleTextStyle}" />
-                                        <ToggleSwitch x:Name="BackgroundSyncSwitch" Header="Background sync" Toggled="OnToggleChanged" />
-                                        <ToggleSwitch x:Name="StartupSwitch" Header="Start with Windows" Toggled="OnToggleChanged" />
-                                    </StackPanel>
-                                </Border>
-
-                                <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource CardBorderStyle}" Padding="14">
-                                    <StackPanel Spacing="10">
-                                        <TextBlock Text="Security" Style="{StaticResource SectionTitleTextStyle}" />
-                                        <ToggleSwitch x:Name="DiagnosticsSwitch" Header="Collect diagnostics" Toggled="OnToggleChanged" />
-                                        <TextBlock Text="Kernel bridge and attestation hooks remain service-owned; UI is projection only." Style="{StaticResource MutedTextStyle}" TextWrapping="Wrap" />
-                                    </StackPanel>
-                                </Border>
-
-                                <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource CardBorderStyle}" Padding="14">
-                                    <StackPanel Spacing="10">
-                                        <TextBlock Text="Notifications" Style="{StaticResource SectionTitleTextStyle}" />
-                                        <ToggleSwitch x:Name="NotifyInfoSwitch" Header="Info notifications" Toggled="OnToggleChanged" />
-                                        <ToggleSwitch x:Name="NotifyCriticalSwitch" Header="Warning / critical notifications" Toggled="OnToggleChanged" />
-                                        <ToggleSwitch x:Name="TraySwitch" Header="Allow tray notifications" Toggled="OnToggleChanged" />
-                                    </StackPanel>
-                                </Border>
-
-                                <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource CardBorderStyle}" Padding="14">
-                                    <StackPanel Spacing="10">
-                                        <TextBlock Text="Telemetry Policy" Style="{StaticResource SectionTitleTextStyle}" />
-                                        <TextBlock Text="These values are stored in mock in-memory state today and become the seam for the service bridge later." Style="{StaticResource PageSubtitleTextStyle}" TextWrapping="Wrap" />
-                                        <Button Content="Sync Now" HorizontalAlignment="Left" Click="OnSyncNow" Style="{StaticResource AccentButtonStyle}" />
-                                    </StackPanel>
-                                </Border>
-                            </Grid>
+                    <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource CardBorderStyle}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="Notifications" Style="{StaticResource SectionTitleTextStyle}" />
+                            <TextBlock Text="Control alert verbosity for this workstation." Style="{StaticResource PageSubtitleTextStyle}" />
+                            <ToggleSwitch x:Name="NotifyInfoSwitch" Header="Info notifications" Toggled="OnToggleChanged" />
+                            <ToggleSwitch x:Name="NotifyCriticalSwitch" Header="Warning / critical notifications" Toggled="OnToggleChanged" />
+                            <ToggleSwitch x:Name="TraySwitch" Header="Allow tray notifications" Toggled="OnToggleChanged" />
                         </StackPanel>
                     </Border>
                 </Grid>

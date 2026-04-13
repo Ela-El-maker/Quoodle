@@ -1,85 +1,217 @@
-﻿using Quoodle.Agent.UiCompanion.Infrastructure;
+using Quoodle.Agent.UiCompanion.Infrastructure;
 using Quoodle.Agent.UiCompanion.Models;
 using Quoodle.Agent.UiCompanion.Services;
 
 namespace Quoodle.Agent.UiCompanion.ViewModels;
 
-public sealed class OnboardingViewModel : ObservableObject
+public sealed class OnboardingViewModel : ObservableObject, IDisposable
 {
     private readonly AgentStateStore _store;
-    private int _step;
-    private bool _isPaired;
-    private string _pairingToken = string.Empty;
-    private string _hintText = string.Empty;
+    private AgentStateSnapshot _snapshot;
 
     public OnboardingViewModel(AgentStateStore store)
     {
         _store = store;
+        _snapshot = store.Snapshot;
+
         _store.SnapshotChanged += HandleSnapshotChanged;
-        NextCommand = new RelayCommand(() => _store.AdvanceOnboardingStep(), () => !_isPaired && _step < 6);
-        BackCommand = new RelayCommand(() => _store.PreviousOnboardingStep(), () => !_isPaired && _step > 1);
-        CompleteCommand = new RelayCommand(() => _store.CompleteOnboarding(PairingToken), () => !_isPaired && _step >= 5);
 
-        Apply(_store.Snapshot);
+        CheckEnrollmentCommand = new RelayCommand(() => _store.CheckEnrollmentStatus(), () => !IsPaired && IsDetectIdle);
+        BeginPairingCommand = new RelayCommand(() => _store.BeginPairing(), () => !IsPaired && IsDetectNotEnrolled);
+        SelectTokenModeCommand = new RelayCommand(() => _store.SelectPairMode(OnboardingPairMode.Token), () => !IsPaired && IsPairStage);
+        SelectQrModeCommand = new RelayCommand(
+            () =>
+            {
+                _store.SelectPairMode(OnboardingPairMode.Qr);
+                _store.StartQrPairing();
+            },
+            () => !IsPaired && IsPairStage);
+        VerifyTokenCommand = new RelayCommand(() => _store.VerifyTokenPairing(), () => !IsPaired && CanVerifyToken);
+        RetryPairingCommand = new RelayCommand(() => _store.RetryPairing(), () => !IsPaired && IsTokenFailed);
+
+        RefreshCommandStates();
     }
 
-    public RelayCommand NextCommand { get; }
+    public RelayCommand CheckEnrollmentCommand { get; }
 
-    public RelayCommand BackCommand { get; }
+    public RelayCommand BeginPairingCommand { get; }
 
-    public RelayCommand CompleteCommand { get; }
+    public RelayCommand SelectTokenModeCommand { get; }
 
-    public int Step
+    public RelayCommand SelectQrModeCommand { get; }
+
+    public RelayCommand VerifyTokenCommand { get; }
+
+    public RelayCommand RetryPairingCommand { get; }
+
+    public bool IsPaired => _snapshot.IsPaired;
+
+    public OnboardingFlowState Flow => _snapshot.Onboarding;
+
+    public bool IsDetectStage => Flow.Stage == OnboardingStage.Detect;
+
+    public bool IsPairStage => Flow.Stage == OnboardingStage.Pair;
+
+    public bool IsConfirmStage => Flow.Stage == OnboardingStage.Confirm;
+
+    public bool IsDetectIdle => IsDetectStage && Flow.DetectState == OnboardingDetectState.Idle;
+
+    public bool IsDetectChecking => IsDetectStage && Flow.DetectState == OnboardingDetectState.Checking;
+
+    public bool IsDetectNotEnrolled => IsDetectStage && Flow.DetectState == OnboardingDetectState.NotEnrolled;
+
+    public bool IsPairTokenMode => IsPairStage && Flow.PairMode == OnboardingPairMode.Token;
+
+    public bool IsPairQrMode => IsPairStage && Flow.PairMode == OnboardingPairMode.Qr;
+
+    public bool IsTokenVerifying => IsPairStage && Flow.PairState == OnboardingPairState.TokenVerifying;
+
+    public bool IsTokenFailed => IsPairStage && Flow.PairState == OnboardingPairState.TokenFailed;
+
+    public bool IsQrWaiting => IsPairStage && Flow.PairState == OnboardingPairState.QrWaiting;
+
+    public bool IsRegistering => IsConfirmStage && Flow.ConfirmState == OnboardingConfirmState.Registering;
+
+    public bool IsEnrollmentComplete => IsConfirmStage && Flow.ConfirmState == OnboardingConfirmState.EnrollmentComplete;
+
+    public bool IsStepDetectComplete => IsPairStage || IsConfirmStage || IsPaired;
+
+    public bool IsStepPairComplete => IsConfirmStage || IsPaired;
+
+    public bool IsStepConfirmComplete => IsEnrollmentComplete || IsPaired;
+
+    public bool IsStepDetectCurrent => IsDetectStage;
+
+    public bool IsStepPairCurrent => IsPairStage;
+
+    public bool IsStepConfirmCurrent => IsConfirmStage;
+
+    public string TokenDigits => Flow.TokenDigits;
+
+    public bool CanVerifyToken => IsPairTokenMode && !IsTokenVerifying && TokenDigits.Length == 6;
+
+    public string PairError => Flow.PairError;
+
+    public string PairingString => Flow.PairingString;
+
+    public string EnrollmentDeviceName => _snapshot.DeviceName;
+
+    public string EnrollmentDeviceId => _snapshot.DeviceId;
+
+    public string EnrollmentPlatform => Environment.OSVersion.VersionString;
+
+    public string EnrollmentAgentVersion => _snapshot.AgentVersion;
+
+    public string EnrollmentAt => (Flow.EnrolledAtUtc ?? DateTimeOffset.UtcNow).LocalDateTime.ToString("M/d/yyyy, h:mm:ss tt");
+
+    public string EnrollmentPolicyHash => _snapshot.PolicyHash;
+
+    public string StatusLine => _snapshot.CurrentActivity;
+
+    public void SetTokenDigit(int index, string? value)
     {
-        get => _step;
-        private set => SetProperty(ref _step, value);
+        if (index < 0 || index > 5)
+        {
+            return;
+        }
+
+        var current = TokenDigits.PadRight(6).ToCharArray();
+        var digit = (value ?? string.Empty).FirstOrDefault(char.IsDigit);
+        current[index] = digit == default ? ' ' : digit;
+
+        var next = new string(current).Replace(" ", string.Empty);
+        _store.SetPairTokenDigits(next);
     }
 
-    public bool IsPaired
+    public void SetTokenDigits(string? tokenDigits)
     {
-        get => _isPaired;
-        private set => SetProperty(ref _isPaired, value);
+        var sanitized = new string((tokenDigits ?? string.Empty).Where(char.IsDigit).Take(6).ToArray());
+        _store.SetPairTokenDigits(sanitized);
     }
 
-    public string PairingToken
+    public void BackspaceTokenDigit(int index)
     {
-        get => _pairingToken;
-        set => SetProperty(ref _pairingToken, value);
+        if (index < 0 || index > 5)
+        {
+            return;
+        }
+
+        var current = TokenDigits.PadRight(6).ToCharArray();
+        current[index] = ' ';
+        var next = new string(current).Replace(" ", string.Empty);
+        _store.SetPairTokenDigits(next);
     }
 
-    public string HintText
+    public string TokenDigitAt(int index)
     {
-        get => _hintText;
-        private set => SetProperty(ref _hintText, value);
+        if (index < 0 || index > 5)
+        {
+            return string.Empty;
+        }
+
+        if (TokenDigits.Length <= index)
+        {
+            return string.Empty;
+        }
+
+        return TokenDigits[index].ToString();
     }
 
-    public string StepTitle => Step switch
+    private void HandleSnapshotChanged(object? sender, AgentStateSnapshot snapshot)
     {
-        1 => "Welcome",
-        2 => "Verify Device",
-        3 => "Connection Check",
-        4 => "Policy Preview",
-        5 => "Confirm Pairing",
-        _ => "Paired"
-    };
+        _snapshot = snapshot;
+        RaiseAllDerivedProperties();
+        RefreshCommandStates();
+    }
 
-    public double ProgressPercent => (Math.Max(1, Step) / 6.0) * 100.0;
-
-    private void HandleSnapshotChanged(object? sender, AgentStateSnapshot snapshot) => Apply(snapshot);
-
-    private void Apply(AgentStateSnapshot snapshot)
+    private void RaiseAllDerivedProperties()
     {
-        Step = snapshot.OnboardingStep;
-        IsPaired = snapshot.IsPaired;
-        HintText = snapshot.IsPaired
-            ? $"Device enrolled as {snapshot.DeviceId}."
-            : "Use Next/Back to simulate guided onboarding, then complete pairing.";
+        RaisePropertyChanged(nameof(IsPaired));
+        RaisePropertyChanged(nameof(Flow));
+        RaisePropertyChanged(nameof(IsDetectStage));
+        RaisePropertyChanged(nameof(IsPairStage));
+        RaisePropertyChanged(nameof(IsConfirmStage));
+        RaisePropertyChanged(nameof(IsDetectIdle));
+        RaisePropertyChanged(nameof(IsDetectChecking));
+        RaisePropertyChanged(nameof(IsDetectNotEnrolled));
+        RaisePropertyChanged(nameof(IsPairTokenMode));
+        RaisePropertyChanged(nameof(IsPairQrMode));
+        RaisePropertyChanged(nameof(IsTokenVerifying));
+        RaisePropertyChanged(nameof(IsTokenFailed));
+        RaisePropertyChanged(nameof(IsQrWaiting));
+        RaisePropertyChanged(nameof(IsRegistering));
+        RaisePropertyChanged(nameof(IsEnrollmentComplete));
+        RaisePropertyChanged(nameof(IsStepDetectComplete));
+        RaisePropertyChanged(nameof(IsStepPairComplete));
+        RaisePropertyChanged(nameof(IsStepConfirmComplete));
+        RaisePropertyChanged(nameof(IsStepDetectCurrent));
+        RaisePropertyChanged(nameof(IsStepPairCurrent));
+        RaisePropertyChanged(nameof(IsStepConfirmCurrent));
+        RaisePropertyChanged(nameof(TokenDigits));
+        RaisePropertyChanged(nameof(CanVerifyToken));
+        RaisePropertyChanged(nameof(PairError));
+        RaisePropertyChanged(nameof(PairingString));
+        RaisePropertyChanged(nameof(EnrollmentDeviceName));
+        RaisePropertyChanged(nameof(EnrollmentDeviceId));
+        RaisePropertyChanged(nameof(EnrollmentPlatform));
+        RaisePropertyChanged(nameof(EnrollmentAgentVersion));
+        RaisePropertyChanged(nameof(EnrollmentAt));
+        RaisePropertyChanged(nameof(EnrollmentPolicyHash));
+        RaisePropertyChanged(nameof(StatusLine));
+    }
 
-        RaisePropertyChanged(nameof(StepTitle));
-        RaisePropertyChanged(nameof(ProgressPercent));
+    private void RefreshCommandStates()
+    {
+        CheckEnrollmentCommand.RaiseCanExecuteChanged();
+        BeginPairingCommand.RaiseCanExecuteChanged();
+        SelectTokenModeCommand.RaiseCanExecuteChanged();
+        SelectQrModeCommand.RaiseCanExecuteChanged();
+        VerifyTokenCommand.RaiseCanExecuteChanged();
+        RetryPairingCommand.RaiseCanExecuteChanged();
+    }
 
-        NextCommand.RaiseCanExecuteChanged();
-        BackCommand.RaiseCanExecuteChanged();
-        CompleteCommand.RaiseCanExecuteChanged();
+    public void Dispose()
+    {
+        _store.SnapshotChanged -= HandleSnapshotChanged;
     }
 }

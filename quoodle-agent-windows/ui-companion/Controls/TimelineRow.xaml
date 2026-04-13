@@ -7,11 +7,11 @@
     mc:Ignorable="d">
 
     <Border
-        Padding="14"
-        Background="{ThemeResource SurfaceBrush}"
+        Padding="12"
+        Background="{ThemeResource SurfaceAltBrush}"
         BorderBrush="{ThemeResource BorderBrush}"
         BorderThickness="1"
-        CornerRadius="12">
+        CornerRadius="10">
         <Grid ColumnSpacing="12">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="130" />

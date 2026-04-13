@@ -1,11 +1,17 @@
 using System.Timers;
 using Quoodle.Agent.UiCompanion.Models;
 using Timer = System.Timers.Timer;
+using System.Text.Json;
 
 namespace Quoodle.Agent.UiCompanion.Services;
 
 public sealed class MockAgentStateProvider : IAgentStateProvider
 {
+    private const string ExpectedPairCode = "123456";
+    private const string MockDeviceId = "PC001-A3F9-2B7C";
+    private const string MockDeviceName = "WORKSTATION-PC001";
+    private const string MockPolicyHash = "sha256:a1b2c3d4e5f6";
+
     private static readonly string[] CommandTemplates =
     {
         "health.sample",
@@ -28,6 +34,7 @@ public sealed class MockAgentStateProvider : IAgentStateProvider
     private readonly Timer _timer;
     private AgentStateSnapshot _snapshot = AgentStateSnapshot.CreateInitial();
     private int _reconnectHoldTicks;
+    private int _onboardingOperationId;
 
     public MockAgentStateProvider()
     {
@@ -64,57 +71,230 @@ public sealed class MockAgentStateProvider : IAgentStateProvider
         _timer.Stop();
     }
 
-    public void AdvanceOnboardingStep()
+    public void CheckEnrollmentStatus()
     {
+        int operationId;
         lock (_gate)
         {
-            var step = Math.Min(6, _snapshot.OnboardingStep + 1);
-            _snapshot = _snapshot with { OnboardingStep = step };
-
-            if (step >= 2)
+            if (_snapshot.IsPaired)
             {
-                AddActivityLocked(ActivitySeverity.Info, "ui", "Onboarding progressed", $"Moved to step {step}.");
+                return;
             }
 
+            operationId = ++_onboardingOperationId;
+            _snapshot = _snapshot with
+            {
+                Onboarding = _snapshot.Onboarding with
+                {
+                    Stage = OnboardingStage.Detect,
+                    DetectState = OnboardingDetectState.Checking,
+                    PairError = string.Empty
+                },
+                CurrentActivity = "Checking enrollment status"
+            };
             RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
         }
 
         Publish(Snapshot);
+        _ = SimulateDetectResultAsync(operationId);
     }
 
-    public void PreviousOnboardingStep()
+    public void BeginPairing()
     {
         lock (_gate)
         {
-            var step = Math.Max(1, _snapshot.OnboardingStep - 1);
-            _snapshot = _snapshot with { OnboardingStep = step };
-            RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
-        }
-
-        Publish(Snapshot);
-    }
-
-    public void CompleteOnboarding(string pairingToken)
-    {
-        lock (_gate)
-        {
-            var deviceId = string.IsNullOrWhiteSpace(pairingToken)
-                ? $"dev-{Guid.NewGuid():N}"[..16]
-                : pairingToken.Trim();
+            if (_snapshot.IsPaired)
+            {
+                return;
+            }
 
             _snapshot = _snapshot with
             {
-                IsPaired = true,
-                OnboardingStep = 6,
-                DeviceId = deviceId,
-                Connection = ConnectionState.Connected,
-                CurrentActivity = "Connected and monitoring",
-                LastSyncUtc = DateTimeOffset.UtcNow,
-                LastHeartbeatUtc = DateTimeOffset.UtcNow,
-                ReconnectAttempts = 0
+                Onboarding = _snapshot.Onboarding with
+                {
+                    Stage = OnboardingStage.Pair,
+                    DetectState = OnboardingDetectState.NotEnrolled,
+                    PairMode = OnboardingPairMode.Token,
+                    PairState = OnboardingPairState.TokenEntry,
+                    ConfirmState = OnboardingConfirmState.Registering,
+                    TokenDigits = string.Empty,
+                    PairError = string.Empty,
+                    PairingString = BuildPairingStringLocked(),
+                    EnrolledAtUtc = null
+                },
+                CurrentActivity = "Awaiting pair code or QR scan"
             };
 
-            AddActivityLocked(ActivitySeverity.Info, "service", "Pairing completed", "Device successfully enrolled in local mock flow.");
+            AddActivityLocked(ActivitySeverity.Info, "ui", "Pairing started", "User opened pair step.");
+            RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
+        }
+
+        Publish(Snapshot);
+    }
+
+    public void SelectPairMode(OnboardingPairMode mode)
+    {
+        lock (_gate)
+        {
+            if (_snapshot.IsPaired || _snapshot.Onboarding.Stage != OnboardingStage.Pair)
+            {
+                return;
+            }
+
+            if (_snapshot.Onboarding.PairMode != mode)
+            {
+                _onboardingOperationId += 1;
+            }
+
+            _snapshot = _snapshot with
+            {
+                Onboarding = _snapshot.Onboarding with
+                {
+                    PairMode = mode,
+                    PairState = mode == OnboardingPairMode.Qr ? OnboardingPairState.QrWaiting : OnboardingPairState.TokenEntry,
+                    PairError = string.Empty,
+                    PairingString = BuildPairingStringLocked()
+                },
+                CurrentActivity = mode == OnboardingPairMode.Qr ? "Waiting for QR scan confirmation" : "Awaiting 6-digit pair code"
+            };
+            RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
+        }
+
+        Publish(Snapshot);
+    }
+
+    public void SetPairTokenDigits(string tokenDigits)
+    {
+        lock (_gate)
+        {
+            if (_snapshot.IsPaired || _snapshot.Onboarding.Stage != OnboardingStage.Pair)
+            {
+                return;
+            }
+
+            var sanitized = new string((tokenDigits ?? string.Empty).Where(char.IsDigit).Take(6).ToArray());
+            var pairState = _snapshot.Onboarding.PairState == OnboardingPairState.TokenVerifying
+                ? OnboardingPairState.TokenVerifying
+                : OnboardingPairState.TokenEntry;
+
+            _snapshot = _snapshot with
+            {
+                Onboarding = _snapshot.Onboarding with
+                {
+                    PairMode = OnboardingPairMode.Token,
+                    PairState = pairState,
+                    TokenDigits = sanitized,
+                    PairError = string.Empty
+                }
+            };
+            RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
+        }
+
+        Publish(Snapshot);
+    }
+
+    public void VerifyTokenPairing()
+    {
+        int operationId;
+        string token;
+        lock (_gate)
+        {
+            if (_snapshot.IsPaired || _snapshot.Onboarding.Stage != OnboardingStage.Pair)
+            {
+                return;
+            }
+
+            token = _snapshot.Onboarding.TokenDigits;
+            if (token.Length != 6)
+            {
+                return;
+            }
+
+            operationId = ++_onboardingOperationId;
+            _snapshot = _snapshot with
+            {
+                Onboarding = _snapshot.Onboarding with
+                {
+                    PairMode = OnboardingPairMode.Token,
+                    PairState = OnboardingPairState.TokenVerifying,
+                    PairError = string.Empty
+                },
+                CurrentActivity = "Verifying pair code"
+            };
+            RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
+        }
+
+        Publish(Snapshot);
+        _ = SimulateTokenVerificationAsync(operationId, token);
+    }
+
+    public void StartQrPairing()
+    {
+        int operationId;
+        lock (_gate)
+        {
+            if (_snapshot.IsPaired || _snapshot.Onboarding.Stage != OnboardingStage.Pair)
+            {
+                return;
+            }
+
+            operationId = ++_onboardingOperationId;
+            _snapshot = _snapshot with
+            {
+                Onboarding = _snapshot.Onboarding with
+                {
+                    PairMode = OnboardingPairMode.Qr,
+                    PairState = OnboardingPairState.QrWaiting,
+                    PairError = string.Empty,
+                    TokenDigits = string.Empty,
+                    PairingString = BuildPairingStringLocked()
+                },
+                CurrentActivity = "Waiting for QR scan confirmation"
+            };
+            RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
+        }
+
+        Publish(Snapshot);
+        _ = SimulateQrPairingAsync(operationId);
+    }
+
+    public void RetryPairing()
+    {
+        lock (_gate)
+        {
+            if (_snapshot.IsPaired || _snapshot.Onboarding.Stage != OnboardingStage.Pair)
+            {
+                return;
+            }
+
+            _onboardingOperationId += 1;
+            _snapshot = _snapshot with
+            {
+                Onboarding = _snapshot.Onboarding with
+                {
+                    PairMode = OnboardingPairMode.Token,
+                    PairState = OnboardingPairState.TokenEntry,
+                    PairError = string.Empty,
+                    TokenDigits = string.Empty
+                },
+                CurrentActivity = "Retry pairing with a new code"
+            };
+            RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
+        }
+
+        Publish(Snapshot);
+    }
+
+    public void CompleteEnrollment()
+    {
+        lock (_gate)
+        {
+            if (_snapshot.Onboarding.Stage != OnboardingStage.Confirm)
+            {
+                return;
+            }
+
+            ApplyEnrollmentCompleteLocked(DateTimeOffset.UtcNow);
             RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
         }
 
@@ -174,6 +354,7 @@ public sealed class MockAgentStateProvider : IAgentStateProvider
     {
         lock (_gate)
         {
+            _onboardingOperationId += 1;
             var preservedSettings = _snapshot.Settings;
             var preservedHistory = _snapshot.CommandHistory;
             var nextActivity = _snapshot.Activity.ToList();
@@ -198,11 +379,175 @@ public sealed class MockAgentStateProvider : IAgentStateProvider
         lock (_gate)
         {
             _reconnectHoldTicks = 0;
+            _onboardingOperationId = 0;
             _snapshot = AgentStateSnapshot.CreateInitial();
             RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
         }
 
         Publish(Snapshot);
+    }
+
+    private async Task SimulateDetectResultAsync(int operationId)
+    {
+        await Task.Delay(900).ConfigureAwait(false);
+        lock (_gate)
+        {
+            if (operationId != _onboardingOperationId || _snapshot.IsPaired)
+            {
+                return;
+            }
+
+            _snapshot = _snapshot with
+            {
+                Onboarding = _snapshot.Onboarding with
+                {
+                    Stage = OnboardingStage.Detect,
+                    DetectState = OnboardingDetectState.NotEnrolled
+                },
+                CurrentActivity = "Device not enrolled"
+            };
+            AddActivityLocked(ActivitySeverity.Warning, "service", "Enrollment check complete", "No active enrollment found for this device.");
+            RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
+        }
+
+        Publish(Snapshot);
+    }
+
+    private async Task SimulateTokenVerificationAsync(int operationId, string token)
+    {
+        await Task.Delay(1200).ConfigureAwait(false);
+        bool success;
+        lock (_gate)
+        {
+            if (operationId != _onboardingOperationId || _snapshot.IsPaired || _snapshot.Onboarding.Stage != OnboardingStage.Pair)
+            {
+                return;
+            }
+
+            success = string.Equals(token, ExpectedPairCode, StringComparison.Ordinal);
+            if (!success)
+            {
+                _snapshot = _snapshot with
+                {
+                    Onboarding = _snapshot.Onboarding with
+                    {
+                        Stage = OnboardingStage.Pair,
+                        PairMode = OnboardingPairMode.Token,
+                        PairState = OnboardingPairState.TokenFailed,
+                        PairError = "Invalid pairing code. Please retry.",
+                        TokenDigits = string.Empty
+                    },
+                    CurrentActivity = "Pair code verification failed"
+                };
+                AddActivityLocked(ActivitySeverity.Warning, "service", "Pair code rejected", "Token verification failed in UI-only mode.");
+                RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
+            }
+            else
+            {
+                BeginConfirmRegistrationLocked("Token verified. Registering device.");
+            }
+        }
+
+        Publish(Snapshot);
+
+        if (success)
+        {
+            await SimulateRegistrationAsync(operationId).ConfigureAwait(false);
+        }
+    }
+
+    private async Task SimulateQrPairingAsync(int operationId)
+    {
+        await Task.Delay(2000).ConfigureAwait(false);
+        lock (_gate)
+        {
+            if (operationId != _onboardingOperationId || _snapshot.IsPaired || _snapshot.Onboarding.Stage != OnboardingStage.Pair)
+            {
+                return;
+            }
+
+            BeginConfirmRegistrationLocked("QR scan confirmed. Registering device.");
+        }
+
+        Publish(Snapshot);
+        await SimulateRegistrationAsync(operationId).ConfigureAwait(false);
+    }
+
+    private async Task SimulateRegistrationAsync(int operationId)
+    {
+        await Task.Delay(1300).ConfigureAwait(false);
+        lock (_gate)
+        {
+            if (operationId != _onboardingOperationId || _snapshot.Onboarding.Stage != OnboardingStage.Confirm)
+            {
+                return;
+            }
+
+            ApplyEnrollmentCompleteLocked(DateTimeOffset.UtcNow);
+            RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
+        }
+
+        Publish(Snapshot);
+    }
+
+    private void BeginConfirmRegistrationLocked(string activity)
+    {
+        _snapshot = _snapshot with
+        {
+            Onboarding = _snapshot.Onboarding with
+            {
+                Stage = OnboardingStage.Confirm,
+                PairState = OnboardingPairState.PairSucceeded,
+                ConfirmState = OnboardingConfirmState.Registering,
+                PairError = string.Empty
+            },
+            CurrentActivity = activity
+        };
+        AddActivityLocked(ActivitySeverity.Info, "service", "Pairing accepted", "Pairing was accepted, awaiting registration completion.");
+        RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
+    }
+
+    private void ApplyEnrollmentCompleteLocked(DateTimeOffset now)
+    {
+        _snapshot = _snapshot with
+        {
+            IsPaired = true,
+            DeviceId = MockDeviceId,
+            DeviceName = MockDeviceName,
+            PolicyHash = MockPolicyHash,
+            Connection = ConnectionState.Connected,
+            Health = HealthState.Healthy,
+            CurrentActivity = "Connected and monitoring",
+            LastSyncUtc = now,
+            LastHeartbeatUtc = now,
+            ReconnectAttempts = 0,
+            Onboarding = _snapshot.Onboarding with
+            {
+                Stage = OnboardingStage.Confirm,
+                ConfirmState = OnboardingConfirmState.EnrollmentComplete,
+                EnrolledAtUtc = now,
+                PairError = string.Empty
+            }
+        };
+
+        AddActivityLocked(ActivitySeverity.Info, "service", "Enrollment complete", "Device registered and paired successfully.");
+    }
+
+    private string BuildPairingStringLocked()
+    {
+        var payload = new Dictionary<string, object?>
+        {
+            ["type"] = "quoodle_pair",
+            ["version"] = 1,
+            ["device_id"] = _snapshot.DeviceId,
+            ["pair_token"] = $"mock-pair-{ExpectedPairCode}",
+            ["pair_session_id"] = $"sess-{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}",
+            ["timestamp"] = DateTimeOffset.UtcNow.ToString("O"),
+            ["controller_url"] = "https://control.quoodle.local",
+            ["device_label"] = _snapshot.DeviceName
+        };
+
+        return JsonSerializer.Serialize(payload);
     }
 
     private void Tick()
@@ -271,10 +616,21 @@ public sealed class MockAgentStateProvider : IAgentStateProvider
             }
             else
             {
+                var idleMessage = _snapshot.Onboarding.Stage switch
+                {
+                    OnboardingStage.Detect when _snapshot.Onboarding.DetectState == OnboardingDetectState.Checking => "Checking enrollment status",
+                    OnboardingStage.Detect => "Waiting for pairing",
+                    OnboardingStage.Pair when _snapshot.Onboarding.PairMode == OnboardingPairMode.Qr => "Waiting for QR scan confirmation",
+                    OnboardingStage.Pair => "Awaiting pair code or QR scan",
+                    OnboardingStage.Confirm when _snapshot.Onboarding.ConfirmState == OnboardingConfirmState.Registering => "Registering device enrollment",
+                    OnboardingStage.Confirm => "Enrollment complete",
+                    _ => "Waiting for pairing"
+                };
+
                 _snapshot = _snapshot with
                 {
                     LastHeartbeatUtc = now,
-                    CurrentActivity = "Waiting for pairing"
+                    CurrentActivity = idleMessage
                 };
             }
 
@@ -425,6 +781,7 @@ public sealed class MockAgentStateProvider : IAgentStateProvider
             new("Identity", "Device Name", _snapshot.DeviceName),
             new("Identity", "Device ID", _snapshot.DeviceId),
             new("Identity", "Agent Version", _snapshot.AgentVersion),
+            new("Identity", "Policy Hash", _snapshot.PolicyHash),
             new("Runtime", "Pairing State", _snapshot.IsPaired ? "Paired" : "Not paired"),
             new("Runtime", "Connection", _snapshot.Connection.ToString()),
             new("Runtime", "Current Activity", _snapshot.CurrentActivity),
@@ -434,6 +791,7 @@ public sealed class MockAgentStateProvider : IAgentStateProvider
             new("Sync/Health", "CPU / Memory / Disk", $"{_snapshot.CpuPercent}% / {_snapshot.MemoryPercent}% / {_snapshot.DiskPercent}%"),
             new("Sync/Health", "Last Heartbeat", _snapshot.LastHeartbeatUtc.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss")),
             new("Sync/Health", "Last Sync", _snapshot.LastSyncUtc.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss")),
+            new("Sync/Health", "Enrolled At", _snapshot.Onboarding.EnrolledAtUtc?.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss") ?? "Pending"),
             new("Sync/Health", "Snapshot Updated", now.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss"))
         };
 

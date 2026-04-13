@@ -4,6 +4,7 @@ using Microsoft.Win32;
 using Quoodle.Agent.UiCompanion.Models;
 using Quoodle.Agent.UiCompanion.Services;
 using Quoodle.Agent.UiCompanion.Views;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace Quoodle.Agent.UiCompanion;
@@ -11,6 +12,14 @@ namespace Quoodle.Agent.UiCompanion;
 public sealed partial class MainWindow : Window
 {
     private const string NavPreferenceFileName = "nav-route.txt";
+    private static readonly HashSet<string> CoreRoutes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "dashboard",
+        "quick-status",
+        "activity",
+        "settings",
+        "onboarding"
+    };
     private readonly AgentStateStore _stateStore;
     private readonly string _navPreferencePath;
 
@@ -50,7 +59,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        root.RequestedTheme = ResolveSystemTheme();
+        root.RequestedTheme = ElementTheme.Dark;
     }
 
     private string ResolveInitialRoute(AgentStateSnapshot snapshot)
@@ -61,7 +70,12 @@ public sealed partial class MainWindow : Window
         }
 
         var preferred = LoadPreferredRoute();
-        return string.IsNullOrWhiteSpace(preferred) ? "dashboard" : preferred;
+        if (string.IsNullOrWhiteSpace(preferred))
+        {
+            return "dashboard";
+        }
+
+        return CoreRoutes.Contains(preferred) ? preferred : "dashboard";
     }
 
     private void HandleSnapshotChanged(object? sender, AgentStateSnapshot snapshot)
@@ -79,12 +93,6 @@ public sealed partial class MainWindow : Window
             Navigate("onboarding");
             SelectNavItem("onboarding");
             return;
-        }
-
-        if (snapshot.IsPaired && CurrentRoute() == "onboarding")
-        {
-            Navigate("dashboard");
-            SelectNavItem("dashboard");
         }
     }
 
@@ -127,7 +135,7 @@ public sealed partial class MainWindow : Window
         };
 
         var pendingCount = snapshot.CommandHistory.Count(c => c.Status is CommandExecutionStatus.Queued or CommandExecutionStatus.Dispatched or CommandExecutionStatus.Executing);
-        KernelHintText.Text = $"{pendingCount} command events pending review";
+        KernelHintText.Text = $"{pendingCount} kernel events pending review";
     }
 
     private static ElementTheme ResolveSystemTheme()

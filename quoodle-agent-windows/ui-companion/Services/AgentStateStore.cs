@@ -17,11 +17,21 @@ public sealed class AgentStateStore : IDisposable
 
     public event EventHandler<AgentStateSnapshot>? SnapshotChanged;
 
-    public void AdvanceOnboardingStep() => _provider.AdvanceOnboardingStep();
+    public void CheckEnrollmentStatus() => _provider.CheckEnrollmentStatus();
 
-    public void PreviousOnboardingStep() => _provider.PreviousOnboardingStep();
+    public void BeginPairing() => _provider.BeginPairing();
 
-    public void CompleteOnboarding(string pairingToken) => _provider.CompleteOnboarding(pairingToken);
+    public void SelectPairMode(OnboardingPairMode mode) => _provider.SelectPairMode(mode);
+
+    public void SetPairTokenDigits(string tokenDigits) => _provider.SetPairTokenDigits(tokenDigits);
+
+    public void VerifyTokenPairing() => _provider.VerifyTokenPairing();
+
+    public void StartQrPairing() => _provider.StartQrPairing();
+
+    public void RetryPairing() => _provider.RetryPairing();
+
+    public void CompleteEnrollment() => _provider.CompleteEnrollment();
 
     public void TriggerSyncNow() => _provider.TriggerSyncNow();
 

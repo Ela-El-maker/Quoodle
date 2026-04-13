@@ -31,41 +31,43 @@ public sealed partial class DashboardPage : Page
         };
 
         IdentityText.Text = $"{_vm.DeviceName}  ({_vm.DeviceId})";
-        VersionText.Text = $"Agent version: {_vm.AgentVersion}";
-        LastSyncText.Text = $"Last sync: {_vm.LastSync}";
+        VersionText.Text = $"wss://gateway.quoodle.io/agent  •  {_vm.Connection.ToLowerInvariant()}";
+        LastSyncText.Text = _vm.LastSync;
         ActivityText.Text = _vm.CurrentActivity;
         HeroVersionText.Text = _vm.AgentVersion;
         HeroBuildText.Text = Environment.OSVersion.Version.ToString();
         HeroTransportText.Text = $"{_vm.Connection} • {_vm.LatencyMs} ms";
         HeroReconnectText.Text = _vm.ReconnectAttempts.ToString();
 
-        CpuCard.Title = "WSS Uptime";
+        CpuCard.Title = "WSS Uptime (24H)";
         CpuCard.Value = $"{Math.Max(1, 100 - Math.Abs(50 - _vm.Cpu))}%";
-        CpuCard.Subtitle = "Last 24h channel stability";
+        CpuCard.Subtitle = "wss://gateway.quoodle.io/agent";
 
         MemoryCard.Title = "Last Heartbeat";
         MemoryCard.Value = $"{Math.Max(1, _vm.Memory / 2)}s";
-        MemoryCard.Subtitle = "Target < 20s";
+        MemoryCard.Subtitle = "next expected in ~12s";
 
-        DiskCard.Title = "Failed Commands";
+        DiskCard.Title = "Failed Commands (24H)";
         DiskCard.Value = _vm.Disk > 85 ? "2" : "0";
-        DiskCard.Subtitle = "24h window";
+        DiskCard.Subtitle = _vm.Disk > 85 ? "lock_screen x 1, ping x 1" : "no failed commands";
 
-        RxCard.Title = "NET RX";
-        RxCard.Value = $"{_vm.NetworkRx:F1} Mbps";
-        RxCard.Subtitle = "Inbound stream";
+        RxCard.Title = "CPU Usage";
+        RxCard.Value = $"{_vm.Cpu}%";
+        RxCard.Subtitle = "sampled 60s";
 
-        TxCard.Title = "NET TX";
-        TxCard.Value = $"{_vm.NetworkTx:F1} Mbps";
-        TxCard.Subtitle = "Outbound stream";
+        TxCard.Title = "RAM Usage";
+        TxCard.Value = $"{_vm.Memory}%";
+        TxCard.Subtitle = "GlobalMemoryStatusEx";
 
         TelemetrySummaryText.Text = _vm.Connection == "Connected"
-            ? "Mock provider is generating stable heartbeat, transport, and command telemetry."
-            : "Transport is degraded; dashboard tiles are showing cached and reconnecting state.";
+            ? "Last 8 messages are healthy. Command and telemetry stream are in sync with the control plane."
+            : "Transport degraded. Showing cached envelope activity while reconnecting.";
 
         DiskCard.Tone = _vm.Disk > 85 ? "Danger" : "Warning";
         MemoryCard.Tone = _vm.Connection == "Connected" ? "Success" : "Warning";
         CpuCard.Tone = _vm.Connection == "Connected" ? "Success" : "Info";
+        RxCard.Tone = "Info";
+        TxCard.Tone = "Info";
     }
 
     private static string ResolveConnectionTone(string connection)

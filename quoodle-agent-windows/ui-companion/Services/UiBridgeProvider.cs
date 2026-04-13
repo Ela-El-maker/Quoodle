@@ -17,11 +17,21 @@ public sealed class UiBridgeProvider : IAgentStateProvider
     {
     }
 
-    public void AdvanceOnboardingStep() => throw new NotImplementedException("UiBridgeProvider is a future live provider.");
+    public void CheckEnrollmentStatus() => throw new NotImplementedException("UiBridgeProvider is a future live provider.");
 
-    public void PreviousOnboardingStep() => throw new NotImplementedException("UiBridgeProvider is a future live provider.");
+    public void BeginPairing() => throw new NotImplementedException("UiBridgeProvider is a future live provider.");
 
-    public void CompleteOnboarding(string pairingToken) => throw new NotImplementedException("UiBridgeProvider is a future live provider.");
+    public void SelectPairMode(OnboardingPairMode mode) => throw new NotImplementedException("UiBridgeProvider is a future live provider.");
+
+    public void SetPairTokenDigits(string tokenDigits) => throw new NotImplementedException("UiBridgeProvider is a future live provider.");
+
+    public void VerifyTokenPairing() => throw new NotImplementedException("UiBridgeProvider is a future live provider.");
+
+    public void StartQrPairing() => throw new NotImplementedException("UiBridgeProvider is a future live provider.");
+
+    public void RetryPairing() => throw new NotImplementedException("UiBridgeProvider is a future live provider.");
+
+    public void CompleteEnrollment() => throw new NotImplementedException("UiBridgeProvider is a future live provider.");
 
     public void TriggerSyncNow() => throw new NotImplementedException("UiBridgeProvider is a future live provider.");
 

@@ -24,7 +24,7 @@ public sealed partial class QuickStatusPage : Page
         DeviceNameText.Text = _vm.DeviceName;
         DeviceIdText.Text = _vm.DeviceId;
         AgentVersionText.Text = _vm.AgentVersion;
-        LatencyHeaderText.Text = $"{_vm.LatencyMs} ms";
+        LatencyHeaderText.Text = _vm.ReconnectAttempts == 0 ? "24h 0m" : $"{_vm.ReconnectAttempts} reconnects";
         PolicyHashText.Text = $"sha256:{Math.Abs(_vm.DeviceId.GetHashCode()):x8}";
 
         HealthChip.Label = _vm.Health;
@@ -37,7 +37,7 @@ public sealed partial class QuickStatusPage : Page
         };
 
         LastSyncCard.Title = "Last Sync";
-        LastSyncCard.Value = _vm.LastSync;
+        LastSyncCard.Value = FormatAsAgo(_vm.LastSync);
         LastSyncCard.Subtitle = "Auto-sync every 30s";
         LastSyncCard.Tone = "Info";
 
@@ -57,7 +57,7 @@ public sealed partial class QuickStatusPage : Page
         EventsCard.Tone = _vm.PendingEvents > 0 ? "Warning" : "Success";
 
         ActivityText.Text = _vm.Activity;
-        HeartbeatText.Text = $"Last heartbeat {_vm.LastHeartbeat}";
+        HeartbeatText.Text = $"Last heartbeat {FormatAsAgo(_vm.LastHeartbeat)}";
         ReconnectText.Text = _vm.ReconnectAttempts == 0
             ? "Stable transport path"
             : $"Reconnect attempts {_vm.ReconnectAttempts}";
@@ -68,6 +68,33 @@ public sealed partial class QuickStatusPage : Page
         SyncText.Text = _vm.PendingEvents > 0
             ? "Events are queued for flush. Trigger a sync or inspect diagnostics."
             : "Transport is healthy and the mock queue is clear.";
+    }
+
+    private static string FormatAsAgo(string hhmmss)
+    {
+        if (!TimeSpan.TryParse(hhmmss, out var time))
+        {
+            return hhmmss;
+        }
+
+        var now = DateTime.Now.TimeOfDay;
+        var diff = now - time;
+        if (diff < TimeSpan.Zero)
+        {
+            diff += TimeSpan.FromDays(1);
+        }
+
+        if (diff.TotalSeconds < 60)
+        {
+            return $"{Math.Max(1, (int)diff.TotalSeconds)}s ago";
+        }
+
+        if (diff.TotalMinutes < 60)
+        {
+            return $"{(int)diff.TotalMinutes}m ago";
+        }
+
+        return $"{(int)diff.TotalHours}h ago";
     }
 
     private static string ResolveConnectionTone(string connection)

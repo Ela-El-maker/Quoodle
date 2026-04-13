@@ -82,8 +82,15 @@ public sealed partial class MetricCard : UserControl
         if (Application.Current.Resources.TryGetValue(accentKey, out var accentObj) && accentObj is Brush accentBrush)
         {
             GlyphIcon.Foreground = accentBrush;
-            CardBorder.BorderBrush = accentBrush;
-            CardBorder.BorderThickness = new Thickness(1.2);
+            CardBorder.BorderBrush = tone switch
+            {
+                "success" => Application.Current.Resources["HeaderPanelBorderBrush"] as Brush ?? accentBrush,
+                "info" => Application.Current.Resources["BorderBrush"] as Brush ?? accentBrush,
+                "warning" => Application.Current.Resources["BorderBrush"] as Brush ?? accentBrush,
+                "danger" => Application.Current.Resources["DangerBrush"] as Brush ?? accentBrush,
+                _ => Application.Current.Resources["BorderBrush"] as Brush ?? accentBrush
+            };
+            CardBorder.BorderThickness = new Thickness(1);
         }
     }
 }

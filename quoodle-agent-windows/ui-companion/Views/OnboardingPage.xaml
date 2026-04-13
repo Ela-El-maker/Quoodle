@@ -4,61 +4,409 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:controls="using:Quoodle.Agent.UiCompanion.Controls"
     mc:Ignorable="d"
     Background="{ThemeResource AppBackgroundBrush}">
 
+    <Page.Resources>
+        <Style x:Key="OnboardingTitleTextStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+            <Setter Property="FontSize" Value="44" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="OnboardingSubtitleTextStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{ThemeResource TextSecondaryBrush}" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="Normal" />
+        </Style>
+
+        <Style x:Key="OnboardingStepLabelStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="OnboardingBodyTextStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{ThemeResource TextSecondaryBrush}" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="Normal" />
+        </Style>
+
+        <Style x:Key="OnboardingPrimaryButtonStyle" TargetType="Button">
+            <Setter Property="Foreground" Value="{ThemeResource SuccessBrush}" />
+            <Setter Property="Background" Value="#142F25" />
+            <Setter Property="BorderBrush" Value="#1A6D49" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Padding" Value="30,13" />
+            <Setter Property="MinWidth" Value="244" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="OnboardingNeutralButtonStyle" TargetType="Button">
+            <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+            <Setter Property="Background" Value="#2B2F39" />
+            <Setter Property="BorderBrush" Value="#3A4253" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Padding" Value="28,13" />
+            <Setter Property="MinWidth" Value="236" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="PairModeTabButtonStyle" TargetType="Button">
+            <Setter Property="Foreground" Value="{ThemeResource TextMutedBrush}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Padding" Value="20,10" />
+            <Setter Property="FontSize" Value="17" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="TokenDigitBoxStyle" TargetType="TextBox">
+            <Setter Property="Width" Value="66" />
+            <Setter Property="Height" Value="84" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="TextAlignment" Value="Center" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="FontSize" Value="38" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontFamily" Value="Consolas" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Background" Value="{ThemeResource InputBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource InputBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <Style x:Key="DetailsValueTextStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontFamily" Value="Consolas" />
+        </Style>
+    </Page.Resources>
+
     <ScrollViewer>
-        <Grid Padding="28" MaxWidth="1140">
-            <StackPanel Spacing="20">
+        <Grid Padding="16,8,16,16" MaxWidth="1280">
+            <StackPanel Spacing="18">
                 <StackPanel Spacing="4">
-                    <TextBlock Text="Device Onboarding" Style="{StaticResource PageTitleTextStyle}" />
-                    <TextBlock Text="Enroll this device with the QuoodleAgent service." Style="{StaticResource PageSubtitleTextStyle}" />
+                    <TextBlock Text="Device Onboarding" Style="{StaticResource OnboardingTitleTextStyle}" />
+                    <TextBlock Text="Enroll this device with the QuoodleAgent service." Style="{StaticResource OnboardingSubtitleTextStyle}" />
                 </StackPanel>
 
-                <Grid ColumnSpacing="18">
+                <Grid ColumnSpacing="12" Margin="0,4,0,4">
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                        <Border x:Name="Step1Chip" Width="36" Height="36" CornerRadius="18" Background="{ThemeResource SurfaceAltBrush}" BorderBrush="{ThemeResource BorderBrush}" BorderThickness="1">
-                            <TextBlock Text="1" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" />
+                        <Border x:Name="StepDetectChip" Width="40" Height="40" CornerRadius="20" BorderThickness="1">
+                            <TextBlock x:Name="StepDetectChipText" Text="1" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" />
                         </Border>
-                        <TextBlock Text="Detect" FontWeight="SemiBold" />
+                        <TextBlock x:Name="StepDetectLabel" Text="Detect" FontWeight="SemiBold" FontSize="16" />
                     </StackPanel>
 
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                        <Border x:Name="Step2Chip" Width="36" Height="36" CornerRadius="18" Background="{ThemeResource SurfaceAltBrush}" BorderBrush="{ThemeResource BorderBrush}" BorderThickness="1">
-                            <TextBlock Text="2" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" />
-                        </Border>
-                        <TextBlock Text="Pair" FontWeight="SemiBold" />
-                    </StackPanel>
+                    <Border x:Name="StepDetectLine" Grid.Column="1" Height="1" Background="{ThemeResource BorderBrush}" VerticalAlignment="Center" Margin="8,0" />
 
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                        <Border x:Name="Step3Chip" Width="36" Height="36" CornerRadius="18" Background="{ThemeResource SurfaceAltBrush}" BorderBrush="{ThemeResource BorderBrush}" BorderThickness="1">
-                            <TextBlock Text="3" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" />
+                        <Border x:Name="StepPairChip" Width="40" Height="40" CornerRadius="20" BorderThickness="1">
+                            <TextBlock x:Name="StepPairChipText" Text="2" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" />
                         </Border>
-                        <TextBlock Text="Confirm" FontWeight="SemiBold" />
+                        <TextBlock x:Name="StepPairLabel" Text="Pair" FontWeight="SemiBold" FontSize="16" />
+                    </StackPanel>
+
+                    <Border x:Name="StepPairLine" Grid.Column="3" Height="1" Background="{ThemeResource BorderBrush}" VerticalAlignment="Center" Margin="8,0" />
+
+                    <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                        <Border x:Name="StepConfirmChip" Width="40" Height="40" CornerRadius="20" BorderThickness="1">
+                            <TextBlock x:Name="StepConfirmChipText" Text="3" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" />
+                        </Border>
+                        <TextBlock x:Name="StepConfirmLabel" Text="Confirm" FontWeight="SemiBold" FontSize="16" />
                     </StackPanel>
                 </Grid>
 
-                <Border Style="{StaticResource CardBorderStyle}" Padding="24">
-                    <StackPanel Spacing="14">
-                        <TextBlock x:Name="StepTitleText" Style="{StaticResource SectionTitleTextStyle}" />
-                        <ProgressBar x:Name="StepProgress" Height="8" Minimum="0" Maximum="100" Foreground="{ThemeResource SuccessBrush}" />
-                        <TextBlock x:Name="StepHintText" TextWrapping="Wrap" Style="{StaticResource PageSubtitleTextStyle}" />
+                <Border x:Name="DetectCard" Style="{StaticResource CardBorderStyle}" Padding="34,28" MaxWidth="1040" HorizontalAlignment="Stretch">
+                    <StackPanel Spacing="16" HorizontalAlignment="Center" MaxWidth="860">
+                        <Border
+                            Width="84"
+                            Height="84"
+                            CornerRadius="22"
+                            Background="{ThemeResource HeaderPanelBackgroundBrush}"
+                            BorderBrush="{ThemeResource HeaderPanelBorderBrush}"
+                            BorderThickness="1"
+                            HorizontalAlignment="Center">
+                            <FontIcon Glyph="&#xE73E;" FontSize="38" Foreground="{ThemeResource SuccessBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
 
-                        <TextBox
-                            x:Name="PairTokenBox"
-                            Header="Pairing token / device id"
-                            PlaceholderText="auto-generated if blank"
-                            TextChanged="OnPairingTokenChanged" />
+                        <TextBlock Text="Device Enrollment Check" Style="{StaticResource OnboardingStepLabelStyle}" TextAlignment="Center" />
+                        <TextBlock Text="We'll check whether this device is already enrolled with a QuoodleAgent instance." TextWrapping="Wrap" Style="{StaticResource OnboardingSubtitleTextStyle}" TextAlignment="Center" MaxWidth="640" />
 
-                        <controls:ActionButtonBar x:Name="Actions" PrimaryText="Next" SecondaryText="Back" />
-                        <Button x:Name="CompleteButton" Content="Complete Pairing" HorizontalAlignment="Left" Style="{StaticResource AccentButtonStyle}" />
+                        <Button
+                            x:Name="CheckStatusButton"
+                            HorizontalAlignment="Center"
+                            Style="{StaticResource OnboardingPrimaryButtonStyle}"
+                            Click="OnCheckStatus">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="&#xE701;" FontSize="16" />
+                                <TextBlock Text="Check Enrollment Status" FontSize="15" FontWeight="SemiBold" Foreground="{ThemeResource SuccessBrush}" />
+                            </StackPanel>
+                        </Button>
+
+                        <StackPanel x:Name="DetectCheckingPanel" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10" Visibility="Collapsed">
+                            <ProgressRing IsActive="True" Width="18" Height="18" Foreground="{ThemeResource SuccessBrush}" />
+                            <TextBlock Text="Checking enrollment..." Style="{StaticResource OnboardingBodyTextStyle}" />
+                        </StackPanel>
+
+                        <Border
+                            x:Name="DetectWarningPanel"
+                            Background="{ThemeResource WarningPanelBackgroundBrush}"
+                            BorderBrush="{ThemeResource WarningPanelBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="12"
+                            Padding="16"
+                            Visibility="Collapsed"
+                            Margin="0,2,0,0">
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <FontIcon Glyph="&#xE7BA;" FontSize="19" Foreground="{ThemeResource ChipWarningForegroundBrush}" Margin="4,1,0,0" />
+                                <StackPanel Grid.Column="1" Spacing="3">
+                                    <TextBlock Text="Device not enrolled" Foreground="{ThemeResource ChipWarningForegroundBrush}" FontWeight="SemiBold" FontSize="17" />
+                                    <TextBlock Text="No active enrollment found. Proceed to pair this device with your agent." Style="{StaticResource OnboardingBodyTextStyle}" TextWrapping="Wrap" Foreground="{ThemeResource ChipWarningForegroundBrush}" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <Button
+                            x:Name="BeginPairingButton"
+                            HorizontalAlignment="Center"
+                            Style="{StaticResource OnboardingPrimaryButtonStyle}"
+                            Click="OnBeginPairing"
+                            Visibility="Collapsed"
+                            Margin="0,8,0,0">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <TextBlock Text="Begin Pairing" FontSize="15" FontWeight="SemiBold" Foreground="{ThemeResource SuccessBrush}" />
+                                <FontIcon Glyph="&#xE72A;" FontSize="16" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="PairCard" Style="{StaticResource CardBorderStyle}" Padding="34,28" Visibility="Collapsed" MaxWidth="1040" HorizontalAlignment="Stretch">
+                    <StackPanel Spacing="16" MaxWidth="860" HorizontalAlignment="Left">
+                        <Grid ColumnSpacing="14" VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0" Glyph="&#xE72B;" Foreground="{ThemeResource TextMutedBrush}" VerticalAlignment="Center" FontSize="17" />
+                            <StackPanel Grid.Column="1" Spacing="2">
+                                <TextBlock Text="Pair Device" Style="{StaticResource OnboardingStepLabelStyle}" />
+                                <TextBlock Text="Enter the 6-digit token from your enrollment portal." Style="{StaticResource OnboardingSubtitleTextStyle}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Border Background="{ThemeResource SurfaceAltBrush}" BorderBrush="{ThemeResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="6" HorizontalAlignment="Left">
+                            <Grid ColumnSpacing="6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <Button x:Name="TokenTabButton" Grid.Column="0" Style="{StaticResource PairModeTabButtonStyle}" Click="OnSelectTokenMode">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon Glyph="&#xE128;" FontSize="14" />
+                                        <TextBlock Text="Enter Token" FontSize="16" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                </Button>
+                                <Button x:Name="QrTabButton" Grid.Column="1" Style="{StaticResource PairModeTabButtonStyle}" Click="OnSelectQrMode">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon Glyph="&#xED14;" FontSize="14" />
+                                        <TextBlock Text="Scan QR" FontSize="16" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                        </Border>
+
+                        <StackPanel x:Name="TokenPane" Spacing="16" Margin="0,8,0,0">
+                            <TextBlock Text="Enter the 6-digit pairing code shown in your QuoodleAgent enrollment portal." Style="{StaticResource OnboardingSubtitleTextStyle}" TextWrapping="Wrap" />
+
+                            <StackPanel x:Name="TokenEntryPanel" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
+                                <TextBox x:Name="TokenBox0" Style="{StaticResource TokenDigitBoxStyle}" MaxLength="1" TextChanged="OnTokenDigitChanged" KeyDown="OnTokenDigitKeyDown" />
+                                <TextBox x:Name="TokenBox1" Style="{StaticResource TokenDigitBoxStyle}" MaxLength="1" TextChanged="OnTokenDigitChanged" KeyDown="OnTokenDigitKeyDown" />
+                                <TextBox x:Name="TokenBox2" Style="{StaticResource TokenDigitBoxStyle}" MaxLength="1" TextChanged="OnTokenDigitChanged" KeyDown="OnTokenDigitKeyDown" />
+                                <TextBox x:Name="TokenBox3" Style="{StaticResource TokenDigitBoxStyle}" MaxLength="1" TextChanged="OnTokenDigitChanged" KeyDown="OnTokenDigitKeyDown" />
+                                <TextBox x:Name="TokenBox4" Style="{StaticResource TokenDigitBoxStyle}" MaxLength="1" TextChanged="OnTokenDigitChanged" KeyDown="OnTokenDigitKeyDown" />
+                                <TextBox x:Name="TokenBox5" Style="{StaticResource TokenDigitBoxStyle}" MaxLength="1" TextChanged="OnTokenDigitChanged" KeyDown="OnTokenDigitKeyDown" />
+                            </StackPanel>
+
+                            <Button
+                                x:Name="VerifyTokenButton"
+                                HorizontalAlignment="Center"
+                                Style="{StaticResource OnboardingPrimaryButtonStyle}"
+                                Click="OnVerifyToken">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <FontIcon Glyph="&#xE72E;" FontSize="16" />
+                                    <TextBlock Text="Verify &amp; Enroll" FontSize="15" FontWeight="SemiBold" Foreground="{ThemeResource SuccessBrush}" />
+                                </StackPanel>
+                            </Button>
+
+                            <StackPanel x:Name="TokenVerifyingPanel" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8" Visibility="Collapsed">
+                                <ProgressRing IsActive="True" Width="18" Height="18" Foreground="{ThemeResource SuccessBrush}" />
+                                <TextBlock Text="Verifying code..." Style="{StaticResource OnboardingBodyTextStyle}" />
+                            </StackPanel>
+
+                            <Border
+                                x:Name="TokenErrorPanel"
+                                Background="{ThemeResource WarningPanelBackgroundBrush}"
+                                BorderBrush="{ThemeResource WarningPanelBorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="12"
+                                Padding="14"
+                                Visibility="Collapsed">
+                                <StackPanel Spacing="8">
+                                    <TextBlock x:Name="TokenErrorText" Foreground="{ThemeResource ChipWarningForegroundBrush}" FontWeight="SemiBold" />
+                                    <Button x:Name="RetryPairingButton" Content="Try Again" Style="{StaticResource OnboardingNeutralButtonStyle}" HorizontalAlignment="Left" Click="OnRetryPairing" MinWidth="140" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel x:Name="QrPane" Spacing="14" Visibility="Collapsed" Margin="0,8,0,0">
+                            <TextBlock Text="Scan this QR code with the QuoodleAgent mobile companion app to complete enrollment." Style="{StaticResource OnboardingSubtitleTextStyle}" TextWrapping="Wrap" />
+
+                            <Border Background="#FFF4F5F7" CornerRadius="10" Padding="12" HorizontalAlignment="Center">
+                                <Grid x:Name="QrGrid" Width="260" Height="260" />
+                            </Border>
+
+                            <Button x:Name="CopyPairingButton" Style="{StaticResource PairModeTabButtonStyle}" HorizontalAlignment="Center" Click="OnCopyPairingString">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE16F;" FontSize="14" />
+                                    <TextBlock Text="Copy pairing string" FontSize="16" Foreground="{ThemeResource TextMutedBrush}" />
+                                </StackPanel>
+                            </Button>
+
+                            <Border Background="{ThemeResource SurfaceAltBrush}" BorderBrush="{ThemeResource BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="12">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <ProgressRing IsActive="True" Width="16" Height="16" Foreground="{ThemeResource TextMutedBrush}" />
+                                    <TextBlock Text="Waiting for QR scan confirmation..." Style="{StaticResource OnboardingBodyTextStyle}" Foreground="{ThemeResource TextMutedBrush}" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="ConfirmCard" Style="{StaticResource CardBorderStyle}" Padding="34,28" Visibility="Collapsed" MaxWidth="1040" HorizontalAlignment="Stretch">
+                    <StackPanel Spacing="16" MaxWidth="860" HorizontalAlignment="Center">
+                        <StackPanel x:Name="RegisteringPanel" Spacing="8" HorizontalAlignment="Center" Visibility="Collapsed">
+                            <ProgressRing IsActive="True" Width="22" Height="22" Foreground="{ThemeResource SuccessBrush}" />
+                            <TextBlock Text="Registering device with control server..." Style="{StaticResource OnboardingBodyTextStyle}" />
+                        </StackPanel>
+
+                        <StackPanel x:Name="EnrollmentCompletePanel" Spacing="16" Visibility="Collapsed">
+                            <Border
+                                Width="84"
+                                Height="84"
+                                CornerRadius="22"
+                                Background="{ThemeResource HeaderPanelBackgroundBrush}"
+                                BorderBrush="{ThemeResource HeaderPanelBorderBrush}"
+                                BorderThickness="1"
+                                HorizontalAlignment="Center">
+                                <FontIcon Glyph="&#xE73E;" FontSize="38" Foreground="{ThemeResource SuccessBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+
+                            <TextBlock Text="Enrollment Complete" Style="{StaticResource OnboardingStepLabelStyle}" TextAlignment="Center" />
+                            <TextBlock Text="This device is now enrolled and actively reporting to the QuoodleAgent backend." TextWrapping="Wrap" Style="{StaticResource OnboardingSubtitleTextStyle}" TextAlignment="Center" MaxWidth="740" />
+
+                            <Border Background="{ThemeResource SurfaceAltBrush}" BorderBrush="{ThemeResource BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="0">
+                                <StackPanel>
+                                    <Grid Padding="14,13" ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Orientation="Horizontal" Spacing="9">
+                                            <FontIcon Glyph="&#xE700;" FontSize="16" Foreground="{ThemeResource TextMutedBrush}" />
+                                            <TextBlock Text="Device Name" Style="{StaticResource OnboardingBodyTextStyle}" />
+                                        </StackPanel>
+                                        <TextBlock x:Name="EnrollmentDeviceNameText" Grid.Column="1" Style="{StaticResource DetailsValueTextStyle}" />
+                                    </Grid>
+                                    <Border Height="1" Background="{ThemeResource BorderBrush}" />
+                                    <Grid Padding="14,13" ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                        <StackPanel Orientation="Horizontal" Spacing="9">
+                                            <FontIcon Glyph="&#xE11B;" FontSize="16" Foreground="{ThemeResource TextMutedBrush}" />
+                                            <TextBlock Text="Device ID" Style="{StaticResource OnboardingBodyTextStyle}" />
+                                        </StackPanel>
+                                        <TextBlock x:Name="EnrollmentDeviceIdText" Grid.Column="1" Style="{StaticResource DetailsValueTextStyle}" />
+                                    </Grid>
+                                    <Border Height="1" Background="{ThemeResource BorderBrush}" />
+                                    <Grid Padding="14,13" ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                        <StackPanel Orientation="Horizontal" Spacing="9">
+                                            <FontIcon Glyph="&#xE770;" FontSize="16" Foreground="{ThemeResource TextMutedBrush}" />
+                                            <TextBlock Text="Platform" Style="{StaticResource OnboardingBodyTextStyle}" />
+                                        </StackPanel>
+                                        <TextBlock x:Name="EnrollmentPlatformText" Grid.Column="1" Style="{StaticResource DetailsValueTextStyle}" />
+                                    </Grid>
+                                    <Border Height="1" Background="{ThemeResource BorderBrush}" />
+                                    <Grid Padding="14,13" ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                        <StackPanel Orientation="Horizontal" Spacing="9">
+                                            <FontIcon Glyph="&#xE72E;" FontSize="16" Foreground="{ThemeResource TextMutedBrush}" />
+                                            <TextBlock Text="Agent Version" Style="{StaticResource OnboardingBodyTextStyle}" />
+                                        </StackPanel>
+                                        <TextBlock x:Name="EnrollmentAgentVersionText" Grid.Column="1" Style="{StaticResource DetailsValueTextStyle}" />
+                                    </Grid>
+                                    <Border Height="1" Background="{ThemeResource BorderBrush}" />
+                                    <Grid Padding="14,13" ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                        <StackPanel Orientation="Horizontal" Spacing="9">
+                                            <FontIcon Glyph="&#xE121;" FontSize="16" Foreground="{ThemeResource TextMutedBrush}" />
+                                            <TextBlock Text="Enrolled At" Style="{StaticResource OnboardingBodyTextStyle}" />
+                                        </StackPanel>
+                                        <TextBlock x:Name="EnrollmentAtText" Grid.Column="1" Style="{StaticResource DetailsValueTextStyle}" />
+                                    </Grid>
+                                    <Border Height="1" Background="{ThemeResource BorderBrush}" />
+                                    <Grid Padding="14,13" ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                        <StackPanel Orientation="Horizontal" Spacing="9">
+                                            <FontIcon Glyph="&#xE128;" FontSize="16" Foreground="{ThemeResource TextMutedBrush}" />
+                                            <TextBlock Text="Policy Hash" Style="{StaticResource OnboardingBodyTextStyle}" />
+                                        </StackPanel>
+                                        <TextBlock x:Name="EnrollmentPolicyHashText" Grid.Column="1" Style="{StaticResource DetailsValueTextStyle}" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12">
+                                <Button x:Name="OpenDashboardButton" Style="{StaticResource OnboardingPrimaryButtonStyle}" Click="OnOpenDashboard">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <FontIcon Glyph="&#xE80F;" FontSize="16" />
+                                        <TextBlock Text="Open Dashboard" FontSize="15" FontWeight="SemiBold" Foreground="{ThemeResource SuccessBrush}" />
+                                        <FontIcon Glyph="&#xE72A;" FontSize="16" />
+                                    </StackPanel>
+                                </Button>
+                                <Button x:Name="ConfigureAgentButton" Style="{StaticResource OnboardingNeutralButtonStyle}" Click="OnConfigureAgent">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <FontIcon Glyph="&#xE72E;" FontSize="16" />
+                                        <TextBlock Text="Configure Agent" FontSize="15" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
             </StackPanel>

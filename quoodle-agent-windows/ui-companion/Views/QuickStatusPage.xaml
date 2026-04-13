@@ -9,12 +9,11 @@
     Background="{ThemeResource AppBackgroundBrush}">
 
     <ScrollViewer>
-        <Grid Padding="28" MaxWidth="1220">
-            <StackPanel Spacing="18">
+        <Grid Padding="16,8,16,16" MaxWidth="1260">
+            <StackPanel Spacing="14">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
@@ -23,14 +22,16 @@
                         <TextBlock Text="Live snapshot of agent health and activity." Style="{StaticResource PageSubtitleTextStyle}" />
                     </StackPanel>
 
-                    <controls:StatusChip x:Name="HealthChip" Grid.Column="1" Width="120" Margin="0,0,10,0" />
-                    <controls:StatusChip x:Name="ConnectionChip" Grid.Column="2" Width="150" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
+                        <controls:StatusChip x:Name="HealthChip" Width="120" Visibility="Collapsed" />
+                        <controls:StatusChip x:Name="ConnectionChip" Width="150" />
+                    </StackPanel>
                 </Grid>
 
                 <Border Style="{StaticResource CardBorderStyle}">
-                    <Grid ColumnSpacing="20">
+                    <Grid ColumnSpacing="18">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="1.2*" />
+                            <ColumnDefinition Width="1.25*" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
@@ -38,33 +39,33 @@
                         </Grid.ColumnDefinitions>
 
                         <StackPanel Grid.Column="0" Spacing="4">
-                            <TextBlock Text="Device Name" Style="{StaticResource MutedTextStyle}" />
-                            <TextBlock x:Name="DeviceNameText" FontSize="17" FontWeight="SemiBold" />
+                            <TextBlock Text="DEVICE NAME" Style="{StaticResource MutedTextStyle}" />
+                            <TextBlock x:Name="DeviceNameText" FontSize="30" FontWeight="SemiBold" TextWrapping="Wrap" />
                         </StackPanel>
 
                         <StackPanel Grid.Column="1" Spacing="4">
-                            <TextBlock Text="Device ID" Style="{StaticResource MutedTextStyle}" />
+                            <TextBlock Text="DEVICE ID" Style="{StaticResource MutedTextStyle}" />
                             <TextBlock x:Name="DeviceIdText" FontWeight="SemiBold" />
                         </StackPanel>
 
                         <StackPanel Grid.Column="2" Spacing="4">
-                            <TextBlock Text="Agent Version" Style="{StaticResource MutedTextStyle}" />
+                            <TextBlock Text="AGENT VERSION" Style="{StaticResource MutedTextStyle}" />
                             <TextBlock x:Name="AgentVersionText" FontWeight="SemiBold" />
                         </StackPanel>
 
                         <StackPanel Grid.Column="3" Spacing="4">
-                            <TextBlock Text="Latency" Style="{StaticResource MutedTextStyle}" />
+                            <TextBlock Text="UPTIME" Style="{StaticResource MutedTextStyle}" />
                             <TextBlock x:Name="LatencyHeaderText" FontWeight="SemiBold" />
                         </StackPanel>
 
                         <StackPanel Grid.Column="4" Spacing="4">
-                            <TextBlock Text="Policy Hash" Style="{StaticResource MutedTextStyle}" />
-                            <TextBlock x:Name="PolicyHashText" FontWeight="SemiBold" />
+                            <TextBlock Text="POLICY HASH" Style="{StaticResource MutedTextStyle}" />
+                            <TextBlock x:Name="PolicyHashText" FontWeight="SemiBold" TextWrapping="Wrap" />
                         </StackPanel>
                     </Grid>
                 </Border>
 
-                <Grid ColumnSpacing="14">
+                <Grid ColumnSpacing="12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
@@ -86,8 +87,8 @@
                         </Grid.ColumnDefinitions>
 
                         <StackPanel Spacing="8">
-                            <TextBlock Text="Current Activity" Style="{StaticResource MutedTextStyle}" />
-                            <TextBlock x:Name="ActivityText" FontSize="18" FontWeight="SemiBold" />
+                            <TextBlock Text="CURRENT ACTIVITY" Style="{StaticResource MutedTextStyle}" />
+                            <TextBlock x:Name="ActivityText" FontSize="34" FontWeight="SemiBold" />
                             <TextBlock x:Name="HeartbeatText" Style="{StaticResource PageSubtitleTextStyle}" />
                             <TextBlock x:Name="ReconnectText" Style="{StaticResource PageSubtitleTextStyle}" />
                         </StackPanel>
@@ -102,7 +103,12 @@
                     <Button Content="View Logs" Click="OnViewLogs" Style="{StaticResource SecondaryButtonStyle}" />
                 </StackPanel>
 
-                <Border Background="{ThemeResource ChipWarningBackgroundBrush}" CornerRadius="{ThemeResource Corner.Large}" Padding="16">
+                <Border
+                    Background="{ThemeResource WarningPanelBackgroundBrush}"
+                    BorderBrush="{ThemeResource WarningPanelBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Padding="16">
                     <Grid ColumnSpacing="12">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />

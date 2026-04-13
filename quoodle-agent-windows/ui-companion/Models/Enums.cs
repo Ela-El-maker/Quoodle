@@ -33,3 +33,38 @@ public enum CommandExecutionStatus
     TimedOut,
     Rejected
 }
+
+public enum OnboardingStage
+{
+    Detect,
+    Pair,
+    Confirm
+}
+
+public enum OnboardingDetectState
+{
+    Idle,
+    Checking,
+    NotEnrolled
+}
+
+public enum OnboardingPairMode
+{
+    Token,
+    Qr
+}
+
+public enum OnboardingPairState
+{
+    TokenEntry,
+    TokenVerifying,
+    TokenFailed,
+    QrWaiting,
+    PairSucceeded
+}
+
+public enum OnboardingConfirmState
+{
+    Registering,
+    EnrollmentComplete
+}

@@ -4,26 +4,32 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:controls="using:Quoodle.Agent.UiCompanion.Controls"
     xmlns:models="using:Quoodle.Agent.UiCompanion.Models"
     mc:Ignorable="d"
     Background="{ThemeResource AppBackgroundBrush}">
 
-    <Grid Padding="28" MaxWidth="1280" RowSpacing="14">
+    <Grid Padding="16,8,16,16" MaxWidth="1320" RowSpacing="12">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
         <StackPanel Spacing="4">
             <TextBlock Text="Activity &amp; Diagnostics" Style="{StaticResource PageTitleTextStyle}" />
-            <TextBlock Text="Full audit trail of WSS state, command history, and mock kernel-event projection." Style="{StaticResource PageSubtitleTextStyle}" />
+            <TextBlock Text="Full audit trail of WSS messages, command history, and kernel events." Style="{StaticResource PageSubtitleTextStyle}" />
         </StackPanel>
 
-        <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="12">
-            <StackPanel Orientation="Horizontal" Spacing="10">
-                <Border Background="{ThemeResource SurfaceAltBrush}" CornerRadius="10" Padding="14,10">
+        <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="10">
+            <Grid ColumnSpacing="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Background="{ThemeResource SurfaceAltBrush}" BorderBrush="{ThemeResource BorderBrush}" BorderThickness="1" CornerRadius="9" Padding="14,8">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <TextBlock Text="WSS Message Log" FontWeight="SemiBold" />
                         <Border Background="{ThemeResource ChipNeutralBackgroundBrush}" CornerRadius="8" Padding="8,2">
@@ -31,63 +37,131 @@
                         </Border>
                     </StackPanel>
                 </Border>
-                <Border Background="{ThemeResource SurfaceAltBrush}" CornerRadius="10" Padding="14,10">
+
+                <Border Grid.Column="1" Background="{ThemeResource SurfaceAltBrush}" BorderBrush="{ThemeResource BorderBrush}" BorderThickness="1" CornerRadius="9" Padding="14,8">
                     <TextBlock Text="Command History" Style="{StaticResource PageSubtitleTextStyle}" />
                 </Border>
-                <Border Background="{ThemeResource SurfaceAltBrush}" CornerRadius="10" Padding="14,10">
+
+                <Border Grid.Column="2" Background="{ThemeResource SurfaceAltBrush}" BorderBrush="{ThemeResource BorderBrush}" BorderThickness="1" CornerRadius="9" Padding="14,8">
                     <TextBlock Text="Kernel Events" Style="{StaticResource PageSubtitleTextStyle}" />
                 </Border>
-            </StackPanel>
+            </Grid>
         </Border>
 
-        <Grid Grid.Row="2" ColumnSpacing="16">
+        <Grid Grid.Row="2" ColumnSpacing="12">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="2.2*" />
-                <ColumnDefinition Width="1.1*" />
+                <ColumnDefinition Width="2.4*" />
+                <ColumnDefinition Width="1.2*" />
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}" Padding="0">
                 <Grid RowSpacing="0">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <Grid Padding="16" ColumnSpacing="12">
+                    <Grid Padding="12" ColumnSpacing="8">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="220" />
+                            <ColumnDefinition Width="2.2*" />
+                            <ColumnDefinition Width="1.1*" />
+                            <ColumnDefinition Width="1.1*" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
-                        <TextBox x:Name="SearchBox" PlaceholderText="Search type, source, or summary" IsEnabled="False" />
-                        <ComboBox x:Name="FilterBox" Grid.Column="1" Width="220" SelectionChanged="OnFilterChanged"/>
+                        <TextBox x:Name="SearchBox" PlaceholderText="Search type, message ID, summary" IsEnabled="False" />
+                        <ComboBox x:Name="FilterBox" Grid.Column="1" SelectionChanged="OnFilterChanged" />
+                        <ComboBox Grid.Column="2" IsEnabled="False">
+                            <ComboBoxItem Content="All Sources" />
+                        </ComboBox>
+                        <Button Grid.Column="3" Content="Export JSON" Style="{StaticResource SecondaryButtonStyle}" IsEnabled="False" />
                     </Grid>
 
-                    <ListView Grid.Row="1" x:Name="ActivityList" SelectionMode="None" Background="Transparent" BorderThickness="0" Padding="10">
+                    <Grid Grid.Row="1" Background="#AA121621" Padding="12,10" ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="86" />
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="110" />
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="200" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="64" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Text="Seq" Style="{StaticResource MutedTextStyle}" />
+                        <TextBlock Grid.Column="1" Text="Type" Style="{StaticResource MutedTextStyle}" />
+                        <TextBlock Grid.Column="2" Text="From" Style="{StaticResource MutedTextStyle}" />
+                        <TextBlock Grid.Column="3" Text="Message ID" Style="{StaticResource MutedTextStyle}" />
+                        <TextBlock Grid.Column="4" Text="Timestamp" Style="{StaticResource MutedTextStyle}" />
+                        <TextBlock Grid.Column="5" Text="Body Summary" Style="{StaticResource MutedTextStyle}" />
+                        <TextBlock Grid.Column="6" Text="Sig" Style="{StaticResource MutedTextStyle}" />
+                    </Grid>
+
+                    <ListView
+                        Grid.Row="2"
+                        x:Name="ActivityList"
+                        SelectionMode="None"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="0">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="models:ActivityEntry">
-                                <controls:TimelineRow
-                                    Margin="0,0,0,10"
-                                    Timestamp="{x:Bind Timestamp, Mode=OneWay}"
-                                    Source="{x:Bind Source, Mode=OneWay}"
-                                    Title="{x:Bind Title, Mode=OneWay}"
-                                    Details="{x:Bind Details, Mode=OneWay}"
-                                    Severity="{x:Bind Severity, Mode=OneWay}" />
+                                <Grid Padding="12,10" ColumnSpacing="12" Background="Transparent">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="86" />
+                                        <ColumnDefinition Width="120" />
+                                        <ColumnDefinition Width="110" />
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="200" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="64" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Text="{x:Bind Timestamp.Second, Mode=OneWay}" Style="{StaticResource PageSubtitleTextStyle}" />
+
+                                    <Border Grid.Column="1" Background="{ThemeResource ChipNeutralBackgroundBrush}" CornerRadius="7" Padding="8,3" HorizontalAlignment="Left">
+                                        <TextBlock Text="{x:Bind Title, Mode=OneWay}" Foreground="{ThemeResource ChipNeutralForegroundBrush}" FontSize="12" FontWeight="SemiBold" />
+                                    </Border>
+
+                                    <TextBlock Grid.Column="2" Text="{x:Bind Source, Mode=OneWay}" Foreground="{ThemeResource BrandBrush}" />
+                                    <TextBlock Grid.Column="3" Text="{x:Bind Title, Mode=OneWay}" Style="{StaticResource PageSubtitleTextStyle}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="4" Text="{x:Bind Timestamp, Mode=OneWay, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}" Style="{StaticResource PageSubtitleTextStyle}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="5" Text="{x:Bind Details, Mode=OneWay}" Style="{StaticResource PageSubtitleTextStyle}" TextTrimming="CharacterEllipsis" MaxLines="1" />
+                                    <TextBlock Grid.Column="6" Text="ok" Foreground="{ThemeResource SuccessBrush}" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                                </Grid>
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>
+
+                    <TextBlock
+                        Grid.Row="3"
+                        Text="10 messages • page 1 of 1"
+                        Style="{StaticResource MutedTextStyle}"
+                        Margin="12,8,12,10" />
                 </Grid>
             </Border>
 
-            <Border Grid.Column="1" Style="{StaticResource CardBorderStyle}">
-                <StackPanel Spacing="12">
-                    <TextBlock Text="Raw Message" Style="{StaticResource SectionTitleTextStyle}" />
-                    <Border Background="{ThemeResource SurfaceAltBrush}" CornerRadius="{ThemeResource Corner.Medium}" BorderBrush="{ThemeResource BorderBrush}" BorderThickness="1" Padding="20">
-                        <StackPanel Spacing="10">
-                            <TextBlock Text="No row selected" FontWeight="SemiBold" />
-                            <TextBlock Text="Click any timeline item after the live bridge is connected to inspect its structured envelope here." TextWrapping="Wrap" Style="{StaticResource PageSubtitleTextStyle}" />
-                        </StackPanel>
-                    </Border>
+            <Border Grid.Column="1" Style="{StaticResource CardBorderStyle}" Padding="0">
+                <StackPanel>
+                    <Grid Padding="16,14" ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Text="Raw Message" Style="{StaticResource SectionTitleTextStyle}" />
+                        <TextBlock Grid.Column="1" Text="Copy" Style="{StaticResource PageSubtitleTextStyle}" />
+                    </Grid>
+
+                    <Border Height="1" Background="{ThemeResource BorderBrush}" />
+
+                    <StackPanel Spacing="10" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24,28,24,28">
+                        <TextBlock Text="&lt;/&gt;" Style="{StaticResource SectionTitleTextStyle}" Foreground="{ThemeResource TextMutedBrush}" HorizontalAlignment="Center" />
+                        <TextBlock Text="No message selected" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                        <TextBlock Text="Click any row in the log tables to inspect its raw JSON envelope." TextWrapping="Wrap" TextAlignment="Center" Style="{StaticResource PageSubtitleTextStyle}" />
+                    </StackPanel>
                 </StackPanel>
             </Border>
         </Grid>

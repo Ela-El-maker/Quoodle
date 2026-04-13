@@ -12,11 +12,21 @@ public interface IAgentStateProvider : IDisposable
 
     void Stop();
 
-    void AdvanceOnboardingStep();
+    void CheckEnrollmentStatus();
 
-    void PreviousOnboardingStep();
+    void BeginPairing();
 
-    void CompleteOnboarding(string pairingToken);
+    void SelectPairMode(OnboardingPairMode mode);
+
+    void SetPairTokenDigits(string tokenDigits);
+
+    void VerifyTokenPairing();
+
+    void StartQrPairing();
+
+    void RetryPairing();
+
+    void CompleteEnrollment();
 
     void TriggerSyncNow();
 

@@ -2,10 +2,11 @@
 
 public sealed record AgentStateSnapshot(
     bool IsPaired,
-    int OnboardingStep,
+    OnboardingFlowState Onboarding,
     string DeviceId,
     string DeviceName,
     string AgentVersion,
+    string PolicyHash,
     ConnectionState Connection,
     HealthState Health,
     DateTimeOffset LastSyncUtc,
@@ -25,10 +26,11 @@ public sealed record AgentStateSnapshot(
 {
     public static AgentStateSnapshot CreateInitial() => new(
         IsPaired: false,
-        OnboardingStep: 1,
+        Onboarding: OnboardingFlowState.CreateInitial(),
         DeviceId: "pending-pairing",
         DeviceName: Environment.MachineName,
         AgentVersion: "0.1.0-ui-m1",
+        PolicyHash: "sha256:pending",
         Connection: ConnectionState.Connecting,
         Health: HealthState.Healthy,
         LastSyncUtc: DateTimeOffset.UtcNow,

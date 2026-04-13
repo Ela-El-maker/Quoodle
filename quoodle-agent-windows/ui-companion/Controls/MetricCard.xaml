@@ -9,8 +9,9 @@
     <Border
         x:Name="CardBorder"
         Style="{StaticResource CardBorderStyle}"
-        MinWidth="180">
-        <StackPanel Spacing="10">
+        MinWidth="180"
+        Padding="16">
+        <StackPanel Spacing="9">
             <Grid ColumnSpacing="8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -19,15 +20,15 @@
 
                 <Border
                     x:Name="IconHost"
-                    Width="28"
-                    Height="28"
+                    Width="34"
+                    Height="34"
                     CornerRadius="8"
                     Background="{ThemeResource SurfaceAltBrush}">
                     <FontIcon
                         x:Name="GlyphIcon"
                         Glyph="&#xE946;"
                         Foreground="{ThemeResource BrandBrush}"
-                        FontSize="14"
+                        FontSize="15"
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center" />
                 </Border>
@@ -41,7 +42,7 @@
 
             <TextBlock
                 x:Name="ValueText"
-                FontSize="44"
+                FontSize="28"
                 FontWeight="SemiBold"
                 Foreground="{ThemeResource TextPrimaryBrush}" />
 

@@ -4,26 +4,26 @@
 
     <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Dark">
-            <Color x:Key="Color.AppBackground">#FF080B12</Color>
-            <Color x:Key="Color.ShellBackground">#FF121621</Color>
-            <Color x:Key="Color.PaneBackground">#FF141923</Color>
-            <Color x:Key="Color.Surface">#FF171D29</Color>
-            <Color x:Key="Color.SurfaceAlt">#FF101521</Color>
-            <Color x:Key="Color.Border">#FF273042</Color>
+            <Color x:Key="Color.AppBackground">#FF070A12</Color>
+            <Color x:Key="Color.ShellBackground">#FF11151F</Color>
+            <Color x:Key="Color.PaneBackground">#FF121722</Color>
+            <Color x:Key="Color.Surface">#FF171B26</Color>
+            <Color x:Key="Color.SurfaceAlt">#FF1F2431</Color>
+            <Color x:Key="Color.Border">#FF272D3D</Color>
 
-            <Color x:Key="Color.TextPrimary">#FFF2F5FB</Color>
-            <Color x:Key="Color.TextSecondary">#FFB4BDCC</Color>
-            <Color x:Key="Color.TextMuted">#FF7E889B</Color>
+            <Color x:Key="Color.TextPrimary">#FFE9EDF5</Color>
+            <Color x:Key="Color.TextSecondary">#FFA4ACBC</Color>
+            <Color x:Key="Color.TextMuted">#FF747E92</Color>
 
-            <Color x:Key="Color.Brand">#FF2EA8FF</Color>
-            <Color x:Key="Color.Success">#FF36D483</Color>
-            <Color x:Key="Color.Warning">#FFF2B84B</Color>
-            <Color x:Key="Color.Danger">#FFF87171</Color>
-            <Color x:Key="Color.Info">#FF59C6FF</Color>
+            <Color x:Key="Color.Brand">#FF2CB8FF</Color>
+            <Color x:Key="Color.Success">#FF2AD372</Color>
+            <Color x:Key="Color.Warning">#FFE0B126</Color>
+            <Color x:Key="Color.Danger">#FFE35E6C</Color>
+            <Color x:Key="Color.Info">#FF2AA9EA</Color>
 
-            <Color x:Key="Color.NavSelectedBackground">#FF15342A</Color>
+            <Color x:Key="Color.NavSelectedBackground">#FF163726</Color>
             <Color x:Key="Color.NavSelectedBorder">#FF1F9A61</Color>
-            <Color x:Key="Color.NavHoverBackground">#FF1A2130</Color>
+            <Color x:Key="Color.NavHoverBackground">#FF1A2030</Color>
 
             <SolidColorBrush x:Key="AppBackgroundBrush" Color="{ThemeResource Color.AppBackground}" />
             <SolidColorBrush x:Key="ShellBackgroundBrush" Color="{ThemeResource Color.ShellBackground}" />
@@ -43,11 +43,11 @@
             <SolidColorBrush x:Key="InfoBrush" Color="{ThemeResource Color.Info}" />
             <SolidColorBrush x:Key="NeutralBrush" Color="{ThemeResource Color.TextMuted}" />
 
-            <SolidColorBrush x:Key="ChipSuccessBackgroundBrush" Color="#1D3A2E" />
-            <SolidColorBrush x:Key="ChipWarningBackgroundBrush" Color="#43371D" />
-            <SolidColorBrush x:Key="ChipDangerBackgroundBrush" Color="#44252A" />
-            <SolidColorBrush x:Key="ChipInfoBackgroundBrush" Color="#1A3142" />
-            <SolidColorBrush x:Key="ChipNeutralBackgroundBrush" Color="#2A3040" />
+            <SolidColorBrush x:Key="ChipSuccessBackgroundBrush" Color="#1A3C2A" />
+            <SolidColorBrush x:Key="ChipWarningBackgroundBrush" Color="#433613" />
+            <SolidColorBrush x:Key="ChipDangerBackgroundBrush" Color="#482229" />
+            <SolidColorBrush x:Key="ChipInfoBackgroundBrush" Color="#17384A" />
+            <SolidColorBrush x:Key="ChipNeutralBackgroundBrush" Color="#2A303E" />
             <SolidColorBrush x:Key="ChipSuccessForegroundBrush" Color="{ThemeResource Color.Success}" />
             <SolidColorBrush x:Key="ChipWarningForegroundBrush" Color="{ThemeResource Color.Warning}" />
             <SolidColorBrush x:Key="ChipDangerForegroundBrush" Color="{ThemeResource Color.Danger}" />
@@ -57,33 +57,35 @@
             <SolidColorBrush x:Key="NavSelectedBackgroundBrush" Color="{ThemeResource Color.NavSelectedBackground}" />
             <SolidColorBrush x:Key="NavSelectedBorderBrush" Color="{ThemeResource Color.NavSelectedBorder}" />
             <SolidColorBrush x:Key="NavHoverBackgroundBrush" Color="{ThemeResource Color.NavHoverBackground}" />
-            <SolidColorBrush x:Key="HeaderPanelBackgroundBrush" Color="#140E2A1E" />
+            <SolidColorBrush x:Key="HeaderPanelBackgroundBrush" Color="#150E2A1E" />
             <SolidColorBrush x:Key="HeaderPanelBorderBrush" Color="#2B1F9A61" />
-            <SolidColorBrush x:Key="WarningPanelBackgroundBrush" Color="#191F1707" />
-            <SolidColorBrush x:Key="WarningPanelBorderBrush" Color="#5A7A5A12" />
+            <SolidColorBrush x:Key="WarningPanelBackgroundBrush" Color="#1A251D08" />
+            <SolidColorBrush x:Key="WarningPanelBorderBrush" Color="#7A9D7416" />
+            <SolidColorBrush x:Key="InputBackgroundBrush" Color="#232733" />
+            <SolidColorBrush x:Key="InputBorderBrush" Color="#343A4A" />
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="Light">
-            <Color x:Key="Color.AppBackground">#FFF2F5FA</Color>
-            <Color x:Key="Color.ShellBackground">#FFE9EEF5</Color>
-            <Color x:Key="Color.PaneBackground">#FFE5EBF3</Color>
-            <Color x:Key="Color.Surface">#FFFFFFFF</Color>
-            <Color x:Key="Color.SurfaceAlt">#FFF6F8FC</Color>
-            <Color x:Key="Color.Border">#FFD6DEEB</Color>
+            <Color x:Key="Color.AppBackground">#FF070A12</Color>
+            <Color x:Key="Color.ShellBackground">#FF11151F</Color>
+            <Color x:Key="Color.PaneBackground">#FF121722</Color>
+            <Color x:Key="Color.Surface">#FF171B26</Color>
+            <Color x:Key="Color.SurfaceAlt">#FF1F2431</Color>
+            <Color x:Key="Color.Border">#FF272D3D</Color>
 
-            <Color x:Key="Color.TextPrimary">#FF101828</Color>
-            <Color x:Key="Color.TextSecondary">#FF344054</Color>
-            <Color x:Key="Color.TextMuted">#FF667085</Color>
+            <Color x:Key="Color.TextPrimary">#FFE9EDF5</Color>
+            <Color x:Key="Color.TextSecondary">#FFA4ACBC</Color>
+            <Color x:Key="Color.TextMuted">#FF747E92</Color>
 
-            <Color x:Key="Color.Brand">#FF1677D8</Color>
-            <Color x:Key="Color.Success">#FF15803D</Color>
-            <Color x:Key="Color.Warning">#FFB45309</Color>
-            <Color x:Key="Color.Danger">#FFB42318</Color>
-            <Color x:Key="Color.Info">#FF0E7490</Color>
+            <Color x:Key="Color.Brand">#FF2CB8FF</Color>
+            <Color x:Key="Color.Success">#FF2AD372</Color>
+            <Color x:Key="Color.Warning">#FFE0B126</Color>
+            <Color x:Key="Color.Danger">#FFE35E6C</Color>
+            <Color x:Key="Color.Info">#FF2AA9EA</Color>
 
-            <Color x:Key="Color.NavSelectedBackground">#FFE4F4EA</Color>
-            <Color x:Key="Color.NavSelectedBorder">#FF2F9F66</Color>
-            <Color x:Key="Color.NavHoverBackground">#FFF0F4FA</Color>
+            <Color x:Key="Color.NavSelectedBackground">#FF163726</Color>
+            <Color x:Key="Color.NavSelectedBorder">#FF1F9A61</Color>
+            <Color x:Key="Color.NavHoverBackground">#FF1A2030</Color>
 
             <SolidColorBrush x:Key="AppBackgroundBrush" Color="{ThemeResource Color.AppBackground}" />
             <SolidColorBrush x:Key="ShellBackgroundBrush" Color="{ThemeResource Color.ShellBackground}" />
@@ -103,11 +105,11 @@
             <SolidColorBrush x:Key="InfoBrush" Color="{ThemeResource Color.Info}" />
             <SolidColorBrush x:Key="NeutralBrush" Color="{ThemeResource Color.TextMuted}" />
 
-            <SolidColorBrush x:Key="ChipSuccessBackgroundBrush" Color="#E6F6EC" />
-            <SolidColorBrush x:Key="ChipWarningBackgroundBrush" Color="#FFF4E5" />
-            <SolidColorBrush x:Key="ChipDangerBackgroundBrush" Color="#FDEBEC" />
-            <SolidColorBrush x:Key="ChipInfoBackgroundBrush" Color="#E8F5FB" />
-            <SolidColorBrush x:Key="ChipNeutralBackgroundBrush" Color="#EEF2F7" />
+            <SolidColorBrush x:Key="ChipSuccessBackgroundBrush" Color="#1A3C2A" />
+            <SolidColorBrush x:Key="ChipWarningBackgroundBrush" Color="#433613" />
+            <SolidColorBrush x:Key="ChipDangerBackgroundBrush" Color="#482229" />
+            <SolidColorBrush x:Key="ChipInfoBackgroundBrush" Color="#17384A" />
+            <SolidColorBrush x:Key="ChipNeutralBackgroundBrush" Color="#2A303E" />
             <SolidColorBrush x:Key="ChipSuccessForegroundBrush" Color="{ThemeResource Color.Success}" />
             <SolidColorBrush x:Key="ChipWarningForegroundBrush" Color="{ThemeResource Color.Warning}" />
             <SolidColorBrush x:Key="ChipDangerForegroundBrush" Color="{ThemeResource Color.Danger}" />
@@ -117,10 +119,12 @@
             <SolidColorBrush x:Key="NavSelectedBackgroundBrush" Color="{ThemeResource Color.NavSelectedBackground}" />
             <SolidColorBrush x:Key="NavSelectedBorderBrush" Color="{ThemeResource Color.NavSelectedBorder}" />
             <SolidColorBrush x:Key="NavHoverBackgroundBrush" Color="{ThemeResource Color.NavHoverBackground}" />
-            <SolidColorBrush x:Key="HeaderPanelBackgroundBrush" Color="#FFF2FAF5" />
-            <SolidColorBrush x:Key="HeaderPanelBorderBrush" Color="#FFB7E0C7" />
-            <SolidColorBrush x:Key="WarningPanelBackgroundBrush" Color="#FFFFF8EA" />
-            <SolidColorBrush x:Key="WarningPanelBorderBrush" Color="#FFEBCB71" />
+            <SolidColorBrush x:Key="HeaderPanelBackgroundBrush" Color="#150E2A1E" />
+            <SolidColorBrush x:Key="HeaderPanelBorderBrush" Color="#2B1F9A61" />
+            <SolidColorBrush x:Key="WarningPanelBackgroundBrush" Color="#1A251D08" />
+            <SolidColorBrush x:Key="WarningPanelBorderBrush" Color="#7A9D7416" />
+            <SolidColorBrush x:Key="InputBackgroundBrush" Color="#232733" />
+            <SolidColorBrush x:Key="InputBorderBrush" Color="#343A4A" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 
@@ -132,7 +136,7 @@
 
     <CornerRadius x:Key="Corner.Small">8</CornerRadius>
     <CornerRadius x:Key="Corner.Medium">12</CornerRadius>
-    <CornerRadius x:Key="Corner.Large">18</CornerRadius>
+    <CornerRadius x:Key="Corner.Large">14</CornerRadius>
 
     <Style TargetType="TextBlock">
         <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
@@ -141,7 +145,7 @@
 
     <Style x:Key="PageTitleTextStyle" TargetType="TextBlock">
         <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
-        <Setter Property="FontSize" Value="32" />
+        <Setter Property="FontSize" Value="44" />
         <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
 
@@ -166,16 +170,18 @@
         <Setter Property="BorderBrush" Value="{ThemeResource BorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="{ThemeResource Corner.Large}" />
-        <Setter Property="Padding" Value="18" />
+        <Setter Property="Padding" Value="24" />
     </Style>
 
     <Style x:Key="AccentButtonStyle" TargetType="Button">
-        <Setter Property="Foreground" Value="White" />
+        <Setter Property="Foreground" Value="#FF0E1B13" />
         <Setter Property="Background" Value="{ThemeResource SuccessBrush}" />
-        <Setter Property="BorderBrush" Value="Transparent" />
-        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="BorderBrush" Value="#FF0A6B3A" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="22,10" />
         <Setter Property="CornerRadius" Value="10" />
         <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="FontSize" Value="20" />
     </Style>
 
     <Style x:Key="SecondaryButtonStyle" TargetType="Button">
@@ -183,19 +189,51 @@
         <Setter Property="Background" Value="{ThemeResource SurfaceAltBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource BorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Padding" Value="14,8" />
+        <Setter Property="Padding" Value="20,10" />
         <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="FontSize" Value="20" />
     </Style>
 
     <Style x:Key="NavSectionTextStyle" TargetType="TextBlock">
         <Setter Property="Foreground" Value="{ThemeResource TextMutedBrush}" />
-        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontSize" Value="16" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Margin" Value="12,16,0,6" />
+        <Setter Property="Margin" Value="14,18,0,8" />
+        <Setter Property="CharacterSpacing" Value="80" />
     </Style>
 
     <Style TargetType="NavigationViewItem">
         <Setter Property="Foreground" Value="{ThemeResource TextSecondaryBrush}" />
+        <Setter Property="Margin" Value="8,4" />
+        <Setter Property="Padding" Value="12,9" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="FontSize" Value="18" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style TargetType="TextBox">
+        <Setter Property="Background" Value="{ThemeResource InputBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource InputBorderBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+        <Setter Property="PlaceholderForeground" Value="{ThemeResource TextMutedBrush}" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="Padding" Value="16,12" />
+    </Style>
+
+    <Style TargetType="ComboBox">
+        <Setter Property="Background" Value="{ThemeResource InputBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource InputBorderBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="Padding" Value="10,8" />
+    </Style>
+
+    <Style TargetType="ToggleSwitch">
+        <Setter Property="OnContent" Value="" />
+        <Setter Property="OffContent" Value="" />
+        <Setter Property="Margin" Value="0,6,0,0" />
     </Style>
 
     <SolidColorBrush x:Key="NavigationViewDefaultPaneBackground" Color="Transparent" />

@@ -9,82 +9,85 @@
     Background="{ThemeResource AppBackgroundBrush}">
 
     <ScrollViewer>
-        <Grid Padding="28" MaxWidth="1280">
-            <StackPanel Spacing="18">
-                <StackPanel Spacing="6">
-                    <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                        <TextBlock Text="Agent Dashboard" Style="{StaticResource PageTitleTextStyle}" />
-                        <controls:StatusChip x:Name="ConnectionChip" Width="150"/>
-                        <controls:StatusChip x:Name="HealthChip" Width="120"/>
-                    </StackPanel>
-                    <TextBlock Text="Live control-plane transport, telemetry, and command posture." Style="{StaticResource PageSubtitleTextStyle}" />
-                </StackPanel>
-
+        <Grid Padding="16,8,16,16" MaxWidth="1320">
+            <StackPanel Spacing="14">
                 <Border
-                    Padding="18"
+                    Padding="16"
                     Background="{ThemeResource HeaderPanelBackgroundBrush}"
                     BorderBrush="{ThemeResource HeaderPanelBorderBrush}"
                     BorderThickness="1"
-                    CornerRadius="{ThemeResource Corner.Large}">
-                    <Grid ColumnSpacing="20" RowSpacing="14">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
+                    CornerRadius="12">
+                    <StackPanel Spacing="12">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
 
-                        <StackPanel Spacing="4">
-                            <TextBlock x:Name="IdentityText" FontWeight="SemiBold" FontSize="16"/>
-                            <TextBlock x:Name="VersionText" Style="{StaticResource PageSubtitleTextStyle}"/>
-                            <TextBlock x:Name="LastSyncText" Style="{StaticResource PageSubtitleTextStyle}"/>
-                            <TextBlock x:Name="ActivityText" Style="{StaticResource PageSubtitleTextStyle}" TextWrapping="Wrap"/>
-                        </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                <controls:StatusChip x:Name="ConnectionChip" Width="132" />
+                                <TextBlock x:Name="IdentityText" Style="{StaticResource PageSubtitleTextStyle}" />
+                            </StackPanel>
 
-                        <Button Grid.Column="1" Content="Sync Now" Click="OnSyncNow" Style="{StaticResource AccentButtonStyle}"/>
+                            <TextBlock Grid.Column="1" x:Name="ActivityText" Style="{StaticResource PageSubtitleTextStyle}" Margin="10,0,0,0" />
+                            <TextBlock Grid.Column="2" Text="Details" Style="{StaticResource PageSubtitleTextStyle}" />
+                        </Grid>
 
-                        <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnSpacing="22">
+                        <Grid ColumnSpacing="20" RowSpacing="8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
 
-                            <StackPanel Grid.Column="0" Spacing="3">
-                                <TextBlock Text="Agent Version" Style="{StaticResource MutedTextStyle}" />
+                            <StackPanel Grid.Row="0" Grid.Column="0" Spacing="2">
+                                <TextBlock Text="AGENT VERSION" Style="{StaticResource MutedTextStyle}" />
                                 <TextBlock x:Name="HeroVersionText" FontWeight="SemiBold" />
                             </StackPanel>
-
-                            <StackPanel Grid.Column="1" Spacing="3">
-                                <TextBlock Text="OS Build" Style="{StaticResource MutedTextStyle}" />
+                            <StackPanel Grid.Row="0" Grid.Column="1" Spacing="2">
+                                <TextBlock Text="OS BUILD" Style="{StaticResource MutedTextStyle}" />
                                 <TextBlock x:Name="HeroBuildText" FontWeight="SemiBold" />
                             </StackPanel>
-
-                            <StackPanel Grid.Column="2" Spacing="3">
-                                <TextBlock Text="Transport Status" Style="{StaticResource MutedTextStyle}" />
+                            <StackPanel Grid.Row="0" Grid.Column="2" Spacing="2">
+                                <TextBlock Text="TRANSPORT" Style="{StaticResource MutedTextStyle}" />
                                 <TextBlock x:Name="HeroTransportText" FontWeight="SemiBold" />
                             </StackPanel>
-
-                            <StackPanel Grid.Column="3" Spacing="3">
-                                <TextBlock Text="Reconnect Attempts" Style="{StaticResource MutedTextStyle}" />
+                            <StackPanel Grid.Row="0" Grid.Column="3" Spacing="2">
+                                <TextBlock Text="RECONNECT ATTEMPTS" Style="{StaticResource MutedTextStyle}" />
                                 <TextBlock x:Name="HeroReconnectText" FontWeight="SemiBold" />
                             </StackPanel>
+
+                            <StackPanel Grid.Row="1" Grid.Column="0" Spacing="2">
+                                <TextBlock Text="LAST SYNC" Style="{StaticResource MutedTextStyle}" />
+                                <TextBlock x:Name="LastSyncText" FontWeight="SemiBold" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="1" Spacing="2">
+                                <TextBlock Text="HEALTH" Style="{StaticResource MutedTextStyle}" />
+                                <controls:StatusChip x:Name="HealthChip" Width="110" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Spacing="2">
+                                <TextBlock Text="CHANNEL" Style="{StaticResource MutedTextStyle}" />
+                                <TextBlock x:Name="VersionText" />
+                            </StackPanel>
                         </Grid>
-                    </Grid>
+                    </StackPanel>
                 </Border>
 
-                <Grid ColumnSpacing="14" RowSpacing="14">
+                <Grid ColumnSpacing="12" RowSpacing="12">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="2*"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="2*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
                     <controls:MetricCard
@@ -92,38 +95,38 @@
                         Grid.Row="0"
                         Grid.Column="0"
                         Tone="Success"
-                        Glyph="&#xE7F4;" />
+                        Glyph="&#xE945;" />
                     <controls:MetricCard
                         x:Name="MemoryCard"
                         Grid.Row="0"
                         Grid.Column="1"
-                        Tone="Info"
-                        Glyph="&#xE950;" />
+                        Tone="Success"
+                        Glyph="&#xEB7D;" />
                     <controls:MetricCard
                         x:Name="DiskCard"
                         Grid.Row="0"
                         Grid.Column="2"
-                        Tone="Warning"
-                        Glyph="&#xE958;" />
+                        Tone="Danger"
+                        Glyph="&#xEA39;" />
 
                     <controls:MetricCard
                         x:Name="RxCard"
                         Grid.Row="1"
                         Grid.Column="0"
                         Tone="Info"
-                        Glyph="&#xE7F5;" />
+                        Glyph="&#xEA3A;" />
                     <controls:MetricCard
                         x:Name="TxCard"
                         Grid.Row="1"
                         Grid.Column="1"
                         Tone="Info"
-                        Glyph="&#xE8D5;" />
+                        Glyph="&#xE7F4;" />
 
-                    <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource CardBorderStyle}" Background="{ThemeResource SurfaceAltBrush}">
+                    <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource CardBorderStyle}" Background="{ThemeResource SurfaceBrush}">
                         <StackPanel Spacing="8">
-                            <TextBlock Text="Telemetry Summary" Style="{StaticResource MutedTextStyle}"/>
-                            <TextBlock x:Name="TelemetrySummaryText" TextWrapping="Wrap" Style="{StaticResource PageSubtitleTextStyle}"/>
-                            <TextBlock Text="High-fidelity dashboard overview aligned to the mock shell." Style="{StaticResource MutedTextStyle}"/>
+                            <TextBlock Text="WSS Event Feed" Style="{StaticResource SectionTitleTextStyle}" />
+                            <TextBlock x:Name="TelemetrySummaryText" TextWrapping="Wrap" Style="{StaticResource PageSubtitleTextStyle}" />
+                            <Button Content="Sync Now" Click="OnSyncNow" HorizontalAlignment="Left" Style="{StaticResource SecondaryButtonStyle}" />
                         </StackPanel>
                     </Border>
                 </Grid>

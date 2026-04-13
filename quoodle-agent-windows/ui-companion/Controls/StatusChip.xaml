@@ -7,22 +7,22 @@
     mc:Ignorable="d">
     <Border
         x:Name="ChipBorder"
-        Padding="10,5"
+        Padding="12,6"
         CornerRadius="16"
         BorderThickness="1"
         Background="{ThemeResource ChipNeutralBackgroundBrush}"
-        BorderBrush="{ThemeResource BorderBrush}">
+        BorderBrush="{ThemeResource InputBorderBrush}">
         <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
             <Ellipse
                 x:Name="ToneDot"
-                Width="8"
-                Height="8"
+                Width="9"
+                Height="9"
                 Fill="{ThemeResource ChipNeutralForegroundBrush}" />
             <TextBlock
                 x:Name="ChipText"
                 FontWeight="SemiBold"
                 Foreground="{ThemeResource ChipNeutralForegroundBrush}"
-                FontSize="12"
+                FontSize="13"
                 Text="Unknown" />
         </StackPanel>
     </Border>

@@ -8,13 +8,14 @@
     xmlns:controls="using:Microsoft.UI.Xaml.Controls"
     Title="Quoodle Agent Companion"
     mc:Ignorable="d">
+
     <Grid Background="{ThemeResource AppBackgroundBrush}">
         <controls:NavigationView
             x:Name="AppNav"
             IsSettingsVisible="False"
             IsBackButtonVisible="Collapsed"
             IsTitleBarAutoPaddingEnabled="False"
-            OpenPaneLength="300"
+            OpenPaneLength="320"
             CompactPaneLength="56"
             PaneDisplayMode="Left"
             SelectionChanged="OnSelectionChanged"
@@ -22,25 +23,24 @@
 
             <controls:NavigationView.PaneCustomContent>
                 <Border BorderBrush="{ThemeResource BorderBrush}" BorderThickness="0,0,0,1">
-                    <Grid Padding="18,16,18,14">
-                        <StackPanel Spacing="6">
-                            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                                <Border
-                                    Width="34"
-                                    Height="34"
-                                    CornerRadius="10"
-                                    Background="{ThemeResource SurfaceAltBrush}">
-                                    <FontIcon
-                                        Glyph="&#xE7B8;"
-                                        Foreground="{ThemeResource BrandBrush}"
-                                        FontSize="18"
-                                        HorizontalAlignment="Center"
-                                        VerticalAlignment="Center" />
-                                </Border>
-                                <StackPanel>
-                                    <TextBlock Text="QuoodleAgent" FontSize="24" FontWeight="SemiBold" />
-                                    <TextBlock x:Name="PaneVersionText" Style="{StaticResource MutedTextStyle}" Text="v0.0.1" />
-                                </StackPanel>
+                    <Grid Padding="20,18,20,14">
+                        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                            <Border
+                                Width="38"
+                                Height="38"
+                                CornerRadius="11"
+                                Background="#FF2F3365">
+                                <FontIcon
+                                    Glyph="&#xE774;"
+                                    Foreground="#FFD9AA44"
+                                    FontSize="20"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center" />
+                            </Border>
+
+                            <StackPanel>
+                                <TextBlock Text="QuoodleAgent" FontSize="34" FontWeight="SemiBold" />
+                                <TextBlock x:Name="PaneVersionText" Style="{StaticResource MutedTextStyle}" Text="v0.0.1 • PC001" />
                             </StackPanel>
                         </StackPanel>
                     </Grid>
@@ -50,57 +50,39 @@
             <controls:NavigationView.MenuItems>
                 <controls:NavigationViewItemHeader Content="MONITOR" />
 
-                <controls:NavigationViewItem Content="Device Onboarding" Tag="onboarding">
-                    <controls:NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Contact" />
-                    </controls:NavigationViewItem.Icon>
-                </controls:NavigationViewItem>
-
                 <controls:NavigationViewItem Content="Agent Dashboard" Tag="dashboard">
                     <controls:NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Home" />
-                    </controls:NavigationViewItem.Icon>
-                </controls:NavigationViewItem>
-
-                <controls:NavigationViewItem Content="Device Details" Tag="device-details">
-                    <controls:NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Admin" />
-                    </controls:NavigationViewItem.Icon>
-                </controls:NavigationViewItem>
-
-                <controls:NavigationViewItem Content="Command History" Tag="command-history">
-                    <controls:NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Document" />
-                    </controls:NavigationViewItem.Icon>
-                </controls:NavigationViewItem>
-
-                <controls:NavigationViewItem Content="Pairing Recovery" Tag="pairing-recovery">
-                    <controls:NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Repair" />
+                        <FontIcon Glyph="&#xF246;" />
                     </controls:NavigationViewItem.Icon>
                 </controls:NavigationViewItem>
 
                 <controls:NavigationViewItem Content="Quick Status" Tag="quick-status">
                     <controls:NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Clock" />
+                        <FontIcon Glyph="&#xE9CE;" />
                     </controls:NavigationViewItem.Icon>
                 </controls:NavigationViewItem>
 
                 <controls:NavigationViewItem Content="Activity &amp; Diagnostics" Tag="activity">
                     <controls:NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="List" />
+                        <FontIcon Glyph="&#xEC4F;" />
                     </controls:NavigationViewItem.Icon>
                 </controls:NavigationViewItem>
 
                 <controls:NavigationViewItem Content="Settings &amp; Config" Tag="settings">
                     <controls:NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Setting" />
+                        <FontIcon Glyph="&#xE713;" />
+                    </controls:NavigationViewItem.Icon>
+                </controls:NavigationViewItem>
+
+                <controls:NavigationViewItem Content="Device Onboarding" Tag="onboarding">
+                    <controls:NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE77B;" />
                     </controls:NavigationViewItem.Icon>
                 </controls:NavigationViewItem>
             </controls:NavigationView.MenuItems>
 
             <controls:NavigationView.PaneFooter>
-                <StackPanel Padding="14,12,14,16" Spacing="8">
+                <StackPanel Padding="14,10,14,14" Spacing="8">
                     <TextBlock Text="AGENT STATUS" Style="{StaticResource NavSectionTextStyle}" Margin="0" />
                     <TextBlock x:Name="StatusLine1" Style="{StaticResource PageSubtitleTextStyle}" Text="WSS Connected" />
                     <TextBlock x:Name="StatusLine2" Style="{StaticResource PageSubtitleTextStyle}" Text="Kernel Guard Active" />
@@ -111,67 +93,31 @@
                         BorderThickness="1"
                         CornerRadius="12"
                         Padding="10,8">
-                        <TextBlock x:Name="KernelHintText" Foreground="{ThemeResource ChipWarningForegroundBrush}" FontSize="13" Text="0 kernel events pending review" />
+                        <TextBlock
+                            x:Name="KernelHintText"
+                            Foreground="{ThemeResource ChipWarningForegroundBrush}"
+                            FontSize="14"
+                            Text="0 kernel events pending review" />
                     </Border>
                 </StackPanel>
             </controls:NavigationView.PaneFooter>
 
             <controls:NavigationView.Header>
-                <Border
-                    Margin="10,10,10,0"
-                    Padding="18"
-                    Background="{ThemeResource HeaderPanelBackgroundBrush}"
-                    BorderBrush="{ThemeResource HeaderPanelBorderBrush}"
-                    BorderThickness="1"
-                    CornerRadius="{ThemeResource Corner.Large}">
-                    <StackPanel Spacing="10">
-                        <Grid ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-
-                            <TextBlock x:Name="HeaderConnectionText" Grid.Column="0" FontWeight="SemiBold" />
-                            <TextBlock x:Name="HeaderSessionText" Grid.Column="1" Style="{StaticResource PageSubtitleTextStyle}" />
-                            <TextBlock x:Name="HeaderDeviceText" Grid.Column="2" Style="{StaticResource PageSubtitleTextStyle}" />
-                            <TextBlock x:Name="HeaderHeartbeatText" Grid.Column="3" Style="{StaticResource PageSubtitleTextStyle}" HorizontalAlignment="Right" />
-                        </Grid>
-
-                        <Grid ColumnSpacing="14">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-
-                            <StackPanel Grid.Column="0" Spacing="2">
-                                <TextBlock Text="AGENT VERSION" Style="{StaticResource MutedTextStyle}" />
-                                <TextBlock x:Name="HeaderVersionText" FontWeight="SemiBold" />
-                            </StackPanel>
-
-                            <StackPanel Grid.Column="1" Spacing="2">
-                                <TextBlock Text="OS BUILD" Style="{StaticResource MutedTextStyle}" />
-                                <TextBlock x:Name="HeaderBuildText" FontWeight="SemiBold" />
-                            </StackPanel>
-
-                            <StackPanel Grid.Column="2" Spacing="2">
-                                <TextBlock Text="POLICY" Style="{StaticResource MutedTextStyle}" />
-                                <TextBlock x:Name="HeaderPolicyText" FontWeight="SemiBold" />
-                            </StackPanel>
-
-                            <StackPanel Grid.Column="3" Spacing="2">
-                                <TextBlock Text="LATENCY" Style="{StaticResource MutedTextStyle}" />
-                                <TextBlock x:Name="HeaderLatencyText" FontWeight="SemiBold" HorizontalAlignment="Right" />
-                            </StackPanel>
-                        </Grid>
-                    </StackPanel>
+                <Border Visibility="Collapsed">
+                    <Grid>
+                        <TextBlock x:Name="HeaderConnectionText" />
+                        <TextBlock x:Name="HeaderSessionText" />
+                        <TextBlock x:Name="HeaderDeviceText" />
+                        <TextBlock x:Name="HeaderHeartbeatText" />
+                        <TextBlock x:Name="HeaderVersionText" />
+                        <TextBlock x:Name="HeaderBuildText" />
+                        <TextBlock x:Name="HeaderPolicyText" />
+                        <TextBlock x:Name="HeaderLatencyText" />
+                    </Grid>
                 </Border>
             </controls:NavigationView.Header>
 
-            <Frame x:Name="ContentFrame" Margin="8,0,8,8" />
+            <Frame x:Name="ContentFrame" Margin="14,8,14,14" />
         </controls:NavigationView>
     </Grid>
 </Window>
