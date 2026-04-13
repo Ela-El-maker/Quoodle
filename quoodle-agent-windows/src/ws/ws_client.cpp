@@ -1146,6 +1146,7 @@ bool WsClient::try_connect()
 
                         if (command::IsObservabilityMethod(method)) {
                             const auto obs = command::ExecuteObservabilityCommand(
+                                config_,
                                 state_impl_,
                                 method,
                                 command_message_id,
@@ -1160,8 +1161,8 @@ bool WsClient::try_connect()
                                     "completed",
                                     "ok",
                                     obs.notes.empty() ? "observability command completed" : obs.notes,
-                                    "",
-                                    "",
+                                    obs.artifact_url,
+                                    obs.artifact_checksum,
                                     0,
                                     "",
                                     obs.output_text,
@@ -1180,8 +1181,8 @@ bool WsClient::try_connect()
                                     "failed",
                                     "failed",
                                     obs.notes.empty() ? "observability command failed" : obs.notes,
-                                    "",
-                                    "",
+                                    obs.artifact_url,
+                                    obs.artifact_checksum,
                                     obs.error_code,
                                     obs.reason,
                                     obs.output_text,

@@ -1,5 +1,6 @@
 #include "observability_command.hpp"
 
+#include "artifact_client.hpp"
 #include "../kernel/ioctl_client.hpp"
 
 #include <nlohmann/json.hpp>
@@ -9,7 +10,11 @@
 #include <cctype>
 #include <cstdio>
 #include <cstdint>
+#include <ctime>
+#include <filesystem>
+#include <sstream>
 #include <string>
+#include <system_error>
 #include <vector>
 
 #ifdef _WIN32
@@ -29,10 +34,39 @@ namespace
 
 constexpr int QERR_OBS_AUTH_FAILED = 5301;
 constexpr int QERR_OBS_COLLECT_FAILED = 5302;
+constexpr int QERR_FS_INVALID_PARAMS = 5200;
+constexpr int QERR_FS_PATH_NOT_FOUND = 5201;
+constexpr int QERR_FS_NOT_DIRECTORY = 5202;
+constexpr int QERR_FS_NOT_FILE = 5203;
+constexpr int QERR_FS_ACCESS_DENIED = 5204;
+constexpr int QERR_FS_TOO_LARGE = 5205;
+constexpr int QERR_FS_UPLOAD_REQUEST_FAILED = 5206;
+constexpr int QERR_FS_UPLOAD_FAILED = 5207;
 constexpr std::size_t kDefaultLimit = 250;
 constexpr std::size_t kMaxLimit = 1000;
+constexpr std::size_t kDefaultFsLimit = 250;
+constexpr std::size_t kMaxFsLimit = 2000;
+constexpr std::uint64_t kDefaultDownloadMaxBytes = 5u * 1024u * 1024u;
+constexpr std::uint64_t kMaxDownloadMaxBytes = 25u * 1024u * 1024u;
 constexpr int kErrInvalidOpcode = 4002;
 constexpr int kErrNotSupported = 4004;
+
+struct FileListOptions
+{
+  std::filesystem::path root_path;
+  bool recursive{true};
+  std::size_t max_depth{4};
+  std::size_t limit{kDefaultFsLimit};
+  bool include_hidden{false};
+  bool include_system{false};
+  bool follow_symlinks{false};
+};
+
+struct DownloadOptions
+{
+  std::filesystem::path file_path;
+  std::uint64_t max_bytes{kDefaultDownloadMaxBytes};
+};
 
 std::string lowercase_copy(std::string value)
 {
@@ -67,6 +101,14 @@ std::string canonical_method(const std::string &method)
   if (lowered == "display-info" || lowered == "window-title" || lowered == "active-window")
   {
     return "get_active_window";
+  }
+  if (lowered == "filesystem" || lowered == "browse-filesystem")
+  {
+    return "list_files";
+  }
+  if (lowered == "download-file")
+  {
+    return "download_file";
   }
   return lowered;
 }
@@ -105,6 +147,169 @@ std::size_t parse_limit(const std::string &params_json)
   {
     return kDefaultLimit;
   }
+}
+
+bool parse_params_object(const std::string &params_json, nlohmann::json &out)
+{
+  out = nlohmann::json::object();
+  if (params_json.empty())
+  {
+    return true;
+  }
+
+  try
+  {
+    const auto parsed = nlohmann::json::parse(params_json);
+    if (!parsed.is_object())
+    {
+      return false;
+    }
+    out = parsed;
+    return true;
+  }
+  catch (const std::exception &)
+  {
+    return false;
+  }
+}
+
+bool json_bool(const nlohmann::json &obj, const char *key, bool default_value)
+{
+  if (!obj.contains(key))
+  {
+    return default_value;
+  }
+  const auto &value = obj.at(key);
+  if (value.is_boolean())
+  {
+    return value.get<bool>();
+  }
+  if (value.is_number_integer())
+  {
+    return value.get<long long>() != 0;
+  }
+  if (value.is_string())
+  {
+    const auto lowered = lowercase_copy(value.get<std::string>());
+    return lowered == "1" || lowered == "true" || lowered == "yes" || lowered == "on";
+  }
+  return default_value;
+}
+
+std::size_t json_size_t(const nlohmann::json &obj, const char *key, std::size_t default_value, std::size_t max_value)
+{
+  if (!obj.contains(key) || !obj.at(key).is_number_integer())
+  {
+    return default_value;
+  }
+  const auto raw = obj.at(key).get<long long>();
+  if (raw <= 0)
+  {
+    return default_value;
+  }
+  const auto casted = static_cast<std::size_t>(raw);
+  return std::min(casted, max_value);
+}
+
+std::uint64_t json_u64(const nlohmann::json &obj, const char *key, std::uint64_t default_value, std::uint64_t max_value)
+{
+  if (!obj.contains(key) || !obj.at(key).is_number_integer())
+  {
+    return default_value;
+  }
+  const auto raw = obj.at(key).get<long long>();
+  if (raw <= 0)
+  {
+    return default_value;
+  }
+  const auto casted = static_cast<std::uint64_t>(raw);
+  return std::min(casted, max_value);
+}
+
+std::filesystem::path default_filesystem_root()
+{
+  std::error_code ec;
+  const std::filesystem::path c_drive("C:\\");
+  if (std::filesystem::exists(c_drive, ec))
+  {
+    return c_drive;
+  }
+  ec.clear();
+  auto cwd = std::filesystem::current_path(ec);
+  if (ec)
+  {
+    return std::filesystem::path(".");
+  }
+  if (cwd.has_root_path())
+  {
+    return cwd.root_path();
+  }
+  return cwd;
+}
+
+std::filesystem::path normalize_path(const std::string &raw_path)
+{
+  std::filesystem::path path = raw_path.empty() ? default_filesystem_root() : std::filesystem::path(raw_path);
+  if (path.is_relative())
+  {
+    path = default_filesystem_root() / path;
+  }
+  path = path.lexically_normal();
+  std::error_code ec;
+  const auto absolute = std::filesystem::absolute(path, ec);
+  if (!ec)
+  {
+    return absolute.lexically_normal();
+  }
+  return path;
+}
+
+bool parse_file_list_options(const std::string &params_json, FileListOptions &out, std::string &reason, std::string &notes)
+{
+  nlohmann::json parsed = nlohmann::json::object();
+  if (!parse_params_object(params_json, parsed))
+  {
+    reason = "list_files_invalid_params";
+    notes = "params must be a JSON object";
+    return false;
+  }
+
+  const std::string path_value = parsed.value("path", std::string());
+  out.root_path = normalize_path(path_value);
+  out.recursive = json_bool(parsed, "recursive", true);
+  out.max_depth = json_size_t(parsed, "max_depth", 4, 16);
+  out.limit = json_size_t(parsed, "limit", kDefaultFsLimit, kMaxFsLimit);
+  out.include_hidden = json_bool(parsed, "include_hidden", false);
+  out.include_system = json_bool(parsed, "include_system", false);
+  out.follow_symlinks = json_bool(parsed, "follow_symlinks", false);
+  reason.clear();
+  notes.clear();
+  return true;
+}
+
+bool parse_download_options(const std::string &params_json, DownloadOptions &out, std::string &reason, std::string &notes)
+{
+  nlohmann::json parsed = nlohmann::json::object();
+  if (!parse_params_object(params_json, parsed))
+  {
+    reason = "download_file_invalid_params";
+    notes = "params must be a JSON object";
+    return false;
+  }
+
+  const std::string path_value = parsed.value("path", std::string());
+  if (path_value.empty())
+  {
+    reason = "download_file_invalid_params";
+    notes = "path is required";
+    return false;
+  }
+
+  out.file_path = normalize_path(path_value);
+  out.max_bytes = json_u64(parsed, "max_bytes", kDefaultDownloadMaxBytes, kMaxDownloadMaxBytes);
+  reason.clear();
+  notes.clear();
+  return true;
 }
 
 ObservabilityExecutionResult fail_result(int code, const std::string &reason, const std::string &notes, const std::string &meta_json = {})
@@ -354,6 +559,314 @@ std::string ansi_to_utf8(const std::string &value)
   std::wstring wide(static_cast<std::size_t>(wide_needed - 1), L'\0');
   MultiByteToWideChar(CP_ACP, 0, value.c_str(), -1, wide.data(), wide_needed);
   return wide_to_utf8(wide.c_str());
+}
+
+std::string path_to_utf8(const std::filesystem::path &path)
+{
+  try
+  {
+    return wide_to_utf8(path.wstring().c_str());
+  }
+  catch (const std::exception &)
+  {
+    return path.string();
+  }
+}
+
+std::string file_time_to_iso8601(const std::filesystem::file_time_type &file_time)
+{
+  try
+  {
+    const auto sys_now = std::chrono::system_clock::now();
+    const auto fs_now = std::filesystem::file_time_type::clock::now();
+    const auto converted = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+        file_time - fs_now + sys_now);
+    const std::time_t value = std::chrono::system_clock::to_time_t(converted);
+    if (value <= 0)
+    {
+      return {};
+    }
+    std::tm utc{};
+    if (gmtime_s(&utc, &value) != 0)
+    {
+      return {};
+    }
+    char buffer[32] = {};
+    if (std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &utc) == 0)
+    {
+      return {};
+    }
+    return buffer;
+  }
+  catch (const std::exception &)
+  {
+    return {};
+  }
+}
+
+bool query_hidden_system_flags(const std::filesystem::path &path, bool &is_hidden, bool &is_system)
+{
+  is_hidden = false;
+  is_system = false;
+  const std::wstring wide = path.wstring();
+  const DWORD attrs = GetFileAttributesW(wide.c_str());
+  if (attrs == INVALID_FILE_ATTRIBUTES)
+  {
+    return false;
+  }
+  is_hidden = (attrs & FILE_ATTRIBUTE_HIDDEN) != 0;
+  is_system = (attrs & FILE_ATTRIBUTE_SYSTEM) != 0;
+  return true;
+}
+
+bool should_include_entry(const std::filesystem::path &path, const FileListOptions &options)
+{
+  bool hidden = false;
+  bool system = false;
+  (void)query_hidden_system_flags(path, hidden, system);
+  if (!options.include_hidden && hidden)
+  {
+    return false;
+  }
+  if (!options.include_system && system)
+  {
+    return false;
+  }
+  return true;
+}
+
+nlohmann::json build_file_entry(const std::filesystem::directory_entry &entry)
+{
+  const auto full_path = entry.path();
+  std::error_code ec;
+  const bool is_dir = entry.is_directory(ec);
+  ec.clear();
+  const bool is_file = entry.is_regular_file(ec);
+  ec.clear();
+  const bool is_symlink = entry.is_symlink(ec);
+
+  std::uint64_t size_bytes = 0;
+  if (is_file)
+  {
+    ec.clear();
+    size_bytes = entry.file_size(ec);
+    if (ec)
+    {
+      size_bytes = 0;
+    }
+  }
+
+  bool is_hidden = false;
+  bool is_system = false;
+  (void)query_hidden_system_flags(full_path, is_hidden, is_system);
+
+  std::string target_path;
+  if (is_symlink)
+  {
+    ec.clear();
+    const auto target = std::filesystem::read_symlink(full_path, ec);
+    if (!ec)
+    {
+      target_path = path_to_utf8(target);
+    }
+  }
+
+  std::string modified_at;
+  ec.clear();
+  const auto last_write = std::filesystem::last_write_time(full_path, ec);
+  if (!ec)
+  {
+    modified_at = file_time_to_iso8601(last_write);
+  }
+
+  std::string created_at;
+  WIN32_FILE_ATTRIBUTE_DATA attr_data{};
+  if (GetFileAttributesExW(full_path.wstring().c_str(), GetFileExInfoStandard, &attr_data))
+  {
+    ULARGE_INTEGER ull{};
+    ull.LowPart = attr_data.ftCreationTime.dwLowDateTime;
+    ull.HighPart = attr_data.ftCreationTime.dwHighDateTime;
+    if (ull.QuadPart > 0)
+    {
+      constexpr std::uint64_t windows_to_unix_epoch_100ns = 116444736000000000ULL;
+      const std::uint64_t unix_100ns = ull.QuadPart - windows_to_unix_epoch_100ns;
+      const std::time_t unix_seconds = static_cast<std::time_t>(unix_100ns / 10000000ULL);
+      std::tm utc{};
+      if (gmtime_s(&utc, &unix_seconds) == 0)
+      {
+        char buffer[32] = {};
+        if (std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &utc) > 0)
+        {
+          created_at = buffer;
+        }
+      }
+    }
+  }
+
+  nlohmann::json row = {
+      {"name", path_to_utf8(full_path.filename())},
+      {"path", path_to_utf8(full_path)},
+      {"type", is_dir ? "directory" : (is_file ? "file" : "other")},
+      {"size", is_file ? nlohmann::json(size_bytes) : nlohmann::json(nullptr)},
+      {"modified_at", modified_at.empty() ? nlohmann::json(nullptr) : nlohmann::json(modified_at)},
+      {"created_at", created_at.empty() ? nlohmann::json(nullptr) : nlohmann::json(created_at)},
+      {"extension", full_path.has_extension() ? full_path.extension().string() : std::string()},
+      {"is_hidden", is_hidden},
+      {"is_system", is_system},
+      {"is_symlink", is_symlink},
+      {"target_path", target_path.empty() ? nlohmann::json(nullptr) : nlohmann::json(target_path)},
+      {"downloadable", is_file},
+      {"download_method", is_file ? nlohmann::json("download_file") : nlohmann::json(nullptr)},
+  };
+
+  return row;
+}
+
+bool collect_list_files(const FileListOptions &options, nlohmann::json &data, std::string &reason, std::string &notes)
+{
+  std::error_code ec;
+  if (!std::filesystem::exists(options.root_path, ec))
+  {
+    reason = "list_files_path_not_found";
+    notes = path_to_utf8(options.root_path);
+    return false;
+  }
+  ec.clear();
+  if (!std::filesystem::is_directory(options.root_path, ec))
+  {
+    reason = "list_files_path_not_directory";
+    notes = path_to_utf8(options.root_path);
+    return false;
+  }
+
+  std::vector<nlohmann::json> entries;
+  entries.reserve(options.limit);
+  std::vector<std::filesystem::path> child_directories;
+  std::size_t total_seen = 0;
+  bool partial = false;
+
+  const auto add_entry = [&](const std::filesystem::directory_entry &entry) {
+    ++total_seen;
+    if (!should_include_entry(entry.path(), options))
+    {
+      return;
+    }
+    if (entries.size() >= options.limit)
+    {
+      partial = true;
+      return;
+    }
+    entries.push_back(build_file_entry(entry));
+  };
+
+  const std::filesystem::directory_options dir_options = options.follow_symlinks
+                                                             ? (std::filesystem::directory_options::skip_permission_denied |
+                                                                std::filesystem::directory_options::follow_directory_symlink)
+                                                             : std::filesystem::directory_options::skip_permission_denied;
+
+  try
+  {
+    std::filesystem::directory_iterator root_iter(options.root_path, dir_options, ec);
+    std::filesystem::directory_iterator root_end;
+    for (; root_iter != root_end; ++root_iter)
+    {
+      if (ec)
+      {
+        ec.clear();
+        continue;
+      }
+      add_entry(*root_iter);
+      if (options.recursive)
+      {
+        ec.clear();
+        if (root_iter->is_directory(ec))
+        {
+          child_directories.push_back(root_iter->path());
+        }
+      }
+    }
+
+    if (options.recursive && !partial && options.max_depth > 1)
+    {
+      for (const auto &child_dir : child_directories)
+      {
+        std::filesystem::recursive_directory_iterator iter(child_dir, dir_options, ec);
+        std::filesystem::recursive_directory_iterator end;
+        for (; iter != end; ++iter)
+        {
+          if (ec)
+          {
+            ec.clear();
+            continue;
+          }
+          const std::size_t depth_from_root = static_cast<std::size_t>(iter.depth()) + 2;
+          if (depth_from_root > options.max_depth)
+          {
+            iter.disable_recursion_pending();
+            continue;
+          }
+          if (!options.follow_symlinks && iter->is_symlink())
+          {
+            iter.disable_recursion_pending();
+          }
+          add_entry(*iter);
+          if (partial)
+          {
+            break;
+          }
+        }
+        if (partial)
+        {
+          break;
+        }
+      }
+    }
+  }
+  catch (const std::filesystem::filesystem_error &e)
+  {
+    reason = "list_files_access_denied";
+    notes = e.what();
+    return false;
+  }
+  catch (const std::exception &e)
+  {
+    reason = "list_files_collect_failed";
+    notes = e.what();
+    return false;
+  }
+
+  std::sort(entries.begin(), entries.end(), [](const nlohmann::json &a, const nlohmann::json &b) {
+    const auto at = a.value("type", std::string());
+    const auto bt = b.value("type", std::string());
+    if (at != bt)
+    {
+      if (at == "directory")
+        return true;
+      if (bt == "directory")
+        return false;
+    }
+    return a.value("name", std::string()) < b.value("name", std::string());
+  });
+
+  data = {
+      {"schema_version", "v1"},
+      {"snapshot_type", "list_files"},
+      {"kernel_mode", true},
+      {"collection_ts_unix", now_unix_string()},
+      {"path", path_to_utf8(options.root_path)},
+      {"is_directory", true},
+      {"recursive", options.recursive},
+      {"max_depth", options.max_depth},
+      {"partial", partial},
+      {"next_cursor", nullptr},
+      {"count", entries.size()},
+      {"total_seen", total_seen},
+      {"entries", entries},
+      {"download", {{"supported", true}, {"method", "download_file"}}},
+  };
+  notes = partial ? "partial_result_limit_reached" : "ok";
+  reason.clear();
+  return true;
 }
 
 bool collect_processes(std::size_t limit, nlohmann::json &data, std::string &reason, std::string &notes)
@@ -914,10 +1427,12 @@ bool IsObservabilityMethod(const std::string &method)
 {
   const std::string lowered = canonical_method(method);
   return lowered == "list_processes" || lowered == "list_services" || lowered == "list_connections" ||
-         lowered == "list_mounts" || lowered == "network_info" || lowered == "get_active_window";
+         lowered == "list_mounts" || lowered == "network_info" || lowered == "get_active_window" ||
+         lowered == "list_files" || lowered == "download_file";
 }
 
 ObservabilityExecutionResult ExecuteObservabilityCommand(
+    const AgentConfig &config,
     const AgentState &state,
     const std::string &method,
     const std::string &command_message_id,
@@ -952,9 +1467,17 @@ ObservabilityExecutionResult ExecuteObservabilityCommand(
   {
     auth = ioctl.get_active_window(command_message_id, state, command_message_id);
   }
+  else if (canonical == "list_files")
+  {
+    auth = ioctl.list_files(command_message_id, state, params_json, command_message_id);
+  }
+  else if (canonical == "download_file")
+  {
+    auth = ioctl.download_file(command_message_id, state, params_json, command_message_id);
+  }
   else
   {
-    return fail_result(QERR_OBS_COLLECT_FAILED, "unsupported_observability_method", "Unsupported observability method");
+    return fail_result(QERR_OBS_COLLECT_FAILED, "unsupported_method", "Unsupported method");
   }
 
   nlohmann::json kernel_meta = nlohmann::json::object();
@@ -1017,6 +1540,8 @@ ObservabilityExecutionResult ExecuteObservabilityCommand(
   nlohmann::json data = nlohmann::json::object();
   std::string reason;
   std::string notes;
+  std::string artifact_url;
+  std::string artifact_checksum;
   bool collected = false;
   if (canonical == "list_processes")
   {
@@ -1042,6 +1567,128 @@ ObservabilityExecutionResult ExecuteObservabilityCommand(
   {
     collected = collect_active_window(data, reason, notes);
   }
+  else if (canonical == "list_files")
+  {
+    FileListOptions options{};
+    if (!parse_file_list_options(params_json, options, reason, notes))
+    {
+      return fail_result(QERR_FS_INVALID_PARAMS, reason, notes, kernel_meta.dump());
+    }
+    collected = collect_list_files(options, data, reason, notes);
+    if (!collected)
+    {
+      int code = QERR_OBS_COLLECT_FAILED;
+      if (reason == "list_files_path_not_found")
+      {
+        code = QERR_FS_PATH_NOT_FOUND;
+      }
+      else if (reason == "list_files_path_not_directory")
+      {
+        code = QERR_FS_NOT_DIRECTORY;
+      }
+      else if (reason == "list_files_access_denied")
+      {
+        code = QERR_FS_ACCESS_DENIED;
+      }
+      return fail_result(code, reason, notes, kernel_meta.dump());
+    }
+  }
+  else if (canonical == "download_file")
+  {
+    DownloadOptions options{};
+    if (!parse_download_options(params_json, options, reason, notes))
+    {
+      return fail_result(QERR_FS_INVALID_PARAMS, reason, notes, kernel_meta.dump());
+    }
+
+    std::error_code ec;
+    if (!std::filesystem::exists(options.file_path, ec))
+    {
+      return fail_result(QERR_FS_PATH_NOT_FOUND, "download_file_path_not_found", path_to_utf8(options.file_path), kernel_meta.dump());
+    }
+    ec.clear();
+    if (!std::filesystem::is_regular_file(options.file_path, ec))
+    {
+      return fail_result(QERR_FS_NOT_FILE, "download_file_not_file", path_to_utf8(options.file_path), kernel_meta.dump());
+    }
+    ec.clear();
+    const auto file_size = static_cast<std::uint64_t>(std::filesystem::file_size(options.file_path, ec));
+    if (ec)
+    {
+      return fail_result(QERR_FS_ACCESS_DENIED, "download_file_size_failed", "unable to stat file", kernel_meta.dump());
+    }
+    if (file_size == 0)
+    {
+      return fail_result(QERR_FS_NOT_FILE, "download_file_empty", "file is empty", kernel_meta.dump());
+    }
+    if (file_size > options.max_bytes)
+    {
+      return fail_result(QERR_FS_TOO_LARGE, "download_file_too_large", "file exceeds max_bytes", kernel_meta.dump());
+    }
+
+    auto extension = lowercase_copy(options.file_path.extension().string());
+    std::string content_type = "application/octet-stream";
+    if (extension == ".png")
+    {
+      content_type = "image/png";
+    }
+    else if (extension == ".jpg" || extension == ".jpeg")
+    {
+      content_type = "image/jpeg";
+    }
+    else if (extension == ".txt" || extension == ".log" || extension == ".json")
+    {
+      content_type = "text/plain";
+    }
+
+    ArtifactClient artifact_client;
+    const auto ticket = artifact_client.request_upload(
+        config.artifact_api_base_url,
+        config.jwt,
+        command_message_id,
+        content_type,
+        file_size);
+    if (!ticket.ok)
+    {
+      return fail_result(
+          QERR_FS_UPLOAD_REQUEST_FAILED,
+          "download_file_upload_request_failed",
+          ticket.reason.empty() ? "upload_request_failed" : ticket.reason,
+          kernel_meta.dump());
+    }
+
+    const auto upload = artifact_client.upload_file(
+        ticket.upload_url,
+        config.jwt,
+        ticket.artifact_id,
+        ticket.upload_token,
+        options.file_path.string());
+    if (!upload.ok)
+    {
+      return fail_result(
+          QERR_FS_UPLOAD_FAILED,
+          "download_file_upload_failed",
+          upload.reason.empty() ? "upload_failed" : upload.reason,
+          kernel_meta.dump());
+    }
+
+    data = {
+        {"schema_version", "v1"},
+        {"snapshot_type", "download_file"},
+        {"kernel_mode", true},
+        {"collection_ts_unix", now_unix_string()},
+        {"path", path_to_utf8(options.file_path)},
+        {"name", path_to_utf8(options.file_path.filename())},
+        {"size_bytes", file_size},
+        {"extension", options.file_path.has_extension() ? options.file_path.extension().string() : std::string()},
+        {"content_type", content_type},
+        {"status", "uploaded"},
+    };
+    artifact_url = upload.artifact_url;
+    artifact_checksum = upload.artifact_checksum;
+    notes = "download_file_uploaded";
+    collected = true;
+  }
 
   if (!collected)
   {
@@ -1050,11 +1697,20 @@ ObservabilityExecutionResult ExecuteObservabilityCommand(
 
   ObservabilityExecutionResult out{};
   out.success = true;
-  out.notes = kernel_meta.contains("authorization_mode")
-                  ? canonical + " collected (compat auth)"
-                  : canonical + " collected";
+  if (!notes.empty())
+  {
+    out.notes = notes;
+  }
+  else
+  {
+    out.notes = kernel_meta.contains("authorization_mode")
+                    ? canonical + " collected (compat auth)"
+                    : canonical + " collected";
+  }
   out.data_json = data.dump();
   out.meta_json = kernel_meta.dump();
+  out.artifact_url = artifact_url;
+  out.artifact_checksum = artifact_checksum;
   return out;
 #else
   return fail_result(QERR_OBS_COLLECT_FAILED, "unsupported_platform", "observability collectors are only supported on Windows", kernel_meta.dump());

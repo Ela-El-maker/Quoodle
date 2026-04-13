@@ -31,6 +31,10 @@ QuoodleOpcode MapOpcodeToCode(const std::string &opcode)
     return QOP_OBS_NETWORK_INFO;
   if (opcode == "get_active_window" || opcode == "GET_ACTIVE_WINDOW")
     return QOP_OBS_GET_ACTIVE_WINDOW;
+  if (opcode == "list_files" || opcode == "LIST_FILES")
+    return QOP_FS_LIST_FILES;
+  if (opcode == "download_file" || opcode == "DOWNLOAD_FILE")
+    return QOP_FS_DOWNLOAD_FILE;
   if (opcode == "EXEC_VALIDATE_UPDATE_PACKAGE" || opcode == "VALIDATE_UPDATE_PACKAGE")
     return QOP_EXEC_VALIDATE_UPDATE_PACKAGE;
   if (opcode == "EXEC_CAPTURE_SCREENSHOT" || opcode == "CAPTURE_SCREENSHOT" || opcode == "screenshot")

@@ -77,6 +77,12 @@ public:
                                 const std::string &command_message_id = "");
   KernelExecResult get_active_window(const std::string &request_id, const AgentState &state,
                                      const std::string &command_message_id = "");
+  KernelExecResult list_files(const std::string &request_id, const AgentState &state,
+                              const std::string &params_json = "{}",
+                              const std::string &command_message_id = "");
+  KernelExecResult download_file(const std::string &request_id, const AgentState &state,
+                                 const std::string &params_json = "{}",
+                                 const std::string &command_message_id = "");
   KernelExecResult validate_update_package(const std::string &request_id, const AgentState &state,
                                            const std::string &package_path,
                                            const std::string &command_message_id = "");

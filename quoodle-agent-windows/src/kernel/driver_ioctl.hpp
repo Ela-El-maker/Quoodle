@@ -87,6 +87,9 @@ enum QuoodleOpcode : uint32_t {
   QOP_OBS_LIST_MOUNTS = ((1u << 16) | 4u),
   QOP_OBS_NETWORK_INFO = ((1u << 16) | 5u),
   QOP_OBS_GET_ACTIVE_WINDOW = ((1u << 16) | 6u),
+  // Category-masked filesystem opcodes (read-oriented).
+  QOP_FS_LIST_FILES = ((2u << 16) | 1u),
+  QOP_FS_DOWNLOAD_FILE = ((2u << 16) | 2u),
 };
 
 struct QuoodleIoctlRequest {
