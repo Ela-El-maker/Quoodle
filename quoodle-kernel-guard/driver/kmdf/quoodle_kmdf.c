@@ -199,6 +199,14 @@ static VOID QuoodleEvtIoDeviceControl(_In_ WDFQUEUE Queue,
         QuoodleOpcodeHandleGetActiveWindow(resp, &req_copy);
         should_emit_event = TRUE;
         break;
+      case QOP_FS_LIST_FILES:
+        QuoodleOpcodeHandleListFiles(resp, &req_copy);
+        should_emit_event = TRUE;
+        break;
+      case QOP_FS_DOWNLOAD_FILE:
+        QuoodleOpcodeHandleDownloadFile(resp, &req_copy);
+        should_emit_event = TRUE;
+        break;
       case QOP_EXEC_COLLECT_SYSTEM_INFO:
         QuoodleOpcodeHandleCollectSystemInfo(resp, &req_copy);
         should_emit_event = TRUE;

@@ -78,4 +78,18 @@ VOID QuoodleOpcodeHandleGetActiveWindow(
   q_opcode_handle_authorized_collect(resp, "get_active_window");
 }
 
+VOID QuoodleOpcodeHandleListFiles(
+    _Out_ QUOODLE_IOCTL_RESPONSE* resp,
+    _In_opt_ const QUOODLE_IOCTL_REQUEST* req) {
+  UNREFERENCED_PARAMETER(req);
+  q_opcode_handle_authorized_collect(resp, "list_files");
+}
+
+VOID QuoodleOpcodeHandleDownloadFile(
+    _Out_ QUOODLE_IOCTL_RESPONSE* resp,
+    _In_opt_ const QUOODLE_IOCTL_REQUEST* req) {
+  UNREFERENCED_PARAMETER(req);
+  q_opcode_handle_authorized_collect(resp, "download_file");
+}
+
 
