@@ -145,6 +145,7 @@ class _DeviceCommandsTabWidgetState
       'deviceId': _asString(row['device_id']).ifEmpty(widget.deviceId),
       'deviceName': _asString(row['device_name']),
       'params': params is Map || params is List ? params : _asString(params),
+      'result': row['result'],
       'resultStatus': _asString(row['result_status']),
       'resultNotes': _asString(row['result_notes']),
       'artifactUrl': _asString(row['artifact_url']),

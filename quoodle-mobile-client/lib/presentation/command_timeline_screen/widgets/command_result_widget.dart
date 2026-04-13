@@ -1,29 +1,94 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:secure_device_control/app/di/providers.dart';
+import 'package:secure_device_control/core/storage/storage_keys.dart';
+import 'package:secure_device_control/features/commands/presentation/providers/commands_api_providers.dart';
+import 'package:secure_device_control/features/commands/presentation/result/command_result_parser.dart';
 
 import '../../../theme/app_theme.dart';
 import '../../../widgets/status_badge_widget.dart';
 
-// ── Public Entry Point ───────────────────────────────────────────────────────
-class CommandResultWidget extends StatelessWidget {
-  final Map<String, dynamic> command;
-  final CommandStatus status;
-
+class CommandResultWidget extends ConsumerStatefulWidget {
   const CommandResultWidget({
     super.key,
     required this.command,
     required this.status,
   });
 
-  bool get _isSuccess => status == CommandStatus.completed;
-  bool get _isFailed =>
-      status == CommandStatus.failed || status == CommandStatus.expired;
+  final Map<String, dynamic> command;
+  final CommandStatus status;
 
-  Color get _statusColor => _isSuccess ? AppTheme.secondary : AppTheme.error;
+  @override
+  ConsumerState<CommandResultWidget> createState() =>
+      _CommandResultWidgetState();
+}
+
+class _CommandResultWidgetState extends ConsumerState<CommandResultWidget> {
+  bool _downloadingArtifact = false;
+
+  bool get _isSuccess => widget.status == CommandStatus.completed;
+
+  bool get _isFailed =>
+      widget.status == CommandStatus.failed ||
+      widget.status == CommandStatus.expired;
+
+  Future<void> _downloadArtifact(String artifactUrl, {String? checksum}) async {
+    if (_downloadingArtifact) {
+      return;
+    }
+    setState(() => _downloadingArtifact = true);
+    try {
+      final result = await ref.read(commandArtifactDownloaderProvider).download(
+            artifactUrl: artifactUrl,
+            checksum: checksum,
+          );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              result.checksumVerified
+                  ? 'Saved ${result.fileName} (${result.sizeBytes} bytes)'
+                  : 'Saved ${result.fileName}, checksum mismatch detected.',
+            ),
+            backgroundColor:
+                result.checksumVerified ? AppTheme.secondary : AppTheme.warning,
+          ),
+        );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('Download failed: $error'),
+            backgroundColor: AppTheme.error,
+          ),
+        );
+    } finally {
+      if (mounted) {
+        setState(() => _downloadingArtifact = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (!_isSuccess && !_isFailed) {
+      return const SizedBox.shrink();
+    }
+
+    final parsed = parseCommandResult(widget.command);
+
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.surfaceVariant,
@@ -33,70 +98,49 @@ class CommandResultWidget extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _ResultHeader(
-            command: command,
-            isSuccess: _isSuccess,
-            statusColor: _statusColor,
-          ),
+          _ResultHeader(command: widget.command, status: widget.status),
           const Divider(height: 1, color: AppTheme.borderLight),
-          if (_isSuccess)
-            _buildTypedResult(context)
-          else if (_isFailed)
-            _FailureView(command: command),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _ResultTopMeta(
+                  parsed: parsed,
+                  status: widget.status,
+                ),
+                const SizedBox(height: 12),
+                _TypedResultBody(
+                  parsed: parsed,
+                  onDownloadArtifact: _downloadArtifact,
+                  downloadingArtifact: _downloadingArtifact,
+                ),
+                const SizedBox(height: 12),
+                _DebugSection(
+                  result: parsed.result,
+                  params: parsed.params,
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
-
-  Widget _buildTypedResult(BuildContext context) {
-    final method = command['method'] as String? ?? '';
-    switch (method) {
-      case 'screenshot':
-      case 'screenshot_capture':
-        return _ScreenshotResultView(command: command);
-      case 'list_processes':
-      case 'process_list':
-        return _ProcessListResultView(command: command);
-      case 'running_apps':
-        return _RunningAppsResultView(command: command);
-      case 'list_files':
-      case 'filesystem':
-        return _FilesystemResultView(command: command);
-      case 'collect_system_info':
-      case 'system_info':
-        return _SystemInfoResultView(command: command);
-      case 'network_info':
-        return _NetworkInfoResultView(command: command);
-      case 'download_file':
-      case 'upload_file':
-      case 'create_file':
-        return _FileOpResultView(command: command);
-      case 'collect_telemetry':
-      case 'health_check':
-        return _TelemetryResultView(command: command);
-      case 'lock_screen':
-      case 'policy_probe':
-      case 'policy_sync':
-      case 'reboot_device':
-      case 'reboot':
-        return _ActionResultView(command: command);
-      default:
-        return _GenericResultView(command: command);
-    }
-  }
 }
 
-// ── Result Header ────────────────────────────────────────────────────────────
 class _ResultHeader extends StatelessWidget {
-  final Map<String, dynamic> command;
-  final bool isSuccess;
-  final Color statusColor;
-
   const _ResultHeader({
     required this.command,
-    required this.isSuccess,
-    required this.statusColor,
+    required this.status,
   });
+
+  final Map<String, dynamic> command;
+  final CommandStatus status;
+
+  bool get _isSuccess => status == CommandStatus.completed;
+
+  Color get _statusColor => _isSuccess ? AppTheme.secondary : AppTheme.error;
 
   @override
   Widget build(BuildContext context) {
@@ -105,20 +149,22 @@ class _ResultHeader extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            isSuccess ? Icons.check_circle_rounded : Icons.cancel_rounded,
-            color: statusColor,
+            _isSuccess ? Icons.check_circle_rounded : Icons.cancel_rounded,
+            color: _statusColor,
             size: 18,
           ),
           const SizedBox(width: 8),
-          Text(
-            isSuccess ? 'Command Completed' : 'Command Failed',
-            style: GoogleFonts.ibmPlexSans(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: statusColor,
+          Expanded(
+            child: Text(
+              _isSuccess ? 'Command Completed' : 'Command Failed',
+              style: GoogleFonts.ibmPlexSans(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: _statusColor,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          const Spacer(),
           if (command.containsKey('executionTimeMs'))
             _MetaChip(
               label: '${command['executionTimeMs']}ms',
@@ -130,1683 +176,1106 @@ class _ResultHeader extends StatelessWidget {
   }
 }
 
-// ── Screenshot Result ────────────────────────────────────────────────────────
-class _ScreenshotResultView extends StatefulWidget {
-  final Map<String, dynamic> command;
-  const _ScreenshotResultView({required this.command});
+class _ResultTopMeta extends StatelessWidget {
+  const _ResultTopMeta({
+    required this.parsed,
+    required this.status,
+  });
 
-  @override
-  State<_ScreenshotResultView> createState() => _ScreenshotResultViewState();
-}
-
-class _ScreenshotResultViewState extends State<_ScreenshotResultView> {
-  bool _fullscreen = false;
+  final ParsedCommandResult parsed;
+  final CommandStatus status;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _SectionLabel('SCREENSHOT'),
-              const Spacer(),
-              _MetaChip(label: 'SENSITIVE', color: AppTheme.warning),
-            ],
-          ),
+    final isFailed =
+        status == CommandStatus.failed || status == CommandStatus.expired;
+    final notesText = parsed.resultNotes.ifEmpty(
+      isFailed ? parsed.errorMessage.ifEmpty('Command execution failed.') : '',
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const _SectionLabel('BACKEND RESULT'),
+            const Spacer(),
+            Flexible(
+              child: _MetaChip(label: parsed.canonicalMethod, monospace: true),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _MetaChip(
+                label: 'STATE: ${parsed.executionState}', monospace: true),
+            if (parsed.resultStatus.isNotEmpty)
+              _MetaChip(
+                  label: 'RESULT: ${parsed.resultStatus}', monospace: true),
+            if (parsed.errorCode.isNotEmpty)
+              _MetaChip(
+                  label: 'ERROR: ${parsed.errorCode}', color: AppTheme.error),
+          ],
+        ),
+        if (notesText.isNotEmpty) ...[
           const SizedBox(height: 10),
-          GestureDetector(
-            onTap: () => setState(() => _fullscreen = !_fullscreen),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              width: double.infinity,
-              height: _fullscreen ? 280 : 180,
-              decoration: BoxDecoration(
-                color: AppTheme.surface,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppTheme.border),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isFailed ? AppTheme.errorMuted : AppTheme.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isFailed
+                    ? AppTheme.error.withAlpha(90)
+                    : AppTheme.borderLight,
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Image.network(
-                      'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&q=80',
-                      fit: BoxFit.cover,
-                      semanticLabel:
-                          'Screenshot of device screen showing dashboard with charts and data tables',
-                      errorBuilder: (_, __, ___) => Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.screenshot_rounded,
-                              size: 32,
-                              color: AppTheme.textMuted,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'screenshot_20260406_104131.png',
-                              style: GoogleFonts.ibmPlexMono(
-                                fontSize: 10,
-                                color: AppTheme.textMuted,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 7,
-                        ),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.bottomCenter,
-                            end: Alignment.topCenter,
-                            colors: [
-                              Colors.black.withAlpha(180),
-                              Colors.transparent,
-                            ],
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Text(
-                              '1920×1080  ·  PNG  ·  2.4 MB',
-                              style: GoogleFonts.ibmPlexMono(
-                                fontSize: 10,
-                                color: Colors.white70,
-                              ),
-                            ),
-                            const Spacer(),
-                            Text(
-                              '10:41:31',
-                              style: GoogleFonts.ibmPlexMono(
-                                fontSize: 10,
-                                color: Colors.white54,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Icon(
-                          _fullscreen
-                              ? Icons.zoom_out_rounded
-                              : Icons.zoom_in_rounded,
-                          size: 14,
-                          color: Colors.white70,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+            ),
+            child: Text(
+              notesText,
+              style: GoogleFonts.ibmPlexSans(
+                fontSize: 12,
+                color: isFailed ? AppTheme.error : AppTheme.textSecondary,
+                height: 1.4,
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          _ActionRow(
-            actions: [
-              _ActionButton(
-                icon: Icons.download_rounded,
-                label: 'Download',
-                onTap: () {},
-              ),
-              _ActionButton(
-                icon: Icons.zoom_in_rounded,
-                label: _fullscreen ? 'Collapse' : 'Expand',
-                onTap: () => setState(() => _fullscreen = !_fullscreen),
-              ),
-              _ActionButton(
-                icon: Icons.share_rounded,
-                label: 'Export',
-                onTap: () {},
-              ),
-            ],
-          ),
         ],
-      ),
+      ],
     );
   }
 }
 
-// ── Process List Result ──────────────────────────────────────────────────────
+class _TypedResultBody extends StatelessWidget {
+  const _TypedResultBody({
+    required this.parsed,
+    required this.onDownloadArtifact,
+    required this.downloadingArtifact,
+  });
+
+  final ParsedCommandResult parsed;
+  final Future<void> Function(String artifactUrl, {String? checksum})
+      onDownloadArtifact;
+  final bool downloadingArtifact;
+
+  @override
+  Widget build(BuildContext context) {
+    switch (parsed.kind) {
+      case ParsedResultKind.screenshot:
+        return _ScreenshotResultView(
+          parsed: parsed,
+          downloadingArtifact: downloadingArtifact,
+          onDownloadArtifact: onDownloadArtifact,
+        );
+      case ParsedResultKind.processList:
+        return _ProcessListResultView(parsed: parsed);
+      case ParsedResultKind.fileSystem:
+        return _FileSystemResultView(
+          parsed: parsed,
+          downloadingArtifact: downloadingArtifact,
+          onDownloadArtifact: onDownloadArtifact,
+        );
+      case ParsedResultKind.systemInfo:
+        return _SystemInfoResultView(parsed: parsed);
+      case ParsedResultKind.generic:
+        return _GenericResultView(parsed: parsed);
+    }
+  }
+}
+
+class _ScreenshotResultView extends ConsumerWidget {
+  const _ScreenshotResultView({
+    required this.parsed,
+    required this.downloadingArtifact,
+    required this.onDownloadArtifact,
+  });
+
+  final ParsedCommandResult parsed;
+  final bool downloadingArtifact;
+  final Future<void> Function(String artifactUrl, {String? checksum})
+      onDownloadArtifact;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final artifactUrl = parsed.artifactUrl;
+    final checksum = parsed.artifactChecksum;
+    final dataMap = parsed.resultData is Map
+        ? Map<String, dynamic>.from(parsed.resultData as Map)
+        : const <String, dynamic>{};
+    final capture = _asMap(dataMap['capture']);
+    final authMeta = _asMap(dataMap['authorization']);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionLabel('SCREENSHOT'),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _MetaChip(
+              label:
+                  'FORMAT: ${_displayValue(dataMap['format']).ifEmpty(_displayValue(capture['format']).ifEmpty('png'))}',
+            ),
+            _MetaChip(
+              label:
+                  'RESOLUTION: ${_displayValue(dataMap['resolution']).ifEmpty(_resolutionLabel(capture))}',
+            ),
+            _MetaChip(
+              label:
+                  artifactUrl.isEmpty ? 'ARTIFACT: MISSING' : 'ARTIFACT: READY',
+              color:
+                  artifactUrl.isEmpty ? AppTheme.warning : AppTheme.secondary,
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (artifactUrl.isEmpty)
+          _InfoCard(
+            icon: Icons.image_not_supported_outlined,
+            message: 'Artifact not available for this command result.',
+            tone: AppTheme.warning,
+          )
+        else ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.borderLight),
+            ),
+            child: FutureBuilder<String?>(
+              future: ref.read(_artifactAuthHeaderProvider.future),
+              builder: (context, snapshot) {
+                final token = snapshot.data ?? '';
+                final headers = token.isEmpty
+                    ? const <String, String>{}
+                    : <String, String>{'Authorization': 'Bearer $token'};
+                return ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    artifactUrl,
+                    headers: headers,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) {
+                      return Container(
+                        padding: const EdgeInsets.all(16),
+                        color: AppTheme.surfaceVariant,
+                        child: Text(
+                          'Preview unavailable. You can still download the image.',
+                          style: GoogleFonts.ibmPlexSans(
+                            fontSize: 12,
+                            color: AppTheme.textMuted,
+                          ),
+                        ),
+                      );
+                    },
+                    loadingBuilder: (context, child, progress) {
+                      if (progress == null) {
+                        return child;
+                      }
+                      return const SizedBox(
+                        height: 140,
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppTheme.primary,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _ActionButton(
+                  icon: Icons.download_rounded,
+                  label: downloadingArtifact ? 'Saving...' : 'Download',
+                  onPressed: downloadingArtifact
+                      ? null
+                      : () => onDownloadArtifact(
+                            artifactUrl,
+                            checksum: checksum,
+                          ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _ActionButton(
+                  icon: Icons.copy_rounded,
+                  label: 'Copy URL',
+                  onPressed: () => Clipboard.setData(
+                    ClipboardData(text: artifactUrl),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (checksum.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _CopyableField(label: 'CHECKSUM', value: checksum),
+          ],
+        ],
+        if (capture.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          _KeyValueGrid(title: 'Capture Metadata', values: capture),
+        ],
+        if (authMeta.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          _KeyValueGrid(title: 'Authorization', values: authMeta),
+        ],
+      ],
+    );
+  }
+
+  static Map<String, dynamic> _asMap(Object? value) {
+    if (value is Map) {
+      return value.map((k, v) => MapEntry(k.toString(), v));
+    }
+    return const <String, dynamic>{};
+  }
+
+  static String _displayValue(Object? value) {
+    if (value == null) {
+      return '';
+    }
+    final text = value.toString().trim();
+    return text;
+  }
+
+  static String _resolutionLabel(Map<String, dynamic> capture) {
+    final width = capture['width'];
+    final height = capture['height'];
+    if (width is num && height is num) {
+      return '${width.toInt()}x${height.toInt()}';
+    }
+    return 'unknown';
+  }
+}
+
 class _ProcessListResultView extends StatefulWidget {
-  final Map<String, dynamic> command;
-  const _ProcessListResultView({required this.command});
+  const _ProcessListResultView({required this.parsed});
+
+  final ParsedCommandResult parsed;
 
   @override
   State<_ProcessListResultView> createState() => _ProcessListResultViewState();
 }
 
 class _ProcessListResultViewState extends State<_ProcessListResultView> {
-  String _sortBy = 'cpu';
-  String _filter = '';
+  final TextEditingController _searchController = TextEditingController();
+  String _sortColumn = 'pid';
+  bool _sortAscending = true;
 
-  static final List<Map<String, dynamic>> _allProcesses = [
-    {
-      'pid': 4,
-      'name': 'System',
-      'cpu': 0.1,
-      'mem': 0.2,
-      'user': 'SYSTEM',
-      'status': 'running',
-    },
-    {
-      'pid': 892,
-      'name': 'svchost.exe',
-      'cpu': 2.3,
-      'mem': 1.4,
-      'user': 'SYSTEM',
-      'status': 'running',
-    },
-    {
-      'pid': 1204,
-      'name': 'chrome.exe',
-      'cpu': 18.7,
-      'mem': 12.3,
-      'user': 'lnakamura',
-      'status': 'running',
-    },
-    {
-      'pid': 2048,
-      'name': 'explorer.exe',
-      'cpu': 0.8,
-      'mem': 3.1,
-      'user': 'lnakamura',
-      'status': 'running',
-    },
-    {
-      'pid': 3312,
-      'name': 'antivirus.exe',
-      'cpu': 4.2,
-      'mem': 5.8,
-      'user': 'SYSTEM',
-      'status': 'running',
-    },
-    {
-      'pid': 4096,
-      'name': 'outlook.exe',
-      'cpu': 1.1,
-      'mem': 8.4,
-      'user': 'lnakamura',
-      'status': 'running',
-    },
-    {
-      'pid': 5120,
-      'name': 'quoodle-agent',
-      'cpu': 0.3,
-      'mem': 0.9,
-      'user': 'SYSTEM',
-      'status': 'running',
-    },
-    {
-      'pid': 6144,
-      'name': 'teams.exe',
-      'cpu': 6.5,
-      'mem': 15.2,
-      'user': 'lnakamura',
-      'status': 'running',
-    },
-    {
-      'pid': 7200,
-      'name': 'winlogon.exe',
-      'cpu': 0.0,
-      'mem': 0.6,
-      'user': 'SYSTEM',
-      'status': 'running',
-    },
-    {
-      'pid': 8192,
-      'name': 'slack.exe',
-      'cpu': 3.1,
-      'mem': 9.7,
-      'user': 'lnakamura',
-      'status': 'running',
-    },
-  ];
-
-  List<Map<String, dynamic>> get _filtered {
-    var list = _allProcesses.where((p) {
-      if (_filter.isEmpty) return true;
-      return (p['name'] as String).toLowerCase().contains(
-            _filter.toLowerCase(),
-          );
-    }).toList();
-    list.sort((a, b) {
-      if (_sortBy == 'cpu') {
-        return (b['cpu'] as double).compareTo(a['cpu'] as double);
-      } else if (_sortBy == 'mem') {
-        return (b['mem'] as double).compareTo(a['mem'] as double);
-      } else {
-        return (a['pid'] as int).compareTo(b['pid'] as int);
-      }
-    });
-    return list;
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final processes = _filtered;
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _SectionLabel('PROCESS LIST'),
-              const Spacer(),
-              _MetaChip(label: '${processes.length} processes'),
-            ],
-          ),
-          const SizedBox(height: 10),
-          // Search + sort bar
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: AppTheme.surface,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppTheme.border),
-                  ),
-                  child: Row(
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8),
-                        child: Icon(
-                          Icons.search_rounded,
-                          size: 14,
-                          color: AppTheme.textMuted,
-                        ),
-                      ),
-                      Expanded(
-                        child: TextField(
-                          onChanged: (v) => setState(() => _filter = v),
-                          style: GoogleFonts.ibmPlexSans(
-                            fontSize: 12,
-                            color: AppTheme.textPrimary,
-                          ),
-                          decoration: InputDecoration(
-                            border: InputBorder.none,
-                            hintText: 'Filter processes...',
-                            hintStyle: GoogleFonts.ibmPlexSans(
-                              fontSize: 12,
-                              color: AppTheme.textMuted,
-                            ),
-                            filled: false,
-                            contentPadding: const EdgeInsets.symmetric(
-                              vertical: 8,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              _SortChip(
-                label: 'CPU',
-                active: _sortBy == 'cpu',
-                onTap: () => setState(() => _sortBy = 'cpu'),
-              ),
-              const SizedBox(width: 4),
-              _SortChip(
-                label: 'MEM',
-                active: _sortBy == 'mem',
-                onTap: () => setState(() => _sortBy = 'mem'),
-              ),
-              const SizedBox(width: 4),
-              _SortChip(
-                label: 'PID',
-                active: _sortBy == 'pid',
-                onTap: () => setState(() => _sortBy = 'pid'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          // Table
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppTheme.border),
-            ),
-            child: Column(
-              children: [
-                // Header
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: const BoxDecoration(
-                    color: AppTheme.surface,
-                    borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(9),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      _TableHeader('PID', width: 48),
-                      _TableHeader('PROCESS', flex: 2),
-                      _TableHeader('USER', flex: 1),
-                      _TableHeader('CPU%', width: 48, right: true),
-                      _TableHeader('MEM%', width: 48, right: true),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1, color: AppTheme.borderLight),
-                ...processes.asMap().entries.map((entry) {
-                  final i = entry.key;
-                  final p = entry.value;
-                  final cpu = p['cpu'] as double;
-                  final mem = p['mem'] as double;
-                  final cpuColor = cpu > 10
-                      ? AppTheme.error
-                      : cpu > 5
-                          ? AppTheme.warning
-                          : AppTheme.secondary;
-                  final isLast = i == processes.length - 1;
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 9,
-                    ),
-                    decoration: BoxDecoration(
-                      color:
-                          i.isEven ? AppTheme.surfaceVariant : AppTheme.surface,
-                      borderRadius: isLast
-                          ? const BorderRadius.vertical(
-                              bottom: Radius.circular(9),
-                            )
-                          : BorderRadius.zero,
-                      border: !isLast
-                          ? const Border(
-                              bottom: BorderSide(color: AppTheme.borderLight),
-                            )
-                          : null,
-                    ),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 48,
-                          child: Text(
-                            '${p['pid']}',
-                            style: GoogleFonts.ibmPlexMono(
-                              fontSize: 11,
-                              color: AppTheme.textMuted,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            p['name'] as String,
-                            style: GoogleFonts.ibmPlexMono(
-                              fontSize: 11,
-                              color: AppTheme.textPrimary,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Expanded(
-                          flex: 1,
-                          child: Text(
-                            p['user'] as String,
-                            style: GoogleFonts.ibmPlexSans(
-                              fontSize: 10,
-                              color: AppTheme.textMuted,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        SizedBox(
-                          width: 48,
-                          child: Text(
-                            cpu.toStringAsFixed(1),
-                            style: GoogleFonts.ibmPlexMono(
-                              fontSize: 11,
-                              color: cpuColor,
-                            ),
-                            textAlign: TextAlign.right,
-                          ),
-                        ),
-                        SizedBox(
-                          width: 48,
-                          child: Text(
-                            mem.toStringAsFixed(1),
-                            style: GoogleFonts.ibmPlexMono(
-                              fontSize: 11,
-                              color: AppTheme.primary,
-                            ),
-                            textAlign: TextAlign.right,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          _ActionRow(
-            actions: [
-              _ActionButton(
-                icon: Icons.copy_rounded,
-                label: 'Copy',
-                onTap: () {},
-              ),
-              _ActionButton(
-                icon: Icons.download_rounded,
-                label: 'Export CSV',
-                onTap: () {},
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Running Apps Result ──────────────────────────────────────────────────────
-class _RunningAppsResultView extends StatelessWidget {
-  final Map<String, dynamic> command;
-  const _RunningAppsResultView({required this.command});
-
-  static final List<Map<String, dynamic>> _apps = [
-    {
-      'name': 'Google Chrome',
-      'bundle': 'com.google.chrome',
-      'version': '120.0.6099',
-      'status': 'foreground',
-      'memory': '312 MB',
-      'icon': Icons.language_rounded,
-    },
-    {
-      'name': 'Microsoft Teams',
-      'bundle': 'com.microsoft.teams',
-      'version': '1.6.0.28861',
-      'status': 'background',
-      'memory': '245 MB',
-      'icon': Icons.groups_rounded,
-    },
-    {
-      'name': 'Microsoft Outlook',
-      'bundle': 'com.microsoft.outlook',
-      'version': '16.0.17029',
-      'status': 'background',
-      'memory': '198 MB',
-      'icon': Icons.email_rounded,
-    },
-    {
-      'name': 'Slack',
-      'bundle': 'com.tinyspeck.slackmacgap',
-      'version': '4.35.126',
-      'status': 'background',
-      'memory': '156 MB',
-      'icon': Icons.chat_bubble_rounded,
-    },
-    {
-      'name': 'Quoodle Agent',
-      'bundle': 'com.quoodle.agent',
-      'version': '2.1.4',
-      'status': 'system',
-      'memory': '24 MB',
-      'icon': Icons.security_rounded,
-    },
-    {
-      'name': 'Windows Defender',
-      'bundle': 'com.microsoft.defender',
-      'version': '4.18.2311',
-      'status': 'system',
-      'memory': '89 MB',
-      'icon': Icons.shield_rounded,
-    },
-  ];
-
-  Color _statusColor(String s) {
-    switch (s) {
-      case 'foreground':
-        return AppTheme.secondary;
-      case 'background':
-        return AppTheme.primary;
-      case 'system':
-        return AppTheme.textMuted;
-      default:
-        return AppTheme.textMuted;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _SectionLabel('RUNNING APPS'),
-              const Spacer(),
-              _MetaChip(label: '${_apps.length} apps'),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ..._apps.map((app) {
-            final statusColor = _statusColor(app['status'] as String);
-            return Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppTheme.surface,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppTheme.borderLight),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: statusColor.withAlpha(20),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      app['icon'] as IconData,
-                      size: 18,
-                      color: statusColor,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          app['name'] as String,
-                          style: GoogleFonts.ibmPlexSans(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: AppTheme.textPrimary,
-                          ),
-                        ),
-                        Text(
-                          app['bundle'] as String,
-                          style: GoogleFonts.ibmPlexMono(
-                            fontSize: 10,
-                            color: AppTheme.textMuted,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: statusColor.withAlpha(20),
-                          borderRadius: BorderRadius.circular(5),
-                        ),
-                        child: Text(
-                          (app['status'] as String).toUpperCase(),
-                          style: GoogleFonts.ibmPlexMono(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: statusColor,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        app['memory'] as String,
-                        style: GoogleFonts.ibmPlexMono(
-                          fontSize: 10,
-                          color: AppTheme.textMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          }),
-          const SizedBox(height: 4),
-          _ActionRow(
-            actions: [
-              _ActionButton(
-                icon: Icons.copy_rounded,
-                label: 'Copy',
-                onTap: () {},
-              ),
-              _ActionButton(
-                icon: Icons.download_rounded,
-                label: 'Export',
-                onTap: () {},
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Filesystem Result ────────────────────────────────────────────────────────
-class _FilesystemResultView extends StatefulWidget {
-  final Map<String, dynamic> command;
-  const _FilesystemResultView({required this.command});
-
-  @override
-  State<_FilesystemResultView> createState() => _FilesystemResultViewState();
-}
-
-class _FilesystemResultViewState extends State<_FilesystemResultView> {
-  final Set<String> _expanded = {'/home', '/etc'};
-
-  static final Map<String, dynamic> _tree = {
-    '/': {
-      'type': 'dir',
-      'children': {
-        'home': {
-          'type': 'dir',
-          'children': {
-            'lnakamura': {
-              'type': 'dir',
-              'children': {
-                'Documents': {'type': 'dir', 'size': '—'},
-                'Downloads': {'type': 'dir', 'size': '—'},
-                '.bashrc': {'type': 'file', 'size': '3.2 KB'},
-                '.ssh': {'type': 'dir', 'size': '—'},
-              },
-            },
-          },
-        },
-        'etc': {
-          'type': 'dir',
-          'children': {
-            'passwd': {'type': 'file', 'size': '2.1 KB'},
-            'hosts': {'type': 'file', 'size': '312 B'},
-            'resolv.conf': {'type': 'file', 'size': '128 B'},
-            'ssh': {'type': 'dir', 'size': '—'},
-          },
-        },
-        'var': {
-          'type': 'dir',
-          'children': {
-            'log': {'type': 'dir', 'size': '—'},
-            'tmp': {'type': 'dir', 'size': '—'},
-          },
-        },
-        'tmp': {'type': 'dir', 'children': {}},
-      },
-    },
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _SectionLabel('FILESYSTEM'),
-              const Spacer(),
-              _MetaChip(label: 'SENSITIVE', color: AppTheme.warning),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Container(
-            decoration: BoxDecoration(
-              color: AppTheme.surface,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppTheme.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Path bar
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: const BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(color: AppTheme.borderLight),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.folder_rounded,
-                        size: 14,
-                        color: AppTheme.warning,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '/',
-                        style: GoogleFonts.ibmPlexMono(
-                          fontSize: 12,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: _buildTreeNode(
-                    '/',
-                    _tree['/'] as Map<String, dynamic>,
-                    0,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          _ActionRow(
-            actions: [
-              _ActionButton(
-                icon: Icons.copy_rounded,
-                label: 'Copy Path',
-                onTap: () {},
-              ),
-              _ActionButton(
-                icon: Icons.download_rounded,
-                label: 'Export Tree',
-                onTap: () {},
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTreeNode(String name, Map<String, dynamic> node, int depth) {
-    final isDir = node['type'] == 'dir';
-    final children = node['children'] as Map<String, dynamic>?;
-    final isExpanded = _expanded.contains(name);
+    final rows = extractProcessRows(widget.parsed.resultData);
+    final columns = _resolveColumns(rows);
+    final filtered = _applySearch(rows);
+    final sorted = _applySort(filtered);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        GestureDetector(
-          onTap: isDir
-              ? () => setState(() {
-                    if (isExpanded) {
-                      _expanded.remove(name);
-                    } else {
-                      _expanded.add(name);
-                    }
-                  })
-              : null,
-          child: Padding(
-            padding: EdgeInsets.only(left: depth * 16.0, top: 3, bottom: 3),
-            child: Row(
-              children: [
-                if (isDir)
-                  Icon(
-                    isExpanded
-                        ? Icons.expand_more_rounded
-                        : Icons.chevron_right_rounded,
-                    size: 14,
-                    color: AppTheme.textMuted,
-                  )
-                else
-                  const SizedBox(width: 14),
-                const SizedBox(width: 4),
-                Icon(
-                  isDir
-                      ? (isExpanded
-                          ? Icons.folder_open_rounded
-                          : Icons.folder_rounded)
-                      : Icons.insert_drive_file_outlined,
-                  size: 14,
-                  color: isDir ? AppTheme.warning : AppTheme.textMuted,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    name,
-                    style: GoogleFonts.ibmPlexMono(
-                      fontSize: 12,
-                      color:
-                          isDir ? AppTheme.textPrimary : AppTheme.textSecondary,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (!isDir && node.containsKey('size'))
-                  Text(
-                    node['size'] as String,
-                    style: GoogleFonts.ibmPlexMono(
-                      fontSize: 10,
-                      color: AppTheme.textMuted,
-                    ),
-                  ),
-              ],
+        const _SectionLabel('PROCESS LIST'),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _SearchField(
+                controller: _searchController,
+                hint: 'Search process name, pid, user...',
+                onChanged: (_) => setState(() {}),
+              ),
             ),
-          ),
+            const SizedBox(width: 8),
+            _MetaChip(
+              label: '${rows.length} rows',
+              monospace: true,
+              color: AppTheme.secondary,
+            ),
+          ],
         ),
-        if (isDir && isExpanded && children != null)
-          ...children.entries.map(
-            (e) => _buildTreeNode(
-              e.key,
-              e.value as Map<String, dynamic>,
-              depth + 1,
+        const SizedBox(height: 8),
+        if (rows.isEmpty)
+          const _InfoCard(
+            icon: Icons.list_alt_rounded,
+            message: 'No process rows were returned by the backend.',
+          )
+        else
+          Container(
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.borderLight),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minWidth: MediaQuery.of(context).size.width - 64,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        color: AppTheme.surfaceVariant,
+                        child: Row(
+                          children: columns
+                              .map(
+                                (column) => _HeaderCell(
+                                  label: column,
+                                  active: _sortColumn == column,
+                                  ascending: _sortAscending,
+                                  onTap: () => setState(() {
+                                    if (_sortColumn == column) {
+                                      _sortAscending = !_sortAscending;
+                                    } else {
+                                      _sortColumn = column;
+                                      _sortAscending = true;
+                                    }
+                                  }),
+                                ),
+                              )
+                              .toList(growable: false),
+                        ),
+                      ),
+                      ...sorted.map(
+                        (row) => Row(
+                          children: columns
+                              .map(
+                                (column) => _BodyCell(
+                                  value: _displayValue(row[column]),
+                                ),
+                              )
+                              .toList(growable: false),
+                        ),
+                      ),
+                      if (sorted.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Text(
+                            'No process rows match your search.',
+                            style: GoogleFonts.ibmPlexSans(
+                              fontSize: 12,
+                              color: AppTheme.textMuted,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
       ],
     );
   }
-}
 
-// ── System Info Result ───────────────────────────────────────────────────────
-class _SystemInfoResultView extends StatelessWidget {
-  final Map<String, dynamic> command;
-  const _SystemInfoResultView({required this.command});
+  List<String> _resolveColumns(List<Map<String, dynamic>> rows) {
+    final preferred = ['pid', 'name', 'ppid', 'threads', 'user', 'path'];
+    final discovered = <String>{};
+    for (final row in rows) {
+      discovered.addAll(row.keys);
+    }
+    final ordered = <String>[];
+    for (final key in preferred) {
+      if (discovered.contains(key)) {
+        ordered.add(key);
+        discovered.remove(key);
+      }
+    }
+    final extra = discovered.toList()..sort();
+    ordered.addAll(extra.take(8 - ordered.length.clamp(0, 8)));
+    if (ordered.isEmpty) {
+      ordered.add('value');
+    }
+    return ordered;
+  }
 
-  static final Map<String, Map<String, String>> _sections = {
-    'Hardware': {
-      'CPU': 'Intel Core i7-10700 @ 2.90GHz (8 cores)',
-      'RAM': '16 GB DDR4-3200',
-      'Storage': '512 GB NVMe SSD',
-      'GPU': 'Intel UHD Graphics 630',
-    },
-    'Operating System': {
-      'OS': 'Windows 10 Pro 22H2',
-      'Build': '19045.3803',
-      'Architecture': 'x86_64',
-      'Uptime': '3d 14h 22m',
-      'Last Boot': '2026-04-07 19:38:12',
-    },
-    'Network': {
-      'Hostname': 'WKSFINANCE07',
-      'Primary IP': '10.0.3.22',
-      'MAC': 'A4:C3:F0:12:34:56',
-      'DNS': '10.0.0.1, 8.8.8.8',
-      'Gateway': '10.0.3.1',
-    },
-    'Storage': {
-      'C:\\ Total': '512 GB',
-      'C:\\ Used': '287 GB (56%)',
-      'C:\\ Free': '225 GB',
-      'Filesystem': 'NTFS',
-    },
-  };
+  List<Map<String, dynamic>> _applySearch(List<Map<String, dynamic>> rows) {
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) {
+      return rows;
+    }
+    return rows.where((row) {
+      return row.values.any((value) {
+        final text = value?.toString().toLowerCase() ?? '';
+        return text.contains(query);
+      });
+    }).toList(growable: false);
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SectionLabel('SYSTEM INFORMATION'),
-          const SizedBox(height: 12),
-          ..._sections.entries.map(
-            (section) => Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 3,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: AppTheme.secondary,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      section.key,
-                      style: GoogleFonts.ibmPlexSans(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  decoration: BoxDecoration(
-                    color: AppTheme.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppTheme.borderLight),
-                  ),
-                  child: Column(
-                    children: section.value.entries
-                        .toList()
-                        .asMap()
-                        .entries
-                        .map((entry) {
-                      final i = entry.key;
-                      final kv = entry.value;
-                      final isLast = i == section.value.length - 1;
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 9,
-                        ),
-                        decoration: BoxDecoration(
-                          border: !isLast
-                              ? const Border(
-                                  bottom: BorderSide(
-                                    color: AppTheme.borderLight,
-                                  ),
-                                )
-                              : null,
-                        ),
-                        child: Row(
-                          children: [
-                            SizedBox(
-                              width: 110,
-                              child: Text(
-                                kv.key,
-                                style: GoogleFonts.ibmPlexSans(
-                                  fontSize: 12,
-                                  color: AppTheme.textMuted,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                kv.value,
-                                style: GoogleFonts.ibmPlexMono(
-                                  fontSize: 12,
-                                  color: AppTheme.textPrimary,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
-            ),
-          ),
-          _ActionRow(
-            actions: [
-              _ActionButton(
-                icon: Icons.copy_rounded,
-                label: 'Copy',
-                onTap: () {},
-              ),
-              _ActionButton(
-                icon: Icons.download_rounded,
-                label: 'Export JSON',
-                onTap: () {},
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+  List<Map<String, dynamic>> _applySort(List<Map<String, dynamic>> rows) {
+    final sorted = [...rows];
+    sorted.sort((a, b) {
+      final av = _displayValue(a[_sortColumn]);
+      final bv = _displayValue(b[_sortColumn]);
+      final compare = av.compareTo(bv);
+      return _sortAscending ? compare : -compare;
+    });
+    return sorted;
+  }
+
+  String _displayValue(Object? value) {
+    if (value == null) {
+      return '-';
+    }
+    return value.toString();
   }
 }
 
-// ── Network Info Result ──────────────────────────────────────────────────────
-class _NetworkInfoResultView extends StatefulWidget {
-  final Map<String, dynamic> command;
-  const _NetworkInfoResultView({required this.command});
+class _FileSystemResultView extends StatefulWidget {
+  const _FileSystemResultView({
+    required this.parsed,
+    required this.downloadingArtifact,
+    required this.onDownloadArtifact,
+  });
+
+  final ParsedCommandResult parsed;
+  final bool downloadingArtifact;
+  final Future<void> Function(String artifactUrl, {String? checksum})
+      onDownloadArtifact;
 
   @override
-  State<_NetworkInfoResultView> createState() => _NetworkInfoResultViewState();
+  State<_FileSystemResultView> createState() => _FileSystemResultViewState();
 }
 
-class _NetworkInfoResultViewState extends State<_NetworkInfoResultView> {
-  int _tab = 0;
+class _FileSystemResultViewState extends State<_FileSystemResultView> {
+  final TextEditingController _searchController = TextEditingController();
+  String _currentPath = '';
 
-  static final List<Map<String, String>> _interfaces = [
-    {
-      'name': 'Ethernet',
-      'ip': '10.0.3.22',
-      'mask': '255.255.255.0',
-      'mac': 'A4:C3:F0:12:34:56',
-      'status': 'up',
-      'speed': '1 Gbps',
-    },
-    {
-      'name': 'Wi-Fi',
-      'ip': '—',
-      'mask': '—',
-      'mac': 'B2:D1:E3:45:67:89',
-      'status': 'down',
-      'speed': '—',
-    },
-    {
-      'name': 'Loopback',
-      'ip': '127.0.0.1',
-      'mask': '255.0.0.0',
-      'mac': '—',
-      'status': 'up',
-      'speed': '—',
-    },
-  ];
-
-  static final List<Map<String, String>> _connections = [
-    {
-      'proto': 'TCP',
-      'local': '10.0.3.22:443',
-      'remote': '52.114.74.45:443',
-      'state': 'ESTABLISHED',
-      'proc': 'teams.exe',
-    },
-    {
-      'proto': 'TCP',
-      'local': '10.0.3.22:52341',
-      'remote': '142.250.80.46:443',
-      'state': 'ESTABLISHED',
-      'proc': 'chrome.exe',
-    },
-    {
-      'proto': 'TCP',
-      'local': '10.0.3.22:49152',
-      'remote': '10.0.0.1:443',
-      'state': 'ESTABLISHED',
-      'proc': 'quoodle-agent',
-    },
-    {
-      'proto': 'UDP',
-      'local': '0.0.0.0:5353',
-      'remote': '*:*',
-      'state': 'LISTEN',
-      'proc': 'svchost.exe',
-    },
-  ];
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _SectionLabel('NETWORK INFO'),
-              const Spacer(),
-              _MetaChip(label: '${_interfaces.length} interfaces'),
-            ],
-          ),
-          const SizedBox(height: 10),
-          // Tab bar
-          Row(
-            children: [
-              _TabButton(
-                label: 'Interfaces',
-                active: _tab == 0,
-                onTap: () => setState(() => _tab = 0),
-              ),
-              const SizedBox(width: 8),
-              _TabButton(
-                label: 'Connections',
-                active: _tab == 1,
-                onTap: () => setState(() => _tab = 1),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (_tab == 0) _buildInterfaces() else _buildConnections(),
-          const SizedBox(height: 12),
-          _ActionRow(
-            actions: [
-              _ActionButton(
-                icon: Icons.copy_rounded,
-                label: 'Copy',
-                onTap: () {},
-              ),
-              _ActionButton(
-                icon: Icons.download_rounded,
-                label: 'Export',
-                onTap: () {},
-              ),
-            ],
-          ),
-        ],
-      ),
+    final entries = extractFileSystemEntries(widget.parsed.resultData);
+    final systemInfoData = extractSystemInfoData(widget.parsed.resultData);
+    final windowsStyle = inferWindowsStylePaths(
+      entries,
+      systemInfoData: systemInfoData,
     );
-  }
 
-  Widget _buildInterfaces() {
+    final byParent = _indexByParent(entries);
+    final currentEntries = byParent[_currentPath] ?? const <FileSystemEntry>[];
+    final filtered = _applySearch(currentEntries);
+
     return Column(
-      children: _interfaces.map((iface) {
-        final isUp = iface['status'] == 'up';
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppTheme.surface,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppTheme.borderLight),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    iface['name'] == 'Wi-Fi'
-                        ? Icons.wifi_rounded
-                        : iface['name'] == 'Loopback'
-                            ? Icons.loop_rounded
-                            : Icons.cable_rounded,
-                    size: 16,
-                    color: isUp ? AppTheme.secondary : AppTheme.textMuted,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    iface['name']!,
-                    style: GoogleFonts.ibmPlexSans(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 7,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isUp ? AppTheme.secondaryMuted : AppTheme.border,
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                    child: Text(
-                      iface['status']!.toUpperCase(),
-                      style: GoogleFonts.ibmPlexMono(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        color: isUp ? AppTheme.secondary : AppTheme.textMuted,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              if (isUp) ...[
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _InfoPill(label: 'IP', value: iface['ip']!),
-                    _InfoPill(label: 'MASK', value: iface['mask']!),
-                    if (iface['speed'] != '—')
-                      _InfoPill(label: 'SPEED', value: iface['speed']!),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildConnections() {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: const BoxDecoration(
-              color: AppTheme.surface,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(9)),
-            ),
-            child: Row(
-              children: [
-                _TableHeader('PROTO', width: 44),
-                _TableHeader('LOCAL', flex: 2),
-                _TableHeader('REMOTE', flex: 2),
-                _TableHeader('STATE', flex: 1),
-              ],
-            ),
-          ),
-          const Divider(height: 1, color: AppTheme.border),
-          ..._connections.asMap().entries.map((entry) {
-            final i = entry.key;
-            final c = entry.value;
-            final isLast = i == _connections.length - 1;
-            final stateColor = c['state'] == 'ESTABLISHED'
-                ? AppTheme.secondary
-                : AppTheme.primary;
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-              decoration: BoxDecoration(
-                color: i.isEven ? AppTheme.surfaceVariant : AppTheme.surface,
-                borderRadius: isLast
-                    ? const BorderRadius.vertical(bottom: Radius.circular(9))
-                    : BorderRadius.zero,
-                border: !isLast
-                    ? const Border(
-                        bottom: BorderSide(color: AppTheme.borderLight),
-                      )
-                    : null,
-              ),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 44,
-                    child: Text(
-                      c['proto']!,
-                      style: GoogleFonts.ibmPlexMono(
-                        fontSize: 10,
-                        color: AppTheme.primary,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      c['local']!,
-                      style: GoogleFonts.ibmPlexMono(
-                        fontSize: 10,
-                        color: AppTheme.textSecondary,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      c['remote']!,
-                      style: GoogleFonts.ibmPlexMono(
-                        fontSize: 10,
-                        color: AppTheme.textSecondary,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Expanded(
-                    flex: 1,
-                    child: Text(
-                      c['state']!,
-                      style: GoogleFonts.ibmPlexMono(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w600,
-                        color: stateColor,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            );
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionLabel('FILESYSTEM'),
+        const SizedBox(height: 8),
+        _ExplorerToolbar(
+          currentPath: _currentPath,
+          windowsStyle: windowsStyle,
+          onBack: () => setState(() {
+            _currentPath = _parentPath(_currentPath);
           }),
-        ],
-      ),
-    );
-  }
-}
-
-// ── File Op Result ───────────────────────────────────────────────────────────
-class _FileOpResultView extends StatelessWidget {
-  final Map<String, dynamic> command;
-  const _FileOpResultView({required this.command});
-
-  @override
-  Widget build(BuildContext context) {
-    final method = command['method']?.toString() ?? '';
-    final isUpload = method == 'upload_file';
-    final isDownload = method == 'download_file';
-    final heading = isUpload
-        ? 'FILE UPLOAD'
-        : isDownload
-            ? 'FILE DOWNLOAD'
-            : 'FILE CREATED';
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SectionLabel(heading),
-          const SizedBox(height: 12),
+          canGoBack: _currentPath.isNotEmpty,
+          onRoot: () => setState(() {
+            _currentPath = '';
+          }),
+        ),
+        const SizedBox(height: 8),
+        _SearchField(
+          controller: _searchController,
+          hint: 'Search files and folders in current view...',
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 8),
+        if (entries.isEmpty)
+          const _InfoCard(
+            icon: Icons.folder_off_rounded,
+            message: 'No filesystem entries were returned in this snapshot.',
+          )
+        else
+          _Breadcrumbs(
+            currentPath: _currentPath,
+            windowsStyle: windowsStyle,
+            onTapPath: (path) => setState(() => _currentPath = path),
+          ),
+        const SizedBox(height: 8),
+        if (entries.isNotEmpty)
           Container(
-            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: AppTheme.surface,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppTheme.secondary.withAlpha(80)),
+              border: Border.all(color: AppTheme.borderLight),
             ),
             child: Column(
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: AppTheme.secondaryMuted,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(
-                        isUpload
-                            ? Icons.upload_file_rounded
-                            : isDownload
-                                ? Icons.download_rounded
-                                : Icons.note_add_rounded,
-                        size: 22,
-                        color: AppTheme.secondary,
+                if (filtered.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      'No entries found in this folder for your search.',
+                      style: GoogleFonts.ibmPlexSans(
+                        fontSize: 12,
+                        color: AppTheme.textMuted,
                       ),
                     ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            isUpload
-                                ? 'report_q4_2025.pdf'
-                                : isDownload
-                                    ? 'device_evidence.tar.gz'
-                                    : 'config_override.json',
-                            style: GoogleFonts.ibmPlexMono(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.textPrimary,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            isUpload
-                                ? '/home/lnakamura/Documents/'
-                                : isDownload
-                                    ? '/var/log/quoodle/'
-                                    : '/etc/quoodle/',
-                            style: GoogleFonts.ibmPlexMono(
-                              fontSize: 10,
-                              color: AppTheme.textMuted,
-                            ),
-                          ),
-                        ],
-                      ),
+                  )
+                else
+                  ...filtered.map(
+                    (entry) => _FileRow(
+                      entry: entry,
+                      onOpen: entry.isDirectory
+                          ? () => setState(() => _currentPath = entry.path)
+                          : null,
+                      artifactUrl: widget.parsed.artifactUrl,
+                      downloadingArtifact: widget.downloadingArtifact,
+                      onDownloadArtifact: widget.onDownloadArtifact,
+                      checksum: widget.parsed.artifactChecksum,
                     ),
-                    const Icon(
-                      Icons.check_circle_rounded,
-                      size: 20,
-                      color: AppTheme.secondary,
+                  ),
+                if (widget.parsed.artifactUrl.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(12, 8, 12, 10),
+                    child: _InfoCard(
+                      icon: Icons.info_outline_rounded,
+                      message:
+                          'File download is unavailable for this snapshot. Control plane did not return an artifact URL.',
                     ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                const Divider(color: AppTheme.borderLight, height: 1),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _InfoPill(
-                      label: 'SIZE',
-                      value: isUpload ? '2.4 MB' : '1.2 KB',
-                    ),
-                    _InfoPill(label: 'TYPE', value: isUpload ? 'PDF' : 'JSON'),
-                    _InfoPill(label: 'TIME', value: '0.8s'),
-                  ],
-                ),
+                  ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
-          _ActionRow(
-            actions: [
-              _ActionButton(
-                icon: Icons.copy_rounded,
-                label: 'Copy Path',
-                onTap: () {},
-              ),
-            ],
-          ),
-        ],
-      ),
+      ],
     );
+  }
+
+  Map<String, List<FileSystemEntry>> _indexByParent(
+      List<FileSystemEntry> entries) {
+    final byParent = <String, List<FileSystemEntry>>{};
+    for (final entry in entries) {
+      final parent = entry.parentPath;
+      byParent.putIfAbsent(parent, () => <FileSystemEntry>[]).add(entry);
+    }
+    for (final list in byParent.values) {
+      list.sort((a, b) {
+        if (a.isDirectory != b.isDirectory) {
+          return a.isDirectory ? -1 : 1;
+        }
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
+    }
+    return byParent;
+  }
+
+  List<FileSystemEntry> _applySearch(List<FileSystemEntry> entries) {
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) {
+      return entries;
+    }
+    return entries
+        .where(
+          (entry) =>
+              entry.name.toLowerCase().contains(query) ||
+              entry.path.toLowerCase().contains(query),
+        )
+        .toList(growable: false);
+  }
+
+  String _parentPath(String path) {
+    if (path.isEmpty) {
+      return '';
+    }
+    final normalized = path.replaceAll('\\', '/');
+    final chunks = normalized.split('/').where((e) => e.isNotEmpty).toList();
+    if (chunks.length <= 1) {
+      return '';
+    }
+    if (chunks.length == 2 && RegExp(r'^[A-Za-z]:$').hasMatch(chunks.first)) {
+      return '';
+    }
+    return chunks.sublist(0, chunks.length - 1).join('/');
   }
 }
 
-// ── Telemetry Result ─────────────────────────────────────────────────────────
-class _TelemetryResultView extends StatelessWidget {
-  final Map<String, dynamic> command;
-  const _TelemetryResultView({required this.command});
+class _SystemInfoResultView extends StatelessWidget {
+  const _SystemInfoResultView({required this.parsed});
 
-  static final List<Map<String, dynamic>> _metrics = [
-    {
-      'label': 'CPU Usage',
-      'value': '34%',
-      'sub': '8 cores · 2.90 GHz',
-      'icon': Icons.memory_rounded,
-      'color': AppTheme.primary,
-      'pct': 0.34,
-    },
-    {
-      'label': 'Memory',
-      'value': '9.2 GB',
-      'sub': '16 GB total · 57%',
-      'icon': Icons.storage_rounded,
-      'color': AppTheme.secondary,
-      'pct': 0.57,
-    },
-    {
-      'label': 'Disk I/O',
-      'value': '12 MB/s',
-      'sub': '512 GB · 56% used',
-      'icon': Icons.disc_full_rounded,
-      'color': AppTheme.warning,
-      'pct': 0.56,
-    },
-    {
-      'label': 'Network',
-      'value': '2.4 MB/s',
-      'sub': 'Down · 0.3 MB/s Up',
-      'icon': Icons.wifi_rounded,
-      'color': AppTheme.primary,
-      'pct': 0.24,
-    },
-  ];
+  final ParsedCommandResult parsed;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SectionLabel('TELEMETRY SNAPSHOT'),
-          const SizedBox(height: 12),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-            childAspectRatio: 2.2,
-            children: _metrics.map((m) {
-              final color = m['color'] as Color;
-              final pct = m['pct'] as double;
-              return Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppTheme.surface,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppTheme.borderLight),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(m['icon'] as IconData, size: 14, color: color),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            m['label'] as String,
-                            style: GoogleFonts.ibmPlexSans(
-                              fontSize: 10,
-                              color: AppTheme.textMuted,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      m['value'] as String,
-                      style: GoogleFonts.ibmPlexMono(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.textPrimary,
-                      ),
-                    ),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(2),
-                      child: LinearProgressIndicator(
-                        value: pct,
-                        backgroundColor: AppTheme.border,
-                        valueColor: AlwaysStoppedAnimation<Color>(color),
-                        minHeight: 3,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 12),
-          _ActionRow(
-            actions: [
-              _ActionButton(
-                icon: Icons.copy_rounded,
-                label: 'Copy',
-                onTap: () {},
+    final info = extractSystemInfoData(parsed.resultData);
+    final sections = <_InfoSectionData>[
+      _InfoSectionData('Identity', _mapOf(info['identity'])),
+      _InfoSectionData('OS', _mapOf(info['os'])),
+      _InfoSectionData('Hardware', _mapOf(info['hardware'])),
+      _InfoSectionData('Runtime', _mapOf(info['runtime'])),
+      _InfoSectionData('Storage', _mapOf(info['storage'])),
+      _InfoSectionData('Network', _mapOf(info['network'])),
+      _InfoSectionData('Security', _mapOf(info['security'])),
+    ];
+
+    final diagnostics = _buildDiagnostics(info);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionLabel('SYSTEM INFO'),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _MetaChip(
+              label:
+                  'SNAPSHOT: ${_displayValue(info['snapshot_type']).ifEmpty('collect_system_info')}',
+              monospace: true,
+            ),
+            _MetaChip(
+              label:
+                  'SCHEMA: ${_displayValue(info['schema_version']).ifEmpty('unknown')}',
+            ),
+            _MetaChip(
+              label: 'KERNEL MODE: ${_toYesNo(info['kernel_mode'])}',
+              color: AppTheme.secondary,
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        ...sections.where((s) => s.values.isNotEmpty).map(
+              (section) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child:
+                    _KeyValueGrid(title: section.title, values: section.values),
               ),
-              _ActionButton(
-                icon: Icons.download_rounded,
-                label: 'Export',
-                onTap: () {},
-              ),
-            ],
+            ),
+        if (sections.every((s) => s.values.isEmpty))
+          const _InfoCard(
+            icon: Icons.info_outline_rounded,
+            message: 'No structured system info fields were returned.',
           ),
-        ],
-      ),
+        const SizedBox(height: 2),
+        const _SectionLabel('DIAGNOSTICS'),
+        const SizedBox(height: 8),
+        if (diagnostics.isEmpty)
+          const _InfoCard(
+            icon: Icons.verified_rounded,
+            message: 'No diagnostics reported.',
+            tone: AppTheme.secondary,
+          )
+        else
+          ...diagnostics.map(
+            (entry) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: _InfoCard(
+                icon: entry.tone == AppTheme.warning
+                    ? Icons.warning_amber_rounded
+                    : Icons.info_outline_rounded,
+                message: entry.message,
+                tone: entry.tone,
+              ),
+            ),
+          ),
+      ],
     );
+  }
+
+  static Map<String, dynamic> _mapOf(Object? value) {
+    if (value is Map) {
+      return value.map((k, v) => MapEntry(k.toString(), v));
+    }
+    return const <String, dynamic>{};
+  }
+
+  static String _displayValue(Object? value) {
+    if (value == null) {
+      return '';
+    }
+    if (value is bool) {
+      return value ? 'true' : 'false';
+    }
+    return value.toString();
+  }
+
+  static String _toYesNo(Object? value) {
+    if (value is bool) {
+      return value ? 'YES' : 'NO';
+    }
+    return 'UNKNOWN';
+  }
+
+  static List<_DiagnosticEntry> _buildDiagnostics(Map<String, dynamic> info) {
+    final diagnostics = <_DiagnosticEntry>[];
+
+    final failures = info['collection_failures'];
+    if (failures is List) {
+      for (final item in failures) {
+        if (item is Map) {
+          final field = item['field']?.toString() ?? 'field';
+          final reason = item['reason']?.toString() ?? 'unknown';
+          diagnostics.add(
+            _DiagnosticEntry(
+              message: '$field: $reason',
+              tone: AppTheme.warning,
+            ),
+          );
+        }
+      }
+    }
+
+    final masked = info['masked_fields'];
+    if (masked is List && masked.isNotEmpty) {
+      diagnostics.add(
+        _DiagnosticEntry(
+          message: '${masked.length} field(s) were masked by policy.',
+          tone: AppTheme.warning,
+        ),
+      );
+    }
+
+    final included = info['included_fields'];
+    if (included is List && included.isNotEmpty) {
+      diagnostics.add(
+        _DiagnosticEntry(
+          message: 'Included sections: ${included.join(', ')}',
+          tone: AppTheme.primary,
+        ),
+      );
+    }
+
+    return diagnostics;
   }
 }
 
-// ── Action Result (lock/reboot/policy) ──────────────────────────────────────
-class _ActionResultView extends StatelessWidget {
-  final Map<String, dynamic> command;
-  const _ActionResultView({required this.command});
+class _GenericResultView extends StatelessWidget {
+  const _GenericResultView({required this.parsed});
+
+  final ParsedCommandResult parsed;
 
   @override
   Widget build(BuildContext context) {
-    final method = command['method'] as String? ?? '';
-    final isReboot = method == 'reboot' || method == 'reboot_device';
-    final isPolicy = method == 'policy_sync' || method == 'policy_probe';
-    final label = method == 'lock_screen'
-        ? 'Screen Locked'
-        : isReboot
-            ? 'Reboot Initiated'
-            : 'Policy Synced';
-    final sub = method == 'lock_screen'
-        ? 'Device screen has been locked successfully.'
-        : isReboot
-            ? 'Device will reboot in 30 seconds.'
-            : isPolicy
-                ? 'Policy probe dispatched successfully.'
-                : 'Action completed successfully.';
-    final icon = method == 'lock_screen'
-        ? Icons.lock_rounded
-        : isReboot
-            ? Icons.restart_alt_rounded
-            : Icons.sync_rounded;
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
+    final data = parsed.resultData;
+    if (data is Map && data.isNotEmpty) {
+      return _KeyValueGrid(
+        title: 'Result',
+        values: data.map((k, v) => MapEntry(k.toString(), v)),
+      );
+    }
+    if (data is List && data.isNotEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: AppTheme.secondaryMuted,
+          color: AppTheme.surface,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppTheme.secondary.withAlpha(80)),
+          border: Border.all(color: AppTheme.borderLight),
+        ),
+        child: Text(
+          '${data.length} item(s) returned.',
+          style: GoogleFonts.ibmPlexSans(
+            fontSize: 12,
+            color: AppTheme.textSecondary,
+          ),
+        ),
+      );
+    }
+    return const _InfoCard(
+      icon: Icons.notes_rounded,
+      message: 'No structured result data available for this command.',
+    );
+  }
+}
+
+class _DebugSection extends StatelessWidget {
+  const _DebugSection({
+    required this.result,
+    required this.params,
+  });
+
+  final Map<String, dynamic> result;
+  final Object? params;
+
+  @override
+  Widget build(BuildContext context) {
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 0),
+        childrenPadding: const EdgeInsets.only(bottom: 6),
+        iconColor: AppTheme.textMuted,
+        collapsedIconColor: AppTheme.textMuted,
+        title: Text(
+          'Debug JSON',
+          style: GoogleFonts.ibmPlexSans(
+            fontSize: 12,
+            color: AppTheme.textMuted,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        children: [
+          const _SectionLabel('RESULT JSON'),
+          const SizedBox(height: 6),
+          _JsonBlock(content: _prettyJson(result)),
+          if (params != null) ...[
+            const SizedBox(height: 10),
+            const _SectionLabel('PARAMS JSON'),
+            const SizedBox(height: 6),
+            _JsonBlock(content: _prettyJson(params)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static String _prettyJson(Object? value) {
+    const encoder = JsonEncoder.withIndent('  ');
+    if (value == null) {
+      return '{}';
+    }
+    try {
+      return encoder.convert(value);
+    } catch (_) {
+      return value.toString();
+    }
+  }
+}
+
+class _ExplorerToolbar extends StatelessWidget {
+  const _ExplorerToolbar({
+    required this.currentPath,
+    required this.windowsStyle,
+    required this.onBack,
+    required this.canGoBack,
+    required this.onRoot,
+  });
+
+  final String currentPath;
+  final bool windowsStyle;
+  final VoidCallback onBack;
+  final bool canGoBack;
+  final VoidCallback onRoot;
+
+  @override
+  Widget build(BuildContext context) {
+    final rootLabel = windowsStyle ? 'Computer' : '/';
+    return Row(
+      children: [
+        _ActionButton(
+          icon: Icons.arrow_back_ios_new_rounded,
+          label: 'Up',
+          onPressed: canGoBack ? onBack : null,
+          compact: true,
+        ),
+        const SizedBox(width: 8),
+        _ActionButton(
+          icon: Icons.home_rounded,
+          label: rootLabel,
+          onPressed: onRoot,
+          compact: true,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppTheme.borderLight),
+            ),
+            child: Text(
+              currentPath.isEmpty ? rootLabel : currentPath,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.ibmPlexMono(
+                fontSize: 10,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Breadcrumbs extends StatelessWidget {
+  const _Breadcrumbs({
+    required this.currentPath,
+    required this.windowsStyle,
+    required this.onTapPath,
+  });
+
+  final String currentPath;
+  final bool windowsStyle;
+  final ValueChanged<String> onTapPath;
+
+  @override
+  Widget build(BuildContext context) {
+    final chunks = currentPath
+        .replaceAll('\\', '/')
+        .split('/')
+        .where((e) => e.isNotEmpty)
+        .toList(growable: false);
+
+    final chips = <Widget>[
+      GestureDetector(
+        onTap: () => onTapPath(''),
+        child: _BreadChip(label: windowsStyle ? 'Computer' : '/'),
+      ),
+    ];
+
+    var cursor = '';
+    for (final chunk in chunks) {
+      cursor = cursor.isEmpty ? chunk : '$cursor/$chunk';
+      chips
+        ..add(const Icon(Icons.chevron_right_rounded,
+            size: 14, color: AppTheme.textMuted))
+        ..add(
+          GestureDetector(
+            onTap: () => onTapPath(cursor),
+            child: _BreadChip(label: chunk),
+          ),
+        );
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(children: chips),
+    );
+  }
+}
+
+class _BreadChip extends StatelessWidget {
+  const _BreadChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryDim,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.ibmPlexSans(
+          fontSize: 11,
+          color: AppTheme.primary,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _FileRow extends StatelessWidget {
+  const _FileRow({
+    required this.entry,
+    required this.onOpen,
+    required this.artifactUrl,
+    required this.downloadingArtifact,
+    required this.onDownloadArtifact,
+    required this.checksum,
+  });
+
+  final FileSystemEntry entry;
+  final VoidCallback? onOpen;
+  final String artifactUrl;
+  final bool downloadingArtifact;
+  final Future<void> Function(String artifactUrl, {String? checksum})
+      onDownloadArtifact;
+  final String checksum;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onOpen,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: AppTheme.borderLight)),
         ),
         child: Row(
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppTheme.secondary.withAlpha(30),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, size: 22, color: AppTheme.secondary),
+            Icon(
+              entry.isDirectory
+                  ? Icons.folder_rounded
+                  : Icons.insert_drive_file_rounded,
+              size: 16,
+              color:
+                  entry.isDirectory ? AppTheme.warning : AppTheme.textSecondary,
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    label,
-                    style: GoogleFonts.ibmPlexSans(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.secondary,
-                    ),
-                  ),
-                  Text(
-                    sub,
+                    entry.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.ibmPlexSans(
                       fontSize: 12,
-                      color: AppTheme.textSecondary,
-                      height: 1.4,
+                      color: AppTheme.textPrimary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    entry.path,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.ibmPlexMono(
+                      fontSize: 10,
+                      color: AppTheme.textMuted,
                     ),
                   ),
                 ],
               ),
             ),
+            const SizedBox(width: 8),
+            if (!entry.isDirectory)
+              IconButton(
+                onPressed: artifactUrl.isEmpty || downloadingArtifact
+                    ? null
+                    : () => onDownloadArtifact(artifactUrl, checksum: checksum),
+                icon: Icon(
+                  downloadingArtifact
+                      ? Icons.downloading_rounded
+                      : Icons.download_rounded,
+                  size: 16,
+                  color: artifactUrl.isEmpty
+                      ? AppTheme.textDisabled
+                      : AppTheme.primary,
+                ),
+                tooltip:
+                    artifactUrl.isEmpty ? 'Artifact unavailable' : 'Download',
+              ),
+            if (entry.isDirectory)
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 16,
+                color: AppTheme.textMuted,
+              ),
           ],
         ),
       ),
@@ -1814,140 +1283,85 @@ class _ActionResultView extends StatelessWidget {
   }
 }
 
-// ── Generic Result ───────────────────────────────────────────────────────────
-class _GenericResultView extends StatelessWidget {
-  final Map<String, dynamic> command;
-  const _GenericResultView({required this.command});
+class _HeaderCell extends StatelessWidget {
+  const _HeaderCell({
+    required this.label,
+    required this.active,
+    required this.ascending,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool active;
+  final bool ascending;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final notes =
-        command['resultNotes'] as String? ?? 'Command executed successfully.';
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SectionLabel('OUTPUT'),
-          const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppTheme.surface,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppTheme.borderLight),
-            ),
-            child: Text(
-              notes,
-              style: GoogleFonts.ibmPlexMono(
-                fontSize: 12,
-                color: AppTheme.secondary,
-                height: 1.5,
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        width: 130,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.ibmPlexSans(
+                  fontSize: 11,
+                  color: AppTheme.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          _ActionRow(
-            actions: [
-              _ActionButton(
-                icon: Icons.copy_rounded,
-                label: 'Copy',
-                onTap: () => Clipboard.setData(ClipboardData(text: notes)),
+            if (active)
+              Icon(
+                ascending
+                    ? Icons.arrow_drop_up_rounded
+                    : Icons.arrow_drop_down_rounded,
+                size: 16,
+                color: AppTheme.primary,
               ),
-              _ActionButton(
-                icon: Icons.share_rounded,
-                label: 'Export',
-                onTap: () {},
-              ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-// ── Failure View ─────────────────────────────────────────────────────────────
-class _FailureView extends StatelessWidget {
-  final Map<String, dynamic> command;
-  const _FailureView({required this.command});
+class _BodyCell extends StatelessWidget {
+  const _BodyCell({required this.value});
+
+  final String value;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppTheme.errorMuted,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppTheme.error.withAlpha(77)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Error Code: ${command['errorCode'] ?? 'AGENT_UNREACHABLE'}',
-                  style: GoogleFonts.ibmPlexMono(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.error,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  command['errorMessage'] as String? ??
-                      'The agent did not respond within the command TTL window. Device may be offline or network path is disrupted.',
-                  style: GoogleFonts.ibmPlexSans(
-                    fontSize: 11,
-                    color: AppTheme.textSecondary,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'RECOMMENDED ACTIONS',
-            style: GoogleFonts.ibmPlexSans(
-              fontSize: 9,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.textMuted,
-              letterSpacing: 0.8,
-            ),
-          ),
-          const SizedBox(height: 8),
-          _RecommendedAction(
-            icon: Icons.refresh_rounded,
-            label: 'Retry command',
-            description: 'Submit the same command again',
-          ),
-          _RecommendedAction(
-            icon: Icons.devices_rounded,
-            label: 'Check device status',
-            description: 'Verify device is online in fleet view',
-          ),
-          _RecommendedAction(
-            icon: Icons.bug_report_rounded,
-            label: 'Investigate agent logs',
-            description: 'Review agent-side error logs',
-          ),
-        ],
+    return Container(
+      width: 130,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppTheme.borderLight)),
+      ),
+      child: Text(
+        value,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: GoogleFonts.ibmPlexMono(
+          fontSize: 10,
+          color: AppTheme.textPrimary,
+        ),
       ),
     );
   }
 }
-
-// ── Shared Helper Widgets ────────────────────────────────────────────────────
 
 class _SectionLabel extends StatelessWidget {
-  final String text;
   const _SectionLabel(this.text);
+
+  final String text;
 
   @override
   Widget build(BuildContext context) {
@@ -1964,10 +1378,15 @@ class _SectionLabel extends StatelessWidget {
 }
 
 class _MetaChip extends StatelessWidget {
+  const _MetaChip({
+    required this.label,
+    this.color,
+    this.monospace = false,
+  });
+
   final String label;
   final Color? color;
   final bool monospace;
-  const _MetaChip({required this.label, this.color, this.monospace = false});
 
   @override
   Widget build(BuildContext context) {
@@ -1978,8 +1397,11 @@ class _MetaChip extends StatelessWidget {
         color: textColor.withAlpha(20),
         borderRadius: BorderRadius.circular(5),
       ),
+      constraints: const BoxConstraints(maxWidth: 260),
       child: Text(
         label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: monospace
             ? GoogleFonts.ibmPlexMono(
                 fontSize: 10,
@@ -1996,151 +1418,53 @@ class _MetaChip extends StatelessWidget {
   }
 }
 
-class _ActionRow extends StatelessWidget {
-  final List<Widget> actions;
-  const _ActionRow({required this.actions});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(children: actions);
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  const _ActionButton({
-    required this.icon,
+class _CopyableField extends StatelessWidget {
+  const _CopyableField({
     required this.label,
-    required this.onTap,
+    required this.value,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: AppTheme.surface,
-          borderRadius: BorderRadius.circular(7),
-          border: Border.all(color: AppTheme.border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 12, color: AppTheme.textMuted),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: GoogleFonts.ibmPlexSans(
-                fontSize: 11,
-                color: AppTheme.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SortChip extends StatelessWidget {
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-  const _SortChip({
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: active ? AppTheme.primaryDim : AppTheme.surface,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: active ? AppTheme.primary : AppTheme.border,
-          ),
-        ),
-        child: Text(
-          label,
-          style: GoogleFonts.ibmPlexMono(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: active ? AppTheme.primary : AppTheme.textMuted,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TableHeader extends StatelessWidget {
-  final String label;
-  final double? width;
-  final int? flex;
-  final bool right;
-  const _TableHeader(this.label, {this.width, this.flex, this.right = false});
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Text(
-      label,
-      style: GoogleFonts.ibmPlexSans(
-        fontSize: 9,
-        fontWeight: FontWeight.w600,
-        color: AppTheme.textMuted,
-        letterSpacing: 0.5,
-      ),
-      textAlign: right ? TextAlign.right : TextAlign.left,
-    );
-    if (width != null) {
-      return SizedBox(width: width, child: text);
-    }
-    return Expanded(flex: flex ?? 1, child: text);
-  }
-}
-
-class _InfoPill extends StatelessWidget {
   final String label;
   final String value;
-  const _InfoPill({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppTheme.borderLight),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            label,
-            style: GoogleFonts.ibmPlexSans(
-              fontSize: 9,
-              fontWeight: FontWeight.w600,
+            '$label: ',
+            style: GoogleFonts.ibmPlexMono(
+              fontSize: 10,
               color: AppTheme.textMuted,
-              letterSpacing: 0.5,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(width: 5),
-          Text(
-            value,
-            style: GoogleFonts.ibmPlexMono(
-              fontSize: 11,
-              color: AppTheme.textPrimary,
+          Expanded(
+            child: Text(
+              value,
+              style: GoogleFonts.ibmPlexMono(
+                fontSize: 10,
+                color: AppTheme.textPrimary,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () => Clipboard.setData(ClipboardData(text: value)),
+            child: const Icon(
+              Icons.copy_rounded,
+              size: 14,
+              color: AppTheme.textMuted,
             ),
           ),
         ],
@@ -2149,93 +1473,267 @@ class _InfoPill extends StatelessWidget {
   }
 }
 
-class _TabButton extends StatelessWidget {
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-  const _TabButton({
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: active ? AppTheme.primaryDim : AppTheme.surface,
-          borderRadius: BorderRadius.circular(7),
-          border: Border.all(
-            color: active ? AppTheme.primary : AppTheme.border,
-          ),
-        ),
-        child: Text(
-          label,
-          style: GoogleFonts.ibmPlexSans(
-            fontSize: 12,
-            fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-            color: active ? AppTheme.primary : AppTheme.textMuted,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RecommendedAction extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String description;
-  const _RecommendedAction({
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({
     required this.icon,
     required this.label,
-    required this.description,
+    required this.onPressed,
+    this.compact = false,
   });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: AppTheme.surface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppTheme.border),
-            ),
-            child: Icon(icon, size: 15, color: AppTheme.textMuted),
+    return SizedBox(
+      height: compact ? 34 : 36,
+      child: ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          backgroundColor: AppTheme.primaryDim,
+          foregroundColor: AppTheme.primary,
+          disabledBackgroundColor: AppTheme.surface,
+          disabledForegroundColor: AppTheme.textDisabled,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: const BorderSide(color: AppTheme.borderLight),
           ),
-          const SizedBox(width: 10),
+        ),
+        onPressed: onPressed,
+        icon: Icon(icon, size: compact ? 14 : 15),
+        label: Text(
+          label,
+          overflow: TextOverflow.ellipsis,
+          style: GoogleFonts.ibmPlexSans(
+            fontSize: compact ? 11 : 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoCard extends StatelessWidget {
+  const _InfoCard({
+    required this.icon,
+    required this.message,
+    this.tone = AppTheme.textMuted,
+  });
+
+  final IconData icon;
+  final String message;
+  final Color tone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: tone.withAlpha(20),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: tone.withAlpha(80)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 14, color: tone),
+          const SizedBox(width: 8),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: GoogleFonts.ibmPlexSans(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-                Text(
-                  description,
-                  style: GoogleFonts.ibmPlexSans(
-                    fontSize: 11,
-                    color: AppTheme.textMuted,
-                  ),
-                ),
-              ],
+            child: Text(
+              message,
+              style: GoogleFonts.ibmPlexSans(
+                fontSize: 12,
+                color: tone,
+              ),
             ),
           ),
         ],
       ),
     );
   }
+}
+
+class _SearchField extends StatelessWidget {
+  const _SearchField({
+    required this.controller,
+    required this.hint,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final String hint;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 36,
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
+        style:
+            GoogleFonts.ibmPlexSans(fontSize: 12, color: AppTheme.textPrimary),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: GoogleFonts.ibmPlexSans(
+            fontSize: 12,
+            color: AppTheme.textMuted,
+          ),
+          prefixIcon: const Icon(Icons.search_rounded, size: 16),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        ),
+      ),
+    );
+  }
+}
+
+class _KeyValueGrid extends StatelessWidget {
+  const _KeyValueGrid({
+    required this.title,
+    required this.values,
+  });
+
+  final String title;
+  final Map<String, dynamic> values;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = values.entries.toList(growable: false);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: GoogleFonts.ibmPlexSans(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...entries.map(
+            (entry) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: Text(
+                      _toLabel(entry.key),
+                      style: GoogleFonts.ibmPlexSans(
+                        fontSize: 11,
+                        color: AppTheme.textMuted,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 5,
+                    child: Text(
+                      _display(entry.value),
+                      style: GoogleFonts.ibmPlexMono(
+                        fontSize: 10,
+                        color: AppTheme.textPrimary,
+                      ),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _toLabel(String value) {
+    return value
+        .replaceAll('_', ' ')
+        .replaceFirstMapped(RegExp(r'^.'), (m) => m.group(0)!.toUpperCase());
+  }
+
+  static String _display(Object? value) {
+    if (value == null) {
+      return 'Not collected';
+    }
+    if (value is Map || value is List) {
+      try {
+        return const JsonEncoder.withIndent('  ').convert(value);
+      } catch (_) {
+        return value.toString();
+      }
+    }
+    return value.toString();
+  }
+}
+
+class _JsonBlock extends StatelessWidget {
+  const _JsonBlock({required this.content});
+
+  final String content;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.borderLight),
+      ),
+      child: SelectableText(
+        content,
+        style: GoogleFonts.ibmPlexMono(
+          fontSize: 10,
+          color: AppTheme.textSecondary,
+          height: 1.4,
+        ),
+      ),
+    );
+  }
+}
+
+final _artifactAuthHeaderProvider = FutureProvider<String?>((ref) async {
+  final secureStorage = ref.read(secureStorageServiceProvider);
+  return secureStorage.read(StorageKeys.authToken);
+});
+
+class _InfoSectionData {
+  const _InfoSectionData(this.title, this.values);
+
+  final String title;
+  final Map<String, dynamic> values;
+}
+
+class _DiagnosticEntry {
+  const _DiagnosticEntry({
+    required this.message,
+    required this.tone,
+  });
+
+  final String message;
+  final Color tone;
+}
+
+extension on String {
+  String ifEmpty(String fallback) => isEmpty ? fallback : this;
 }

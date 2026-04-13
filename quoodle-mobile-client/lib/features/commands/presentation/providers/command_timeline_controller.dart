@@ -158,6 +158,8 @@ class CommandTimelineController
         _deriveExecutingAt(status, dispatchedAt, ackedAt, fallback);
 
     final result = _asStringDynamicMap(payload['result']);
+    final fallbackResult = _asStringDynamicMap(fallback['result']);
+    final effectiveResult = result.isEmpty ? fallbackResult : result;
     final resultStatus = _asString(payload['result_status']).ifEmpty(
       _asString(result['status']),
     );
@@ -208,6 +210,7 @@ class CommandTimelineController
       'ackedAt': ackedAt,
       'executingAt': executingAt,
       'completedAt': completedAt,
+      'result': effectiveResult,
       'resultStatus': resultStatus,
       'resultNotes': resultNotes,
       'artifactUrl': _asString(payload['artifact_url']).ifEmpty(

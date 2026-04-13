@@ -25,6 +25,31 @@ class _CommandTimelineScreenState extends ConsumerState<CommandTimelineScreen> {
 
   int _currentNavIndex = 2; // Commands tab
 
+  AppRoute _fallbackRouteForCommand(Map<String, dynamic> command) {
+    final deviceId = command['deviceId']?.toString() ?? '';
+    return deviceId.isNotEmpty ? AppRoute.deviceDetail : AppRoute.devices;
+  }
+
+  Object? _fallbackArgsForCommand(Map<String, dynamic> command) {
+    final deviceId = command['deviceId']?.toString() ?? '';
+    if (deviceId.isEmpty) {
+      return null;
+    }
+    final deviceName = command['deviceName']?.toString() ?? '';
+    return <String, dynamic>{
+      'deviceId': deviceId,
+      if (deviceName.isNotEmpty) 'deviceName': deviceName,
+    };
+  }
+
+  void _handleBack(Map<String, dynamic> command) {
+    AppNavigator.popOrGo(
+      context,
+      _fallbackRouteForCommand(command),
+      arguments: _fallbackArgsForCommand(command),
+    );
+  }
+
   void _onNavTap(int index) {
     if (index != _currentNavIndex) {
       setState(() => _currentNavIndex = index);
@@ -58,64 +83,75 @@ class _CommandTimelineScreenState extends ConsumerState<CommandTimelineScreen> {
     final currentStatus = _toLegacyStatus(timelineState.status);
     final isTerminal = timelineState.isTerminal;
 
-    return Scaffold(
-      backgroundColor: AppTheme.background,
-      extendBody: true,
-      appBar: _buildAppBar(context, command, currentStatus),
-      body: CustomScrollView(
-        slivers: [
-          if (timelineState.loadedFromCache)
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          return;
+        }
+        _handleBack(command);
+      },
+      child: Scaffold(
+        backgroundColor: AppTheme.background,
+        extendBody: true,
+        appBar: _buildAppBar(context, command, currentStatus),
+        body: CustomScrollView(
+          slivers: [
+            if (timelineState.loadedFromCache)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                sliver: SliverToBoxAdapter(child: _buildCachedBanner()),
+              ),
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              sliver: SliverToBoxAdapter(child: _buildCachedBanner()),
-            ),
-          SliverPadding(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              timelineState.loadedFromCache ? 8 : 16,
-              16,
-              0,
-            ),
-            sliver: SliverToBoxAdapter(
-              child: _buildCommandHeaderCard(context, command),
-            ),
-          ),
-          if (!isTerminal)
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                timelineState.loadedFromCache ? 8 : 16,
+                16,
+                0,
+              ),
               sliver: SliverToBoxAdapter(
-                child: _buildPollingIndicator(timelineState.secondsSinceUpdate),
+                child: _buildCommandHeaderCard(context, command),
               ),
             ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            sliver: SliverToBoxAdapter(
-              child: CommandTimelineWidget(
-                currentStatus: currentStatus,
-                command: command,
+            if (!isTerminal)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                sliver: SliverToBoxAdapter(
+                  child:
+                      _buildPollingIndicator(timelineState.secondsSinceUpdate),
+                ),
               ),
-            ),
-          ),
-          if (isTerminal)
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               sliver: SliverToBoxAdapter(
-                child: CommandResultWidget(
+                child: CommandTimelineWidget(
+                  currentStatus: currentStatus,
                   command: command,
-                  status: currentStatus,
                 ),
               ),
             ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-            sliver:
-                SliverToBoxAdapter(child: CommandAuditWidget(command: command)),
-          ),
-        ],
-      ),
-      bottomNavigationBar: AppNavigation(
-        currentIndex: _currentNavIndex,
-        onTap: _onNavTap,
+            if (isTerminal)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                sliver: SliverToBoxAdapter(
+                  child: CommandResultWidget(
+                    command: command,
+                    status: currentStatus,
+                  ),
+                ),
+              ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+              sliver: SliverToBoxAdapter(
+                child: CommandAuditWidget(command: command),
+              ),
+            ),
+          ],
+        ),
+        bottomNavigationBar: AppNavigation(
+          currentIndex: _currentNavIndex,
+          onTap: _onNavTap,
+        ),
       ),
     );
   }
@@ -164,7 +200,7 @@ class _CommandTimelineScreenState extends ConsumerState<CommandTimelineScreen> {
           size: 18,
           color: AppTheme.textPrimary,
         ),
-        onPressed: () => Navigator.maybePop(context),
+        onPressed: () => _handleBack(command),
       ),
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

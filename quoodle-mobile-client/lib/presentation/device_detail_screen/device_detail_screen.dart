@@ -27,6 +27,10 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
   late TabController _tabController;
   String? _deviceId;
 
+  void _handleBack() {
+    AppNavigator.popOrGo(context, AppRoute.devices);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -60,45 +64,54 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
       );
     }
 
-    return Scaffold(
-      backgroundColor: AppTheme.background,
-      extendBodyBehindAppBar: true,
-      appBar: _buildGlassAppBar(context, device),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => AppNavigator.push(
-          context,
-          AppRoute.sendCommand,
-          arguments: <String, dynamic>{
-            'deviceId': device.id,
-            'deviceName': device.name,
-          },
-        ),
-        icon: const Icon(Icons.terminal_rounded, size: 18),
-        label: Text(
-          'Send Command',
-          style: GoogleFonts.ibmPlexSans(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          return;
+        }
+        _handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: AppTheme.background,
+        extendBodyBehindAppBar: true,
+        appBar: _buildGlassAppBar(context, device),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: () => AppNavigator.push(
+            context,
+            AppRoute.sendCommand,
+            arguments: <String, dynamic>{
+              'deviceId': device.id,
+              'deviceName': device.name,
+            },
           ),
-        ),
-      ),
-      body: Column(
-        children: [
-          _buildDeviceHeader(device),
-          _buildTabBar(),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                DeviceOverviewTabWidget(device: _toDeviceMap(device)),
-                DeviceTelemetryTabWidget(deviceId: device.id),
-                DeviceCommandsTabWidget(deviceId: device.id),
-                DeviceAlertsTabWidget(deviceId: device.id),
-                DeviceAuditTabWidget(deviceId: device.id),
-              ],
+          icon: const Icon(Icons.terminal_rounded, size: 18),
+          label: Text(
+            'Send Command',
+            style: GoogleFonts.ibmPlexSans(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
             ),
           ),
-        ],
+        ),
+        body: Column(
+          children: [
+            _buildDeviceHeader(device),
+            _buildTabBar(),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  DeviceOverviewTabWidget(device: _toDeviceMap(device)),
+                  DeviceTelemetryTabWidget(deviceId: device.id),
+                  DeviceCommandsTabWidget(deviceId: device.id),
+                  DeviceAlertsTabWidget(deviceId: device.id),
+                  DeviceAuditTabWidget(deviceId: device.id),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -151,7 +164,7 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
                         size: 18,
                         color: AppTheme.textPrimary,
                       ),
-                      onPressed: () => Navigator.maybePop(context),
+                      onPressed: _handleBack,
                     ),
                     Expanded(
                       child: Text(
@@ -189,9 +202,10 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
         : riskScore >= 60
             ? AppTheme.error
             : AppTheme.warning;
+    final topInset = MediaQuery.of(context).padding.top + kToolbarHeight;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      padding: EdgeInsets.fromLTRB(16, topInset + 12, 16, 16),
       decoration: const BoxDecoration(
         color: AppTheme.surface,
         border: Border(bottom: BorderSide(color: AppTheme.border, width: 1)),

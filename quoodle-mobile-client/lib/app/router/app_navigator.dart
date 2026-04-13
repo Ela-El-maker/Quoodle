@@ -130,6 +130,20 @@ class AppNavigator {
     return Future<T?>.value(null);
   }
 
+  static bool popOrGo(
+    BuildContext context,
+    AppRoute fallback, {
+    Object? arguments,
+  }) {
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+      return true;
+    }
+    _router(context).go(pathFor(fallback), extra: arguments);
+    return false;
+  }
+
   static GoRouter _router(BuildContext context) {
     return GoRouter.maybeOf(context) ?? AppRouter.goRouter;
   }

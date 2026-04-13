@@ -271,12 +271,9 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
       return;
     }
 
-    AppNavigator.pushAndPruneUntil(
+    AppNavigator.push(
       context,
       AppRoute.commandTimeline,
-      predicate: (route) =>
-          route.settings.name == AppNavigator.pathFor(AppRoute.deviceDetail) ||
-          route.settings.name == AppNavigator.pathFor(AppRoute.devices),
       arguments: dispatchResult.timelineArguments,
     );
   }
