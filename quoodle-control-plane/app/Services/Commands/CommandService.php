@@ -32,6 +32,9 @@ class CommandService
         // Phase 2 observability slice (read-only collectors).
         'network_info',
         'get_active_window',
+        // Filesystem read-only slice.
+        'list_files',
+        'download_file',
     ];
 
     public function __construct(
@@ -75,6 +78,28 @@ class CommandService
 
         if (! $this->runtimeCapabilities->isRuntimeSupported($method)) {
             return ['status' => 'rejected', 'reason' => 'not_supported_runtime'];
+        }
+
+        // Defensive normalization for list_files so stale clients cannot trigger
+        // repeated invalid_params rejections (e.g., limit > max bound).
+        if ($method === 'list_files') {
+            $params = is_array($payload['params'] ?? null) ? $payload['params'] : [];
+
+            if (array_key_exists('limit', $params)) {
+                $limit = is_numeric($params['limit']) ? (int) $params['limit'] : null;
+                if ($limit !== null) {
+                    $params['limit'] = max(1, min($limit, 1000));
+                }
+            }
+
+            if (array_key_exists('max_depth', $params)) {
+                $depth = is_numeric($params['max_depth']) ? (int) $params['max_depth'] : null;
+                if ($depth !== null) {
+                    $params['max_depth'] = max(1, min($depth, 16));
+                }
+            }
+
+            $payload['params'] = $params;
         }
 
         $validation = $definition->validate($payload['params'] ?? []);

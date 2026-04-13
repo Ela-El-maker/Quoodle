@@ -55,6 +55,7 @@ class DeviceController extends Controller
                 $resolvedConnectionMode = $this->resolvedConnectionMode($latest);
                 $resolvedComplianceStatus = $this->resolvedComplianceStatus($device, $latest);
                 $resolvedPolicyInSync = $this->resolvedPolicyInSync($device, $latest);
+                $resolvedKernelGuard = $this->resolvedKernelGuard($latest);
 
                 return [
                     'device_id' => $device->device_id,
@@ -71,6 +72,7 @@ class DeviceController extends Controller
                     'resolved_connection_mode' => $resolvedConnectionMode,
                     'resolved_compliance_status' => $resolvedComplianceStatus,
                     'resolved_policy_in_sync' => $resolvedPolicyInSync,
+                    'kernel_guard' => $resolvedKernelGuard,
                 ];
             }),
             'meta' => [
@@ -175,6 +177,7 @@ class DeviceController extends Controller
         $resolvedConnectionMode = $this->resolvedConnectionMode($latestTelemetry);
         $resolvedComplianceStatus = $this->resolvedComplianceStatus($device, $latestTelemetry);
         $resolvedPolicyInSync = $this->resolvedPolicyInSync($device, $latestTelemetry);
+        $resolvedKernelGuard = $this->resolvedKernelGuard($latestTelemetry);
 
         $latestMetrics = is_array($latestTelemetry?->metrics) ? $latestTelemetry->metrics : (is_array($latestSnapshot?->metrics) ? $latestSnapshot->metrics : []);
         $latestTimestamp = $latestTelemetry?->timestamp ?? $latestSnapshot?->timestamp;
@@ -197,6 +200,7 @@ class DeviceController extends Controller
             'resolved_connection_mode' => $resolvedConnectionMode,
             'resolved_compliance_status' => $resolvedComplianceStatus,
             'resolved_policy_in_sync' => $resolvedPolicyInSync,
+            'kernel_guard' => $resolvedKernelGuard,
             'compliance' => [
                 'status' => $resolvedComplianceStatus,
                 'last_evaluated_at' => optional($device->updated_at)?->toIso8601String(),
@@ -281,6 +285,19 @@ class DeviceController extends Controller
         }
 
         return hash_equals($expected, $reported);
+    }
+
+    private function resolvedKernelGuard(?DeviceTelemetryLatest $latest): ?bool
+    {
+        $metrics = is_array($latest?->metrics) ? $latest->metrics : [];
+        if (array_key_exists('kernel_guard', $metrics) && is_bool($metrics['kernel_guard'])) {
+            return $metrics['kernel_guard'];
+        }
+        if (array_key_exists('kernel_mode', $metrics) && is_bool($metrics['kernel_mode'])) {
+            return $metrics['kernel_mode'];
+        }
+
+        return null;
     }
 
     public function rename(Request $request, string $device_id): JsonResponse

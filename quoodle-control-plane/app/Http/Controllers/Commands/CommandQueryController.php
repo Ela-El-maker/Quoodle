@@ -25,6 +25,7 @@ class CommandQueryController extends Controller
         $before = $request->query('before');
 
         $query = $this->visibleCommandsQuery($request)
+            ->select($this->commandListColumns())
             ->with(['user:id,email', 'device:device_id,device_name'])
             ->orderByDesc('queued_at')
             ->orderByDesc('id');
@@ -116,6 +117,7 @@ class CommandQueryController extends Controller
 
         $limit = min((int) $request->query('limit', 20), 100);
         $commands = Command::where('device_id', $device_id)
+            ->select($this->commandListColumns())
             ->with(['user:id,email', 'device:device_id,device_name'])
             ->orderByDesc('queued_at')
             ->limit($limit)
@@ -139,6 +141,31 @@ class CommandQueryController extends Controller
         }
 
         return $query;
+    }
+
+    /**
+     * Keep command list queries lightweight so MySQL doesn't sort huge envelope/signature blobs.
+     *
+     * @return array<int, string>
+     */
+    private function commandListColumns(): array
+    {
+        return [
+            'id',
+            'device_id',
+            'user_id',
+            'method',
+            'params',
+            'state',
+            'execution_state',
+            'queued_at',
+            'dispatched_at',
+            'completed_at',
+            'trace_id',
+            'error_code',
+            'error_message',
+            'reason',
+        ];
     }
 
     private function canViewCommand(Request $request, Command $command): bool

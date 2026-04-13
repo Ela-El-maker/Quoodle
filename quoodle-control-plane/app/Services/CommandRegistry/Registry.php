@@ -193,9 +193,13 @@ class Registry
                 requires2fa: false,
                 allowedInQuarantine: false,
                 paramsRules: [
-                    'path' => $relativePath,
+                    'path' => ['nullable', 'string', 'max:1024'],
                     'recursive' => ['nullable', 'boolean'],
+                    'max_depth' => ['nullable', 'integer', 'min:1', 'max:16'],
                     'limit' => ['nullable', 'integer', 'min:1', 'max:1000'],
+                    'include_hidden' => ['nullable', 'boolean'],
+                    'include_system' => ['nullable', 'boolean'],
+                    'follow_symlinks' => ['nullable', 'boolean'],
                 ]
             ),
             'stat_file' => new CommandDefinition(
@@ -251,7 +255,7 @@ class Registry
                 requires2fa: false,
                 allowedInQuarantine: false,
                 paramsRules: [
-                    'path' => $relativePath,
+                    'path' => ['required', 'string', 'max:1024'],
                     'max_bytes' => ['nullable', 'integer', 'min:1', 'max:5242880'],
                 ]
             ),

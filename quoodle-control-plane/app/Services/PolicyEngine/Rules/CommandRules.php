@@ -18,6 +18,8 @@ class CommandRules
             'list_mounts',
             'network_info',
             'get_active_window',
+            'list_files',
+            'download_file',
         ], true);
     }
 }

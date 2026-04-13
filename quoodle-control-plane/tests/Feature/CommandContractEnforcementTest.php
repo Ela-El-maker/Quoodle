@@ -139,6 +139,8 @@ class CommandContractEnforcementTest extends TestCase
         $this->assertContains('list_mounts', $runtimeSupported);
         $this->assertContains('network_info', $runtimeSupported);
         $this->assertContains('get_active_window', $runtimeSupported);
+        $this->assertContains('list_files', $runtimeSupported);
+        $this->assertContains('download_file', $runtimeSupported);
 
         $canonical = $response->json('canonical_methods');
         $this->assertContains('logout_user', $canonical);
@@ -299,6 +301,51 @@ class CommandContractEnforcementTest extends TestCase
     }
 
     /** @test */
+    public function list_files_is_runtime_supported_and_accepts_recursive_contract(): void
+    {
+        Queue::fake();
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $device = $this->createOwnedDevice($admin, 'dev-list-files');
+
+        $payload = $this->commandPayload($device, 'list_files');
+        $payload['params'] = [
+            'path' => 'Users/Public',
+            'recursive' => true,
+            'max_depth' => 4,
+            'limit' => 200,
+            'include_hidden' => false,
+            'include_system' => false,
+            'follow_symlinks' => false,
+        ];
+
+        $this->withHeaders($this->makeHeaders($admin))
+            ->postJson('/api/commands', $payload)
+            ->assertCreated()
+            ->assertJsonPath('status', 'accepted');
+    }
+
+    /** @test */
+    public function download_file_is_runtime_supported_and_accepts_path_contract(): void
+    {
+        Queue::fake();
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $device = $this->createOwnedDevice($admin, 'dev-download-file');
+
+        $payload = $this->commandPayload($device, 'download_file');
+        $payload['params'] = [
+            'path' => 'Users/Public/report.txt',
+            'max_bytes' => 1048576,
+        ];
+
+        $this->withHeaders($this->makeHeaders($admin))
+            ->postJson('/api/commands', $payload)
+            ->assertCreated()
+            ->assertJsonPath('status', 'accepted');
+    }
+
+    /** @test */
     public function screenshot_bypasses_non_compliant_rejection_gate(): void
     {
         Queue::fake();
@@ -322,11 +369,21 @@ class CommandContractEnforcementTest extends TestCase
         Queue::fake();
 
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
-        $methods = ['list_processes', 'list_services', 'list_connections', 'list_mounts', 'network_info', 'get_active_window'];
+        $cases = [
+            ['method' => 'list_processes', 'params' => []],
+            ['method' => 'list_services', 'params' => []],
+            ['method' => 'list_connections', 'params' => []],
+            ['method' => 'list_mounts', 'params' => []],
+            ['method' => 'network_info', 'params' => []],
+            ['method' => 'get_active_window', 'params' => []],
+            ['method' => 'list_files', 'params' => ['path' => 'Users/Public', 'recursive' => true, 'limit' => 50]],
+            ['method' => 'download_file', 'params' => ['path' => 'Users/Public/report.txt', 'max_bytes' => 1048576]],
+        ];
 
-        foreach ($methods as $index => $method) {
+        foreach ($cases as $index => $case) {
             $device = $this->createOwnedDevice($admin, "dev-obs-bypass-{$index}");
-            $payload = $this->commandPayload($device, $method);
+            $payload = $this->commandPayload($device, $case['method']);
+            $payload['params'] = $case['params'];
             $payload['attestation_status'] = 'failed';
 
             $this->withHeaders($this->makeHeaders($admin))

@@ -271,6 +271,16 @@ class TelemetryQueryController extends Controller
         }
 
         $telemetry = TelemetryEvent::query()
+            ->select([
+                'id',
+                'device_id',
+                'timestamp',
+                'telemetry_scope',
+                'presence_state',
+                'connection_mode',
+                'risk_score',
+                'metrics',
+            ])
             ->whereIn('device_id', $deviceIds)
             ->orderByDesc('timestamp')
             ->limit($limit)
@@ -296,6 +306,14 @@ class TelemetryQueryController extends Controller
             ->values();
 
         $alerts = Alert::query()
+            ->select([
+                'id',
+                'device_id',
+                'timestamp',
+                'severity',
+                'category',
+                'message',
+            ])
             ->whereIn('device_id', $deviceIds)
             ->orderByDesc('timestamp')
             ->limit($limit)
@@ -313,6 +331,15 @@ class TelemetryQueryController extends Controller
             ]);
 
         $commands = Command::query()
+            ->select([
+                'id',
+                'device_id',
+                'method',
+                'state',
+                'error_code',
+                'error_message',
+                'queued_at',
+            ])
             ->whereIn('device_id', $deviceIds)
             ->orderByDesc('queued_at')
             ->limit($limit)

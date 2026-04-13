@@ -21,6 +21,8 @@ class RuntimeCapabilities
         'list_mounts',
         'network_info',
         'get_active_window',
+        'list_files',
+        'download_file',
     ];
 
     public function __construct(private readonly Registry $registry)
