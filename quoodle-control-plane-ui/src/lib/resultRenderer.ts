@@ -100,6 +100,11 @@ const methodTitleMap: Record<string, string> = {
   collect_system_info: 'System Snapshot',
   ping: 'Ping Result',
   list_processes: 'Process Inventory',
+  list_services: 'Service Inventory',
+  list_connections: 'Connection Inventory',
+  list_mounts: 'Mount Inventory',
+  network_info: 'Network Inventory',
+  get_active_window: 'Active Window',
   screenshot: 'Screenshot Capture',
 };
 
@@ -387,6 +392,50 @@ function normalizeProcessArray(data: unknown): Array<Record<string, unknown>> {
   return [];
 }
 
+function normalizeServicesArray(data: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(data)) {
+    return data.filter((item): item is Record<string, unknown> => isObject(item));
+  }
+  if (isObject(data) && Array.isArray(data.services)) {
+    return data.services.filter((item): item is Record<string, unknown> => isObject(item));
+  }
+  return [];
+}
+
+function normalizeConnectionsArray(data: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(data)) {
+    return data.filter((item): item is Record<string, unknown> => isObject(item));
+  }
+  if (isObject(data) && Array.isArray(data.connections)) {
+    return data.connections.filter((item): item is Record<string, unknown> => isObject(item));
+  }
+  return [];
+}
+
+function normalizeMountsArray(data: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(data)) {
+    return data.filter((item): item is Record<string, unknown> => isObject(item));
+  }
+  if (isObject(data) && Array.isArray(data.mounts)) {
+    return data.mounts.filter((item): item is Record<string, unknown> => isObject(item));
+  }
+  return [];
+}
+
+function normalizeNetworkAdaptersArray(data: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(data)) {
+    return data.filter((item): item is Record<string, unknown> => isObject(item));
+  }
+  if (isObject(data) && Array.isArray(data.adapters)) {
+    return data.adapters.filter((item): item is Record<string, unknown> => isObject(item));
+  }
+  return [];
+}
+
+function normalizeActiveWindowPayload(data: unknown): Record<string, unknown> {
+  return isObject(data) ? data : {};
+}
+
 function buildProcessTable(rows: Array<Record<string, unknown>>): ResultTableDefinition {
   const preferred = ['pid', 'name', 'cpu', 'memory', 'memory_mb', 'user', 'path', 'start_time'];
   const discovered = new Set<string>();
@@ -435,6 +484,214 @@ function buildListProcesses(row: NormalizedCommandResult): ResultViewModel {
       widget: 'table',
       table,
       emptySummary: processes.length === 0 ? 'No process rows were returned' : null,
+    },
+    {
+      id: 'diagnostics',
+      title: 'Diagnostics',
+      widget: 'diagnostics',
+      diagnostics: model.diagnostics,
+      emptySummary: model.diagnostics.length === 0 ? 'No diagnostics reported' : null,
+    },
+  ];
+  return model;
+}
+
+function buildListServices(row: NormalizedCommandResult): ResultViewModel {
+  const model = buildBaseModel(row, 'list_services', methodTitleMap.list_services);
+  const data = extractStructuredData(row);
+  const services = normalizeServicesArray(data);
+  const table = buildProcessTable(services);
+
+  model.hero = [
+    { label: 'Status', value: toDisplayValue(row.resultStatus ?? row.state), tone: 'info' },
+    { label: 'Services', value: String(services.length), tone: 'success' },
+  ];
+  model.diagnostics = buildDiagnosticsFromRow(row);
+  model.sections = [
+    {
+      id: 'overview',
+      title: 'Overview',
+      widget: 'stats',
+      stats: model.hero,
+      description: services.length > 250 ? 'Showing first 250 rows' : undefined,
+    },
+    {
+      id: 'services',
+      title: 'Services',
+      widget: 'table',
+      table,
+      emptySummary: services.length === 0 ? 'No service rows were returned' : null,
+    },
+    {
+      id: 'diagnostics',
+      title: 'Diagnostics',
+      widget: 'diagnostics',
+      diagnostics: model.diagnostics,
+      emptySummary: model.diagnostics.length === 0 ? 'No diagnostics reported' : null,
+    },
+  ];
+  return model;
+}
+
+function buildListConnections(row: NormalizedCommandResult): ResultViewModel {
+  const model = buildBaseModel(row, 'list_connections', methodTitleMap.list_connections);
+  const data = extractStructuredData(row);
+  const connections = normalizeConnectionsArray(data);
+  const table = buildProcessTable(connections);
+
+  model.hero = [
+    { label: 'Status', value: toDisplayValue(row.resultStatus ?? row.state), tone: 'info' },
+    { label: 'Connections', value: String(connections.length), tone: 'success' },
+  ];
+  model.diagnostics = buildDiagnosticsFromRow(row);
+  model.sections = [
+    {
+      id: 'overview',
+      title: 'Overview',
+      widget: 'stats',
+      stats: model.hero,
+      description: connections.length > 250 ? 'Showing first 250 rows' : undefined,
+    },
+    {
+      id: 'connections',
+      title: 'Connections',
+      widget: 'table',
+      table,
+      emptySummary: connections.length === 0 ? 'No connection rows were returned' : null,
+    },
+    {
+      id: 'diagnostics',
+      title: 'Diagnostics',
+      widget: 'diagnostics',
+      diagnostics: model.diagnostics,
+      emptySummary: model.diagnostics.length === 0 ? 'No diagnostics reported' : null,
+    },
+  ];
+  return model;
+}
+
+function buildListMounts(row: NormalizedCommandResult): ResultViewModel {
+  const model = buildBaseModel(row, 'list_mounts', methodTitleMap.list_mounts);
+  const data = extractStructuredData(row);
+  const mounts = normalizeMountsArray(data);
+  const table = buildProcessTable(mounts);
+
+  model.hero = [
+    { label: 'Status', value: toDisplayValue(row.resultStatus ?? row.state), tone: 'info' },
+    { label: 'Mounts', value: String(mounts.length), tone: 'success' },
+  ];
+  model.diagnostics = buildDiagnosticsFromRow(row);
+  model.sections = [
+    {
+      id: 'overview',
+      title: 'Overview',
+      widget: 'stats',
+      stats: model.hero,
+      description: mounts.length > 250 ? 'Showing first 250 rows' : undefined,
+    },
+    {
+      id: 'mounts',
+      title: 'Mounts',
+      widget: 'table',
+      table,
+      emptySummary: mounts.length === 0 ? 'No mount rows were returned' : null,
+    },
+    {
+      id: 'diagnostics',
+      title: 'Diagnostics',
+      widget: 'diagnostics',
+      diagnostics: model.diagnostics,
+      emptySummary: model.diagnostics.length === 0 ? 'No diagnostics reported' : null,
+    },
+  ];
+  return model;
+}
+
+function buildNetworkInfo(row: NormalizedCommandResult): ResultViewModel {
+  const model = buildBaseModel(row, 'network_info', methodTitleMap.network_info);
+  const data = extractStructuredData(row);
+  const adapters = normalizeNetworkAdaptersArray(data);
+  const table = buildProcessTable(adapters);
+
+  model.hero = [
+    { label: 'Status', value: toDisplayValue(row.resultStatus ?? row.state), tone: 'info' },
+    { label: 'Adapters', value: String(adapters.length), tone: 'success' },
+  ];
+  model.diagnostics = buildDiagnosticsFromRow(row);
+  model.sections = [
+    {
+      id: 'overview',
+      title: 'Overview',
+      widget: 'stats',
+      stats: model.hero,
+      description: adapters.length > 250 ? 'Showing first 250 rows' : undefined,
+    },
+    {
+      id: 'adapters',
+      title: 'Adapters',
+      widget: 'table',
+      table,
+      emptySummary: adapters.length === 0 ? 'No adapter rows were returned' : null,
+    },
+    {
+      id: 'diagnostics',
+      title: 'Diagnostics',
+      widget: 'diagnostics',
+      diagnostics: model.diagnostics,
+      emptySummary: model.diagnostics.length === 0 ? 'No diagnostics reported' : null,
+    },
+  ];
+  return model;
+}
+
+function buildActiveWindow(row: NormalizedCommandResult): ResultViewModel {
+  const model = buildBaseModel(row, 'get_active_window', methodTitleMap.get_active_window);
+  const data = extractStructuredData(row);
+  const payload = normalizeActiveWindowPayload(data);
+  const available = payload.available === true;
+
+  const payloadBlock = objectEntries(payload, { hideNull: true });
+  model.hero = [
+    {
+      label: 'State',
+      value: toLabel(row.state),
+      tone: row.state === 'completed' ? 'success' : row.state === 'failed' ? 'danger' : 'info',
+    },
+    {
+      label: 'Window',
+      value: toDisplayValue(payload.title ?? payload.status ?? 'Unknown'),
+      tone: available ? 'success' : 'warning',
+    },
+    {
+      label: 'Process',
+      value: toDisplayValue(payload.process_name ?? payload.pid ?? 'Unknown'),
+      tone: 'info',
+    },
+  ];
+
+  model.diagnostics = buildDiagnosticsFromRow(row);
+  if (!available) {
+    model.diagnostics.push({
+      severity: 'warning',
+      reason: 'window_unavailable',
+      message: 'No interactive foreground window was available at collection time.',
+    });
+  }
+
+  model.sections = [
+    {
+      id: 'overview',
+      title: 'Overview',
+      widget: 'stats',
+      stats: model.hero,
+    },
+    {
+      id: 'window',
+      title: 'Window Details',
+      widget: 'kv',
+      keyValues: payloadBlock.keyValues,
+      collapsedByDefault: !available,
+      emptySummary: payloadBlock.keyValues.length === 0 ? 'No window details were returned' : null,
     },
     {
       id: 'diagnostics',
@@ -653,6 +910,31 @@ const renderDefinitions: Record<string, ResultRenderDefinition> = {
     method: 'list_processes',
     title: methodTitleMap.list_processes,
     build: buildListProcesses,
+  },
+  list_services: {
+    method: 'list_services',
+    title: methodTitleMap.list_services,
+    build: buildListServices,
+  },
+  list_connections: {
+    method: 'list_connections',
+    title: methodTitleMap.list_connections,
+    build: buildListConnections,
+  },
+  list_mounts: {
+    method: 'list_mounts',
+    title: methodTitleMap.list_mounts,
+    build: buildListMounts,
+  },
+  network_info: {
+    method: 'network_info',
+    title: methodTitleMap.network_info,
+    build: buildNetworkInfo,
+  },
+  get_active_window: {
+    method: 'get_active_window',
+    title: methodTitleMap.get_active_window,
+    build: buildActiveWindow,
   },
   screenshot: {
     method: 'screenshot',
