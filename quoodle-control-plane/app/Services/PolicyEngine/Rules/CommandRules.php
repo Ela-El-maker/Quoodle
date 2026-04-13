@@ -6,6 +6,18 @@ class CommandRules
 {
     public function allowed(string $method): bool
     {
-        return in_array($method, ['lock_screen', 'ping', 'logout_user', 'reboot_device', 'shutdown_device', 'screenshot'], true);
+        return in_array($method, [
+            'ping',
+            'reboot_device',
+            'shutdown_device',
+            'collect_system_info',
+            'screenshot',
+            'list_processes',
+            'list_services',
+            'list_connections',
+            'list_mounts',
+            'network_info',
+            'get_active_window',
+        ], true);
     }
 }

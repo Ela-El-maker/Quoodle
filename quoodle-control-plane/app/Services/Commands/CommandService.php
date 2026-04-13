@@ -24,6 +24,14 @@ class CommandService
      */
     private const COMPLIANCE_BYPASS_METHODS = [
         'screenshot',
+        // Observability slices (read-only collectors).
+        'list_processes',
+        'list_services',
+        'list_connections',
+        'list_mounts',
+        // Phase 2 observability slice (read-only collectors).
+        'network_info',
+        'get_active_window',
     ];
 
     public function __construct(

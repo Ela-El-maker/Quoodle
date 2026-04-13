@@ -15,6 +15,12 @@ class RuntimeCapabilities
         'shutdown_device',
         'collect_system_info',
         'screenshot',
+        'list_processes',
+        'list_services',
+        'list_connections',
+        'list_mounts',
+        'network_info',
+        'get_active_window',
     ];
 
     public function __construct(private readonly Registry $registry)
