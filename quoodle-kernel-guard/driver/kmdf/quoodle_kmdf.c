@@ -164,7 +164,6 @@ static VOID QuoodleEvtIoDeviceControl(_In_ WDFQUEUE Queue,
         break;
       case QOP_EXEC_LOCK_SCREEN:
       case QOP_EXEC_LOGOUT:
-      case QOP_EXEC_GET_PROCESS_LIST:
       case QOP_EXEC_VALIDATE_UPDATE_PACKAGE:
       case QOP_STAGE_UPDATE:
       case QOP_COMMIT_UPDATE:
@@ -173,6 +172,31 @@ static VOID QuoodleEvtIoDeviceControl(_In_ WDFQUEUE Queue,
       case QOP_EXEC_RUN_TAMPER_CHECK:
       case QOP_EXEC_SELF_REPAIR:
         QuoodleOpcodeHandleNotSupported(resp);
+        should_emit_event = TRUE;
+        break;
+      case QOP_EXEC_GET_PROCESS_LIST:
+      case QOP_OBS_LIST_PROCESSES:
+        QuoodleOpcodeHandleGetProcessList(resp, &req_copy);
+        should_emit_event = TRUE;
+        break;
+      case QOP_OBS_LIST_SERVICES:
+        QuoodleOpcodeHandleListServices(resp, &req_copy);
+        should_emit_event = TRUE;
+        break;
+      case QOP_OBS_LIST_CONNECTIONS:
+        QuoodleOpcodeHandleListConnections(resp, &req_copy);
+        should_emit_event = TRUE;
+        break;
+      case QOP_OBS_LIST_MOUNTS:
+        QuoodleOpcodeHandleListMounts(resp, &req_copy);
+        should_emit_event = TRUE;
+        break;
+      case QOP_OBS_NETWORK_INFO:
+        QuoodleOpcodeHandleNetworkInfo(resp, &req_copy);
+        should_emit_event = TRUE;
+        break;
+      case QOP_OBS_GET_ACTIVE_WINDOW:
+        QuoodleOpcodeHandleGetActiveWindow(resp, &req_copy);
         should_emit_event = TRUE;
         break;
       case QOP_EXEC_COLLECT_SYSTEM_INFO:

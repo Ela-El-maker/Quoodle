@@ -13,4 +13,22 @@ VOID QuoodleOpcodeHandleCollectSystemInfo(
 VOID QuoodleOpcodeHandleCaptureScreenshot(
     _Out_ QUOODLE_IOCTL_RESPONSE* resp,
     _In_opt_ const QUOODLE_IOCTL_REQUEST* req);
+VOID QuoodleOpcodeHandleGetProcessList(
+    _Out_ QUOODLE_IOCTL_RESPONSE* resp,
+    _In_opt_ const QUOODLE_IOCTL_REQUEST* req);
+VOID QuoodleOpcodeHandleListServices(
+    _Out_ QUOODLE_IOCTL_RESPONSE* resp,
+    _In_opt_ const QUOODLE_IOCTL_REQUEST* req);
+VOID QuoodleOpcodeHandleListConnections(
+    _Out_ QUOODLE_IOCTL_RESPONSE* resp,
+    _In_opt_ const QUOODLE_IOCTL_REQUEST* req);
+VOID QuoodleOpcodeHandleListMounts(
+    _Out_ QUOODLE_IOCTL_RESPONSE* resp,
+    _In_opt_ const QUOODLE_IOCTL_REQUEST* req);
+VOID QuoodleOpcodeHandleNetworkInfo(
+    _Out_ QUOODLE_IOCTL_RESPONSE* resp,
+    _In_opt_ const QUOODLE_IOCTL_REQUEST* req);
+VOID QuoodleOpcodeHandleGetActiveWindow(
+    _Out_ QUOODLE_IOCTL_RESPONSE* resp,
+    _In_opt_ const QUOODLE_IOCTL_REQUEST* req);
 VOID QuoodleOpcodeHandleNotSupported(_Out_ QUOODLE_IOCTL_RESPONSE* resp);

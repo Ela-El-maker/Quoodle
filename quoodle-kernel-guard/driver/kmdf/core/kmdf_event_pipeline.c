@@ -110,6 +110,18 @@ static const CHAR* qep_opcode_to_string(_In_ QUOODLE_OPCODE opcode) {
       return "COLLECT_SYSTEM_INFO";
     case QOP_EXEC_GET_PROCESS_LIST:
       return "GET_PROCESS_LIST";
+    case QOP_OBS_LIST_PROCESSES:
+      return "LIST_PROCESSES";
+    case QOP_OBS_LIST_SERVICES:
+      return "LIST_SERVICES";
+    case QOP_OBS_LIST_CONNECTIONS:
+      return "LIST_CONNECTIONS";
+    case QOP_OBS_LIST_MOUNTS:
+      return "LIST_MOUNTS";
+    case QOP_OBS_NETWORK_INFO:
+      return "NETWORK_INFO";
+    case QOP_OBS_GET_ACTIVE_WINDOW:
+      return "GET_ACTIVE_WINDOW";
     case QOP_EXEC_VALIDATE_UPDATE_PACKAGE:
       return "VALIDATE_UPDATE_PACKAGE";
     case QOP_EXEC_CAPTURE_SCREENSHOT:
