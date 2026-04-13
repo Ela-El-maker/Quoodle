@@ -8,7 +8,7 @@ Class=USBDevice
 ClassGuid={88BAE032-5A81-49f0-BC3D-A4FF138216D6}
 Provider=%ManufacturerName%
 CatalogFile=quoodle_kmdf.cat
-DriverVer = 04/12/2026,19.50.4.543
+DriverVer = 04/13/2026,12.52.6.73
 PnpLockDown=1
 
 [DestinationDirs]
