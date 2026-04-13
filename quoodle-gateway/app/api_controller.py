@@ -45,6 +45,8 @@ RUNTIME_SUPPORTED_METHODS = {
     "list_mounts",
     "network_info",
     "get_active_window",
+    "list_files",
+    "download_file",
 }
 
 TELEMETRY_ALLOWLIST_COMMON = {

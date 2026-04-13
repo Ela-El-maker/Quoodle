@@ -188,10 +188,21 @@ def test_dispatch_allows_list_services_and_connections_methods(client):
     old_require = settings.require_laravel_signature
     try:
         settings.require_laravel_signature = False
-        for method in ("list_services", "list_connections", "list_mounts", "network_info", "get_active_window"):
+        for method in (
+            "list_services",
+            "list_connections",
+            "list_mounts",
+            "network_info",
+            "get_active_window",
+            "list_files",
+            "download_file",
+        ):
             payload = _sample_dispatch_payload()
             payload["method"] = method
             payload["envelope"]["body"]["method"] = method
+            if method == "download_file":
+                payload["params"] = {"path": "Users/Public/test.txt"}
+                payload["envelope"]["body"]["params"] = {"path": "Users/Public/test.txt"}
 
             resp = client.post("/api/v1/command/dispatch", json=payload)
             assert resp.status_code == 200
