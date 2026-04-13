@@ -959,7 +959,52 @@ KernelExecResult IoctlClient::capture_screenshot_authorize(const std::string &re
 KernelExecResult IoctlClient::get_process_list(const std::string &request_id, const AgentState &state,
                                                const std::string &command_message_id)
 {
-  std::string json = execute_request("GET_PROCESS_LIST", request_id, "{}", state, command_message_id);
+  std::string json = execute_request("LIST_PROCESSES", request_id, "{}", state, command_message_id);
+  if (json.empty())
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
+  return parse_and_verify_response(json, request_id);
+}
+
+KernelExecResult IoctlClient::list_services(const std::string &request_id, const AgentState &state,
+                                            const std::string &command_message_id)
+{
+  std::string json = execute_request("LIST_SERVICES", request_id, "{}", state, command_message_id);
+  if (json.empty())
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
+  return parse_and_verify_response(json, request_id);
+}
+
+KernelExecResult IoctlClient::list_connections(const std::string &request_id, const AgentState &state,
+                                               const std::string &command_message_id)
+{
+  std::string json = execute_request("LIST_CONNECTIONS", request_id, "{}", state, command_message_id);
+  if (json.empty())
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
+  return parse_and_verify_response(json, request_id);
+}
+
+KernelExecResult IoctlClient::list_mounts(const std::string &request_id, const AgentState &state,
+                                          const std::string &command_message_id)
+{
+  std::string json = execute_request("LIST_MOUNTS", request_id, "{}", state, command_message_id);
+  if (json.empty())
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
+  return parse_and_verify_response(json, request_id);
+}
+
+KernelExecResult IoctlClient::network_info(const std::string &request_id, const AgentState &state,
+                                           const std::string &command_message_id)
+{
+  std::string json = execute_request("NETWORK_INFO", request_id, "{}", state, command_message_id);
+  if (json.empty())
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
+  return parse_and_verify_response(json, request_id);
+}
+
+KernelExecResult IoctlClient::get_active_window(const std::string &request_id, const AgentState &state,
+                                                const std::string &command_message_id)
+{
+  std::string json = execute_request("GET_ACTIVE_WINDOW", request_id, "{}", state, command_message_id);
   if (json.empty())
     return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
   return parse_and_verify_response(json, request_id);

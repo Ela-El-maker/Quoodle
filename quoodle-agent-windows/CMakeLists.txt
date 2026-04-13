@@ -156,6 +156,7 @@ add_executable(agent
   src/ws/ws_protocol.cpp
   src/ws/sequence_manager.cpp
   src/command/artifact_client.cpp
+  src/command/observability_command.cpp
   src/command/screenshot_command.cpp
   src/command/screenshot_helper.cpp
   src/utils/json_canonicalizer.cpp

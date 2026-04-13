@@ -17,6 +17,7 @@
 #include "../kernel/kernel_event_listener.hpp"
 #include "../crypto/command_verifier.hpp"
 #include "../command/dispatcher.hpp"
+#include "../command/observability_command.hpp"
 #include "../command/screenshot_command.hpp"
 #include "ws_protocol.hpp"
 
@@ -1142,6 +1143,56 @@ bool WsClient::try_connect()
 
                         nlohmann::json params_obj = envelope["body"].value("params", nlohmann::json::object());
                         const std::string params_json = params_obj.dump();
+
+                        if (command::IsObservabilityMethod(method)) {
+                            const auto obs = command::ExecuteObservabilityCommand(
+                                state_impl_,
+                                method,
+                                command_message_id,
+                                params_json);
+                            if (obs.success) {
+                                std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
+                                auto result_msg = build_command_result_json(
+                                    config_.device_id,
+                                    session_id,
+                                    command_message_id,
+                                    trace_id,
+                                    "completed",
+                                    "ok",
+                                    obs.notes.empty() ? "observability command completed" : obs.notes,
+                                    "",
+                                    "",
+                                    0,
+                                    "",
+                                    obs.output_text,
+                                    obs.data_json,
+                                    obs.meta_json);
+                                if (!result_msg.empty()) {
+                                    socket.sendText(result_msg);
+                                }
+                            } else {
+                                std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
+                                auto result_msg = build_command_result_json(
+                                    config_.device_id,
+                                    session_id,
+                                    command_message_id,
+                                    trace_id,
+                                    "failed",
+                                    "failed",
+                                    obs.notes.empty() ? "observability command failed" : obs.notes,
+                                    "",
+                                    "",
+                                    obs.error_code,
+                                    obs.reason,
+                                    obs.output_text,
+                                    obs.data_json,
+                                    obs.meta_json);
+                                if (!result_msg.empty()) {
+                                    socket.sendText(result_msg);
+                                }
+                            }
+                            return;
+                        }
 
                         if (command::IsScreenshotMethod(method)) {
                             {

@@ -17,8 +17,20 @@ QuoodleOpcode MapOpcodeToCode(const std::string &opcode)
     return QOP_EXEC_PING;
   if (opcode == "EXEC_COLLECT_SYSTEM_INFO" || opcode == "COLLECT_SYSTEM_INFO")
     return QOP_EXEC_COLLECT_SYSTEM_INFO;
+  if (opcode == "list_processes" || opcode == "LIST_PROCESSES")
+    return QOP_OBS_LIST_PROCESSES;
   if (opcode == "EXEC_GET_PROCESS_LIST" || opcode == "GET_PROCESS_LIST")
     return QOP_EXEC_GET_PROCESS_LIST;
+  if (opcode == "list_services" || opcode == "LIST_SERVICES")
+    return QOP_OBS_LIST_SERVICES;
+  if (opcode == "list_connections" || opcode == "LIST_CONNECTIONS")
+    return QOP_OBS_LIST_CONNECTIONS;
+  if (opcode == "list_mounts" || opcode == "LIST_MOUNTS")
+    return QOP_OBS_LIST_MOUNTS;
+  if (opcode == "network_info" || opcode == "NETWORK_INFO")
+    return QOP_OBS_NETWORK_INFO;
+  if (opcode == "get_active_window" || opcode == "GET_ACTIVE_WINDOW")
+    return QOP_OBS_GET_ACTIVE_WINDOW;
   if (opcode == "EXEC_VALIDATE_UPDATE_PACKAGE" || opcode == "VALIDATE_UPDATE_PACKAGE")
     return QOP_EXEC_VALIDATE_UPDATE_PACKAGE;
   if (opcode == "EXEC_CAPTURE_SCREENSHOT" || opcode == "CAPTURE_SCREENSHOT" || opcode == "screenshot")

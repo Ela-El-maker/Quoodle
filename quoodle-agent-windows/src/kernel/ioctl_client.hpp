@@ -67,6 +67,16 @@ public:
                                                 const std::string &params_json = "{}");
   KernelExecResult get_process_list(const std::string &request_id, const AgentState &state,
                                     const std::string &command_message_id = "");
+  KernelExecResult list_services(const std::string &request_id, const AgentState &state,
+                                 const std::string &command_message_id = "");
+  KernelExecResult list_connections(const std::string &request_id, const AgentState &state,
+                                    const std::string &command_message_id = "");
+  KernelExecResult list_mounts(const std::string &request_id, const AgentState &state,
+                               const std::string &command_message_id = "");
+  KernelExecResult network_info(const std::string &request_id, const AgentState &state,
+                                const std::string &command_message_id = "");
+  KernelExecResult get_active_window(const std::string &request_id, const AgentState &state,
+                                     const std::string &command_message_id = "");
   KernelExecResult validate_update_package(const std::string &request_id, const AgentState &state,
                                            const std::string &package_path,
                                            const std::string &command_message_id = "");

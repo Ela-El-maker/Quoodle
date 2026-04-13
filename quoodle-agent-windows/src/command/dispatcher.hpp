@@ -54,13 +54,33 @@ public:
         {
             return ioctl_.collect_system_info(request_id, state, command_message_id, params_json);
         }
+        if (method == "list_processes" || method == "process-list" || method == "GET_PROCESS_LIST" || method == "get_process_list")
+        {
+            return ioctl_.get_process_list(request_id, state, command_message_id);
+        }
+        if (method == "list_services" || method == "services-list" || method == "LIST_SERVICES")
+        {
+            return ioctl_.list_services(request_id, state, command_message_id);
+        }
+        if (method == "list_connections" || method == "netstat" || method == "LIST_CONNECTIONS")
+        {
+            return ioctl_.list_connections(request_id, state, command_message_id);
+        }
+        if (method == "list_mounts" || method == "LIST_MOUNTS")
+        {
+            return ioctl_.list_mounts(request_id, state, command_message_id);
+        }
+        if (method == "network_info" || method == "NETWORK_INFO")
+        {
+            return ioctl_.network_info(request_id, state, command_message_id);
+        }
+        if (method == "get_active_window" || method == "GET_ACTIVE_WINDOW")
+        {
+            return ioctl_.get_active_window(request_id, state, command_message_id);
+        }
         if (method == "screenshot" || method == "screenshot-capture" || method == "CAPTURE_SCREENSHOT" || method == "EXEC_CAPTURE_SCREENSHOT")
         {
             return ioctl_.capture_screenshot_authorize(request_id, state, command_message_id, params_json);
-        }
-        if (method == "get_process_list" || method == "GET_PROCESS_LIST")
-        {
-            return ioctl_.get_process_list(request_id, state, command_message_id);
         }
         if (method == "validate_update_package" || method == "VALIDATE_UPDATE_PACKAGE")
         {

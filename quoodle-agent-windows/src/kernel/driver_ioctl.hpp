@@ -80,6 +80,13 @@ enum QuoodleOpcode : uint32_t {
   QOP_EXEC_RUN_ATTESTATION = 30,
   QOP_EXEC_RUN_TAMPER_CHECK = 31,
   QOP_EXEC_SELF_REPAIR = 32,
+  // Category-masked observability opcodes (additive, v2-compatible).
+  QOP_OBS_LIST_PROCESSES = ((1u << 16) | 1u),
+  QOP_OBS_LIST_SERVICES = ((1u << 16) | 2u),
+  QOP_OBS_LIST_CONNECTIONS = ((1u << 16) | 3u),
+  QOP_OBS_LIST_MOUNTS = ((1u << 16) | 4u),
+  QOP_OBS_NETWORK_INFO = ((1u << 16) | 5u),
+  QOP_OBS_GET_ACTIVE_WINDOW = ((1u << 16) | 6u),
 };
 
 struct QuoodleIoctlRequest {
