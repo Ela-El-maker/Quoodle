@@ -20,6 +20,7 @@ extension DevicesFilterLabel on DevicesFilter {
 class DevicesState {
   const DevicesState({
     required this.isLoading,
+    required this.errorMessage,
     required this.searchQuery,
     required this.selectedFilter,
     required this.allDevices,
@@ -29,6 +30,7 @@ class DevicesState {
   factory DevicesState.initial() {
     return const DevicesState(
       isLoading: true,
+      errorMessage: null,
       searchQuery: '',
       selectedFilter: DevicesFilter.all,
       allDevices: <DeviceEntity>[],
@@ -37,6 +39,7 @@ class DevicesState {
   }
 
   final bool isLoading;
+  final String? errorMessage;
   final String searchQuery;
   final DevicesFilter selectedFilter;
   final List<DeviceEntity> allDevices;
@@ -44,13 +47,16 @@ class DevicesState {
 
   DevicesState copyWith({
     bool? isLoading,
+    String? errorMessage,
     String? searchQuery,
     DevicesFilter? selectedFilter,
     List<DeviceEntity>? allDevices,
     List<DeviceEntity>? filteredDevices,
+    bool clearError = false,
   }) {
     return DevicesState(
       isLoading: isLoading ?? this.isLoading,
+      errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       searchQuery: searchQuery ?? this.searchQuery,
       selectedFilter: selectedFilter ?? this.selectedFilter,
       allDevices: allDevices ?? this.allDevices,

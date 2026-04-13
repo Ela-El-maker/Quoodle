@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:secure_device_control/app/di/providers.dart';
 import 'package:secure_device_control/features/dashboard/data/datasources/dashboard_remote_data_source.dart';
 import 'package:secure_device_control/features/dashboard/data/repositories/dashboard_repository_impl.dart';
 import 'package:secure_device_control/features/dashboard/domain/repositories/dashboard_repository.dart';
@@ -8,7 +9,7 @@ import 'package:secure_device_control/features/dashboard/presentation/providers/
 
 final dashboardRemoteDataSourceProvider =
     Provider<DashboardRemoteDataSource>((ref) {
-  return DashboardRemoteDataSource();
+  return DashboardRemoteDataSource(ref.read(apiClientProvider));
 });
 
 final dashboardRepositoryProvider = Provider<DashboardRepository>((ref) {

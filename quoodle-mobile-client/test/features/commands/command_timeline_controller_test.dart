@@ -1,8 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:secure_device_control/core/network/api_client.dart';
+import 'package:secure_device_control/features/commands/data/datasources/commands_remote_data_source.dart';
 import 'package:secure_device_control/features/commands/domain/entities/command_execution_status.dart';
 import 'package:secure_device_control/features/commands/domain/entities/command_result.dart';
 import 'package:secure_device_control/features/commands/domain/repositories/command_timeline_repository.dart';
+import 'package:secure_device_control/features/commands/presentation/providers/commands_api_providers.dart';
 import 'package:secure_device_control/features/commands/presentation/providers/command_timeline_providers.dart';
 
 class _FakeCommandTimelineRepository implements CommandTimelineRepository {
@@ -29,14 +32,64 @@ class _FakeCommandTimelineRepository implements CommandTimelineRepository {
   }
 }
 
+class _FakeApiClient implements ApiClient {
+  _FakeApiClient({
+    Map<String, dynamic>? singleGetResponse,
+    bool throwOnGet = false,
+  })  : _singleGetResponse = singleGetResponse,
+        _throwOnGet = throwOnGet;
+
+  final Map<String, dynamic>? _singleGetResponse;
+  final bool _throwOnGet;
+
+  @override
+  Future<Map<String, dynamic>> get(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+  }) async {
+    if (_throwOnGet) {
+      throw Exception('network_error');
+    }
+    return _singleGetResponse ?? <String, dynamic>{};
+  }
+
+  @override
+  Future<Map<String, dynamic>> post(
+    String path, {
+    Map<String, dynamic>? data,
+  }) async {
+    return <String, dynamic>{};
+  }
+}
+
 void main() {
   group('CommandTimelineController', () {
     test('polls to completion and persists result', () async {
       final fakeRepository = _FakeCommandTimelineRepository();
+      final fakeApi = _FakeApiClient(
+        singleGetResponse: <String, dynamic>{
+          'command_id': 'cmd-test-1',
+          'device_id': 'dev-007',
+          'device_name': 'WKS-FINANCE-07',
+          'method': 'policy_sync',
+          'params': <String, dynamic>{'force': true},
+          'state': 'completed',
+          'execution_state': 'completed',
+          'queued_at': '2026-04-11T10:41:00Z',
+          'dispatched_at': '2026-04-11T10:41:01Z',
+          'completed_at': '2026-04-11T10:41:02Z',
+          'result_status': 'success',
+          'result_notes': 'Command executed successfully.',
+          'actor_email': 'operator@example.com',
+        },
+      );
 
       final container = ProviderContainer(
         overrides: [
           commandTimelineRepositoryProvider.overrideWithValue(fakeRepository),
+          commandsRemoteDataSourceProvider.overrideWithValue(
+            CommandsRemoteDataSource(fakeApi),
+          ),
           commandTimelineTickIntervalProvider.overrideWithValue(
             const Duration(milliseconds: 5),
           ),
@@ -91,10 +144,14 @@ void main() {
         savedAt: DateTime(2026, 4, 10),
       );
       final fakeRepository = _FakeCommandTimelineRepository(seeded: [seeded]);
+      final fakeApi = _FakeApiClient(throwOnGet: true);
 
       final container = ProviderContainer(
         overrides: [
           commandTimelineRepositoryProvider.overrideWithValue(fakeRepository),
+          commandsRemoteDataSourceProvider.overrideWithValue(
+            CommandsRemoteDataSource(fakeApi),
+          ),
           commandTimelineTickIntervalProvider.overrideWithValue(
             const Duration(milliseconds: 5),
           ),

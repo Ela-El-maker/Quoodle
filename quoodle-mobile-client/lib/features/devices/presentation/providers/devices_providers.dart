@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:secure_device_control/features/devices/data/datasources/devices_local_data_source.dart';
+import 'package:secure_device_control/app/di/providers.dart';
+import 'package:secure_device_control/features/devices/data/datasources/device_telemetry_remote_data_source.dart';
+import 'package:secure_device_control/features/devices/data/datasources/devices_remote_data_source.dart';
 import 'package:secure_device_control/features/devices/data/repositories/devices_repository_impl.dart';
 import 'package:secure_device_control/features/devices/domain/entities/device_entity.dart';
 import 'package:secure_device_control/features/devices/domain/repositories/devices_repository.dart';
@@ -8,12 +10,18 @@ import 'package:secure_device_control/features/devices/domain/usecases/get_devic
 import 'package:secure_device_control/features/devices/presentation/providers/devices_controller.dart';
 import 'package:secure_device_control/features/devices/presentation/providers/devices_state.dart';
 
-final devicesLocalDataSourceProvider = Provider<DevicesLocalDataSource>((ref) {
-  return const DevicesLocalDataSource();
+final devicesRemoteDataSourceProvider =
+    Provider<DevicesRemoteDataSource>((ref) {
+  return DevicesRemoteDataSource(ref.read(apiClientProvider));
+});
+
+final deviceTelemetryRemoteDataSourceProvider =
+    Provider<DeviceTelemetryRemoteDataSource>((ref) {
+  return DeviceTelemetryRemoteDataSource(ref.read(apiClientProvider));
 });
 
 final devicesRepositoryProvider = Provider<DevicesRepository>((ref) {
-  return DevicesRepositoryImpl(ref.read(devicesLocalDataSourceProvider));
+  return DevicesRepositoryImpl(ref.read(devicesRemoteDataSourceProvider));
 });
 
 final getDevicesProvider = Provider<GetDevices>((ref) {

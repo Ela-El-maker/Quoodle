@@ -10,10 +10,25 @@ class DevicesController extends AutoDisposeNotifier<DevicesState> {
   }
 
   Future<void> loadDevices() async {
-    state = state.copyWith(isLoading: true);
-    await Future<void>.delayed(const Duration(milliseconds: 700));
-    final devices = ref.read(getDevicesProvider).call();
-    _emitWithFilters(allDevices: devices, isLoading: false);
+    state = state.copyWith(isLoading: true, clearError: true);
+    final result = await ref.read(getDevicesProvider).call();
+
+    state = result.when(
+      success: (devices) {
+        _emitWithFilters(
+          allDevices: devices,
+          isLoading: false,
+          clearError: true,
+        );
+        return state;
+      },
+      failure: (failure) {
+        return state.copyWith(
+          isLoading: false,
+          errorMessage: failure.userMessage,
+        );
+      },
+    );
   }
 
   void setSearchQuery(String query) {
@@ -33,6 +48,8 @@ class DevicesController extends AutoDisposeNotifier<DevicesState> {
     String? searchQuery,
     DevicesFilter? selectedFilter,
     bool? isLoading,
+    String? errorMessage,
+    bool clearError = false,
   }) {
     final nextAllDevices = allDevices ?? state.allDevices;
     final nextQuery = searchQuery ?? state.searchQuery;
@@ -69,6 +86,7 @@ class DevicesController extends AutoDisposeNotifier<DevicesState> {
 
     state = state.copyWith(
       isLoading: isLoading ?? state.isLoading,
+      errorMessage: clearError ? null : (errorMessage ?? state.errorMessage),
       allDevices: nextAllDevices,
       searchQuery: nextQuery,
       selectedFilter: nextFilter,

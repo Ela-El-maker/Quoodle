@@ -1,3 +1,4 @@
+import 'package:secure_device_control/core/errors/result.dart';
 import 'package:secure_device_control/features/devices/domain/entities/device_entity.dart';
 import 'package:secure_device_control/features/devices/domain/repositories/devices_repository.dart';
 
@@ -6,7 +7,7 @@ class GetDevices {
 
   final DevicesRepository _repository;
 
-  List<DeviceEntity> call() {
+  Future<Result<List<DeviceEntity>>> call() {
     return _repository.getDevices();
   }
 }

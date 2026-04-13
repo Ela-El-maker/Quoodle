@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:secure_device_control/core/errors/result.dart';
 import 'package:secure_device_control/features/devices/domain/entities/device_entity.dart';
 import 'package:secure_device_control/features/devices/domain/repositories/devices_repository.dart';
 import 'package:secure_device_control/features/devices/presentation/providers/devices_providers.dart';
@@ -11,8 +12,9 @@ class _FakeDevicesRepository implements DevicesRepository {
   final List<DeviceEntity> _devices;
 
   @override
-  List<DeviceEntity> getDevices() {
-    return List<DeviceEntity>.unmodifiable(_devices);
+  Future<Result<List<DeviceEntity>>> getDevices() async {
+    return Success<List<DeviceEntity>>(
+        List<DeviceEntity>.unmodifiable(_devices));
   }
 
   @override

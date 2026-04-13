@@ -23,12 +23,15 @@ extension DeviceMapper on DeviceDto {
 }
 
 DeviceStatusType _mapStatus(String status) {
-  switch (status) {
+  switch (status.trim().toLowerCase()) {
     case 'online':
+    case 'active':
       return DeviceStatusType.online;
     case 'offline':
       return DeviceStatusType.offline;
     case 'degraded':
+    case 'stale':
+    case 'reconnecting':
       return DeviceStatusType.degraded;
     case 'quarantined':
       return DeviceStatusType.quarantined;
@@ -38,10 +41,11 @@ DeviceStatusType _mapStatus(String status) {
 }
 
 DeviceComplianceType _mapCompliance(String compliance) {
-  switch (compliance) {
+  switch (compliance.trim().toLowerCase()) {
     case 'compliant':
       return DeviceComplianceType.compliant;
     case 'non_compliant':
+    case 'non-compliant':
       return DeviceComplianceType.nonCompliant;
     default:
       return DeviceComplianceType.unknown;
