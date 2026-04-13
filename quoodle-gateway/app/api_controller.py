@@ -39,6 +39,12 @@ RUNTIME_SUPPORTED_METHODS = {
     "shutdown_device",
     "collect_system_info",
     "screenshot",
+    "list_processes",
+    "list_services",
+    "list_connections",
+    "list_mounts",
+    "network_info",
+    "get_active_window",
 }
 
 TELEMETRY_ALLOWLIST_COMMON = {

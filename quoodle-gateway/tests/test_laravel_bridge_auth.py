@@ -166,3 +166,36 @@ def test_dispatch_allows_screenshot_method(client):
         assert body["reason"] != "not_supported_runtime"
     finally:
         settings.require_laravel_signature = old_require
+
+
+def test_dispatch_allows_list_processes_method(client):
+    old_require = settings.require_laravel_signature
+    try:
+        settings.require_laravel_signature = False
+        payload = _sample_dispatch_payload()
+        payload["method"] = "list_processes"
+        payload["envelope"]["body"]["method"] = "list_processes"
+
+        resp = client.post("/api/v1/command/dispatch", json=payload)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["reason"] != "not_supported_runtime"
+    finally:
+        settings.require_laravel_signature = old_require
+
+
+def test_dispatch_allows_list_services_and_connections_methods(client):
+    old_require = settings.require_laravel_signature
+    try:
+        settings.require_laravel_signature = False
+        for method in ("list_services", "list_connections", "list_mounts", "network_info", "get_active_window"):
+            payload = _sample_dispatch_payload()
+            payload["method"] = method
+            payload["envelope"]["body"]["method"] = method
+
+            resp = client.post("/api/v1/command/dispatch", json=payload)
+            assert resp.status_code == 200
+            body = resp.json()
+            assert body["reason"] != "not_supported_runtime"
+    finally:
+        settings.require_laravel_signature = old_require
