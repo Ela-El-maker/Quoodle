@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:secure_device_control/app/router/app_navigator.dart';
 import 'package:secure_device_control/features/commands/presentation/providers/send_command_controller.dart';
 import 'package:secure_device_control/features/commands/presentation/providers/send_command_state.dart';
+import 'package:secure_device_control/features/devices/presentation/providers/devices_providers.dart';
 import '../../theme/app_theme.dart';
 
 // ── Command Method Definitions ───────────────────────────────────────────────
@@ -142,7 +142,9 @@ class SendCommandScreen extends ConsumerStatefulWidget {
 }
 
 class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
-  final TextEditingController _otpController = TextEditingController();
+  String _targetDeviceId = 'dev-007';
+  String _targetDeviceName = 'WKS-FINANCE-07';
+  bool _targetResolved = false;
 
   SendCommandState get _flowState => ref.read(sendCommandControllerProvider);
   CommandMethod get _selectedMethod => kCommandMethods.firstWhere(
@@ -152,8 +154,6 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
   bool get _sensitiveOverride => _flowState.sensitiveOverride;
   bool get _showPolicyPanel => _flowState.showPolicyPanel;
   bool get _submitting => _flowState.submitting;
-  bool get _show2FA => _flowState.show2FA;
-  bool get _otpError => _flowState.otpError;
 
   // Per-command form state
   // Screenshot
@@ -216,8 +216,20 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
   bool _rebootForce = false;
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_targetResolved) {
+      return;
+    }
+    _targetResolved = true;
+    final args = ModalRoute.of(context)?.settings.arguments;
+    final target = _extractTarget(args);
+    _targetDeviceId = target.$1;
+    _targetDeviceName = target.$2;
+  }
+
+  @override
   void dispose() {
-    _otpController.dispose();
     _fsPathController.dispose();
     _uploadPathController.dispose();
     _createPathController.dispose();
@@ -229,97 +241,43 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
     ref.read(sendCommandControllerProvider.notifier).selectMethod(method.id);
   }
 
-  bool get _requiresSensitiveConfirm =>
-      _selectedMethod.sensitive && !_sensitiveOverride;
-
   void _onSubmitTap() {
-    if (_requiresSensitiveConfirm) {
-      _showSensitiveWarning();
-      return;
-    }
-    ref.read(sendCommandControllerProvider.notifier).showTwoFactor();
+    unawaited(_submitCommand());
   }
 
-  void _showSensitiveWarning() {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppTheme.surfaceVariant,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            const Icon(
-              Icons.warning_amber_rounded,
-              color: AppTheme.warning,
-              size: 20,
-            ),
-            const SizedBox(width: 10),
-            Text(
-              'Sensitive Command',
-              style: GoogleFonts.ibmPlexSans(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.textPrimary,
-              ),
-            ),
-          ],
-        ),
-        content: Text(
-          '${_selectedMethod.label} is a sensitive operation.\n\n${_selectedMethod.policyNote}\n\nDo you want to proceed?',
-          style: GoogleFonts.ibmPlexSans(
-            fontSize: 13,
-            color: AppTheme.textSecondary,
-            height: 1.5,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.maybePop(context),
-            child: Text(
-              'Cancel',
-              style: GoogleFonts.ibmPlexSans(color: AppTheme.textSecondary),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.maybePop(context);
-              ref
-                  .read(sendCommandControllerProvider.notifier)
-                  .confirmSensitiveAndShowTwoFactor();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.warning,
-              foregroundColor: Colors.black,
-            ),
-            child: Text(
-              'Proceed',
-              style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Future<void> _submitCommand() async {
+    final dispatchResult =
+        await ref.read(sendCommandControllerProvider.notifier).dispatchCommand(
+              deviceId: _targetDeviceId,
+              deviceName: _targetDeviceName,
+              methodId: _selectedMethod.id,
+              params: _buildParamsMap(),
+              sensitive: _selectedMethod.sensitive,
+            );
 
-  Future<void> _verify2FA() async {
-    final verified = await ref
-        .read(sendCommandControllerProvider.notifier)
-        .verifyOtp(_otpController.text);
-    if (!verified) {
-      return;
-    }
     if (!mounted) return;
+    if (!dispatchResult.success || dispatchResult.timelineArguments == null) {
+      final messenger = ScaffoldMessenger.of(context);
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              dispatchResult.errorMessage ?? 'Unable to submit command.',
+            ),
+            backgroundColor: AppTheme.error,
+          ),
+        );
+      return;
+    }
+
     AppNavigator.pushAndPruneUntil(
       context,
       AppRoute.commandTimeline,
       predicate: (route) =>
           route.settings.name == AppNavigator.pathFor(AppRoute.deviceDetail) ||
           route.settings.name == AppNavigator.pathFor(AppRoute.devices),
-      arguments: {
-        'method': _selectedMethod.id,
-        'params': _buildParamsMap(),
-        'sensitive': _selectedMethod.sensitive,
-      },
+      arguments: dispatchResult.timelineArguments,
     );
   }
 
@@ -371,6 +329,9 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
   @override
   Widget build(BuildContext context) {
     ref.watch(sendCommandControllerProvider);
+    final resolvedDevice = ref.watch(deviceDetailProvider(_targetDeviceId));
+    final targetDeviceName = resolvedDevice?.name ?? _targetDeviceName;
+
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
@@ -399,7 +360,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
               ),
             ),
             Text(
-              'WKS-FINANCE-07',
+              targetDeviceName,
               style: GoogleFonts.ibmPlexMono(
                 fontSize: 10,
                 color: AppTheme.textMuted,
@@ -439,8 +400,8 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
             ),
         ],
       ),
-      body: _show2FA ? _build2FAView() : _buildCommandForm(),
-      bottomNavigationBar: _show2FA ? null : _buildSubmitBar(),
+      body: _buildCommandForm(),
+      bottomNavigationBar: _buildSubmitBar(),
     );
   }
 
@@ -1535,7 +1496,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
                 const SizedBox(height: 10),
                 _PolicyRow(label: 'Command', value: _selectedMethod.id),
                 _PolicyRow(label: 'Initiator', value: 'L. Nakamura (operator)'),
-                _PolicyRow(label: 'Target', value: 'WKS-FINANCE-07'),
+                _PolicyRow(label: 'Target', value: _currentTargetDeviceName),
                 _PolicyRow(label: 'Audit', value: 'Full logging enabled'),
                 _PolicyRow(label: 'TTL', value: '300s'),
               ],
@@ -1546,189 +1507,29 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
     );
   }
 
-  // ── 2FA View ─────────────────────────────────────────────────────────────────
-  Widget _build2FAView() {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 20),
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: AppTheme.primaryDim,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppTheme.primary.withAlpha(102)),
-            ),
-            child: const Icon(
-              Icons.shield_rounded,
-              color: AppTheme.primary,
-              size: 26,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            '2FA Verification',
-            style: GoogleFonts.ibmPlexSans(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Enter the 6-digit code from your authenticator app to authorise this command.',
-            style: GoogleFonts.ibmPlexSans(
-              fontSize: 13,
-              color: AppTheme.textSecondary,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceVariant,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.border),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: _selectedMethod.color.withAlpha(24),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    _selectedMethod.icon,
-                    size: 18,
-                    color: _selectedMethod.color,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _selectedMethod.label,
-                      style: GoogleFonts.ibmPlexSans(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textPrimary,
-                      ),
-                    ),
-                    Text(
-                      'WKS-FINANCE-07',
-                      style: GoogleFonts.ibmPlexMono(
-                        fontSize: 10,
-                        color: AppTheme.textMuted,
-                      ),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                if (_selectedMethod.sensitive)
-                  const Icon(
-                    Icons.security_rounded,
-                    size: 14,
-                    color: AppTheme.warning,
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'VERIFICATION CODE',
-            style: GoogleFonts.ibmPlexSans(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.textMuted,
-              letterSpacing: 0.8,
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _otpController,
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-            style: GoogleFonts.ibmPlexMono(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.textPrimary,
-              letterSpacing: 8,
-            ),
-            textAlign: TextAlign.center,
-            decoration: InputDecoration(
-              counterText: '',
-              hintText: '000000',
-              hintStyle: GoogleFonts.ibmPlexMono(
-                fontSize: 24,
-                color: AppTheme.textMuted,
-                letterSpacing: 8,
-              ),
-              errorText: _otpError ? 'Enter a valid 6-digit code' : null,
-            ),
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            onChanged: (_) => ref
-                .read(sendCommandControllerProvider.notifier)
-                .clearOtpError(),
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _submitting ? null : _verify2FA,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary,
-                foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: _submitting
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.black,
-                      ),
-                    )
-                  : Text(
-                      'Verify & Submit',
-                      style: GoogleFonts.ibmPlexSans(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Center(
-            child: TextButton(
-              onPressed: () {
-                ref
-                    .read(sendCommandControllerProvider.notifier)
-                    .cancelTwoFactor();
-                _otpController.clear();
-              },
-              child: Text(
-                'Back to Command',
-                style: GoogleFonts.ibmPlexSans(
-                  fontSize: 13,
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+  (String, String) _extractTarget(Object? arguments) {
+    if (arguments is! Map) {
+      return (_targetDeviceId, _targetDeviceName);
+    }
+
+    final map = arguments.cast<Object?, Object?>();
+    final rawDeviceId = map['deviceId'] ?? map['id'];
+    final rawDeviceName = map['deviceName'] ?? map['name'];
+
+    final deviceId = rawDeviceId is String && rawDeviceId.trim().isNotEmpty
+        ? rawDeviceId.trim()
+        : _targetDeviceId;
+    final deviceName =
+        rawDeviceName is String && rawDeviceName.trim().isNotEmpty
+            ? rawDeviceName.trim()
+            : _targetDeviceName;
+
+    return (deviceId, deviceName);
+  }
+
+  String get _currentTargetDeviceName {
+    final resolved = ref.read(deviceDetailProvider(_targetDeviceId));
+    return resolved?.name ?? _targetDeviceName;
   }
 
   // ── Submit Bar ───────────────────────────────────────────────────────────────
@@ -1742,7 +1543,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
       child: SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
-          onPressed: _onSubmitTap,
+          onPressed: _submitting ? null : _onSubmitTap,
           icon: Icon(_selectedMethod.icon, size: 18),
           label: Text(
             'Send ${_selectedMethod.label}',

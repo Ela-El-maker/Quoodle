@@ -1,56 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:secure_device_control/app/router/app_navigator.dart';
+import 'package:secure_device_control/features/dashboard/presentation/providers/dashboard_providers.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/status_badge_widget.dart';
 
-class DashboardActivityFeedWidget extends StatelessWidget {
+class DashboardActivityFeedWidget extends ConsumerWidget {
   const DashboardActivityFeedWidget({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final activities = [
-      _ActivityItem(
-        commandMethod: 'lock_screen',
-        commandLabel: 'Lock Screen',
-        deviceName: 'WKS-HR-003',
-        status: CommandStatus.completed,
-        timestamp: '10:52 AM',
-        initiator: 'M. Okafor',
-      ),
-      _ActivityItem(
-        commandMethod: 'collect_telemetry',
-        commandLabel: 'Collect Telemetry',
-        deviceName: 'PROD-SRV-014',
-        status: CommandStatus.failed,
-        timestamp: '10:44 AM',
-        initiator: 'System',
-      ),
-      _ActivityItem(
-        commandMethod: 'policy_sync',
-        commandLabel: 'Policy Sync',
-        deviceName: 'WKS-FINANCE-07',
-        status: CommandStatus.executing,
-        timestamp: '10:41 AM',
-        initiator: 'L. Nakamura',
-      ),
-      _ActivityItem(
-        commandMethod: 'reboot',
-        commandLabel: 'Reboot',
-        deviceName: 'EDGE-NODE-021',
-        status: CommandStatus.queued,
-        timestamp: '10:38 AM',
-        initiator: 'A. Patel',
-      ),
-      _ActivityItem(
-        commandMethod: 'screenshot_capture',
-        commandLabel: 'Screenshot',
-        deviceName: 'WKS-DEVOPS-11',
-        status: CommandStatus.completed,
-        timestamp: '10:22 AM',
-        initiator: 'K. Santos',
-      ),
-    ];
+  Widget build(BuildContext context, WidgetRef ref) {
+    final summary = ref.watch(
+      dashboardControllerProvider.select((state) => state.summary),
+    );
+    final activities = (summary?.recentActivities ?? const [])
+        .map(
+          (event) => _ActivityItem(
+            commandMethod: event.commandMethod,
+            commandLabel: event.commandLabel,
+            deviceName: event.deviceName,
+            status: _mapCommandStatus(event.status),
+            timestamp: event.timestampLabel,
+            initiator: event.initiator,
+          ),
+        )
+        .toList(growable: false);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -218,4 +193,19 @@ class _ActivityRow extends StatelessWidget {
       ),
     );
   }
+}
+
+CommandStatus _mapCommandStatus(String status) {
+  return switch (status) {
+    'queued' => CommandStatus.queued,
+    'dispatched' => CommandStatus.dispatched,
+    'sent' => CommandStatus.dispatched,
+    'ack_received' => CommandStatus.acked,
+    'acked' => CommandStatus.acked,
+    'executing' => CommandStatus.executing,
+    'completed' => CommandStatus.completed,
+    'failed' => CommandStatus.failed,
+    'expired' => CommandStatus.expired,
+    _ => CommandStatus.queued,
+  };
 }

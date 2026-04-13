@@ -51,25 +51,33 @@ class CommandResultWidget extends StatelessWidget {
   Widget _buildTypedResult(BuildContext context) {
     final method = command['method'] as String? ?? '';
     switch (method) {
+      case 'screenshot':
       case 'screenshot_capture':
         return _ScreenshotResultView(command: command);
+      case 'list_processes':
       case 'process_list':
         return _ProcessListResultView(command: command);
       case 'running_apps':
         return _RunningAppsResultView(command: command);
+      case 'list_files':
       case 'filesystem':
         return _FilesystemResultView(command: command);
+      case 'collect_system_info':
       case 'system_info':
         return _SystemInfoResultView(command: command);
       case 'network_info':
         return _NetworkInfoResultView(command: command);
+      case 'download_file':
       case 'upload_file':
       case 'create_file':
         return _FileOpResultView(command: command);
       case 'collect_telemetry':
+      case 'health_check':
         return _TelemetryResultView(command: command);
       case 'lock_screen':
+      case 'policy_probe':
       case 'policy_sync':
+      case 'reboot_device':
       case 'reboot':
         return _ActionResultView(command: command);
       default:
@@ -1357,15 +1365,14 @@ class _NetworkInfoResultViewState extends State<_NetworkInfoResultView> {
               ),
               if (isUp) ...[
                 const SizedBox(height: 8),
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     _InfoPill(label: 'IP', value: iface['ip']!),
-                    const SizedBox(width: 8),
                     _InfoPill(label: 'MASK', value: iface['mask']!),
-                    if (iface['speed'] != '—') ...[
-                      const SizedBox(width: 8),
+                    if (iface['speed'] != '—')
                       _InfoPill(label: 'SPEED', value: iface['speed']!),
-                    ],
                   ],
                 ),
               ],
@@ -1483,13 +1490,20 @@ class _FileOpResultView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isUpload = command['method'] == 'upload_file';
+    final method = command['method']?.toString() ?? '';
+    final isUpload = method == 'upload_file';
+    final isDownload = method == 'download_file';
+    final heading = isUpload
+        ? 'FILE UPLOAD'
+        : isDownload
+            ? 'FILE DOWNLOAD'
+            : 'FILE CREATED';
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionLabel(isUpload ? 'FILE UPLOAD' : 'FILE CREATED'),
+          _SectionLabel(heading),
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(16),
@@ -1512,7 +1526,9 @@ class _FileOpResultView extends StatelessWidget {
                       child: Icon(
                         isUpload
                             ? Icons.upload_file_rounded
-                            : Icons.note_add_rounded,
+                            : isDownload
+                                ? Icons.download_rounded
+                                : Icons.note_add_rounded,
                         size: 22,
                         color: AppTheme.secondary,
                       ),
@@ -1525,7 +1541,9 @@ class _FileOpResultView extends StatelessWidget {
                           Text(
                             isUpload
                                 ? 'report_q4_2025.pdf'
-                                : 'config_override.json',
+                                : isDownload
+                                    ? 'device_evidence.tar.gz'
+                                    : 'config_override.json',
                             style: GoogleFonts.ibmPlexMono(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -1536,7 +1554,9 @@ class _FileOpResultView extends StatelessWidget {
                           Text(
                             isUpload
                                 ? '/home/lnakamura/Documents/'
-                                : '/etc/quoodle/',
+                                : isDownload
+                                    ? '/var/log/quoodle/'
+                                    : '/etc/quoodle/',
                             style: GoogleFonts.ibmPlexMono(
                               fontSize: 10,
                               color: AppTheme.textMuted,
@@ -1555,15 +1575,15 @@ class _FileOpResultView extends StatelessWidget {
                 const SizedBox(height: 14),
                 const Divider(color: AppTheme.borderLight, height: 1),
                 const SizedBox(height: 14),
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     _InfoPill(
                       label: 'SIZE',
                       value: isUpload ? '2.4 MB' : '1.2 KB',
                     ),
-                    const SizedBox(width: 8),
                     _InfoPill(label: 'TYPE', value: isUpload ? 'PDF' : 'JSON'),
-                    const SizedBox(width: 8),
                     _InfoPill(label: 'TIME', value: '0.8s'),
                   ],
                 ),
@@ -1723,19 +1743,23 @@ class _ActionResultView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final method = command['method'] as String? ?? '';
+    final isReboot = method == 'reboot' || method == 'reboot_device';
+    final isPolicy = method == 'policy_sync' || method == 'policy_probe';
     final label = method == 'lock_screen'
         ? 'Screen Locked'
-        : method == 'reboot'
+        : isReboot
             ? 'Reboot Initiated'
             : 'Policy Synced';
     final sub = method == 'lock_screen'
         ? 'Device screen has been locked successfully.'
-        : method == 'reboot'
+        : isReboot
             ? 'Device will reboot in 30 seconds.'
-            : 'Policy v1.0.4 applied successfully.';
+            : isPolicy
+                ? 'Policy probe dispatched successfully.'
+                : 'Action completed successfully.';
     final icon = method == 'lock_screen'
         ? Icons.lock_rounded
-        : method == 'reboot'
+        : isReboot
             ? Icons.restart_alt_rounded
             : Icons.sync_rounded;
 

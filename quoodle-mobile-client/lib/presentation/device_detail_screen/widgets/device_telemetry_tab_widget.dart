@@ -1,37 +1,43 @@
 import 'dart:async';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:secure_device_control/features/devices/presentation/providers/devices_providers.dart';
 import '../../../theme/app_theme.dart';
 
-class DeviceTelemetryTabWidget extends StatefulWidget {
+class DeviceTelemetryTabWidget extends ConsumerStatefulWidget {
   final String deviceId;
   const DeviceTelemetryTabWidget({super.key, required this.deviceId});
 
   @override
-  State<DeviceTelemetryTabWidget> createState() =>
+  ConsumerState<DeviceTelemetryTabWidget> createState() =>
       _DeviceTelemetryTabWidgetState();
 }
 
 enum _SyncState { syncing, fresh, stale, veryStale }
 
-class _DeviceTelemetryTabWidgetState extends State<DeviceTelemetryTabWidget>
+class _DeviceTelemetryTabWidgetState
+    extends ConsumerState<DeviceTelemetryTabWidget>
     with SingleTickerProviderStateMixin {
+  static const _pollInterval = Duration(seconds: 3);
+  static const _historyWindow = Duration(minutes: 15);
+
   Timer? _pollTimer;
   Timer? _secondTimer;
   int _secondsSinceUpdate = 0;
   bool _isSyncing = false;
   bool _backgroundRefreshActive = true;
-  DateTime _lastUpdatedAt = DateTime.now();
+  DateTime _lastUpdatedAt = DateTime.now().subtract(const Duration(minutes: 1));
 
-  double _cpu = 61.4;
-  double _ram = 74.2;
-  final double _disk = 58.8;
-  double _temp = 52.3;
-  double _netTx = 1.2;
-  double _netRx = 3.8;
-  final int _openPorts = 14;
-  int _activeProcesses = 87;
+  double _cpu = 0;
+  double _ram = 0;
+  double _disk = 0;
+  double _temp = 0;
+  double _netTx = 0;
+  double _netRx = 0;
+  int _openPorts = 0;
+  int _activeProcesses = 0;
 
   final List<FlSpot> _cpuHistory = [
     const FlSpot(0, 48),
@@ -76,53 +82,166 @@ class _DeviceTelemetryTabWidgetState extends State<DeviceTelemetryTabWidget>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
     _startPolling();
+    unawaited(_refreshTelemetry());
+  }
+
+  @override
+  void didUpdateWidget(covariant DeviceTelemetryTabWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.deviceId != widget.deviceId) {
+      unawaited(_refreshTelemetry());
+    }
   }
 
   void _startPolling() {
-    _secondTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+    _secondTimer?.cancel();
+    _pollTimer?.cancel();
+
+    _secondTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
-        t.cancel();
+        timer.cancel();
         return;
       }
       setState(() => _secondsSinceUpdate++);
     });
 
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (!mounted) return;
-      setState(() {
-        _isSyncing = true;
-      });
-      // Simulate network fetch delay
-      Future.delayed(const Duration(milliseconds: 800), () {
-        if (!mounted) return;
-        setState(() {
-          _isSyncing = false;
-          _secondsSinceUpdate = 0;
-          _lastUpdatedAt = DateTime.now();
-          _cpu = 55 + (6 * (DateTime.now().second % 10) / 10);
-          _ram = 72 + (4 * (DateTime.now().second % 5) / 5);
-          _temp = 48 + (8 * (DateTime.now().second % 7) / 7);
-          _netTx = 0.8 + (1.2 * (DateTime.now().second % 4) / 4);
-          _netRx = 2.5 + (2.0 * (DateTime.now().second % 6) / 6);
-          _activeProcesses = 82 + (DateTime.now().second % 12);
-          // Append to history
-          if (_cpuHistory.length >= 20) _cpuHistory.removeAt(0);
-          _cpuHistory.add(
-            FlSpot(
-              _cpuHistory.length.toDouble(),
-              double.parse(_cpu.toStringAsFixed(1)),
-            ),
-          );
-          if (_ramHistory.length >= 20) _ramHistory.removeAt(0);
-          _ramHistory.add(
-            FlSpot(
-              _ramHistory.length.toDouble(),
-              double.parse(_ram.toStringAsFixed(1)),
-            ),
-          );
-        });
-      });
+    _pollTimer = Timer.periodic(_pollInterval, (_) {
+      if (!mounted || !_backgroundRefreshActive || _isSyncing) {
+        return;
+      }
+      unawaited(_refreshTelemetry());
     });
+  }
+
+  Future<void> _refreshTelemetry() async {
+    if (!mounted || _isSyncing) {
+      return;
+    }
+    setState(() {
+      _isSyncing = true;
+    });
+
+    try {
+      final nowUtc = DateTime.now().toUtc();
+      final fromUtc = nowUtc.subtract(_historyWindow);
+      final telemetryDataSource =
+          ref.read(deviceTelemetryRemoteDataSourceProvider);
+
+      final responses = await Future.wait<Map<String, dynamic>>([
+        telemetryDataSource.fetchLatestTelemetry(widget.deviceId),
+        telemetryDataSource.fetchTelemetryHistory(
+          widget.deviceId,
+          from: fromUtc,
+          to: nowUtc,
+          limit: 500,
+        ),
+      ]);
+
+      final latestPayload = responses[0];
+      final historyPayload = responses[1];
+      final latestMetrics = _asStringDynamicMap(latestPayload['metrics']);
+
+      final cpu = _toDouble(latestMetrics['cpu']);
+      final ram = _toDouble(latestMetrics['ram']);
+      final disk = _toDouble(latestMetrics['disk_usage']);
+      final netTx = _toDouble(latestMetrics['network_tx']);
+      final netRx = _toDouble(latestMetrics['network_rx']);
+      final temp = _toDouble(
+        latestMetrics['temperature_c'] ??
+            latestMetrics['temp_c'] ??
+            latestMetrics['temp'],
+      );
+      final activeProcesses = _toInt(
+        latestMetrics['active_processes'] ??
+            latestMetrics['process_count'] ??
+            latestMetrics['processes'],
+      );
+      final openPorts = _toInt(latestMetrics['open_ports']);
+      final timestamp =
+          _parseTimestamp(latestPayload['timestamp']) ?? DateTime.now();
+
+      final historyCpu = <FlSpot>[];
+      final historyRam = <FlSpot>[];
+      final pointsRaw = historyPayload['points'];
+      if (pointsRaw is List) {
+        final points = pointsRaw
+            .whereType<Map>()
+            .map((entry) => _asStringDynamicMap(entry))
+            .toList(growable: false);
+        final windowed =
+            points.length > 20 ? points.sublist(points.length - 20) : points;
+
+        var x = 0.0;
+        for (final point in windowed) {
+          final metrics = _asStringDynamicMap(point['metrics']);
+          final pointCpu = _toDouble(metrics['cpu']);
+          final pointRam = _toDouble(metrics['ram']);
+
+          if (pointCpu != null) {
+            historyCpu.add(FlSpot(x, pointCpu.clamp(0, 100).toDouble()));
+          }
+          if (pointRam != null) {
+            historyRam.add(FlSpot(x, pointRam.clamp(0, 100).toDouble()));
+          }
+          x += 1;
+        }
+      }
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        if (cpu != null) {
+          _cpu = cpu.clamp(0, 100).toDouble();
+        }
+        if (ram != null) {
+          _ram = ram.clamp(0, 100).toDouble();
+        }
+        if (disk != null) {
+          _disk = disk.clamp(0, 100).toDouble();
+        }
+        if (netTx != null) {
+          _netTx = _normalizeNetworkRate(netTx);
+        }
+        if (netRx != null) {
+          _netRx = _normalizeNetworkRate(netRx);
+        }
+        if (activeProcesses != null) {
+          _activeProcesses = activeProcesses.clamp(0, 99999);
+        }
+        if (openPorts != null) {
+          _openPorts = openPorts.clamp(0, 99999);
+        }
+
+        _temp = (temp ?? _deriveTempFromCpu(_cpu)).clamp(0, 120).toDouble();
+        _secondsSinceUpdate = 0;
+        _lastUpdatedAt = timestamp;
+        _isSyncing = false;
+
+        if (historyCpu.isNotEmpty) {
+          _cpuHistory
+            ..clear()
+            ..addAll(historyCpu);
+        } else {
+          _appendCurrentPoint(_cpuHistory, _cpu);
+        }
+
+        if (historyRam.isNotEmpty) {
+          _ramHistory
+            ..clear()
+            ..addAll(historyRam);
+        } else {
+          _appendCurrentPoint(_ramHistory, _ram);
+        }
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isSyncing = false;
+      });
+    }
   }
 
   @override
@@ -153,6 +272,92 @@ class _DeviceTelemetryTabWidgetState extends State<DeviceTelemetryTabWidget>
     if (diff.inSeconds < 60) return '${diff.inSeconds}s ago';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     return '${diff.inHours}h ago';
+  }
+
+  Map<String, dynamic> _asStringDynamicMap(Object? value) {
+    if (value is Map) {
+      return value.map((key, mapValue) => MapEntry(key.toString(), mapValue));
+    }
+    return const <String, dynamic>{};
+  }
+
+  double? _toDouble(Object? value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    if (value is String) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) {
+        return null;
+      }
+      final parsed = double.tryParse(trimmed);
+      if (parsed != null) {
+        return parsed;
+      }
+      final match = RegExp(r'-?\d+(\.\d+)?').firstMatch(trimmed);
+      if (match == null) {
+        return null;
+      }
+      return double.tryParse(match.group(0)!);
+    }
+    return null;
+  }
+
+  int? _toInt(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is List) {
+      return value.length;
+    }
+    if (value is String) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) {
+        return null;
+      }
+      final parsed = int.tryParse(trimmed);
+      if (parsed != null) {
+        return parsed;
+      }
+      final asDouble = double.tryParse(trimmed);
+      if (asDouble != null) {
+        return asDouble.toInt();
+      }
+    }
+    return null;
+  }
+
+  DateTime? _parseTimestamp(Object? value) {
+    if (value is! String || value.trim().isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(value);
+  }
+
+  double _normalizeNetworkRate(double raw) {
+    if (raw.abs() >= 10000) {
+      return raw / (1024 * 1024);
+    }
+    return raw;
+  }
+
+  double _deriveTempFromCpu(double cpuPercent) {
+    return 38 + (cpuPercent * 0.35);
+  }
+
+  void _appendCurrentPoint(List<FlSpot> history, double value) {
+    if (history.length >= 20) {
+      history.removeAt(0);
+    }
+    history.add(
+      FlSpot(
+        history.length.toDouble(),
+        double.parse(value.toStringAsFixed(1)),
+      ),
+    );
   }
 
   @override
@@ -523,9 +728,14 @@ class _DeviceTelemetryTabWidgetState extends State<DeviceTelemetryTabWidget>
               ),
               const Spacer(),
               GestureDetector(
-                onTap: () => setState(
-                  () => _backgroundRefreshActive = !_backgroundRefreshActive,
-                ),
+                onTap: () {
+                  setState(() {
+                    _backgroundRefreshActive = !_backgroundRefreshActive;
+                  });
+                  if (_backgroundRefreshActive) {
+                    unawaited(_refreshTelemetry());
+                  }
+                },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   width: 38,
@@ -560,7 +770,7 @@ class _DeviceTelemetryTabWidgetState extends State<DeviceTelemetryTabWidget>
             children: [
               _RefreshStatusItem(
                 label: 'Interval',
-                value: '3s',
+                value: '${_pollInterval.inSeconds}s',
                 icon: Icons.timer_rounded,
                 color: AppTheme.primary,
               ),

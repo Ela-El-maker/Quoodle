@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:google_fonts/google_fonts.dart';
 import 'package:secure_device_control/app/router/app_navigator.dart';
+import 'package:secure_device_control/features/dashboard/domain/entities/dashboard_summary.dart';
 import 'package:secure_device_control/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:secure_device_control/features/dashboard/presentation/providers/dashboard_state.dart';
 
@@ -133,7 +134,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         slivers: [
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            sliver: SliverToBoxAdapter(child: _buildGreetingRow()),
+            sliver: SliverToBoxAdapter(
+              child: _buildGreetingRow(state.summary),
+            ),
           ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -190,7 +193,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               slivers: [
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(20, 12, 12, 0),
-                  sliver: SliverToBoxAdapter(child: _buildGreetingRow()),
+                  sliver: SliverToBoxAdapter(
+                    child: _buildGreetingRow(state.summary),
+                  ),
                 ),
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(20, 16, 12, 0),
@@ -225,13 +230,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Widget _buildGreetingRow() {
+  Widget _buildGreetingRow(DashboardSummary? summary) {
     final hour = DateTime.now().hour;
-    final greeting = hour < 12
+    final fallbackGreeting = hour < 12
         ? 'Good morning'
         : hour < 17
             ? 'Good afternoon'
             : 'Good evening';
+    final greeting = summary?.greeting ?? fallbackGreeting;
+    final operatorName = summary?.operatorName ?? 'Operator';
+    final lastUpdated = summary?.lastUpdated ?? 'just now';
+    final needsAttention = summary?.itemsNeedingAttention ?? 0;
+    final criticalAlerts = summary?.criticalAlerts ?? 0;
+
     return Row(
       children: [
         Expanded(
@@ -239,7 +250,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '$greeting, Operator',
+                '$greeting, $operatorName',
                 style: GoogleFonts.ibmPlexSans(
                   fontSize: 22,
                   fontWeight: FontWeight.w600,
@@ -248,7 +259,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Last updated: just now  ·  3 items need attention',
+                'Last updated: $lastUpdated  ·  $needsAttention items need attention',
                 style: GoogleFonts.ibmPlexSans(
                   fontSize: 12,
                   color: AppTheme.textMuted,
@@ -277,7 +288,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
               const SizedBox(width: 6),
               Text(
-                '3 ALERTS',
+                '$criticalAlerts ALERTS',
                 style: GoogleFonts.ibmPlexSans(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,

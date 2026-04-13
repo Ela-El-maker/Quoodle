@@ -65,7 +65,14 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
       extendBodyBehindAppBar: true,
       appBar: _buildGlassAppBar(context, device),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => AppNavigator.push(context, AppRoute.sendCommand),
+        onPressed: () => AppNavigator.push(
+          context,
+          AppRoute.sendCommand,
+          arguments: <String, dynamic>{
+            'deviceId': device.id,
+            'deviceName': device.name,
+          },
+        ),
         icon: const Icon(Icons.terminal_rounded, size: 18),
         label: Text(
           'Send Command',
@@ -163,7 +170,7 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
                         size: 20,
                         color: AppTheme.textSecondary,
                       ),
-                      onPressed: () => _showDeviceActions(context),
+                      onPressed: () => _showDeviceActions(context, device),
                     ),
                   ],
                 ),
@@ -337,7 +344,7 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
     return Icons.devices_rounded;
   }
 
-  void _showDeviceActions(BuildContext context) {
+  void _showDeviceActions(BuildContext context, DeviceEntity device) {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppTheme.surfaceVariant,
@@ -369,7 +376,14 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
               color: AppTheme.primary,
               onTap: () {
                 Navigator.maybePop(context);
-                AppNavigator.push(context, AppRoute.sendCommand);
+                AppNavigator.push(
+                  context,
+                  AppRoute.sendCommand,
+                  arguments: <String, dynamic>{
+                    'deviceId': device.id,
+                    'deviceName': device.name,
+                  },
+                );
               },
             ),
             _ActionTile(

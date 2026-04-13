@@ -1,37 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:secure_device_control/app/router/app_navigator.dart';
+import 'package:secure_device_control/features/dashboard/presentation/providers/dashboard_providers.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/status_badge_widget.dart';
 
-class DashboardAtRiskWidget extends StatelessWidget {
+class DashboardAtRiskWidget extends ConsumerWidget {
   const DashboardAtRiskWidget({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final atRisk = [
-      _AtRiskDevice(
-        id: 'dev-014',
-        name: 'PROD-SRV-014',
-        status: DeviceStatus.offline,
-        reason: 'No heartbeat for 18 min',
-        riskScore: 94,
-      ),
-      _AtRiskDevice(
-        id: 'dev-007',
-        name: 'WKS-FINANCE-07',
-        status: DeviceStatus.degraded,
-        reason: 'Policy drift detected',
-        riskScore: 71,
-      ),
-      _AtRiskDevice(
-        id: 'dev-021',
-        name: 'EDGE-NODE-021',
-        status: DeviceStatus.quarantined,
-        reason: 'Attestation failed',
-        riskScore: 98,
-      ),
-    ];
+  Widget build(BuildContext context, WidgetRef ref) {
+    final summary = ref.watch(
+      dashboardControllerProvider.select((state) => state.summary),
+    );
+    final atRisk = (summary?.atRiskDevices ?? const [])
+        .map(
+          (device) => _AtRiskDevice(
+            id: device.id,
+            name: device.name,
+            status: _mapDeviceStatus(device.status),
+            reason: device.reason,
+            riskScore: device.riskScore,
+          ),
+        )
+        .toList(growable: false);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -172,4 +165,15 @@ class _AtRiskCard extends StatelessWidget {
       ),
     );
   }
+}
+
+DeviceStatus _mapDeviceStatus(String status) {
+  return switch (status) {
+    'online' => DeviceStatus.online,
+    'offline' => DeviceStatus.offline,
+    'stale' => DeviceStatus.degraded,
+    'reconnecting' => DeviceStatus.degraded,
+    'quarantined' => DeviceStatus.quarantined,
+    _ => DeviceStatus.pending,
+  };
 }

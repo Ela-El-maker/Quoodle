@@ -114,12 +114,21 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen>
                     ? EmptyStateWidget(
                         icon: Icons.devices_other_rounded,
                         title: 'No devices found',
-                        subtitle: state.searchQuery.isNotEmpty
-                            ? 'No devices match "${state.searchQuery}". Try a different search.'
-                            : 'No devices match the selected filter.',
-                        actionLabel:
-                            state.searchQuery.isEmpty ? 'Pair a Device' : null,
-                        onAction: state.searchQuery.isEmpty ? () {} : null,
+                        subtitle: state.errorMessage != null
+                            ? state.errorMessage!
+                            : state.searchQuery.isNotEmpty
+                                ? 'No devices match "${state.searchQuery}". Try a different search.'
+                                : 'No devices match the selected filter.',
+                        actionLabel: state.errorMessage != null
+                            ? 'Retry'
+                            : (state.searchQuery.isEmpty
+                                ? 'Pair a Device'
+                                : null),
+                        onAction: state.errorMessage != null
+                            ? () => ref
+                                .read(devicesControllerProvider.notifier)
+                                .loadDevices()
+                            : (state.searchQuery.isEmpty ? () {} : null),
                       )
                     : isTablet
                         ? _buildTabletGrid(devices)

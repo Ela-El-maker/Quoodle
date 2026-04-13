@@ -1,32 +1,47 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:secure_device_control/features/dashboard/presentation/providers/dashboard_providers.dart';
 import '../../../theme/app_theme.dart';
 
-class DashboardKpiGridWidget extends StatelessWidget {
+class DashboardKpiGridWidget extends ConsumerWidget {
   const DashboardKpiGridWidget({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final summary = ref.watch(
+      dashboardControllerProvider.select((state) => state.summary),
+    );
+    final totalDevices = summary?.totalDevices ?? 0;
+    final onlineDevices = summary?.onlineDevices ?? 0;
+    final offlineDevices = summary?.offlineDevices ?? 0;
+    final activeCommands = summary?.activeCommands ?? 0;
+    final criticalAlerts = summary?.criticalAlerts ?? 0;
+    final complianceRate = summary?.complianceRate ?? 0;
+    final compliantDevices = summary?.compliantDevices ?? 0;
+    final policySyncRate = summary?.policySyncRate ?? 0;
+    final syncedPolicyDevices = summary?.syncedPolicyDevices ?? 0;
+
     final kpis = [
       _KpiData(
         label: 'Online',
-        value: '19',
-        subtext: 'of 24 devices',
+        value: '$onlineDevices',
+        subtext: 'of $totalDevices devices',
         color: AppTheme.statusOnline,
-        trend: '+2',
+        trend: null,
         trendUp: true,
       ),
       _KpiData(
         label: 'Offline',
-        value: '5',
+        value: '$offlineDevices',
         subtext: 'need attention',
         color: AppTheme.statusQuarantined,
-        trend: '+1',
+        trend: null,
         trendUp: false,
       ),
       _KpiData(
         label: 'Active Cmds',
-        value: '3',
+        value: '$activeCommands',
         subtext: 'in progress',
         color: AppTheme.warning,
         trend: null,
@@ -34,26 +49,26 @@ class DashboardKpiGridWidget extends StatelessWidget {
       ),
       _KpiData(
         label: 'Alerts',
-        value: '3',
+        value: '$criticalAlerts',
         subtext: 'unacknowledged',
         color: AppTheme.critical,
-        trend: '+3',
+        trend: null,
         trendUp: false,
       ),
       _KpiData(
         label: 'Compliance',
-        value: '87%',
-        subtext: '21/24 compliant',
+        value: '${complianceRate.round()}%',
+        subtext: '$compliantDevices/$totalDevices compliant',
         color: AppTheme.secondary,
-        trend: '-4%',
+        trend: null,
         trendUp: false,
       ),
       _KpiData(
         label: 'Policy Sync',
-        value: '92%',
-        subtext: '22/24 synced',
+        value: '${policySyncRate.round()}%',
+        subtext: '$syncedPolicyDevices/$totalDevices synced',
         color: AppTheme.primary,
-        trend: '+1%',
+        trend: null,
         trendUp: true,
       ),
     ];

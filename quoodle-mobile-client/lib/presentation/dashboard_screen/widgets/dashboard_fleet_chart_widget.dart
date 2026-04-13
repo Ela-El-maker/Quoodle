@@ -1,50 +1,31 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:secure_device_control/features/dashboard/domain/entities/dashboard_summary.dart';
+import 'package:secure_device_control/features/dashboard/presentation/providers/dashboard_providers.dart';
 import '../../../theme/app_theme.dart';
 
-class DashboardFleetChartWidget extends StatefulWidget {
+class DashboardFleetChartWidget extends ConsumerStatefulWidget {
   const DashboardFleetChartWidget({super.key});
 
   @override
-  State<DashboardFleetChartWidget> createState() =>
+  ConsumerState<DashboardFleetChartWidget> createState() =>
       _DashboardFleetChartWidgetState();
 }
 
-class _DashboardFleetChartWidgetState extends State<DashboardFleetChartWidget> {
+class _DashboardFleetChartWidgetState
+    extends ConsumerState<DashboardFleetChartWidget> {
   int _selectedWindow = 0; // 0=24h, 1=7d, 2=30d
   final List<String> _windows = ['24h', '7d', '30d'];
 
-  // Fleet health % over last 24 hours (hourly)
-  final List<FlSpot> _healthData = [
-    const FlSpot(0, 95),
-    const FlSpot(1, 95),
-    const FlSpot(2, 94),
-    const FlSpot(3, 91),
-    const FlSpot(4, 88),
-    const FlSpot(5, 88),
-    const FlSpot(6, 87),
-    const FlSpot(7, 83),
-    const FlSpot(8, 79),
-    const FlSpot(9, 79),
-    const FlSpot(10, 82),
-    const FlSpot(11, 85),
-    const FlSpot(12, 86),
-    const FlSpot(13, 88),
-    const FlSpot(14, 90),
-    const FlSpot(15, 88),
-    const FlSpot(16, 85),
-    const FlSpot(17, 84),
-    const FlSpot(18, 87),
-    const FlSpot(19, 89),
-    const FlSpot(20, 91),
-    const FlSpot(21, 90),
-    const FlSpot(22, 88),
-    const FlSpot(23, 79),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final summary = ref.watch(
+      dashboardControllerProvider.select((state) => state.summary),
+    );
+    final healthData = _buildHealthData(summary?.fleetHealthSeries ?? const []);
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -204,7 +185,7 @@ class _DashboardFleetChartWidgetState extends State<DashboardFleetChartWidget> {
                 ),
                 lineBarsData: [
                   LineChartBarData(
-                    spots: _healthData,
+                    spots: healthData,
                     isCurved: true,
                     curveSmoothness: 0.3,
                     color: AppTheme.primary,
@@ -221,7 +202,8 @@ class _DashboardFleetChartWidgetState extends State<DashboardFleetChartWidget> {
                           strokeColor: AppTheme.background,
                         );
                       },
-                      checkToShowDot: (spot, _) => spot.y < 85 || spot.x == 23,
+                      checkToShowDot: (spot, _) =>
+                          spot.y < 85 || spot.x == healthData.last.x,
                     ),
                     belowBarData: BarAreaData(
                       show: true,
@@ -250,6 +232,24 @@ class _DashboardFleetChartWidgetState extends State<DashboardFleetChartWidget> {
         ],
       ),
     );
+  }
+
+  List<FlSpot> _buildHealthData(List<DashboardHealthPoint> points) {
+    if (points.isEmpty) {
+      return const <FlSpot>[
+        FlSpot(0, 0),
+        FlSpot(1, 0),
+      ];
+    }
+
+    return points
+        .map(
+          (point) => FlSpot(
+            point.x,
+            point.y.clamp(0, 100),
+          ),
+        )
+        .toList(growable: false);
   }
 }
 
