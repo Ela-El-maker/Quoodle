@@ -2,10 +2,13 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:secure_device_control/app/bootstrap/env.dart';
 import 'package:secure_device_control/core/network/api_client.dart';
 import 'package:secure_device_control/core/network/dio_provider.dart';
+import 'package:secure_device_control/core/network/interceptors/auth_interceptor.dart';
 import 'package:secure_device_control/core/network/interceptors/logging_interceptor.dart';
 import 'package:secure_device_control/core/network/network_info.dart';
+import 'package:secure_device_control/core/network/interceptors/token_refresh_interceptor.dart';
 import 'package:secure_device_control/core/services/analytics_service.dart';
 import 'package:secure_device_control/core/services/crash_reporting_service.dart';
 import 'package:secure_device_control/core/services/logger_service.dart';
@@ -37,9 +40,18 @@ final keyValueStorageProvider = Provider<KeyValueStorage>((ref) {
 final dioProvider = Provider<Dio>((ref) {
   final dio = Dio(
     BaseOptions(
+      baseUrl: AppEnv.controlPlaneBaseUrl,
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 10),
       sendTimeout: const Duration(seconds: 10),
+    ),
+  );
+  dio.interceptors.add(AuthInterceptor(ref.read(secureStorageServiceProvider)));
+  dio.interceptors.add(
+    TokenRefreshInterceptor(
+      dio: dio,
+      secureStorage: ref.read(secureStorageServiceProvider),
+      logger: ref.read(loggerServiceProvider),
     ),
   );
   dio.interceptors.add(LoggingInterceptor(ref.read(loggerServiceProvider)));

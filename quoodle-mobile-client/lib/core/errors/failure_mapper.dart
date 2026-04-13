@@ -15,6 +15,7 @@ class FailureMapper {
         UnauthorizedException() => const UnauthorizedFailure(),
         NetworkException() => const NetworkFailure(),
         TimeoutException() => const TimeoutFailure(),
+        CancelledException() => const CancelledFailure(),
         ValidationException() => ValidationFailure(error.message),
         _ => UnknownFailure(error.message),
       };
@@ -30,6 +31,9 @@ class FailureMapper {
       }
       if (statusCode == 404) {
         return const NotFoundFailure();
+      }
+      if (statusCode == 429) {
+        return const RateLimitedFailure();
       }
       if (statusCode != null && statusCode >= 500) {
         return const ServerFailure();

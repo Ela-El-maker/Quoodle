@@ -21,27 +21,56 @@ class AuthController extends Notifier<AuthSessionState> {
           : AuthSessionState(
               status: AuthSessionStatus.authenticated, user: user),
       failure: (failure) => AuthSessionState(
+        status: AuthSessionStatus.unauthenticated,
+        errorMessage: failure.userMessage,
+      ),
+    );
+  }
+
+  Future<void> requestEmailOtp({required String email}) async {
+    state = state.copyWith(
+      status: AuthSessionStatus.requestingOtp,
+      clearError: true,
+      pendingEmail: email,
+    );
+
+    final result = await ref.read(requestEmailOtpProvider).call(
+          email: email,
+        );
+
+    state = result.when(
+      success: (challenge) => AuthSessionState(
+        status: AuthSessionStatus.otpCodeSent,
+        pendingEmail: email,
+        otpChallengeId: challenge.challengeId,
+        resendAfterSeconds: challenge.resendAfterSeconds,
+      ),
+      failure: (failure) => state.copyWith(
         status: AuthSessionStatus.error,
         errorMessage: failure.userMessage,
       ),
     );
   }
 
-  Future<void> login({
-    required String email,
-    required String password,
-    String? otpCode,
-  }) async {
+  Future<void> verifyEmailOtp(String otpCode) async {
+    final email = state.pendingEmail;
+    final challengeId = state.otpChallengeId;
+    if (email == null || challengeId == null) {
+      state = state.copyWith(
+        status: AuthSessionStatus.error,
+        errorMessage: 'Verification session expired. Request a new code.',
+      );
+      return;
+    }
+
     state = state.copyWith(
-      status: AuthSessionStatus.authenticating,
+      status: AuthSessionStatus.verifyingOtp,
       clearError: true,
-      pendingEmail: email,
-      pendingPassword: password,
     );
 
-    final result = await ref.read(loginUserProvider).call(
+    final result = await ref.read(verifyEmailOtpProvider).call(
           email: email,
-          password: password,
+          challengeId: challengeId,
           otpCode: otpCode,
         );
 
@@ -50,15 +79,33 @@ class AuthController extends Notifier<AuthSessionState> {
         status: AuthSessionStatus.authenticated,
         user: user,
       ),
+      failure: (failure) => state.copyWith(
+        status: AuthSessionStatus.otpCodeSent,
+        errorMessage: failure.userMessage,
+      ),
+    );
+  }
+
+  Future<void> signInWithGoogle() async {
+    state = state.copyWith(
+      status: AuthSessionStatus.authenticatingWithGoogle,
+      clearError: true,
+    );
+
+    final result = await ref.read(signInWithGoogleProvider).call();
+    state = result.when(
+      success: (user) => AuthSessionState(
+        status: AuthSessionStatus.authenticated,
+        user: user,
+      ),
       failure: (failure) {
-        if (failure is TwoFactorRequiredFailure) {
-          return state.copyWith(
-            status: AuthSessionStatus.twoFactorRequired,
-            clearError: true,
+        if (failure is CancelledFailure) {
+          return const AuthSessionState(
+            status: AuthSessionStatus.unauthenticated,
           );
         }
 
-        return state.copyWith(
+        return AuthSessionState(
           status: AuthSessionStatus.error,
           errorMessage: failure.userMessage,
         );
@@ -66,18 +113,12 @@ class AuthController extends Notifier<AuthSessionState> {
     );
   }
 
-  Future<void> verifyTwoFactor(String otpCode) async {
-    final email = state.pendingEmail;
-    final password = state.pendingPassword;
-    if (email == null || password == null) {
-      state = state.copyWith(
-        status: AuthSessionStatus.error,
-        errorMessage: 'Login session expired. Please enter credentials again.',
-      );
-      return;
-    }
-
-    await login(email: email, password: password, otpCode: otpCode);
+  void resetToEmailStep() {
+    state = state.copyWith(
+      status: AuthSessionStatus.unauthenticated,
+      clearError: true,
+      clearPending: true,
+    );
   }
 
   Future<void> logout() async {

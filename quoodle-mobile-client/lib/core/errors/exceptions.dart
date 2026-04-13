@@ -22,3 +22,7 @@ class TimeoutException extends AppException {
 class ValidationException extends AppException {
   const ValidationException(super.message);
 }
+
+class CancelledException extends AppException {
+  const CancelledException([super.message = 'Operation cancelled']);
+}

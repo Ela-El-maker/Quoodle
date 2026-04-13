@@ -19,16 +19,10 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _twoFAController = TextEditingController();
+  final _otpController = TextEditingController();
 
-  bool _obscurePassword = true;
-
-  late AnimationController _fadeController;
-  late Animation<double> _fadeAnimation;
-
-  static const _demoEmail = 'operator@quoodle.io';
-  static const _demoPassword = 'Qd0pS3cur3!';
+  late final AnimationController _fadeController;
+  late final Animation<double> _fadeAnimation;
 
   @override
   void initState() {
@@ -48,36 +42,34 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
   void dispose() {
     _fadeController.dispose();
     _emailController.dispose();
-    _passwordController.dispose();
-    _twoFAController.dispose();
+    _otpController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleLogin() async {
+  Future<void> _handlePrimaryAction(bool isOtpStep) async {
     if (!_formKey.currentState!.validate()) return;
 
-    final authState = ref.read(authControllerProvider);
     final authController = ref.read(authControllerProvider.notifier);
-
-    if (authState.requiresTwoFactor) {
-      await authController.verifyTwoFactor(_twoFAController.text.trim());
+    if (isOtpStep) {
+      await authController.verifyEmailOtp(_otpController.text.trim());
       return;
     }
 
-    await authController.login(
+    await authController.requestEmailOtp(
       email: _emailController.text.trim(),
-      password: _passwordController.text,
     );
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    await ref.read(authControllerProvider.notifier).signInWithGoogle();
   }
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
-    final show2FA = authState.requiresTwoFactor;
+    final isOtpStep = authState.requiresOtpCode;
     final isLoading = authState.isLoading;
-    final errorMessage = authState.status == AuthSessionStatus.error
-        ? authState.errorMessage
-        : null;
+    final errorMessage = authState.errorMessage;
 
     final size = MediaQuery.of(context).size;
     final isTablet = size.width >= 600;
@@ -91,21 +83,21 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
           child: SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 32,
-                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
                 child: SizedBox(
                   width: isTablet ? 440 : double.infinity,
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
+                    children: <Widget>[
                       _buildLogoSection(),
                       const SizedBox(height: 32),
-                      _buildFormCard(show2FA, isLoading, errorMessage),
-                      const SizedBox(height: 16),
-                      _buildDemoCredentials(),
+                      _buildFormCard(
+                        authState: authState,
+                        isOtpStep: isOtpStep,
+                        isLoading: isLoading,
+                        errorMessage: errorMessage,
+                      ),
                     ],
                   ),
                 ),
@@ -119,13 +111,13 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
 
   Widget _buildLogoSection() {
     return Column(
-      children: [
+      children: <Widget>[
         Container(
           width: 56,
           height: 56,
           decoration: BoxDecoration(
             color: AppTheme.surface,
-            borderRadius: BorderRadius.circular(14.0),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: AppTheme.border, width: 1),
           ),
           child: const Icon(
@@ -146,7 +138,7 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
         ),
         const SizedBox(height: 4),
         Text(
-          'Device Fleet Management Console',
+          'Passwordless Operator Access',
           style: GoogleFonts.ibmPlexSans(
             fontSize: 14,
             fontWeight: FontWeight.w400,
@@ -157,11 +149,16 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
     );
   }
 
-  Widget _buildFormCard(bool show2FA, bool isLoading, String? errorMessage) {
+  Widget _buildFormCard({
+    required AuthSessionState authState,
+    required bool isOtpStep,
+    required bool isLoading,
+    required String? errorMessage,
+  }) {
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(12.0),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppTheme.border, width: 1),
       ),
       padding: const EdgeInsets.all(24),
@@ -169,9 +166,9 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
         key: _formKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+          children: <Widget>[
             Text(
-              show2FA ? 'Two-Factor Authentication' : 'Sign In',
+              isOtpStep ? 'Verify Email Code' : 'Sign In',
               style: GoogleFonts.ibmPlexSans(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -180,146 +177,209 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
             ),
             const SizedBox(height: 4),
             Text(
-              show2FA
-                  ? 'Enter the 6-digit code from your authenticator app'
-                  : 'Access your fleet management console',
+              isOtpStep
+                  ? 'Enter the one-time code sent to ${authState.pendingEmail ?? _emailController.text.trim()}.'
+                  : 'Use Google Sign-In or receive a code via email.',
               style: GoogleFonts.ibmPlexSans(
                 fontSize: 14,
                 color: AppTheme.textMuted,
               ),
             ),
             const SizedBox(height: 24),
-            if (!show2FA) ...[
+            if (!isOtpStep) ...<Widget>[
               _buildField(
                 controller: _emailController,
-                label: 'Email Address',
+                label: 'Work Email',
                 hint: 'operator@company.io',
                 icon: Icons.alternate_email_rounded,
                 keyboardType: TextInputType.emailAddress,
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Email is required';
+                validator: (value) {
+                  final email = value?.trim() ?? '';
+                  if (email.isEmpty) return 'Email is required';
+                  if (!email.contains('@')) return 'Enter a valid email';
                   return null;
                 },
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 48,
+                child: ElevatedButton(
+                  onPressed:
+                      isLoading ? null : () => _handlePrimaryAction(isOtpStep),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: Colors.black,
+                    disabledBackgroundColor: AppTheme.primaryDim,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.black,
+                          ),
+                        )
+                      : Text(
+                          'Send Email Code',
+                          style: GoogleFonts.ibmPlexSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                ),
               ),
               const SizedBox(height: 12),
-              _buildField(
-                controller: _passwordController,
-                label: 'Password',
-                hint: '••••••••',
-                icon: Icons.lock_outline_rounded,
-                obscureText: _obscurePassword,
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscurePassword
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                    size: 18,
-                    color: AppTheme.textMuted,
+              _buildOrDivider(),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 48,
+                child: OutlinedButton(
+                  onPressed: isLoading ? null : _handleGoogleSignIn,
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppTheme.border),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                  onPressed: () {
-                    setState(() => _obscurePassword = !_obscurePassword);
-                  },
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceVariant,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Center(
+                          child: Text(
+                            'G',
+                            style: GoogleFonts.ibmPlexSans(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.textPrimary,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Continue with Google',
+                        style: GoogleFonts.ibmPlexSans(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Password is required';
-                  return null;
-                },
               ),
-            ] else ...[
+            ] else ...<Widget>[
               _buildField(
-                controller: _twoFAController,
+                controller: _otpController,
                 label: 'Verification Code',
                 hint: '000000',
                 icon: Icons.pin_outlined,
                 keyboardType: TextInputType.number,
                 maxLength: 6,
-                validator: (v) {
-                  if (v == null || v.length != 6) return 'Enter 6-digit code';
+                validator: (value) {
+                  final otp = value?.trim() ?? '';
+                  if (otp.length != 6) return 'Enter 6-digit code';
                   return null;
                 },
               ),
-            ],
-            if (errorMessage != null) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: AppTheme.errorMuted,
-                  borderRadius: BorderRadius.circular(8.0),
-                  border: Border.all(
-                    color: AppTheme.error.withAlpha(80),
-                    width: 1,
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 48,
+                child: ElevatedButton(
+                  onPressed:
+                      isLoading ? null : () => _handlePrimaryAction(isOtpStep),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: Colors.black,
+                    disabledBackgroundColor: AppTheme.primaryDim,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 0,
                   ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.error_outline_rounded,
-                      size: 16,
-                      color: AppTheme.error,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        errorMessage,
-                        style: GoogleFonts.ibmPlexSans(
-                          fontSize: 12,
-                          color: AppTheme.error,
+                  child: isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.black,
+                          ),
+                        )
+                      : Text(
+                          'Verify and Sign In',
+                          style: GoogleFonts.ibmPlexSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
                 ),
               ),
-            ],
-            const SizedBox(height: 24),
-            SizedBox(
-              height: 48,
-              child: ElevatedButton(
-                onPressed: isLoading ? null : _handleLogin,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
-                  foregroundColor: Colors.black,
-                  disabledBackgroundColor: AppTheme.primaryDim,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8.0),
-                  ),
-                  elevation: 0,
-                ),
-                child: isLoading
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.black,
-                        ),
-                      )
-                    : Text(
-                        show2FA ? 'Verify Code' : 'Sign In',
-                        style: GoogleFonts.ibmPlexSans(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-              ),
-            ),
-            if (show2FA) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               TextButton(
-                onPressed: () {
-                  ref.read(authControllerProvider.notifier).restoreSession();
-                  _twoFAController.clear();
-                },
+                onPressed: isLoading
+                    ? null
+                    : () async {
+                        final email = authState.pendingEmail ??
+                            _emailController.text.trim();
+                        if (email.isNotEmpty) {
+                          await ref
+                              .read(authControllerProvider.notifier)
+                              .requestEmailOtp(email: email);
+                        }
+                      },
                 child: Text(
-                  'Back to sign in',
+                  'Resend code',
                   style: GoogleFonts.ibmPlexSans(
-                    fontSize: 14,
+                    fontSize: 13,
                     color: AppTheme.textSecondary,
                   ),
+                ),
+              ),
+              TextButton(
+                onPressed: isLoading
+                    ? null
+                    : () {
+                        _otpController.clear();
+                        ref
+                            .read(authControllerProvider.notifier)
+                            .resetToEmailStep();
+                      },
+                child: Text(
+                  'Use another email',
+                  style: GoogleFonts.ibmPlexSans(
+                    fontSize: 13,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+            if (errorMessage != null && errorMessage.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 12),
+              _buildErrorBanner(errorMessage),
+            ],
+            if (isOtpStep &&
+                authState.resendAfterSeconds != null &&
+                authState.resendAfterSeconds! > 0) ...<Widget>[
+              const SizedBox(height: 10),
+              Text(
+                'Resend available in ~${authState.resendAfterSeconds}s',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.ibmPlexSans(
+                  fontSize: 12,
+                  color: AppTheme.textMuted,
                 ),
               ),
             ],
@@ -335,114 +395,86 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
     required String hint,
     required IconData icon,
     TextInputType? keyboardType,
-    bool obscureText = false,
-    Widget? suffixIcon,
     String? Function(String?)? validator,
     int? maxLength,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
-      obscureText: obscureText,
       maxLength: maxLength,
       style: GoogleFonts.ibmPlexSans(fontSize: 14, color: AppTheme.textPrimary),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
         prefixIcon: Icon(icon, size: 18, color: AppTheme.textMuted),
-        suffixIcon: suffixIcon,
         counterText: '',
         filled: true,
         fillColor: AppTheme.surfaceVariant,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8.0),
+          borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: AppTheme.border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8.0),
+          borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: AppTheme.border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8.0),
-          borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8.0),
-          borderSide: const BorderSide(color: AppTheme.error),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8.0),
-          borderSide: const BorderSide(color: AppTheme.error, width: 1.5),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 14,
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppTheme.primary, width: 1),
         ),
       ),
       validator: validator,
     );
   }
 
-  Widget _buildDemoCredentials() {
+  Widget _buildErrorBanner(String message) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceVariant,
-        borderRadius: BorderRadius.circular(8.0),
-        border: Border.all(color: AppTheme.border, width: 1),
+        color: AppTheme.errorMuted,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: AppTheme.error.withAlpha(80),
+          width: 1,
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.info_outline_rounded,
-                size: 14,
-                color: AppTheme.textMuted,
+      child: Row(
+        children: <Widget>[
+          const Icon(Icons.error_outline_rounded,
+              size: 16, color: AppTheme.error),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: GoogleFonts.ibmPlexSans(
+                fontSize: 12,
+                color: AppTheme.error,
               ),
-              const SizedBox(width: 6),
-              Text(
-                'Demo credentials',
-                style: GoogleFonts.ibmPlexSans(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: AppTheme.textMuted,
-                ),
-              ),
-            ],
+            ),
           ),
-          const SizedBox(height: 8),
-          _credRow('Email', _demoEmail),
-          const SizedBox(height: 4),
-          _credRow('Password', _demoPassword),
-          const SizedBox(height: 4),
-          _credRow('2FA Code', '123456'),
         ],
       ),
     );
   }
 
-  Widget _credRow(String label, String value) {
+  Widget _buildOrDivider() {
     return Row(
-      children: [
-        SizedBox(
-          width: 72,
+      children: <Widget>[
+        const Expanded(
+          child: Divider(color: AppTheme.border, thickness: 1),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
           child: Text(
-            label,
+            'or',
             style: GoogleFonts.ibmPlexSans(
               fontSize: 12,
               color: AppTheme.textMuted,
             ),
           ),
         ),
-        Text(
-          value,
-          style: GoogleFonts.ibmPlexMono(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: AppTheme.textSecondary,
-          ),
+        const Expanded(
+          child: Divider(color: AppTheme.border, thickness: 1),
         ),
       ],
     );

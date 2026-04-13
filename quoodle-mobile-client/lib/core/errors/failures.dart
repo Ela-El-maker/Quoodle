@@ -33,6 +33,11 @@ class TimeoutFailure extends Failure {
       [super.userMessage = 'Request timed out. Please retry.']);
 }
 
+class RateLimitedFailure extends Failure {
+  const RateLimitedFailure(
+      [super.userMessage = 'Too many attempts. Please try again shortly.']);
+}
+
 class ServerFailure extends Failure {
   const ServerFailure([super.userMessage = 'Server error occurred.']);
 }
@@ -44,6 +49,10 @@ class CacheFailure extends Failure {
 class TwoFactorRequiredFailure extends Failure {
   const TwoFactorRequiredFailure(
       [super.userMessage = 'Two-factor verification required.']);
+}
+
+class CancelledFailure extends Failure {
+  const CancelledFailure([super.userMessage = 'Operation cancelled.']);
 }
 
 class UnknownFailure extends Failure {

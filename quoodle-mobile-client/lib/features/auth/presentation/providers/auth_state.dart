@@ -3,8 +3,10 @@ import 'package:secure_device_control/features/auth/domain/entities/auth_user.da
 enum AuthSessionStatus {
   unknown,
   unauthenticated,
-  authenticating,
-  twoFactorRequired,
+  requestingOtp,
+  otpCodeSent,
+  verifyingOtp,
+  authenticatingWithGoogle,
   authenticated,
   refreshing,
   error,
@@ -16,7 +18,8 @@ class AuthSessionState {
     this.user,
     this.errorMessage,
     this.pendingEmail,
-    this.pendingPassword,
+    this.otpChallengeId,
+    this.resendAfterSeconds,
   });
 
   factory AuthSessionState.initial() =>
@@ -26,20 +29,24 @@ class AuthSessionState {
   final AuthUser? user;
   final String? errorMessage;
   final String? pendingEmail;
-  final String? pendingPassword;
+  final String? otpChallengeId;
+  final int? resendAfterSeconds;
 
   bool get isLoading =>
-      status == AuthSessionStatus.authenticating ||
+      status == AuthSessionStatus.requestingOtp ||
+      status == AuthSessionStatus.verifyingOtp ||
+      status == AuthSessionStatus.authenticatingWithGoogle ||
       status == AuthSessionStatus.refreshing;
 
-  bool get requiresTwoFactor => status == AuthSessionStatus.twoFactorRequired;
+  bool get requiresOtpCode => status == AuthSessionStatus.otpCodeSent;
 
   AuthSessionState copyWith({
     AuthSessionStatus? status,
     AuthUser? user,
     String? errorMessage,
     String? pendingEmail,
-    String? pendingPassword,
+    String? otpChallengeId,
+    int? resendAfterSeconds,
     bool clearError = false,
     bool clearPending = false,
   }) {
@@ -48,8 +55,10 @@ class AuthSessionState {
       user: user ?? this.user,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       pendingEmail: clearPending ? null : (pendingEmail ?? this.pendingEmail),
-      pendingPassword:
-          clearPending ? null : (pendingPassword ?? this.pendingPassword),
+      otpChallengeId:
+          clearPending ? null : (otpChallengeId ?? this.otpChallengeId),
+      resendAfterSeconds:
+          clearPending ? null : (resendAfterSeconds ?? this.resendAfterSeconds),
     );
   }
 }
