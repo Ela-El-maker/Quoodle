@@ -3,6 +3,7 @@
 #include <ntstrsafe.h>
 
 #include "../quoodle_ioctl.h"
+#include "core/kmdf_app_lockdown.h"
 #include "core/kmdf_event_pipeline.h"
 #include "core/kmdf_request_security.h"
 #include "opcodes/kmdf_opcode_handlers.h"
@@ -163,6 +164,9 @@ static VOID QuoodleEvtIoDeviceControl(_In_ WDFQUEUE Queue,
         should_emit_event = TRUE;
         break;
       case QOP_EXEC_LOCK_SCREEN:
+        QuoodleOpcodeHandleLockScreen(resp);
+        should_emit_event = TRUE;
+        break;
       case QOP_EXEC_LOGOUT:
       case QOP_EXEC_VALIDATE_UPDATE_PACKAGE:
       case QOP_STAGE_UPDATE:
@@ -207,6 +211,71 @@ static VOID QuoodleEvtIoDeviceControl(_In_ WDFQUEUE Queue,
         QuoodleOpcodeHandleDownloadFile(resp, &req_copy);
         should_emit_event = TRUE;
         break;
+      case QOP_SEC_APPLOCK_REPLACE_POLICY: {
+        CHAR error_reason[sizeof(resp->error_message)];
+        NTSTATUS app_status = QuoodleAppLockdownReplacePolicy(
+            req_copy.params_json,
+            (SIZE_T)req_copy.params_length,
+            error_reason,
+            sizeof(error_reason));
+        if (!NT_SUCCESS(app_status)) {
+          resp->error_code = QERR_BAD_PAYLOAD;
+          RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), error_reason[0] != '\0' ? error_reason : "app_lock_replace_failed");
+        } else {
+          const CHAR* ok_json = "{\"status\":\"ok\"}";
+          size_t json_len = 0;
+          resp->status = 0;
+          if (NT_SUCCESS(RtlStringCchLengthA(ok_json, sizeof(resp->result_json), &json_len))) {
+            resp->result_length = (uint32_t)json_len;
+          }
+          RtlStringCchCopyA(resp->result_json, sizeof(resp->result_json), ok_json);
+        }
+        should_emit_event = TRUE;
+        break;
+      }
+      case QOP_SEC_APPLOCK_GET_STATUS: {
+        CHAR error_reason[sizeof(resp->error_message)];
+        CHAR status_json[QUOODLE_MAX_RESULT];
+        RtlZeroMemory(status_json, sizeof(status_json));
+        NTSTATUS app_status = QuoodleAppLockdownGetStatusJson(
+            status_json,
+            sizeof(status_json),
+            error_reason,
+            sizeof(error_reason));
+        if (!NT_SUCCESS(app_status)) {
+          resp->error_code = QERR_BAD_PAYLOAD;
+          RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), error_reason[0] != '\0' ? error_reason : "app_lock_status_failed");
+        } else {
+          size_t json_len = 0;
+          resp->status = 0;
+          if (NT_SUCCESS(RtlStringCchLengthA(status_json, sizeof(resp->result_json), &json_len))) {
+            resp->result_length = (uint32_t)json_len;
+          }
+          RtlStringCchCopyA(resp->result_json, sizeof(resp->result_json), status_json);
+        }
+        should_emit_event = TRUE;
+        break;
+      }
+      case QOP_SEC_APPLOCK_CLEAR_POLICY: {
+        CHAR error_reason[sizeof(resp->error_message)];
+        NTSTATUS app_status = QuoodleAppLockdownClearPolicy(
+            error_reason,
+            sizeof(error_reason));
+        if (!NT_SUCCESS(app_status)) {
+          resp->error_code = QERR_BAD_PAYLOAD;
+          RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), error_reason[0] != '\0' ? error_reason : "app_lock_clear_failed");
+        } else {
+          const CHAR* ok_json = "{\"status\":\"ok\"}";
+          size_t json_len = 0;
+          resp->status = 0;
+          if (NT_SUCCESS(RtlStringCchLengthA(ok_json, sizeof(resp->result_json), &json_len))) {
+            resp->result_length = (uint32_t)json_len;
+          }
+          RtlStringCchCopyA(resp->result_json, sizeof(resp->result_json), ok_json);
+        }
+        should_emit_event = TRUE;
+        break;
+      }
       case QOP_EXEC_COLLECT_SYSTEM_INFO:
         QuoodleOpcodeHandleCollectSystemInfo(resp, &req_copy);
         should_emit_event = TRUE;
@@ -243,6 +312,7 @@ static VOID QuoodleEvtIoDeviceControl(_In_ WDFQUEUE Queue,
 
 static VOID QuoodleEvtDriverUnload(_In_ WDFDRIVER Driver) {
   UNREFERENCED_PARAMETER(Driver);
+  QuoodleAppLockdownShutdown();
   DeleteUserSymbolicLinks();
   QuoodleRequestSecurityClearKey();
   QuoodleEventPipelineShutdown();
@@ -335,6 +405,13 @@ NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT DriverObject, _In_ PUNICODE_STRING Regi
   }
 
   (VOID)QuoodleRequestSecurityLoadHmacKeyFromRegistry(RegistryPath);
+
+  status = QuoodleAppLockdownInitialize();
+  if (!NT_SUCCESS(status)) {
+    DeleteUserSymbolicLinks();
+    WdfObjectDelete(control_device);
+    return status;
+  }
 
   return STATUS_SUCCESS;
 }

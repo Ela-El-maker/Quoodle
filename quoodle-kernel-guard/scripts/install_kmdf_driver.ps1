@@ -211,12 +211,11 @@ if ($TestSigning) {
 }
 
 $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-if ($existingService) {
+$serviceExists = $null -ne $existingService
+if ($serviceExists) {
+    Write-Host "Service '$ServiceName' already exists; attempting in-place update."
     & sc.exe stop $ServiceName *> $null
-    & sc.exe delete $ServiceName *> $null
-    if (-not (Wait-ServiceDeleted -Name $ServiceName -TimeoutSeconds 20)) {
-        throw "Service '$ServiceName' delete is pending or stuck. Reboot and re-run install."
-    }
+    Start-Sleep -Milliseconds 800
 }
 
 $targetDir = "C:\ProgramData\Quoodle"
@@ -240,11 +239,20 @@ if ($sig.Status -eq "UnknownError" -and $sig.StatusMessage -match "not trusted")
     throw "Driver signature is present but not trusted on this machine (thumbprint: $thumbprint). Import signer cert to LocalMachine\\Root and LocalMachine\\TrustedPublisher, then retry."
 }
 
-Write-Host "Creating service '$ServiceName'..."
-$createOutput = & sc.exe create $ServiceName type= kernel start= demand binPath= $targetPath 2>&1
-if ($LASTEXITCODE -ne 0) {
-    $details = ($createOutput | Out-String).Trim()
-    throw "Failed to create service '$ServiceName'. sc.exe exit=$LASTEXITCODE. $details"
+if ($serviceExists) {
+    Write-Host "Updating service '$ServiceName' binary path..."
+    $configOutput = & sc.exe config $ServiceName type= kernel start= demand binPath= $targetPath 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $details = ($configOutput | Out-String).Trim()
+        throw "Failed to update service '$ServiceName'. sc.exe exit=$LASTEXITCODE. $details"
+    }
+} else {
+    Write-Host "Creating service '$ServiceName'..."
+    $createOutput = & sc.exe create $ServiceName type= kernel start= demand binPath= $targetPath 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $details = ($createOutput | Out-String).Trim()
+        throw "Failed to create service '$ServiceName'. sc.exe exit=$LASTEXITCODE. $details"
+    }
 }
 
 $serviceCheck = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue

@@ -21,3 +21,13 @@ VOID QuoodleEventPipelineEmitValidationReject(
     _In_opt_ const CHAR* reason_code,
     _In_ ULONGLONG duration_ms,
     _In_opt_ const CHAR* policy_ref);
+VOID QuoodleEventPipelineEmitAppBlockEvent(
+    _In_opt_ const CHAR* rule_id,
+    _In_opt_ const CHAR* match_type,
+    _In_opt_ const CHAR* matched_value,
+    _In_opt_ const CHAR* image_path,
+    _In_opt_ const CHAR* image_name,
+    _In_opt_ const CHAR* reason_code,
+    _In_opt_ const CHAR* policy_version,
+    _In_opt_ const CHAR* policy_hash,
+    _In_ ULONG session_id);

@@ -5,6 +5,7 @@
 #include "../../quoodle_ioctl.h"
 
 VOID QuoodleOpcodeHandlePing(_Out_ QUOODLE_IOCTL_RESPONSE* resp);
+VOID QuoodleOpcodeHandleLockScreen(_Out_ QUOODLE_IOCTL_RESPONSE* resp);
 VOID QuoodleOpcodeHandleReboot(_Out_ QUOODLE_IOCTL_RESPONSE* resp);
 VOID QuoodleOpcodeHandleShutdown(_Out_ QUOODLE_IOCTL_RESPONSE* resp);
 VOID QuoodleOpcodeHandleCollectSystemInfo(

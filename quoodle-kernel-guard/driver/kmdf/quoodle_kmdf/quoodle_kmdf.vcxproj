@@ -28,9 +28,11 @@
     <!-- Canonical hardened implementation with opcode handlers split by file. -->
     <ClCompile Include="..\quoodle_kmdf.c" />
     <ClCompile Include="..\core\kmdf_event_pipeline.c" />
+    <ClCompile Include="..\core\kmdf_app_lockdown.c" />
     <ClCompile Include="..\core\kmdf_request_security.c" />
     <ClCompile Include="..\opcodes\kmdf_opcode_common.c" />
     <ClCompile Include="..\opcodes\ping.c" />
+    <ClCompile Include="..\opcodes\lock_screen.c" />
     <ClCompile Include="..\opcodes\reboot.c" />
     <ClCompile Include="..\opcodes\shutdown.c" />
     <ClCompile Include="..\opcodes\collect_system_info.c" />
@@ -44,6 +46,7 @@
     <ClInclude Include="Queue.h" />
     <ClInclude Include="Trace.h" />
     <ClInclude Include="..\core\kmdf_event_pipeline.h" />
+    <ClInclude Include="..\core\kmdf_app_lockdown.h" />
     <ClInclude Include="..\core\kmdf_request_security.h" />
     <ClInclude Include="..\opcodes\kmdf_opcode_common.h" />
     <ClInclude Include="..\opcodes\kmdf_opcode_handlers.h" />
@@ -140,6 +143,8 @@
       <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
     </DriverSign>
     <Link>
+      <IntegrityCheck>true</IntegrityCheck>
+      <AdditionalOptions>/INTEGRITYCHECK %(AdditionalOptions)</AdditionalOptions>
       <AdditionalDependencies>%(AdditionalDependencies);usbdex.lib;ntstrsafe.lib</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -154,6 +159,8 @@
       <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
     </DriverSign>
     <Link>
+      <IntegrityCheck>true</IntegrityCheck>
+      <AdditionalOptions>/INTEGRITYCHECK %(AdditionalOptions)</AdditionalOptions>
       <AdditionalDependencies>%(AdditionalDependencies);usbdex.lib;ntstrsafe.lib</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -168,6 +175,8 @@
       <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
     </DriverSign>
     <Link>
+      <IntegrityCheck>true</IntegrityCheck>
+      <AdditionalOptions>/INTEGRITYCHECK %(AdditionalOptions)</AdditionalOptions>
       <AdditionalDependencies>%(AdditionalDependencies);usbdex.lib;ntstrsafe.lib</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -182,6 +191,8 @@
       <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
     </DriverSign>
     <Link>
+      <IntegrityCheck>true</IntegrityCheck>
+      <AdditionalOptions>/INTEGRITYCHECK %(AdditionalOptions)</AdditionalOptions>
       <AdditionalDependencies>%(AdditionalDependencies);usbdex.lib;ntstrsafe.lib</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>

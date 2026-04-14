@@ -106,7 +106,11 @@ typedef enum QUOODLE_OPCODE {
   QOP_OBS_GET_ACTIVE_WINDOW = ((1u << 16) | 6u),
   // Category-masked filesystem opcodes (read-oriented).
   QOP_FS_LIST_FILES = ((2u << 16) | 1u),
-  QOP_FS_DOWNLOAD_FILE = ((2u << 16) | 2u)
+  QOP_FS_DOWNLOAD_FILE = ((2u << 16) | 2u),
+  // Category-masked security opcodes (policy-driven enforcement).
+  QOP_SEC_APPLOCK_REPLACE_POLICY = ((5u << 16) | 1u),
+  QOP_SEC_APPLOCK_GET_STATUS = ((5u << 16) | 2u),
+  QOP_SEC_APPLOCK_CLEAR_POLICY = ((5u << 16) | 3u)
 } QUOODLE_OPCODE;
 
 typedef struct QUOODLE_IOCTL_REQUEST {

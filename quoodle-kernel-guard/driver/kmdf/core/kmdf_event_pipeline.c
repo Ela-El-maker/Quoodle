@@ -29,6 +29,55 @@ static SIZE_T qep_strnlen_a(const CHAR* s, SIZE_T max_len) {
   return len;
 }
 
+static BOOLEAN qep_json_escape(
+    _In_reads_or_z_(in_len) const CHAR* in,
+    _In_ SIZE_T in_len,
+    _Out_writes_(out_len) CHAR* out,
+    _In_ SIZE_T out_len) {
+  SIZE_T i = 0;
+  SIZE_T j = 0;
+
+  if (!out || out_len < 2) {
+    return FALSE;
+  }
+  out[0] = '\0';
+
+  if (!in) {
+    return TRUE;
+  }
+
+  for (i = 0; i < in_len && in[i] != '\0'; ++i) {
+    const UCHAR c = (UCHAR)in[i];
+    if (c == '\\' || c == '"') {
+      if (j + 2 >= out_len) {
+        return FALSE;
+      }
+      out[j++] = '\\';
+      out[j++] = (CHAR)c;
+      continue;
+    }
+    if (c < 0x20) {
+      if (j + 6 >= out_len) {
+        return FALSE;
+      }
+      out[j++] = '\\';
+      out[j++] = 'u';
+      out[j++] = '0';
+      out[j++] = '0';
+      out[j++] = "0123456789abcdef"[(c >> 4) & 0x0F];
+      out[j++] = "0123456789abcdef"[c & 0x0F];
+      continue;
+    }
+    if (j + 1 >= out_len) {
+      return FALSE;
+    }
+    out[j++] = (CHAR)c;
+  }
+
+  out[j] = '\0';
+  return TRUE;
+}
+
 static uint64_t qep_unix_timestamp_seconds(void) {
   LARGE_INTEGER system_time;
   KeQuerySystemTime(&system_time);
@@ -122,6 +171,12 @@ static const CHAR* qep_opcode_to_string(_In_ QUOODLE_OPCODE opcode) {
       return "NETWORK_INFO";
     case QOP_OBS_GET_ACTIVE_WINDOW:
       return "GET_ACTIVE_WINDOW";
+    case QOP_SEC_APPLOCK_REPLACE_POLICY:
+      return "SEC_APPLOCK_REPLACE_POLICY";
+    case QOP_SEC_APPLOCK_GET_STATUS:
+      return "SEC_APPLOCK_GET_STATUS";
+    case QOP_SEC_APPLOCK_CLEAR_POLICY:
+      return "SEC_APPLOCK_CLEAR_POLICY";
     case QOP_EXEC_VALIDATE_UPDATE_PACKAGE:
       return "VALIDATE_UPDATE_PACKAGE";
     case QOP_EXEC_CAPTURE_SCREENSHOT:
@@ -155,6 +210,10 @@ static const CHAR* qep_opcode_category(_In_ QUOODLE_OPCODE opcode) {
     case QOP_COMMIT_UPDATE:
     case QOP_ROLLBACK_UPDATE:
       return "update";
+    case QOP_SEC_APPLOCK_REPLACE_POLICY:
+    case QOP_SEC_APPLOCK_GET_STATUS:
+    case QOP_SEC_APPLOCK_CLEAR_POLICY:
+      return "security";
     default:
       return "exec";
   }
@@ -175,6 +234,12 @@ static const CHAR* qep_opcode_subtype(_In_ QUOODLE_OPCODE opcode) {
       return "update_commit";
     case QOP_ROLLBACK_UPDATE:
       return "update_rollback";
+    case QOP_SEC_APPLOCK_REPLACE_POLICY:
+      return "applock_replace_policy";
+    case QOP_SEC_APPLOCK_GET_STATUS:
+      return "applock_get_status";
+    case QOP_SEC_APPLOCK_CLEAR_POLICY:
+      return "applock_clear_policy";
     default:
       return "opcode";
   }
@@ -367,4 +432,65 @@ VOID QuoodleEventPipelineEmitValidationReject(
       resp->error_code,
       duration_ms,
       policy_ref);
+}
+
+VOID QuoodleEventPipelineEmitAppBlockEvent(
+    _In_opt_ const CHAR* rule_id,
+    _In_opt_ const CHAR* match_type,
+    _In_opt_ const CHAR* matched_value,
+    _In_opt_ const CHAR* image_path,
+    _In_opt_ const CHAR* image_name,
+    _In_opt_ const CHAR* reason_code,
+    _In_opt_ const CHAR* policy_version,
+    _In_opt_ const CHAR* policy_hash,
+    _In_ ULONG session_id) {
+  CHAR payload[QUOODLE_MAX_EVENT_PAYLOAD];
+  CHAR escaped_rule_id[96];
+  CHAR escaped_match_type[64];
+  CHAR escaped_matched_value[320];
+  CHAR escaped_image_path[320];
+  CHAR escaped_image_name[128];
+  CHAR escaped_reason_code[96];
+  CHAR escaped_policy_version[96];
+  CHAR escaped_policy_hash[160];
+
+  if (!rule_id) rule_id = "";
+  if (!match_type) match_type = "";
+  if (!matched_value) matched_value = "";
+  if (!image_path) image_path = "";
+  if (!image_name) image_name = "";
+  if (!reason_code) reason_code = "blocked_policy";
+  if (!policy_version) policy_version = "";
+  if (!policy_hash) policy_hash = "";
+
+  if (!qep_json_escape(rule_id, qep_strnlen_a(rule_id, 80), escaped_rule_id, sizeof(escaped_rule_id))) return;
+  if (!qep_json_escape(match_type, qep_strnlen_a(match_type, 32), escaped_match_type, sizeof(escaped_match_type))) return;
+  if (!qep_json_escape(matched_value, qep_strnlen_a(matched_value, 260), escaped_matched_value, sizeof(escaped_matched_value))) return;
+  if (!qep_json_escape(image_path, qep_strnlen_a(image_path, 260), escaped_image_path, sizeof(escaped_image_path))) return;
+  if (!qep_json_escape(image_name, qep_strnlen_a(image_name, 96), escaped_image_name, sizeof(escaped_image_name))) return;
+  if (!qep_json_escape(reason_code, qep_strnlen_a(reason_code, 80), escaped_reason_code, sizeof(escaped_reason_code))) return;
+  if (!qep_json_escape(policy_version, qep_strnlen_a(policy_version, 80), escaped_policy_version, sizeof(escaped_policy_version))) return;
+  if (!qep_json_escape(policy_hash, qep_strnlen_a(policy_hash, 140), escaped_policy_hash, sizeof(escaped_policy_hash))) return;
+
+  (void)RtlStringCchPrintfA(
+      payload,
+      sizeof(payload),
+      "{\"event_type\":\"app_blocked\",\"category\":\"exec\",\"subtype\":\"app_blocked\","
+      "\"severity\":\"high\",\"decision\":\"deny\",\"reason_code\":\"%s\","
+      "\"rule_id\":\"%s\",\"match_type\":\"%s\",\"matched_value\":\"%s\","
+      "\"image_path\":\"%s\",\"image_name\":\"%s\",\"session_id\":%u,"
+      "\"policy_version\":\"%s\",\"policy_hash\":\"%s\",\"masked_fields\":[]}",
+      escaped_reason_code,
+      escaped_rule_id,
+      escaped_match_type,
+      escaped_matched_value,
+      escaped_image_path,
+      escaped_image_name,
+      session_id,
+      escaped_policy_version,
+      escaped_policy_hash);
+
+  QUOODLE_KERNEL_EVENT evt;
+  qep_init_kernel_event(&evt, QKEVENT_TYPE_RUNTIME, payload);
+  qep_deliver_or_queue_kernel_event(&evt);
 }
