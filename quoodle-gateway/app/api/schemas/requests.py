@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -22,12 +22,63 @@ class CommandDispatchRequest(BaseModel):
         return v
 
 
+class AppLockRule(BaseModel):
+    rule_id: str
+    match_type: Literal["basename", "full_path"]
+    value: str
+    action: Literal["block"] = "block"
+    priority: int = 1000
+    expires_at: Optional[str] = None
+
+    @field_validator("rule_id", "value")
+    def non_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("required")
+        return v.strip()
+
+    @field_validator("priority")
+    def priority_bounds(cls, v: int) -> int:
+        if v < 1 or v > 999999:
+            raise ValueError("priority_out_of_range")
+        return v
+
+
+class AppLockPolicyBundle(BaseModel):
+    enabled: bool = False
+    mode: Literal["blocklist"] = "blocklist"
+    fail_mode: Literal["open"] = "open"
+    policy_version: str
+    policy_hash: str
+    event_dedupe_sec: int = 30
+    updated_at: Optional[str] = None
+    rules: List[AppLockRule] = Field(default_factory=list)
+
+    @field_validator("event_dedupe_sec")
+    def dedupe_bounds(cls, v: int) -> int:
+        if v < 1 or v > 3600:
+            raise ValueError("event_dedupe_sec_out_of_range")
+        return v
+
+
 class PolicyPushRequest(BaseModel):
     policy_version: str
     policy_hash: str
     policy_url: str
     signed_at: str
     signature: str
+    app_lock: Optional[AppLockPolicyBundle] = None
+    target_device_ids: Optional[List[str]] = None
+
+    @field_validator("target_device_ids")
+    def validate_target_device_ids(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return None
+        normalized = [item.strip() for item in v if isinstance(item, str) and item.strip()]
+        if len(normalized) == 0:
+            return None
+        if len(normalized) > 1000:
+            raise ValueError("target_device_ids_too_many")
+        return normalized
 
 
 class OTAPublishRequest(BaseModel):

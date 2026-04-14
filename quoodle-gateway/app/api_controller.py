@@ -35,6 +35,7 @@ logger = logging.getLogger("quoodle.api.telemetry")
 
 RUNTIME_SUPPORTED_METHODS = {
     "ping",
+    "lock_screen",
     "reboot_device",
     "shutdown_device",
     "collect_system_info",
@@ -548,23 +549,35 @@ def create_router(manager: ConnectionManager) -> APIRouter:
 
     @router.post("/policy/push")
     async def push_policy(payload: PolicyPushRequest):
+        app_lock_bundle = payload.app_lock.model_dump() if payload.app_lock is not None else None
+        target_device_ids = payload.target_device_ids or []
+        target_device_set = set(target_device_ids)
         current = policy_resolver.update(
             policy_version=payload.policy_version,
             policy_hash=payload.policy_hash,
             policy_url=payload.policy_url,
             signed_at=payload.signed_at,
             signature=payload.signature,
+            app_lock=app_lock_bundle,
+            target_device_ids=target_device_ids,
         )
 
-        policy_msg = policy_resolver.build_message(None, None)
         entries = await manager.all_entries()
+        if target_device_set:
+            entries = [entry for entry in entries if entry.device_id in target_device_set]
+
         for entry in entries:
-            policy_msg["device_id"] = entry.device_id
-            policy_msg["session_id"] = entry.session_id
+            policy_msg = policy_resolver.build_message(entry.device_id, entry.session_id)
             await entry.websocket.send_json(policy_msg)
 
         await event_bus.publish("policy.updated.v1", current)
-        return {"status": "accepted", "reason": None, "policy": current}
+        return {
+            "status": "accepted",
+            "reason": None,
+            "policy": current,
+            "target_device_ids": target_device_ids,
+            "delivered_count": len(entries),
+        }
 
     @router.get("/policy/state")
     async def policy_state():
