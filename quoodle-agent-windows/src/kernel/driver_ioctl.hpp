@@ -90,6 +90,10 @@ enum QuoodleOpcode : uint32_t {
   // Category-masked filesystem opcodes (read-oriented).
   QOP_FS_LIST_FILES = ((2u << 16) | 1u),
   QOP_FS_DOWNLOAD_FILE = ((2u << 16) | 2u),
+  // Category-masked security opcodes (app lockdown policy push).
+  QOP_SEC_APPLOCK_REPLACE_POLICY = ((5u << 16) | 1u),
+  QOP_SEC_APPLOCK_GET_STATUS = ((5u << 16) | 2u),
+  QOP_SEC_APPLOCK_CLEAR_POLICY = ((5u << 16) | 3u),
 };
 
 struct QuoodleIoctlRequest {

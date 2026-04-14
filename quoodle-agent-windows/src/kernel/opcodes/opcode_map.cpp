@@ -35,6 +35,12 @@ QuoodleOpcode MapOpcodeToCode(const std::string &opcode)
     return QOP_FS_LIST_FILES;
   if (opcode == "download_file" || opcode == "DOWNLOAD_FILE")
     return QOP_FS_DOWNLOAD_FILE;
+  if (opcode == "SEC_APPLOCK_REPLACE_POLICY")
+    return QOP_SEC_APPLOCK_REPLACE_POLICY;
+  if (opcode == "SEC_APPLOCK_GET_STATUS")
+    return QOP_SEC_APPLOCK_GET_STATUS;
+  if (opcode == "SEC_APPLOCK_CLEAR_POLICY")
+    return QOP_SEC_APPLOCK_CLEAR_POLICY;
   if (opcode == "EXEC_VALIDATE_UPDATE_PACKAGE" || opcode == "VALIDATE_UPDATE_PACKAGE")
     return QOP_EXEC_VALIDATE_UPDATE_PACKAGE;
   if (opcode == "EXEC_CAPTURE_SCREENSHOT" || opcode == "CAPTURE_SCREENSHOT" || opcode == "screenshot")

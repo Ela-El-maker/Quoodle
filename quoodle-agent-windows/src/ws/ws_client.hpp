@@ -122,6 +122,7 @@ private:
 
   // Sequence tracking for replay protection
   std::uint64_t last_command_seq_{0};
+  std::string last_good_app_lock_policy_blob_;
 
   // Reconnection state
   std::atomic<ConnectionState> connection_state_{ConnectionState::Disconnected};

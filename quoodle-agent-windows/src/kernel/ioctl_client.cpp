@@ -1032,6 +1032,35 @@ KernelExecResult IoctlClient::download_file(const std::string &request_id, const
   return parse_and_verify_response(json, request_id);
 }
 
+KernelExecResult IoctlClient::applock_replace_policy(const std::string &request_id, const AgentState &state,
+                                                     const std::string &policy_blob,
+                                                     const std::string &command_message_id)
+{
+  const std::string effective_payload = policy_blob.empty() ? "{}" : policy_blob;
+  std::string json = execute_request("SEC_APPLOCK_REPLACE_POLICY", request_id, effective_payload, state, command_message_id);
+  if (json.empty())
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
+  return parse_and_verify_response(json, request_id);
+}
+
+KernelExecResult IoctlClient::applock_get_status(const std::string &request_id, const AgentState &state,
+                                                 const std::string &command_message_id)
+{
+  std::string json = execute_request("SEC_APPLOCK_GET_STATUS", request_id, "{}", state, command_message_id);
+  if (json.empty())
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
+  return parse_and_verify_response(json, request_id);
+}
+
+KernelExecResult IoctlClient::applock_clear_policy(const std::string &request_id, const AgentState &state,
+                                                   const std::string &command_message_id)
+{
+  std::string json = execute_request("SEC_APPLOCK_CLEAR_POLICY", request_id, "{}", state, command_message_id);
+  if (json.empty())
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
+  return parse_and_verify_response(json, request_id);
+}
+
 /**
  * PUBLIC API: validate_update_package
  */

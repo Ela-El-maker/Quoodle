@@ -156,6 +156,7 @@ add_executable(agent
   src/ws/ws_protocol.cpp
   src/ws/sequence_manager.cpp
   src/command/artifact_client.cpp
+  src/command/lock_screen_command.cpp
   src/command/observability_command.cpp
   src/command/screenshot_command.cpp
   src/command/screenshot_helper.cpp

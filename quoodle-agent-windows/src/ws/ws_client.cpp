@@ -8,7 +8,9 @@
 #include <unordered_set>
 #include <algorithm>
 #include <cstdlib>
+#include <ctime>
 #include <mutex>
+#include <sstream>
 
 #include <ixwebsocket/IXNetSystem.h>
 #include <ixwebsocket/IXWebSocket.h>
@@ -17,8 +19,10 @@
 #include "../kernel/kernel_event_listener.hpp"
 #include "../crypto/command_verifier.hpp"
 #include "../command/dispatcher.hpp"
+#include "../command/lock_screen_command.hpp"
 #include "../command/observability_command.hpp"
 #include "../command/screenshot_command.hpp"
+#include "../kernel/ioctl_client.hpp"
 #include "ws_protocol.hpp"
 
 // Environment variable to control signature verification (default: enabled)
@@ -194,6 +198,184 @@ static ParsedCommandOutput parse_command_output_payload(const std::string &raw_r
     parsed.notes = raw_result;
     return parsed;
   }
+}
+
+static std::string sanitize_app_lock_scalar(std::string value)
+{
+  std::replace(value.begin(), value.end(), '\r', ' ');
+  std::replace(value.begin(), value.end(), '\n', ' ');
+  std::replace(value.begin(), value.end(), '=', ':');
+  return value;
+}
+
+static bool try_parse_unix_seconds(const nlohmann::json &value, std::uint64_t &out_seconds)
+{
+  if (value.is_number_unsigned())
+  {
+    out_seconds = value.get<std::uint64_t>();
+    return true;
+  }
+  if (value.is_number_integer())
+  {
+    const auto parsed = value.get<std::int64_t>();
+    if (parsed > 0)
+    {
+      out_seconds = static_cast<std::uint64_t>(parsed);
+      return true;
+    }
+    return false;
+  }
+  if (value.is_string())
+  {
+    const auto text = value.get<std::string>();
+    if (text.empty())
+    {
+      return false;
+    }
+    bool digits_only = std::all_of(text.begin(), text.end(), [](unsigned char ch)
+                                   { return ch >= '0' && ch <= '9'; });
+    if (!digits_only)
+    {
+      return false;
+    }
+    try
+    {
+      out_seconds = std::stoull(text);
+      return out_seconds > 0;
+    }
+    catch (const std::exception &)
+    {
+      return false;
+    }
+  }
+  return false;
+}
+
+static bool build_app_lock_policy_blob(const nlohmann::json &app_lock,
+                                       const std::string &default_policy_hash,
+                                       std::string &blob_out,
+                                       std::string &error_out)
+{
+  if (!app_lock.is_object())
+  {
+    error_out = "app_lock_not_object";
+    return false;
+  }
+
+  const bool enabled = app_lock.value("enabled", false);
+  const std::string mode = sanitize_app_lock_scalar(app_lock.value("mode", std::string("blocklist")));
+  const std::string fail_mode = sanitize_app_lock_scalar(app_lock.value("fail_mode", std::string("open")));
+  const std::string policy_version = sanitize_app_lock_scalar(app_lock.value("policy_version", std::string()));
+  const std::string policy_hash = sanitize_app_lock_scalar(app_lock.value("policy_hash", default_policy_hash));
+  std::uint32_t event_dedupe_sec = 30;
+  if (app_lock.contains("event_dedupe_sec") && app_lock["event_dedupe_sec"].is_number_integer())
+  {
+    const auto parsed = app_lock["event_dedupe_sec"].get<std::int64_t>();
+    if (parsed > 0)
+    {
+      event_dedupe_sec = static_cast<std::uint32_t>(std::min<std::int64_t>(parsed, 3600));
+    }
+  }
+
+  if (mode != "blocklist")
+  {
+    error_out = "unsupported_mode";
+    return false;
+  }
+
+  if (fail_mode != "open")
+  {
+    error_out = "unsupported_fail_mode";
+    return false;
+  }
+
+  std::ostringstream lines;
+  lines << "enabled=" << (enabled ? "1" : "0") << "\n";
+  lines << "mode=" << mode << "\n";
+  lines << "fail_mode=" << fail_mode << "\n";
+  lines << "policy_version=" << policy_version << "\n";
+  lines << "policy_hash=" << policy_hash << "\n";
+  lines << "event_dedupe_sec=" << event_dedupe_sec << "\n";
+
+  std::size_t rule_index = 0;
+  if (app_lock.contains("rules") && app_lock["rules"].is_array())
+  {
+    for (const auto &rule : app_lock["rules"])
+    {
+      if (!rule.is_object())
+      {
+        continue;
+      }
+
+      const std::string action = to_lower_copy(rule.value("action", std::string("block")));
+      if (action != "block")
+      {
+        continue;
+      }
+
+      const std::string match_type = to_lower_copy(rule.value("match_type", std::string()));
+      if (match_type != "basename" && match_type != "full_path")
+      {
+        continue;
+      }
+
+      const std::string value = sanitize_app_lock_scalar(rule.value("value", std::string()));
+      if (value.empty())
+      {
+        continue;
+      }
+
+      std::string rule_id = sanitize_app_lock_scalar(rule.value("rule_id", std::string()));
+      if (rule_id.empty())
+      {
+        rule_id = "rule-" + std::to_string(rule_index);
+      }
+
+      std::uint32_t priority = 1000;
+      if (rule.contains("priority") && rule["priority"].is_number_integer())
+      {
+        const auto parsed = rule["priority"].get<std::int64_t>();
+        if (parsed > 0 && parsed < 1000000)
+        {
+          priority = static_cast<std::uint32_t>(parsed);
+        }
+      }
+
+      lines << "rule." << rule_index << ".rule_id=" << rule_id << "\n";
+      lines << "rule." << rule_index << ".match_type=" << match_type << "\n";
+      lines << "rule." << rule_index << ".value=" << value << "\n";
+      lines << "rule." << rule_index << ".priority=" << priority << "\n";
+
+      if (rule.contains("expires_at") && !rule["expires_at"].is_null())
+      {
+        std::uint64_t expires_at_unix = 0;
+        if (try_parse_unix_seconds(rule["expires_at"], expires_at_unix) && expires_at_unix > 0)
+        {
+          lines << "rule." << rule_index << ".expires_at=" << expires_at_unix << "\n";
+        }
+      }
+
+      rule_index++;
+      if (rule_index >= 64)
+      {
+        break;
+      }
+    }
+  }
+
+  blob_out = lines.str();
+  if (blob_out.empty())
+  {
+    error_out = "empty_policy_blob";
+    return false;
+  }
+  if (blob_out.size() >= QUOODLE_MAX_PARAMS)
+  {
+    error_out = "policy_blob_too_large";
+    return false;
+  }
+
+  return true;
 }
 
 WsClient::WsClient(const AgentConfig &config)
@@ -1051,6 +1233,58 @@ bool WsClient::try_connect()
                     std::string policy_hash = body.value("policy_hash", "");
                     state_impl_.set_policy_hash(policy_hash);
                     Logger::log(LogLevel::Info, "policy updated: " + policy_hash);
+
+                    if (body.contains("app_lock")) {
+                        IoctlClient policy_client;
+                        const std::string request_id = "policy-applock-" + std::to_string(static_cast<long long>(std::time(nullptr)));
+
+                        if (body["app_lock"].is_null()) {
+                            auto clear_res = policy_client.applock_clear_policy(request_id, state_impl_);
+                            if (clear_res.status == "ok") {
+                                last_good_app_lock_policy_blob_.clear();
+                                Logger::log(LogLevel::Info, "app_lock policy cleared via POLICY_UPDATE");
+                                auto status_res = policy_client.applock_get_status(request_id + "-status", state_impl_);
+                                if (status_res.status == "ok" && !status_res.result.empty()) {
+                                    Logger::log(LogLevel::Info, "app_lock kernel status after clear: " + status_res.result);
+                                } else if (status_res.status != "ok") {
+                                    Logger::log(LogLevel::Warn, "app_lock status readback after clear failed: " + status_res.error_message);
+                                }
+                            } else {
+                                Logger::log(LogLevel::Error, "app_lock clear failed: " + clear_res.error_message);
+                            }
+                        } else {
+                            std::string blob;
+                            std::string build_error;
+                            if (!build_app_lock_policy_blob(body["app_lock"], policy_hash, blob, build_error)) {
+                                Logger::log(LogLevel::Warn, "app_lock policy ignored: " + build_error);
+                            } else {
+                                auto apply_res = policy_client.applock_replace_policy(request_id, state_impl_, blob);
+                                if (apply_res.status == "ok") {
+                                    last_good_app_lock_policy_blob_ = blob;
+                                    Logger::log(LogLevel::Info, "app_lock policy applied (kernel) successfully");
+                                    auto status_res = policy_client.applock_get_status(request_id + "-status", state_impl_);
+                                    if (status_res.status == "ok" && !status_res.result.empty()) {
+                                        Logger::log(LogLevel::Info, "app_lock kernel status after apply: " + status_res.result);
+                                    } else if (status_res.status != "ok") {
+                                        Logger::log(LogLevel::Warn, "app_lock status readback after apply failed: " + status_res.error_message);
+                                    }
+                                } else {
+                                    Logger::log(LogLevel::Error, "app_lock apply failed: " + apply_res.error_message);
+                                    if (!last_good_app_lock_policy_blob_.empty()) {
+                                        auto rollback_res = policy_client.applock_replace_policy(
+                                            request_id + "-rollback",
+                                            state_impl_,
+                                            last_good_app_lock_policy_blob_);
+                                        if (rollback_res.status == "ok") {
+                                            Logger::log(LogLevel::Warn, "app_lock rollback to last-known-good succeeded");
+                                        } else {
+                                            Logger::log(LogLevel::Error, "app_lock rollback failed: " + rollback_res.error_message);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 } else if (mtype == "COMMAND_DELIVERY") {
                     std::string session_id = parsed.value("session_id", "");
                     auto body = parsed["body"];
@@ -1257,6 +1491,74 @@ bool WsClient::try_connect()
                                     socket.sendText(result_msg);
                                 }
                             }
+                            return;
+                        }
+
+                        if (command::IsLockScreenMethod(method)) {
+                            Logger::log(
+                                LogLevel::Info,
+                                "lock_screen command received: " + command_message_id);
+                            {
+                                std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
+                                auto progress_msg = build_command_result_json(
+                                    config_.device_id,
+                                    session_id,
+                                    command_message_id,
+                                    trace_id,
+                                    "executing",
+                                    "in_progress",
+                                    "lock screen started");
+                                if (!progress_msg.empty()) {
+                                    socket.sendText(progress_msg);
+                                }
+                            }
+
+                            // Emit terminal state before lock execution to avoid command rows
+                            // getting stuck in "dispatched" when desktop/session transitions
+                            // immediately interrupt websocket delivery.
+                            {
+                                std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
+                                auto result_msg = build_command_result_json(
+                                    config_.device_id,
+                                    session_id,
+                                    command_message_id,
+                                    trace_id,
+                                    "completed",
+                                    "ok",
+                                    "lock screen request accepted",
+                                    "",
+                                    "",
+                                    0,
+                                    "");
+                                if (!result_msg.empty()) {
+                                    socket.sendText(result_msg);
+                                }
+                            }
+
+                            const AgentState state_snapshot = state_impl_;
+                            const std::string lock_request_id = command_message_id;
+                            const std::string lock_params = params_json;
+                            std::thread([state_snapshot, lock_request_id, lock_params]() {
+                                Logger::log(
+                                    LogLevel::Info,
+                                    "lock_screen background execution started: " + lock_request_id);
+                                const auto locked = command::ExecuteLockScreenCommand(
+                                    state_snapshot,
+                                    lock_request_id,
+                                    lock_params);
+                                if (locked.success) {
+                                    Logger::log(
+                                        LogLevel::Info,
+                                        "lock_screen background execution succeeded: " + lock_request_id);
+                                } else {
+                                    Logger::log(
+                                        LogLevel::Warn,
+                                        "lock_screen background execution failed: " + lock_request_id +
+                                            " reason=" + locked.reason +
+                                            " code=" + std::to_string(locked.error_code) +
+                                            " notes=" + locked.notes);
+                                }
+                            }).detach();
                             return;
                         }
 

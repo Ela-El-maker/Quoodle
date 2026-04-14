@@ -83,6 +83,13 @@ public:
   KernelExecResult download_file(const std::string &request_id, const AgentState &state,
                                  const std::string &params_json = "{}",
                                  const std::string &command_message_id = "");
+  KernelExecResult applock_replace_policy(const std::string &request_id, const AgentState &state,
+                                          const std::string &policy_blob,
+                                          const std::string &command_message_id = "");
+  KernelExecResult applock_get_status(const std::string &request_id, const AgentState &state,
+                                      const std::string &command_message_id = "");
+  KernelExecResult applock_clear_policy(const std::string &request_id, const AgentState &state,
+                                        const std::string &command_message_id = "");
   KernelExecResult validate_update_package(const std::string &request_id, const AgentState &state,
                                            const std::string &package_path,
                                            const std::string &command_message_id = "");

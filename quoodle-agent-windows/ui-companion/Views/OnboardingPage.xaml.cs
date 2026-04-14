@@ -115,7 +115,8 @@ public sealed partial class OnboardingPage : Page
         ApplyPairTabVisual(QrTabButton, _vm.IsPairQrMode);
 
         VerifyTokenButton.IsEnabled = _vm.VerifyTokenCommand.CanExecute(null);
-        TokenEntryPanel.IsEnabled = !_vm.IsTokenVerifying;
+        TokenEntryPanel.IsHitTestVisible = !_vm.IsTokenVerifying;
+        TokenEntryPanel.Opacity = _vm.IsTokenVerifying ? 0.55 : 1.0;
         TokenVerifyingPanel.Visibility = _vm.IsTokenVerifying ? Visibility.Visible : Visibility.Collapsed;
 
         TokenErrorPanel.Visibility = _vm.IsTokenFailed ? Visibility.Visible : Visibility.Collapsed;

@@ -5,4 +5,7 @@ public sealed record ActivityEntry(
     ActivitySeverity Severity,
     string Source,
     string Title,
-    string Details);
+    string Details)
+{
+    public string TimestampDisplay => Timestamp.ToString("yyyy-MM-dd HH:mm:ss");
+}
