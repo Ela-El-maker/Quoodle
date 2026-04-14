@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import StatusBadge from '@/components/ui/StatusBadge';
 import CommandResultPresentation from '@/components/results/CommandResultPresentation';
+import DeviceAppLockQuickPanel from './DeviceAppLockQuickPanel';
 import { formatLocalDateTime, formatLocalTime } from '@/lib/dateTime';
 import { resolveCommandMethod } from '@/lib/commandMethodResolver';
 import {
@@ -1108,6 +1109,10 @@ export default function DeviceDetailPageContent() {
   );
 
   const activeCommandBlockReason = activeCommand ? getCommandBlockReason(activeCommand.id) : null;
+  const scanAppsNow = useCallback(async () => {
+    await dispatchCommand('list_processes', {}, 'Process List');
+    setActiveTab('Overview');
+  }, [dispatchCommand]);
 
   return (
     <div className="space-y-4 fade-in">
@@ -1266,6 +1271,13 @@ export default function DeviceDetailPageContent() {
                 ))}
               </div>
             </div>
+            <DeviceAppLockQuickPanel
+              deviceId={device.id}
+              hostname={device.hostname}
+              recentResults={recentResults}
+              onScanApps={scanAppsNow}
+              isScanningApps={isDispatching}
+            />
           </div>
         </div>
       )}

@@ -27,6 +27,7 @@ import {
   MoreHorizontal,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import AppLockManagerSection from './AppLockManagerSection';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -881,6 +882,7 @@ function TeamMembersSection() {
 
 const TABS = [
   { key: 'alert-rules', label: 'Alert Rules', icon: Bell },
+  { key: 'app-lock', label: 'App Lock', icon: Lock },
   { key: 'policy-editor', label: 'Policy Editor', icon: Shield },
   { key: 'compliance-thresholds', label: 'Compliance Thresholds', icon: ShieldCheck },
   { key: 'roles-permissions', label: 'Roles & Permissions', icon: Users },
@@ -925,6 +927,7 @@ export default function SettingsContent() {
       {/* Tab content */}
       <div className="fade-in">
         {activeTab === 'alert-rules' && <AlertRulesSection />}
+        {activeTab === 'app-lock' && <AppLockManagerSection />}
         {activeTab === 'policy-editor' && <PolicyEditorSection />}
         {activeTab === 'compliance-thresholds' && <ComplianceThresholdsSection />}
         {activeTab === 'roles-permissions' && <RolePermissionsSection />}
