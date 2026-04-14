@@ -37,6 +37,16 @@ public sealed class AgentStateStore : IDisposable
 
     public void UpdateSettings(UiSettings settings) => _provider.UpdateSettings(settings);
 
+    public void SaveTransportConfig(TransportConfig config) => _provider.SaveTransportConfig(config);
+
+    public void SaveSecurityConfig(SecurityConfig config) => _provider.SaveSecurityConfig(config);
+
+    public void SaveTelemetryPolicy(TelemetryPolicyConfig config) => _provider.SaveTelemetryPolicy(config);
+
+    public void SaveNotificationConfig(NotificationPolicyConfig config) => _provider.SaveNotificationConfig(config);
+
+    public void TestTransportConnection() => _provider.TestTransportConnection();
+
     public void RetryConnection() => _provider.RetryConnection();
 
     public void BeginRePairFlow() => _provider.BeginRePairFlow();

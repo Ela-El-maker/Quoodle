@@ -16,3 +16,8 @@ WinUI 3 (.NET 8) local interactive UI shell for Windows Agent.
 ```powershell
 dotnet build .\Quoodle.Agent.UiCompanion.csproj -c Release -p:Platform=x64
 ```
+
+## Dashboard VM Tests
+```powershell
+dotnet test .\tests\Quoodle.Agent.UiCompanion.Tests\Quoodle.Agent.UiCompanion.Tests.csproj
+```

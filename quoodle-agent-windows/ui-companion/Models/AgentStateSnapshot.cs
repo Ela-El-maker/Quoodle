@@ -22,6 +22,10 @@ public sealed record AgentStateSnapshot(
     IReadOnlyList<ActivityEntry> Activity,
     IReadOnlyList<DeviceFact> DeviceFacts,
     IReadOnlyList<CommandExecutionEntry> CommandHistory,
+    IReadOnlyList<WssMessageLogRow> WssMessageLog,
+    IReadOnlyList<CommandHistoryRow> CommandHistoryLog,
+    IReadOnlyList<KernelEventRow> KernelEvents,
+    AgentConfiguration Configuration,
     UiSettings Settings)
 {
     public static AgentStateSnapshot CreateInitial() => new(
@@ -71,5 +75,14 @@ public sealed record AgentStateSnapshot(
                 DurationMs: 142,
                 ErrorMessage: string.Empty)
         },
+        WssMessageLog: Array.Empty<WssMessageLogRow>(),
+        CommandHistoryLog: Array.Empty<CommandHistoryRow>(),
+        KernelEvents: Array.Empty<KernelEventRow>(),
+        Configuration: AgentConfiguration.CreateDefault(
+            now: DateTimeOffset.UtcNow,
+            deviceId: "pending-pairing",
+            deviceName: Environment.MachineName,
+            agentVersion: "0.1.0-ui-m1",
+            isEnrolled: false),
         Settings: UiSettings.Default);
 }

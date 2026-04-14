@@ -7,16 +7,99 @@
     mc:Ignorable="d"
     Background="{ThemeResource AppBackgroundBrush}">
 
-    <ScrollViewer>
-        <Grid Padding="16,8,16,16" MaxWidth="1320">
-            <StackPanel Spacing="14">
+    <Page.Resources>
+        <Style x:Key="SettingsCardTitleTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="52" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+        </Style>
+
+        <Style x:Key="SettingsSectionHeaderTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="40" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+        </Style>
+
+        <Style x:Key="SettingsFieldTitleStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="19" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+        </Style>
+
+        <Style x:Key="SettingsFieldHintStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="{ThemeResource TextMutedBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <Style x:Key="SettingsReadOnlyValueBorderStyle" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource InputBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource InputBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Padding" Value="14,10" />
+        </Style>
+
+        <Style x:Key="SettingsTagPillStyle" TargetType="Border">
+            <Setter Property="Background" Value="#222B3443" />
+            <Setter Property="BorderBrush" Value="{ThemeResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="7" />
+            <Setter Property="Padding" Value="8,3" />
+        </Style>
+
+        <Style x:Key="SettingsGreenButtonStyle" TargetType="Button">
+            <Setter Property="Foreground" Value="#FF05130D" />
+            <Setter Property="Background" Value="#26C067" />
+            <Setter Property="BorderBrush" Value="#1A6D49" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Padding" Value="20,11" />
+            <Setter Property="MinWidth" Value="188" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="SettingsSecondaryButtonStyle" TargetType="Button">
+            <Setter Property="Foreground" Value="{ThemeResource TextSecondaryBrush}" />
+            <Setter Property="Background" Value="#1C212D" />
+            <Setter Property="BorderBrush" Value="{ThemeResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Padding" Value="20,11" />
+            <Setter Property="MinWidth" Value="176" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="SettingsCopyButtonStyle" TargetType="Button">
+            <Setter Property="Padding" Value="4" />
+            <Setter Property="MinWidth" Value="24" />
+            <Setter Property="MinHeight" Value="24" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Foreground" Value="{ThemeResource TextMutedBrush}" />
+        </Style>
+
+        <Style x:Key="SettingsSeverityChipStyle" TargetType="Border">
+            <Setter Property="CornerRadius" Value="7" />
+            <Setter Property="Padding" Value="8,2" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+    </Page.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <Grid Padding="18,8,18,18" MaxWidth="1336">
+                <StackPanel Spacing="18">
                 <StackPanel Spacing="4">
-                    <TextBlock Text="Settings &amp; Configuration" Style="{StaticResource PageTitleTextStyle}" />
+                    <TextBlock Text="Settings &amp; Configuration" Style="{StaticResource SettingsCardTitleTextStyle}" />
                     <TextBlock Text="Agent identity, transport, security, telemetry policy, and notifications." Style="{StaticResource PageSubtitleTextStyle}" />
                 </StackPanel>
 
-                <Border Style="{StaticResource CardBorderStyle}">
-                    <StackPanel Spacing="10">
+                <Border Style="{StaticResource CardBorderStyle}" Padding="26,16">
+                    <StackPanel Spacing="14">
                         <TextBlock Text="SECTIONS" Style="{StaticResource NavSectionTextStyle}" Margin="0" />
                         <TextBlock Text="Device Identity" FontSize="19" />
                         <TextBlock Text="Connection &amp; Transport" FontSize="19" />
@@ -28,31 +111,31 @@
 
                 <Border Style="{StaticResource CardBorderStyle}" Padding="0">
                     <StackPanel>
-                        <Grid Padding="16,14" ColumnSpacing="10">
+                        <Grid Padding="24,18" ColumnSpacing="10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-
                             <StackPanel Spacing="4">
                                 <TextBlock Text="Device Identity" Style="{StaticResource SectionTitleTextStyle}" />
                                 <TextBlock Text="Read-only enrollment data. To re-enroll, contact your administrator." Style="{StaticResource PageSubtitleTextStyle}" />
-                                <TextBlock x:Name="IdentityText" FontWeight="SemiBold" />
                             </StackPanel>
-
                             <Border
+                                x:Name="IdentityEnrolledBadge"
                                 Grid.Column="1"
                                 Background="{ThemeResource ChipSuccessBackgroundBrush}"
-                                CornerRadius="14"
-                                Padding="12,6"
+                                BorderBrush="{ThemeResource HeaderPanelBorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="16"
+                                Padding="12,5"
                                 VerticalAlignment="Top">
-                                <TextBlock Text="Enrolled" Foreground="{ThemeResource ChipSuccessForegroundBrush}" FontWeight="SemiBold" />
+                                <TextBlock x:Name="IdentityEnrolledBadgeText" Foreground="{ThemeResource ChipSuccessForegroundBrush}" FontSize="14" FontWeight="SemiBold" />
                             </Border>
                         </Grid>
 
                         <Border Height="1" Background="{ThemeResource BorderBrush}" />
 
-                        <Grid Padding="16" ColumnSpacing="16" RowSpacing="14">
+                        <Grid Padding="24,18" ColumnSpacing="22" RowSpacing="14">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="*" />
@@ -61,88 +144,795 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
                             <StackPanel Grid.Row="0" Grid.Column="0" Spacing="6">
-                                <TextBlock Text="Device ID" FontWeight="SemiBold" />
-                                <TextBox Text="PC001" IsReadOnly="True" />
+                                <TextBlock Text="Device ID" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                <TextBlock Text="Persistent identifier stored at local storage path below." Style="{StaticResource SettingsFieldHintStyle}" />
+                                <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="DeviceIdValueText" FontSize="16" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                            <Button Tag="device_id" Click="OnCopyIdentityValue" Style="{StaticResource SettingsCopyButtonStyle}">
+                                                <FontIcon Glyph="&#xE8C8;" FontSize="14" />
+                                            </Button>
+                                            <FontIcon Glyph="&#xE72E;" Foreground="{ThemeResource TextMutedBrush}" FontSize="14" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
                             </StackPanel>
+
                             <StackPanel Grid.Row="0" Grid.Column="1" Spacing="6">
-                                <TextBlock Text="Enrolled Account" FontWeight="SemiBold" />
-                                <TextBox Text="operator@corp.quoodle.io" IsReadOnly="True" />
+                                <TextBlock Text="Enrolled Account" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                <TextBlock Text="Enrollment owner reported by control server." Style="{StaticResource SettingsFieldHintStyle}" />
+                                <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="EnrolledAccountValueText" FontSize="16" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                            <Button Tag="enrolled_account" Click="OnCopyIdentityValue" Style="{StaticResource SettingsCopyButtonStyle}">
+                                                <FontIcon Glyph="&#xE8C8;" FontSize="14" />
+                                            </Button>
+                                            <FontIcon Glyph="&#xE72E;" Foreground="{ThemeResource TextMutedBrush}" FontSize="14" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
                             </StackPanel>
 
                             <StackPanel Grid.Row="1" Grid.Column="0" Spacing="6">
-                                <TextBlock Text="HWID Hash" FontWeight="SemiBold" />
-                                <TextBox Text="sha256:3a7f9c2b4e1d8f..." IsReadOnly="True" />
+                                <TextBlock Text="HWID Hash" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                <TextBlock Text="SHA-256 of hardware identifiers. Sent in AUTH envelope." Style="{StaticResource SettingsFieldHintStyle}" />
+                                <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="HwidHashValueText" FontSize="16" FontFamily="Consolas" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                            <Button Tag="hwid_hash" Click="OnCopyIdentityValue" Style="{StaticResource SettingsCopyButtonStyle}">
+                                                <FontIcon Glyph="&#xE8C8;" FontSize="14" />
+                                            </Button>
+                                            <FontIcon Glyph="&#xE72E;" Foreground="{ThemeResource TextMutedBrush}" FontSize="14" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
                             </StackPanel>
+
                             <StackPanel Grid.Row="1" Grid.Column="1" Spacing="6">
-                                <TextBlock Text="Attestation Hash" FontWeight="SemiBold" />
-                                <TextBox Text="sha256:7b2c5e8d1f4a0b..." IsReadOnly="True" />
+                                <TextBlock Text="Attestation Hash" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                <TextBlock Text="SHA-256 attestation token. Validated by FastAPI on AUTH." Style="{StaticResource SettingsFieldHintStyle}" />
+                                <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="AttestationHashValueText" FontSize="16" FontFamily="Consolas" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                            <Button Tag="attestation_hash" Click="OnCopyIdentityValue" Style="{StaticResource SettingsCopyButtonStyle}">
+                                                <FontIcon Glyph="&#xE8C8;" FontSize="14" />
+                                            </Button>
+                                            <FontIcon Glyph="&#xE72E;" Foreground="{ThemeResource TextMutedBrush}" FontSize="14" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
                             </StackPanel>
 
                             <StackPanel Grid.Row="2" Grid.Column="0" Spacing="6">
-                                <TextBlock Text="Agent Version" FontWeight="SemiBold" />
-                                <TextBox Text="v0.0.1" IsReadOnly="True" />
+                                <TextBlock Text="Agent Version" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="AgentVersionValueText" FontSize="16" FontFamily="Consolas" VerticalAlignment="Center" />
+                                        <FontIcon Grid.Column="1" Glyph="&#xE72E;" Foreground="{ThemeResource TextMutedBrush}" FontSize="14" VerticalAlignment="Center" />
+                                    </Grid>
+                                </Border>
                             </StackPanel>
+
                             <StackPanel Grid.Row="2" Grid.Column="1" Spacing="6">
-                                <TextBlock Text="OS Build" FontWeight="SemiBold" />
-                                <TextBox Text="Windows 10 Pro · 19045.4170" IsReadOnly="True" />
+                                <TextBlock Text="OS Build" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="OsBuildValueText" FontSize="16" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        <FontIcon Grid.Column="1" Glyph="&#xE72E;" Foreground="{ThemeResource TextMutedBrush}" FontSize="14" VerticalAlignment="Center" />
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="3" Grid.Column="0" Spacing="6">
+                                <TextBlock Text="Local Storage Path" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                <TextBlock Text="Device ID is persisted here. Override with AGENT_DEVICE_ID env var." Style="{StaticResource SettingsFieldHintStyle}" />
+                                <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="LocalStoragePathValueText" FontSize="16" FontFamily="Consolas" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                            <Button Tag="local_storage_path" Click="OnCopyIdentityValue" Style="{StaticResource SettingsCopyButtonStyle}">
+                                                <FontIcon Glyph="&#xE8C8;" FontSize="14" />
+                                            </Button>
+                                            <FontIcon Glyph="&#xE72E;" Foreground="{ThemeResource TextMutedBrush}" FontSize="14" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="3" Grid.Column="1" Spacing="6">
+                                <TextBlock Text="Enrolled At" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="EnrolledAtValueText" FontSize="16" FontFamily="Consolas" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        <FontIcon Grid.Column="1" Glyph="&#xE72E;" Foreground="{ThemeResource TextMutedBrush}" FontSize="14" VerticalAlignment="Center" />
+                                    </Grid>
+                                </Border>
                             </StackPanel>
                         </Grid>
                     </StackPanel>
                 </Border>
 
-                <Grid ColumnSpacing="12" RowSpacing="12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-
-                    <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource CardBorderStyle}">
-                        <StackPanel Spacing="10">
+                <Border Style="{StaticResource CardBorderStyle}" Padding="0">
+                    <StackPanel>
+                        <StackPanel Padding="24,18" Spacing="4">
                             <TextBlock Text="Connection &amp; Transport" Style="{StaticResource SectionTitleTextStyle}" />
-                            <TextBlock Text="WSS endpoint connectivity and startup behavior." Style="{StaticResource PageSubtitleTextStyle}" />
-                            <ToggleSwitch x:Name="BackgroundSyncSwitch" Header="Background sync" Toggled="OnToggleChanged" />
-                            <ToggleSwitch x:Name="StartupSwitch" Header="Start with Windows" Toggled="OnToggleChanged" />
-                            <Button Content="Sync Now" HorizontalAlignment="Left" Click="OnSyncNow" Style="{StaticResource SecondaryButtonStyle}" />
+                            <TextBlock Text="WebSocket endpoint, reconnection policy, and timeout configuration." Style="{StaticResource PageSubtitleTextStyle}" />
                         </StackPanel>
-                    </Border>
 
-                    <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource CardBorderStyle}">
-                        <StackPanel Spacing="10">
-                            <TextBlock Text="Security" Style="{StaticResource SectionTitleTextStyle}" />
-                            <TextBlock Text="Kernel bridge and attestation remain service-owned." Style="{StaticResource PageSubtitleTextStyle}" />
-                            <ToggleSwitch x:Name="DiagnosticsSwitch" Header="Collect diagnostics" Toggled="OnToggleChanged" />
-                            <TextBlock Text="Policy-gated controls will remain read-only on unsupported deployments." Style="{StaticResource MutedTextStyle}" TextWrapping="Wrap" />
+                        <Border Height="1" Background="{ThemeResource BorderBrush}" />
+
+                        <StackPanel Padding="24,18" Spacing="12">
+                            <Grid ColumnSpacing="10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="WSS Endpoint" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                    <TextBlock Text="WebSocket Secure endpoint for the FastAPI gateway." Style="{StaticResource SettingsFieldHintStyle}" />
+                                </StackPanel>
+                                <Border Grid.Column="1" Style="{StaticResource SettingsTagPillStyle}" VerticalAlignment="Center">
+                                    <TextBlock x:Name="TransportEndpointTagText" FontSize="14" Foreground="{ThemeResource TextMutedBrush}" FontFamily="Consolas" />
+                                </Border>
+                            </Grid>
+
+                            <TextBox x:Name="TransportEndpointBox" TextChanged="OnTransportFieldChanged" />
+
+                            <Grid ColumnSpacing="22">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0" Spacing="6">
+                                    <TextBlock Text="Heartbeat Interval" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                    <TextBlock Text="Seconds between HEARTBEAT messages. Set by AUTH_ACK from server." Style="{StaticResource SettingsFieldHintStyle}" />
+                                    <Grid>
+                                        <TextBox x:Name="TransportHeartbeatIntervalBox" TextChanged="OnTransportFieldChanged" Padding="16,12,46,12" />
+                                        <TextBlock
+                                            Text="sec"
+                                            Foreground="{ThemeResource TextMutedBrush}"
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Right"
+                                            Margin="0,0,14,0"
+                                            FontSize="14" />
+                                    </Grid>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" Spacing="6">
+                                    <TextBlock Text="Connect Timeout" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                    <TextBlock Text="Milliseconds before aborting a WSS connect attempt." Style="{StaticResource SettingsFieldHintStyle}" />
+                                    <Grid>
+                                        <TextBox x:Name="TransportConnectTimeoutBox" TextChanged="OnTransportFieldChanged" Padding="16,12,42,12" />
+                                        <TextBlock
+                                            Text="ms"
+                                            Foreground="{ThemeResource TextMutedBrush}"
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Right"
+                                            Margin="0,0,14,0"
+                                            FontSize="14" />
+                                    </Grid>
+                                </StackPanel>
+                            </Grid>
+
+                            <Border Height="1" Background="{ThemeResource BorderBrush}" Margin="0,4,0,2" />
+                            <TextBlock Text="RECONNECT POLICY (EXPONENTIAL BACKOFF)" Style="{StaticResource NavSectionTextStyle}" Margin="0" />
+
+                            <Grid ColumnSpacing="22" RowSpacing="10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <StackPanel Grid.Row="0" Grid.Column="0" Spacing="6">
+                                    <TextBlock Text="Max Attempts" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                    <TextBox x:Name="TransportReconnectMaxAttemptsBox" TextChanged="OnTransportFieldChanged" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="0" Grid.Column="1" Spacing="6">
+                                    <TextBlock Text="Initial Delay" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                    <Grid>
+                                        <TextBox x:Name="TransportReconnectInitialDelayBox" TextChanged="OnTransportFieldChanged" Padding="16,12,42,12" />
+                                        <TextBlock
+                                            Text="ms"
+                                            Foreground="{ThemeResource TextMutedBrush}"
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Right"
+                                            Margin="0,0,14,0"
+                                            FontSize="14" />
+                                    </Grid>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="1" Grid.Column="0" Spacing="6">
+                                    <TextBlock Text="Max Delay" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                    <Grid>
+                                        <TextBox x:Name="TransportReconnectMaxDelayBox" TextChanged="OnTransportFieldChanged" Padding="16,12,42,12" />
+                                        <TextBlock
+                                            Text="ms"
+                                            Foreground="{ThemeResource TextMutedBrush}"
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Right"
+                                            Margin="0,0,14,0"
+                                            FontSize="14" />
+                                    </Grid>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="1" Grid.Column="1" Spacing="6">
+                                    <TextBlock Text="Jitter" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                    <Grid>
+                                        <TextBox x:Name="TransportReconnectJitterBox" TextChanged="OnTransportFieldChanged" Padding="16,12,42,12" />
+                                        <TextBlock
+                                            Text="ms"
+                                            Foreground="{ThemeResource TextMutedBrush}"
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Right"
+                                            Margin="0,0,14,0"
+                                            FontSize="14" />
+                                    </Grid>
+                                </StackPanel>
+                            </Grid>
+
+                            <TextBlock x:Name="TransportValidationText" Style="{StaticResource SettingsFieldHintStyle}" Foreground="{ThemeResource ChipDangerForegroundBrush}" Visibility="Collapsed" />
+                            <TextBlock x:Name="TransportStatusText" Style="{StaticResource SettingsFieldHintStyle}" Foreground="{ThemeResource TextSecondaryBrush}" Visibility="Collapsed" />
+
+                            <Border Height="1" Background="{ThemeResource BorderBrush}" Margin="0,4,0,0" />
+
+                            <Grid Margin="0,6,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <Button x:Name="TestConnectionButton" Grid.Column="0" Click="OnTestConnectionClick" Style="{StaticResource SettingsSecondaryButtonStyle}">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon Glyph="&#xE895;" FontSize="15" />
+                                        <TextBlock Text="Test Connection" />
+                                    </StackPanel>
+                                </Button>
+
+                                <Button x:Name="SaveTransportButton" Grid.Column="2" Click="OnSaveTransportClick" Style="{StaticResource SettingsGreenButtonStyle}">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon Glyph="&#xE74E;" FontSize="15" />
+                                        <TextBlock Text="Save Changes" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
                         </StackPanel>
-                    </Border>
+                    </StackPanel>
+                </Border>
 
-                    <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource CardBorderStyle}">
-                        <StackPanel Spacing="10">
+                <Border Style="{StaticResource CardBorderStyle}" Padding="0">
+                    <StackPanel>
+                        <StackPanel Padding="24,18" Spacing="4">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE72E;" Foreground="{ThemeResource SuccessBrush}" />
+                                <TextBlock Text="Security" Style="{StaticResource SectionTitleTextStyle}" />
+                            </StackPanel>
+                            <TextBlock Text="Signature verification, kernel driver mode, and policy capability gates." Style="{StaticResource PageSubtitleTextStyle}" />
+                        </StackPanel>
+
+                        <Border Height="1" Background="{ThemeResource BorderBrush}" />
+
+                        <StackPanel Padding="24,18" Spacing="10">
+                            <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock Text="Kernel Guard Driver" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                            <Border Style="{StaticResource SettingsTagPillStyle}">
+                                                <TextBlock x:Name="KernelGuardTagText" FontFamily="Consolas" FontSize="13" Foreground="{ThemeResource TextMutedBrush}" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="Use KMDF driver at \\.\QuoodleKernel via IOCTL_QUOODLE_EXECUTE. When disabled, falls back to named pipe \\.\pipe\KernelService." Style="{StaticResource SettingsFieldHintStyle}" />
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="KernelGuardSwitch" Grid.Column="1" VerticalAlignment="Center" Toggled="OnSecurityToggleChanged" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock Text="Require Command Signature" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                            <Border Style="{StaticResource SettingsTagPillStyle}">
+                                                <TextBlock x:Name="RequireCommandSignatureTagText" FontFamily="Consolas" FontSize="13" Foreground="{ThemeResource TextMutedBrush}" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="Enforce Ed25519 signature verification on all inbound COMMAND_DELIVERY envelopes. Disabling accepts unsigned commands." Style="{StaticResource SettingsFieldHintStyle}" />
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="RequireCommandSignatureSwitch" Grid.Column="1" VerticalAlignment="Center" Toggled="OnSecurityToggleChanged" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock Text="Require Kernel Signature" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                            <Border Style="{StaticResource SettingsTagPillStyle}">
+                                                <TextBlock x:Name="RequireKernelSignatureTagText" FontFamily="Consolas" FontSize="13" Foreground="{ThemeResource TextMutedBrush}" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="Enforce signature verification on IOCTL responses from the kernel guard. Disable only for unsigned development builds." Style="{StaticResource SettingsFieldHintStyle}" />
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="RequireKernelSignatureSwitch" Grid.Column="1" VerticalAlignment="Center" Toggled="OnSecurityToggleChanged" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Replay Protection" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                        <TextBlock Text="FastAPI enforces monotonic sequence numbers and timestamp windows to reject replayed WSS messages." Style="{StaticResource SettingsFieldHintStyle}" />
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="ReplayProtectionSwitch" Grid.Column="1" VerticalAlignment="Center" Toggled="OnSecurityToggleChanged" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock Text="Allow User Exit" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                            <Border x:Name="AllowUserExitGateTagBadge" Background="{ThemeResource ChipWarningBackgroundBrush}" BorderBrush="{ThemeResource WarningPanelBorderBrush}" BorderThickness="1" CornerRadius="7" Padding="8,3">
+                                                <TextBlock x:Name="AllowUserExitGateTagText" Foreground="{ThemeResource ChipWarningForegroundBrush}" FontSize="14" FontWeight="SemiBold" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="Permit the user to stop the agent from the system tray. When disabled, the Exit option is hidden or greyed out." Style="{StaticResource SettingsFieldHintStyle}" />
+                                        <TextBlock x:Name="AllowUserExitGateReasonText" Foreground="{ThemeResource ChipWarningForegroundBrush}" FontSize="15" FontFamily="Consolas" />
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="AllowUserExitSwitch" Grid.Column="1" VerticalAlignment="Center" Toggled="OnSecurityToggleChanged" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Signing Algorithm" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                        <TextBlock Text="Ed25519 is the only supported algorithm. Agent and controller both sign all WSS envelopes." Style="{StaticResource SettingsFieldHintStyle}" />
+                                    </StackPanel>
+                                    <Border Grid.Column="1" Background="{ThemeResource ChipInfoBackgroundBrush}" BorderBrush="{ThemeResource ChipInfoForegroundBrush}" BorderThickness="1" CornerRadius="8" Padding="12,6" VerticalAlignment="Center">
+                                        <TextBlock x:Name="SigningAlgorithmBadgeText" Foreground="{ThemeResource ChipInfoForegroundBrush}" FontWeight="SemiBold" FontFamily="Consolas" />
+                                    </Border>
+                                </Grid>
+                            </Border>
+
+                            <TextBlock x:Name="SecurityStatusText" Style="{StaticResource SettingsFieldHintStyle}" Foreground="{ThemeResource TextSecondaryBrush}" Visibility="Collapsed" />
+                            <Border Height="1" Background="{ThemeResource BorderBrush}" Margin="0,4,0,0" />
+
+                            <Grid Margin="0,6,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Button x:Name="SaveSecurityButton" Grid.Column="1" Click="OnSaveSecurityClick" Style="{StaticResource SettingsGreenButtonStyle}">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon Glyph="&#xE74E;" FontSize="15" />
+                                        <TextBlock Text="Save Security" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource CardBorderStyle}" Padding="0">
+                    <StackPanel>
+                        <StackPanel Padding="24,18" Spacing="4">
                             <TextBlock Text="Telemetry Policy" Style="{StaticResource SectionTitleTextStyle}" />
-                            <TextBlock Text="Collection scopes and delivery cadence." Style="{StaticResource PageSubtitleTextStyle}" />
-                            <ToggleSwitch Header="CPU metrics" IsOn="True" IsEnabled="False" />
-                            <ToggleSwitch Header="RAM metrics" IsOn="True" IsEnabled="False" />
-                            <ToggleSwitch Header="Disk usage" IsOn="True" IsEnabled="False" />
-                            <ToggleSwitch Header="Network throughput" IsOn="True" IsEnabled="False" />
+                            <TextBlock Text="Configure collection intervals and which telemetry scopes the agent reports." Style="{StaticResource PageSubtitleTextStyle}" />
                         </StackPanel>
-                    </Border>
 
-                    <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource CardBorderStyle}">
-                        <StackPanel Spacing="10">
-                            <TextBlock Text="Notifications" Style="{StaticResource SectionTitleTextStyle}" />
-                            <TextBlock Text="Control alert verbosity for this workstation." Style="{StaticResource PageSubtitleTextStyle}" />
-                            <ToggleSwitch x:Name="NotifyInfoSwitch" Header="Info notifications" Toggled="OnToggleChanged" />
-                            <ToggleSwitch x:Name="NotifyCriticalSwitch" Header="Warning / critical notifications" Toggled="OnToggleChanged" />
-                            <ToggleSwitch x:Name="TraySwitch" Header="Allow tray notifications" Toggled="OnToggleChanged" />
+                        <Border Height="1" Background="{ThemeResource BorderBrush}" />
+
+                        <StackPanel Padding="24,18" Spacing="12">
+                            <Grid ColumnSpacing="22">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0" Spacing="6">
+                                    <TextBlock Text="Telemetry Interval" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                    <TextBlock Text="How often TELEMETRY messages are sent. Set by AUTH_ACK but overridable." Style="{StaticResource SettingsFieldHintStyle}" />
+                                    <Grid>
+                                        <TextBox x:Name="TelemetryIntervalBox" TextChanged="OnTelemetryFieldChanged" Padding="16,12,46,12" />
+                                        <TextBlock
+                                            Text="sec"
+                                            Foreground="{ThemeResource TextMutedBrush}"
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Right"
+                                            Margin="0,0,14,0"
+                                            FontSize="14" />
+                                    </Grid>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" Spacing="6">
+                                    <TextBlock Text="Heartbeat Interval" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                    <TextBlock Text="How often HEARTBEAT messages are sent to maintain session presence." Style="{StaticResource SettingsFieldHintStyle}" />
+                                    <Grid>
+                                        <TextBox x:Name="TelemetryHeartbeatIntervalBox" TextChanged="OnTelemetryFieldChanged" Padding="16,12,46,12" />
+                                        <TextBlock
+                                            Text="sec"
+                                            Foreground="{ThemeResource TextMutedBrush}"
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Right"
+                                            Margin="0,0,14,0"
+                                            FontSize="14" />
+                                    </Grid>
+                                </StackPanel>
+                            </Grid>
+
+                            <Border Height="1" Background="{ThemeResource BorderBrush}" Margin="0,4,0,2" />
+                            <TextBlock Text="COLLECTION SCOPES — TELEMETRY_BASIC" Style="{StaticResource NavSectionTextStyle}" Margin="0" />
+
+                            <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock Text="CPU Metrics" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                            <Border Style="{StaticResource SettingsTagPillStyle}">
+                                                <TextBlock x:Name="TelemetryCpuScopeLabelText" FontFamily="Consolas" FontSize="13" Foreground="{ThemeResource TextMutedBrush}" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="PDH counter — % Processor Time" Style="{StaticResource SettingsFieldHintStyle}" />
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="TelemetryCpuSwitch" Grid.Column="1" VerticalAlignment="Center" Toggled="OnTelemetryToggleChanged" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock Text="RAM Metrics" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                            <Border Style="{StaticResource SettingsTagPillStyle}">
+                                                <TextBlock x:Name="TelemetryRamScopeLabelText" FontFamily="Consolas" FontSize="13" Foreground="{ThemeResource TextMutedBrush}" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="GlobalMemoryStatusEx — dwMemoryLoad" Style="{StaticResource SettingsFieldHintStyle}" />
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="TelemetryRamSwitch" Grid.Column="1" VerticalAlignment="Center" Toggled="OnTelemetryToggleChanged" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock Text="Disk Usage" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                            <Border Style="{StaticResource SettingsTagPillStyle}">
+                                                <TextBlock x:Name="TelemetryDiskScopeLabelText" FontFamily="Consolas" FontSize="13" Foreground="{ThemeResource TextMutedBrush}" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="GetDiskFreeSpaceEx — primary drive" Style="{StaticResource SettingsFieldHintStyle}" />
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="TelemetryDiskSwitch" Grid.Column="1" VerticalAlignment="Center" Toggled="OnTelemetryToggleChanged" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock Text="Network Throughput" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                            <Border Style="{StaticResource SettingsTagPillStyle}">
+                                                <TextBlock x:Name="TelemetryNetworkScopeLabelText" FontFamily="Consolas" FontSize="13" Foreground="{ThemeResource TextMutedBrush}" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="GetIfTable2 — TX/RX delta per interval" Style="{StaticResource SettingsFieldHintStyle}" />
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="TelemetryNetworkSwitch" Grid.Column="1" VerticalAlignment="Center" Toggled="OnTelemetryToggleChanged" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock Text="Kernel Events" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                            <Border Style="{StaticResource SettingsTagPillStyle}">
+                                                <TextBlock x:Name="TelemetryKernelScopeLabelText" FontFamily="Consolas" FontSize="13" Foreground="{ThemeResource TextMutedBrush}" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="IOCTL_QUOODLE_WAIT_EVENT forwarded as telemetry_scope=kernel_event" Style="{StaticResource SettingsFieldHintStyle}" />
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="TelemetryKernelSwitch" Grid.Column="1" VerticalAlignment="Center" Toggled="OnTelemetryToggleChanged" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}" Background="#1B222D3A" BorderBrush="#223C4758">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="What is collected" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                    <TextBlock Text="The agent collects system performance metrics (CPU, RAM, disk, network throughput) and kernel driver events. It does not collect user content, file contents, personal documents, browser history, or keystrokes. All collected data is transmitted to the control plane you enrolled with." Style="{StaticResource SettingsFieldHintStyle}" />
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock x:Name="TelemetryValidationText" Style="{StaticResource SettingsFieldHintStyle}" Foreground="{ThemeResource ChipDangerForegroundBrush}" Visibility="Collapsed" />
+                            <TextBlock x:Name="TelemetryStatusText" Style="{StaticResource SettingsFieldHintStyle}" Foreground="{ThemeResource TextSecondaryBrush}" Visibility="Collapsed" />
+                            <Border Height="1" Background="{ThemeResource BorderBrush}" Margin="0,4,0,0" />
+
+                            <Grid Margin="0,6,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Button x:Name="SaveTelemetryButton" Grid.Column="1" Click="OnSaveTelemetryClick" Style="{StaticResource SettingsGreenButtonStyle}">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon Glyph="&#xE74E;" FontSize="15" />
+                                        <TextBlock Text="Save Policy" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
                         </StackPanel>
-                    </Border>
-                </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource CardBorderStyle}" Padding="0">
+                    <StackPanel>
+                        <StackPanel Padding="24,18" Spacing="4">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE7F4;" Foreground="{ThemeResource TextSecondaryBrush}" />
+                                <TextBlock Text="Notifications" Style="{StaticResource SectionTitleTextStyle}" />
+                            </StackPanel>
+                            <TextBlock Text="Configure which events trigger Windows toast notifications and rate limiting." Style="{StaticResource PageSubtitleTextStyle}" />
+                        </StackPanel>
+
+                        <Border Height="1" Background="{ThemeResource BorderBrush}" />
+
+                        <StackPanel Padding="24,18" Spacing="9">
+                            <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource SettingsSeverityChipStyle}" Background="{ThemeResource ChipWarningBackgroundBrush}" BorderBrush="{ThemeResource ChipWarningForegroundBrush}">
+                                        <TextBlock Text="WARNING" Foreground="{ThemeResource ChipWarningForegroundBrush}" FontSize="13" FontWeight="SemiBold" />
+                                    </Border>
+                                    <TextBlock Grid.Column="1" Text="Command execution failed" FontSize="19" VerticalAlignment="Center" />
+                                    <ToggleSwitch x:Name="NotifyCommandExecutionFailedSwitch" Grid.Column="2" VerticalAlignment="Center" Toggled="OnNotificationToggleChanged" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource SettingsSeverityChipStyle}" Background="{ThemeResource ChipDangerBackgroundBrush}" BorderBrush="{ThemeResource ChipDangerForegroundBrush}">
+                                        <TextBlock Text="CRITICAL" Foreground="{ThemeResource ChipDangerForegroundBrush}" FontSize="13" FontWeight="SemiBold" />
+                                    </Border>
+                                    <TextBlock Grid.Column="1" Text="Authentication failed (AUTH_ERROR)" FontSize="19" VerticalAlignment="Center" />
+                                    <ToggleSwitch x:Name="NotifyAuthFailedSwitch" Grid.Column="2" VerticalAlignment="Center" Toggled="OnNotificationToggleChanged" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource SettingsSeverityChipStyle}" Background="{ThemeResource ChipDangerBackgroundBrush}" BorderBrush="{ThemeResource ChipDangerForegroundBrush}">
+                                        <TextBlock Text="CRITICAL" Foreground="{ThemeResource ChipDangerForegroundBrush}" FontSize="13" FontWeight="SemiBold" />
+                                    </Border>
+                                    <TextBlock Grid.Column="1" Text="Policy hash mismatch detected" FontSize="19" VerticalAlignment="Center" />
+                                    <ToggleSwitch x:Name="NotifyPolicyHashMismatchSwitch" Grid.Column="2" VerticalAlignment="Center" Toggled="OnNotificationToggleChanged" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource SettingsSeverityChipStyle}" Background="{ThemeResource ChipWarningBackgroundBrush}" BorderBrush="{ThemeResource ChipWarningForegroundBrush}">
+                                        <TextBlock Text="WARNING" Foreground="{ThemeResource ChipWarningForegroundBrush}" FontSize="13" FontWeight="SemiBold" />
+                                    </Border>
+                                    <TextBlock Grid.Column="1" Text="Connection degraded (reconnecting)" FontSize="19" VerticalAlignment="Center" />
+                                    <ToggleSwitch x:Name="NotifyConnectionDegradedSwitch" Grid.Column="2" VerticalAlignment="Center" Toggled="OnNotificationToggleChanged" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource SettingsSeverityChipStyle}" Background="{ThemeResource ChipInfoBackgroundBrush}" BorderBrush="{ThemeResource ChipInfoForegroundBrush}">
+                                        <TextBlock Text="INFO" Foreground="{ThemeResource ChipInfoForegroundBrush}" FontSize="13" FontWeight="SemiBold" />
+                                    </Border>
+                                    <TextBlock Grid.Column="1" Text="Connection recovered" FontSize="19" VerticalAlignment="Center" />
+                                    <ToggleSwitch x:Name="NotifyConnectionRecoveredSwitch" Grid.Column="2" VerticalAlignment="Center" Toggled="OnNotificationToggleChanged" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource SettingsSeverityChipStyle}" Background="{ThemeResource ChipInfoBackgroundBrush}" BorderBrush="{ThemeResource ChipInfoForegroundBrush}">
+                                        <TextBlock Text="INFO" Foreground="{ThemeResource ChipInfoForegroundBrush}" FontSize="13" FontWeight="SemiBold" />
+                                    </Border>
+                                    <TextBlock Grid.Column="1" Text="Kernel event received" FontSize="19" VerticalAlignment="Center" />
+                                    <ToggleSwitch x:Name="NotifyKernelEventReceivedSwitch" Grid.Column="2" VerticalAlignment="Center" Toggled="OnNotificationToggleChanged" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource SettingsReadOnlyValueBorderStyle}">
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource SettingsSeverityChipStyle}" Background="{ThemeResource ChipInfoBackgroundBrush}" BorderBrush="{ThemeResource ChipInfoForegroundBrush}">
+                                        <TextBlock Text="INFO" Foreground="{ThemeResource ChipInfoForegroundBrush}" FontSize="13" FontWeight="SemiBold" />
+                                    </Border>
+                                    <TextBlock Grid.Column="1" Text="Command completed successfully" FontSize="19" VerticalAlignment="Center" />
+                                    <ToggleSwitch x:Name="NotifyCommandCompletedSuccessfullySwitch" Grid.Column="2" VerticalAlignment="Center" Toggled="OnNotificationToggleChanged" />
+                                </Grid>
+                            </Border>
+
+                            <Border Height="1" Background="{ThemeResource BorderBrush}" Margin="0,8,0,2" />
+
+                            <Grid ColumnSpacing="22">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0" Spacing="6">
+                                    <TextBlock Text="Reconnect Warning Threshold" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                    <TextBlock Text="Seconds of reconnecting state before a warning notification fires." Style="{StaticResource SettingsFieldHintStyle}" />
+                                    <Grid>
+                                        <TextBox x:Name="ReconnectWarningThresholdBox" TextChanged="OnNotificationFieldChanged" Padding="16,12,46,12" />
+                                        <TextBlock
+                                            Text="sec"
+                                            Foreground="{ThemeResource TextMutedBrush}"
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Right"
+                                            Margin="0,0,14,0"
+                                            FontSize="14" />
+                                    </Grid>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" Spacing="6">
+                                    <TextBlock Text="Rate Limit Window" Style="{StaticResource SettingsFieldTitleStyle}" />
+                                    <TextBlock Text="Suppress repeated notifications of the same type within this window." Style="{StaticResource SettingsFieldHintStyle}" />
+                                    <Grid>
+                                        <TextBox x:Name="RateLimitWindowBox" TextChanged="OnNotificationFieldChanged" Padding="16,12,46,12" />
+                                        <TextBlock
+                                            Text="min"
+                                            Foreground="{ThemeResource TextMutedBrush}"
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Right"
+                                            Margin="0,0,14,0"
+                                            FontSize="14" />
+                                    </Grid>
+                                </StackPanel>
+                            </Grid>
+
+                            <TextBlock x:Name="NotificationsValidationText" Style="{StaticResource SettingsFieldHintStyle}" Foreground="{ThemeResource ChipDangerForegroundBrush}" Visibility="Collapsed" />
+                            <TextBlock x:Name="NotificationsStatusText" Style="{StaticResource SettingsFieldHintStyle}" Foreground="{ThemeResource TextSecondaryBrush}" Visibility="Collapsed" />
+
+                            <Border Height="1" Background="{ThemeResource BorderBrush}" Margin="0,4,0,0" />
+                            <Grid Margin="0,6,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Button x:Name="SaveNotificationsButton" Grid.Column="1" Click="OnSaveNotificationsClick" Style="{StaticResource SettingsGreenButtonStyle}">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon Glyph="&#xE74E;" FontSize="15" />
+                                        <TextBlock Text="Save Notifications" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </Grid>
     </ScrollViewer>

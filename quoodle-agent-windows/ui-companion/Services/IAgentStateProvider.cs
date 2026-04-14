@@ -32,6 +32,16 @@ public interface IAgentStateProvider : IDisposable
 
     void UpdateSettings(UiSettings settings);
 
+    void SaveTransportConfig(TransportConfig config);
+
+    void SaveSecurityConfig(SecurityConfig config);
+
+    void SaveTelemetryPolicy(TelemetryPolicyConfig config);
+
+    void SaveNotificationConfig(NotificationPolicyConfig config);
+
+    void TestTransportConnection();
+
     void RetryConnection();
 
     void BeginRePairFlow();

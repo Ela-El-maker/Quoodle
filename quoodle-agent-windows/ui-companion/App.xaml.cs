@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Quoodle.Agent.UiCompanion.Services;
 using System.Text;
+using WinRT.Interop;
 
 namespace Quoodle.Agent.UiCompanion;
 
@@ -11,6 +12,8 @@ public partial class App : Application
 
     public static IAgentStateProvider StateProvider { get; } = new MockAgentStateProvider();
     public static AgentStateStore StateStore { get; } = new(StateProvider);
+    public static Window? MainWindowInstance { get; private set; }
+    public static IntPtr MainWindowHandle => MainWindowInstance is null ? IntPtr.Zero : WindowNative.GetWindowHandle(MainWindowInstance);
 
     public App()
     {
@@ -24,6 +27,7 @@ public partial class App : Application
         try
         {
             _window = new MainWindow();
+            MainWindowInstance = _window;
             _window.Activate();
         }
         catch (Exception ex)

@@ -12,7 +12,7 @@
         BorderThickness="1"
         Background="{ThemeResource ChipNeutralBackgroundBrush}"
         BorderBrush="{ThemeResource InputBorderBrush}">
-        <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+        <StackPanel x:Name="ChipContent" Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
             <Ellipse
                 x:Name="ToneDot"
                 Width="9"

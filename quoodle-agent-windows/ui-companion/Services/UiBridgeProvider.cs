@@ -37,6 +37,16 @@ public sealed class UiBridgeProvider : IAgentStateProvider
 
     public void UpdateSettings(UiSettings settings) => throw new NotImplementedException("UiBridgeProvider is a future live provider.");
 
+    public void SaveTransportConfig(TransportConfig config) => throw new NotImplementedException("UiBridgeProvider is a future live provider.");
+
+    public void SaveSecurityConfig(SecurityConfig config) => throw new NotImplementedException("UiBridgeProvider is a future live provider.");
+
+    public void SaveTelemetryPolicy(TelemetryPolicyConfig config) => throw new NotImplementedException("UiBridgeProvider is a future live provider.");
+
+    public void SaveNotificationConfig(NotificationPolicyConfig config) => throw new NotImplementedException("UiBridgeProvider is a future live provider.");
+
+    public void TestTransportConnection() => throw new NotImplementedException("UiBridgeProvider is a future live provider.");
+
     public void RetryConnection() => throw new NotImplementedException("UiBridgeProvider is a future live provider.");
 
     public void BeginRePairFlow() => throw new NotImplementedException("UiBridgeProvider is a future live provider.");

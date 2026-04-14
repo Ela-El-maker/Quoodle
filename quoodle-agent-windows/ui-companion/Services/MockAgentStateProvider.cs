@@ -2,6 +2,7 @@ using System.Timers;
 using Quoodle.Agent.UiCompanion.Models;
 using Timer = System.Timers.Timer;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Quoodle.Agent.UiCompanion.Services;
 
@@ -35,6 +36,11 @@ public sealed class MockAgentStateProvider : IAgentStateProvider
     private AgentStateSnapshot _snapshot = AgentStateSnapshot.CreateInitial();
     private int _reconnectHoldTicks;
     private int _onboardingOperationId;
+    private static readonly JsonSerializerOptions JsonPretty = new()
+    {
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
 
     public MockAgentStateProvider()
     {
@@ -43,6 +49,7 @@ public sealed class MockAgentStateProvider : IAgentStateProvider
 
         lock (_gate)
         {
+            RefreshLegacySettingsFromConfigurationLocked();
             RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
         }
     }
@@ -322,9 +329,170 @@ public sealed class MockAgentStateProvider : IAgentStateProvider
     {
         lock (_gate)
         {
-            _snapshot = _snapshot with { Settings = settings };
+            var currentConfig = _snapshot.Configuration;
+            var updatedNotifications = currentConfig.Notifications with
+            {
+                NotifyConnectionRecovered = settings.NotifyInfo,
+                NotifyKernelEventReceived = settings.NotifyInfo && currentConfig.Notifications.NotifyKernelEventReceived,
+                NotifyCommandCompletedSuccessfully = settings.NotifyInfo && currentConfig.Notifications.NotifyCommandCompletedSuccessfully,
+                NotifyCommandExecutionFailed = settings.NotifyWarningsAndCritical,
+                NotifyAuthFailed = settings.NotifyWarningsAndCritical,
+                NotifyPolicyHashMismatch = settings.NotifyWarningsAndCritical,
+                NotifyConnectionDegraded = settings.NotifyWarningsAndCritical
+            };
+            var updatedSecurity = currentConfig.Security with
+            {
+                KernelGuardEnabled = settings.CollectDiagnostics
+            };
+
+            _snapshot = _snapshot with
+            {
+                Configuration = currentConfig with
+                {
+                    Notifications = updatedNotifications,
+                    Security = updatedSecurity
+                },
+                Settings = settings
+            };
             AddActivityLocked(ActivitySeverity.Info, "ui", "Settings updated", "One or more settings toggles changed.");
             RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
+        }
+
+        Publish(Snapshot);
+    }
+
+    public void SaveTransportConfig(TransportConfig config)
+    {
+        lock (_gate)
+        {
+            var existing = _snapshot.Configuration.Transport;
+            var normalized = config with
+            {
+                Endpoint = string.IsNullOrWhiteSpace(config.Endpoint) ? existing.Endpoint : config.Endpoint.Trim(),
+                EndpointEnvTag = string.IsNullOrWhiteSpace(config.EndpointEnvTag) ? existing.EndpointEnvTag : config.EndpointEnvTag.Trim(),
+                HeartbeatIntervalSeconds = PositiveOrFallback(config.HeartbeatIntervalSeconds, existing.HeartbeatIntervalSeconds),
+                ConnectTimeoutMs = PositiveOrFallback(config.ConnectTimeoutMs, existing.ConnectTimeoutMs),
+                ReconnectMaxAttempts = PositiveOrFallback(config.ReconnectMaxAttempts, existing.ReconnectMaxAttempts),
+                ReconnectInitialDelayMs = PositiveOrFallback(config.ReconnectInitialDelayMs, existing.ReconnectInitialDelayMs),
+                ReconnectMaxDelayMs = PositiveOrFallback(config.ReconnectMaxDelayMs, existing.ReconnectMaxDelayMs),
+                ReconnectJitterMs = PositiveOrFallback(config.ReconnectJitterMs, existing.ReconnectJitterMs),
+                EnvironmentTags = config.EnvironmentTags?.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).Distinct().ToList()
+                    ?? existing.EnvironmentTags
+            };
+
+            _snapshot = _snapshot with
+            {
+                Configuration = _snapshot.Configuration with { Transport = normalized }
+            };
+
+            AddActivityLocked(ActivitySeverity.Info, "ui", "Transport config saved", $"Endpoint set to {normalized.Endpoint}.");
+            RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
+        }
+
+        Publish(Snapshot);
+    }
+
+    public void SaveSecurityConfig(SecurityConfig config)
+    {
+        lock (_gate)
+        {
+            var existing = _snapshot.Configuration.Security;
+            var gates = existing.PolicyGates;
+            var allowUserExit = gates.CanEditAllowUserExit ? config.AllowUserExit : existing.AllowUserExit;
+
+            var normalized = config with
+            {
+                KernelGuardTag = string.IsNullOrWhiteSpace(config.KernelGuardTag) ? existing.KernelGuardTag : config.KernelGuardTag.Trim(),
+                RequireCommandSignatureTag = string.IsNullOrWhiteSpace(config.RequireCommandSignatureTag) ? existing.RequireCommandSignatureTag : config.RequireCommandSignatureTag.Trim(),
+                RequireKernelSignatureTag = string.IsNullOrWhiteSpace(config.RequireKernelSignatureTag) ? existing.RequireKernelSignatureTag : config.RequireKernelSignatureTag.Trim(),
+                SigningAlgorithm = string.IsNullOrWhiteSpace(config.SigningAlgorithm) ? existing.SigningAlgorithm : config.SigningAlgorithm.Trim(),
+                AllowUserExit = allowUserExit,
+                PolicyGates = gates
+            };
+
+            _snapshot = _snapshot with
+            {
+                Configuration = _snapshot.Configuration with { Security = normalized }
+            };
+
+            RefreshLegacySettingsFromConfigurationLocked();
+            AddActivityLocked(ActivitySeverity.Info, "ui", "Security policy saved", "Security toggles were updated.");
+            RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
+        }
+
+        Publish(Snapshot);
+    }
+
+    public void SaveTelemetryPolicy(TelemetryPolicyConfig config)
+    {
+        lock (_gate)
+        {
+            var existing = _snapshot.Configuration.TelemetryPolicy;
+            var normalized = config with
+            {
+                TelemetryIntervalSeconds = PositiveOrFallback(config.TelemetryIntervalSeconds, existing.TelemetryIntervalSeconds),
+                HeartbeatIntervalSeconds = PositiveOrFallback(config.HeartbeatIntervalSeconds, existing.HeartbeatIntervalSeconds),
+                CpuScopeLabel = string.IsNullOrWhiteSpace(config.CpuScopeLabel) ? existing.CpuScopeLabel : config.CpuScopeLabel.Trim(),
+                RamScopeLabel = string.IsNullOrWhiteSpace(config.RamScopeLabel) ? existing.RamScopeLabel : config.RamScopeLabel.Trim(),
+                DiskScopeLabel = string.IsNullOrWhiteSpace(config.DiskScopeLabel) ? existing.DiskScopeLabel : config.DiskScopeLabel.Trim(),
+                NetworkScopeLabel = string.IsNullOrWhiteSpace(config.NetworkScopeLabel) ? existing.NetworkScopeLabel : config.NetworkScopeLabel.Trim(),
+                KernelScopeLabel = string.IsNullOrWhiteSpace(config.KernelScopeLabel) ? existing.KernelScopeLabel : config.KernelScopeLabel.Trim()
+            };
+
+            _snapshot = _snapshot with
+            {
+                Configuration = _snapshot.Configuration with { TelemetryPolicy = normalized }
+            };
+
+            AddActivityLocked(ActivitySeverity.Info, "ui", "Telemetry policy saved", "Telemetry intervals and scopes were updated.");
+            RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
+        }
+
+        Publish(Snapshot);
+    }
+
+    public void SaveNotificationConfig(NotificationPolicyConfig config)
+    {
+        lock (_gate)
+        {
+            var existing = _snapshot.Configuration.Notifications;
+            var normalized = config with
+            {
+                ReconnectWarningThresholdSeconds = PositiveOrFallback(config.ReconnectWarningThresholdSeconds, existing.ReconnectWarningThresholdSeconds),
+                RateLimitWindowMinutes = PositiveOrFallback(config.RateLimitWindowMinutes, existing.RateLimitWindowMinutes)
+            };
+
+            _snapshot = _snapshot with
+            {
+                Configuration = _snapshot.Configuration with { Notifications = normalized }
+            };
+
+            RefreshLegacySettingsFromConfigurationLocked();
+            AddActivityLocked(ActivitySeverity.Info, "ui", "Notification policy saved", "Notification rules were updated.");
+            RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
+        }
+
+        Publish(Snapshot);
+    }
+
+    public void TestTransportConnection()
+    {
+        lock (_gate)
+        {
+            var now = DateTimeOffset.UtcNow;
+            var latency = _random.Next(26, 110);
+
+            _snapshot = _snapshot with
+            {
+                LastSyncUtc = now,
+                LastHeartbeatUtc = now,
+                LatencyMs = latency,
+                Connection = ConnectionState.Connected,
+                CurrentActivity = "Transport test succeeded"
+            };
+
+            AddActivityLocked(ActivitySeverity.Info, "transport", "Transport test OK", $"Endpoint {_snapshot.Configuration.Transport.Endpoint} responded in {latency} ms.");
+            RebuildDeviceFactsLocked(now);
         }
 
         Publish(Snapshot);
@@ -357,6 +525,7 @@ public sealed class MockAgentStateProvider : IAgentStateProvider
             _onboardingOperationId += 1;
             var preservedSettings = _snapshot.Settings;
             var preservedHistory = _snapshot.CommandHistory;
+            var preservedConfiguration = _snapshot.Configuration;
             var nextActivity = _snapshot.Activity.ToList();
             nextActivity.Insert(0, new ActivityEntry(DateTimeOffset.UtcNow, ActivitySeverity.Warning, "ui", "Re-pair started", "Device was moved back to onboarding state."));
 
@@ -364,10 +533,12 @@ public sealed class MockAgentStateProvider : IAgentStateProvider
             {
                 Settings = preservedSettings,
                 CommandHistory = preservedHistory,
+                Configuration = preservedConfiguration,
                 Activity = nextActivity.Take(80).ToList(),
                 CurrentActivity = "Waiting for re-pairing"
             };
 
+            SyncConfigurationIdentityLocked();
             RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
         }
 
@@ -381,6 +552,7 @@ public sealed class MockAgentStateProvider : IAgentStateProvider
             _reconnectHoldTicks = 0;
             _onboardingOperationId = 0;
             _snapshot = AgentStateSnapshot.CreateInitial();
+            RefreshLegacySettingsFromConfigurationLocked();
             RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
         }
 
@@ -530,6 +702,23 @@ public sealed class MockAgentStateProvider : IAgentStateProvider
             }
         };
 
+        var enrolledIdentity = AgentConfiguration.CreateDefault(
+            now,
+            deviceId: _snapshot.DeviceId,
+            deviceName: _snapshot.DeviceName,
+            agentVersion: _snapshot.AgentVersion,
+            isEnrolled: true).DeviceIdentity;
+
+        _snapshot = _snapshot with
+        {
+            Configuration = _snapshot.Configuration with
+            {
+                DeviceIdentity = enrolledIdentity
+            }
+        };
+
+        SyncConfigurationIdentityLocked();
+        RefreshLegacySettingsFromConfigurationLocked();
         AddActivityLocked(ActivitySeverity.Info, "service", "Enrollment complete", "Device registered and paired successfully.");
     }
 
@@ -776,6 +965,8 @@ public sealed class MockAgentStateProvider : IAgentStateProvider
 
     private void RebuildDeviceFactsLocked(DateTimeOffset now)
     {
+        SyncConfigurationIdentityLocked();
+
         var facts = new List<DeviceFact>
         {
             new("Identity", "Device Name", _snapshot.DeviceName),
@@ -796,6 +987,242 @@ public sealed class MockAgentStateProvider : IAgentStateProvider
         };
 
         _snapshot = _snapshot with { DeviceFacts = facts };
+        RebuildDiagnosticsRowsLocked(now);
+    }
+
+    private void SyncConfigurationIdentityLocked()
+    {
+        var identity = _snapshot.Configuration.DeviceIdentity with
+        {
+            DeviceId = _snapshot.DeviceId,
+            AgentVersion = $"v{_snapshot.AgentVersion}",
+            OsBuild = Environment.OSVersion.VersionString.Replace("Microsoft Windows", "Windows").Trim(),
+            EnrolledAtUtc = _snapshot.Onboarding.EnrolledAtUtc ?? _snapshot.Configuration.DeviceIdentity.EnrolledAtUtc,
+            EnrolledState = _snapshot.IsPaired ? "Enrolled" : "Not Enrolled"
+        };
+
+        if (!_snapshot.IsPaired)
+        {
+            identity = identity with { EnrolledAtUtc = null };
+        }
+
+        if (string.IsNullOrWhiteSpace(identity.EnrolledAccount))
+        {
+            identity = identity with
+            {
+                EnrolledAccount = _snapshot.IsPaired ? "operator@corp.quoodle.io" : "pending@quoodle.local"
+            };
+        }
+
+        if (string.IsNullOrWhiteSpace(identity.LocalStoragePath))
+        {
+            identity = identity with
+            {
+                LocalStoragePath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                    "Quoodle",
+                    "device_id")
+            };
+        }
+
+        var configuration = _snapshot.Configuration with { DeviceIdentity = identity };
+        _snapshot = _snapshot with { Configuration = configuration };
+    }
+
+    private void RebuildDiagnosticsRowsLocked(DateTimeOffset now)
+    {
+        var commandRows = BuildCommandRowsLocked();
+        var kernelRows = BuildKernelRowsLocked(now, commandRows);
+        var wssRows = BuildWssRowsLocked(now, commandRows);
+
+        _snapshot = _snapshot with
+        {
+            WssMessageLog = wssRows,
+            CommandHistoryLog = commandRows,
+            KernelEvents = kernelRows
+        };
+    }
+
+    private IReadOnlyList<CommandHistoryRow> BuildCommandRowsLocked()
+    {
+        if (_snapshot.CommandHistory.Count == 0)
+        {
+            return Array.Empty<CommandHistoryRow>();
+        }
+
+        return _snapshot.CommandHistory
+            .OrderByDescending(x => x.IssuedAtUtc)
+            .Take(47)
+            .Select((entry, index) =>
+            {
+                var priority = index % 9 == 0 || entry.Command.Contains("lock", StringComparison.OrdinalIgnoreCase)
+                    ? "high"
+                    : "normal";
+
+                var state = entry.Status switch
+                {
+                    CommandExecutionStatus.Succeeded => "completed",
+                    CommandExecutionStatus.Failed => "failed",
+                    CommandExecutionStatus.Rejected => "rejected",
+                    CommandExecutionStatus.TimedOut => "timed_out",
+                    CommandExecutionStatus.Executing => "running",
+                    CommandExecutionStatus.Dispatched => "dispatched",
+                    _ => "queued"
+                };
+
+                var execPath = entry.Source == "scheduler" ? "_. Named Pipe" : ">. IOCTL";
+                var kexec = $"kexec-{Math.Abs(entry.Id.GetHashCode()) % 1000:000}";
+                var originUser = entry.Source switch
+                {
+                    "control-plane" => "UID001",
+                    "scheduler" => "UID002",
+                    _ => "UID003"
+                };
+
+                var raw = JsonSerializer.Serialize(new
+                {
+                    command_message_id = entry.Id.ToUpperInvariant(),
+                    method = entry.Command.Replace('.', '_'),
+                    execution_state = state,
+                    priority,
+                    result = new
+                    {
+                        status = entry.Status == CommandExecutionStatus.Succeeded ? "ok" : "error"
+                    },
+                    error_code = string.IsNullOrWhiteSpace(entry.ErrorMessage) ? null : "E-MOCK-4004",
+                    kernel_exec_id = kexec,
+                    issued_at = entry.IssuedAtUtc
+                }, JsonPretty);
+
+                return new CommandHistoryRow(
+                    CommandId: entry.Id.ToUpperInvariant(),
+                    Method: entry.Command.Replace('.', '_'),
+                    Priority: priority,
+                    State: state,
+                    ExecPath: execPath,
+                    KernelExecId: kexec,
+                    IssuedAt: entry.IssuedAtUtc,
+                    DurationMs: entry.DurationMs > 0 ? entry.DurationMs : null,
+                    OriginUser: originUser,
+                    RawJson: raw);
+            })
+            .ToList();
+    }
+
+    private static IReadOnlyList<KernelEventRow> BuildKernelRowsLocked(DateTimeOffset now, IReadOnlyList<CommandHistoryRow> commandRows)
+    {
+        if (commandRows.Count == 0)
+        {
+            return Array.Empty<KernelEventRow>();
+        }
+
+        var rows = new List<KernelEventRow>(14);
+        for (var i = 0; i < 14; i++)
+        {
+            var source = commandRows[i % commandRows.Count];
+            var eventId = 14 - i;
+            var eventType = i % 5 == 0 ? 2 : 1;
+            var opcode = source.Method?.Contains("lock", StringComparison.OrdinalIgnoreCase) == true
+                ? "SHUTDOWN"
+                : i % 4 == 0 ? "REBOOT" : "PING";
+            var status = i % 3 == 1 ? "not_supported" : "ok";
+            var errorCode = status == "ok" ? 0 : 4004;
+            var timestamp = source.IssuedAt ?? now.AddMinutes(-(i + 1) * 7);
+            var agentSeq = 114 - i;
+            var kexec = source.KernelExecId ?? $"kexec-{eventId:000}";
+            var commandId = source.CommandId ?? "-";
+
+            var raw = JsonSerializer.Serialize(new
+            {
+                event_id = eventId,
+                event_type = eventType,
+                timestamp_unix = timestamp.ToUnixTimeSeconds(),
+                payload_json = JsonSerializer.Serialize(new
+                {
+                    opcode,
+                    status,
+                    error_code = errorCode
+                }),
+                request_id = $"req-{eventId:000}",
+                kernel_exec_id = kexec
+            }, JsonPretty);
+
+            rows.Add(new KernelEventRow(
+                EventId: eventId,
+                EventType: eventType,
+                Opcode: opcode,
+                Status: status,
+                ErrorCode: errorCode,
+                KernelExecId: kexec,
+                AgentSeq: agentSeq,
+                CommandId: commandId,
+                Timestamp: timestamp,
+                RawJson: raw));
+        }
+
+        return rows;
+    }
+
+    private IReadOnlyList<WssMessageLogRow> BuildWssRowsLocked(DateTimeOffset now, IReadOnlyList<CommandHistoryRow> commandRows)
+    {
+        var rows = new List<WssMessageLogRow>(82);
+
+        for (var seq = 82; seq >= 1; seq--)
+        {
+            var type = ResolveWssType(seq);
+            var from = type is "COMMAND_DELIVERY" or "COMMAND_ACK" ? "controller" : "agent";
+            var messageId = $"m-{type.ToLowerInvariant().Replace("_", "-")[..Math.Min(6, type.Length)]}-{seq:000}";
+            var timestamp = now.AddSeconds(-(82 - seq) * 42);
+
+            var command = commandRows.Count > 0 ? commandRows[(82 - seq) % commandRows.Count] : null;
+            var bodySummary = type switch
+            {
+                "HEARTBEAT" => $"status=alive uptime={12000 + seq}s error_state=ok",
+                "TELEMETRY" => $"scope=telemetry_basic cpu={_snapshot.CpuPercent}% ram={_snapshot.MemoryPercent}% disk={_snapshot.DiskPercent}%",
+                "KERNEL_EVENT" => $"scope=kernel_event event_id={seq % 15} event_type={(seq % 2) + 1} opcode=PING",
+                "COMMAND_RESULT" => $"{command?.CommandId ?? "CMD-0000"} {command?.Method ?? "health_sample"} execution_state={command?.State ?? "completed"}",
+                "COMMAND_ACK" => $"{command?.CommandId ?? "CMD-0000"} status=received reason=null",
+                _ => $"{command?.CommandId ?? "CMD-0000"} method={command?.Method ?? "ping"} priority={command?.Priority ?? "normal"} TTL=300s"
+            };
+
+            var sigState = type == "COMMAND_RESULT" && seq % 14 == 0 ? "not_ok" : "ok";
+            var raw = JsonSerializer.Serialize(new
+            {
+                type,
+                from,
+                device_id = _snapshot.DeviceId,
+                seq,
+                timestamp,
+                body = new
+                {
+                    message_id = command?.CommandId ?? messageId.ToUpperInvariant(),
+                    summary = bodySummary,
+                    sig = sigState
+                }
+            }, JsonPretty);
+
+            rows.Add(new WssMessageLogRow(
+                Sequence: seq,
+                Type: type,
+                From: from,
+                MessageId: messageId,
+                Timestamp: timestamp,
+                BodySummary: bodySummary,
+                SigState: sigState,
+                RawJson: raw));
+        }
+
+        return rows;
+    }
+
+    private static string ResolveWssType(int seq)
+    {
+        if (seq % 13 == 0) return "COMMAND_ACK";
+        if (seq % 11 == 0) return "COMMAND_DELIVERY";
+        if (seq % 7 == 0) return "COMMAND_RESULT";
+        if (seq % 5 == 0) return "TELEMETRY";
+        if (seq % 3 == 0) return "KERNEL_EVENT";
+        return "HEARTBEAT";
     }
 
     private void AddActivityLocked(ActivitySeverity severity, string source, string title, string details)
@@ -809,6 +1236,34 @@ public sealed class MockAgentStateProvider : IAgentStateProvider
 
         _snapshot = _snapshot with { Activity = next };
     }
+
+    private void RefreshLegacySettingsFromConfigurationLocked()
+    {
+        var notifications = _snapshot.Configuration.Notifications;
+        var security = _snapshot.Configuration.Security;
+        var current = _snapshot.Settings;
+
+        var notifyInfo = notifications.NotifyConnectionRecovered
+            || notifications.NotifyKernelEventReceived
+            || notifications.NotifyCommandCompletedSuccessfully;
+
+        var notifyWarningsAndCritical = notifications.NotifyCommandExecutionFailed
+            || notifications.NotifyAuthFailed
+            || notifications.NotifyPolicyHashMismatch
+            || notifications.NotifyConnectionDegraded;
+
+        _snapshot = _snapshot with
+        {
+            Settings = current with
+            {
+                NotifyInfo = notifyInfo,
+                NotifyWarningsAndCritical = notifyWarningsAndCritical,
+                CollectDiagnostics = security.KernelGuardEnabled
+            }
+        };
+    }
+
+    private static int PositiveOrFallback(int value, int fallback) => value > 0 ? value : fallback;
 
     private static int Clamp(int value, int min, int max) => Math.Max(min, Math.Min(max, value));
 

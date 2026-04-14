@@ -18,6 +18,12 @@ public sealed partial class StatusChip : UserControl
         typeof(StatusChip),
         new PropertyMetadata("Neutral", OnVisualPropertyChanged));
 
+    public static readonly DependencyProperty CompactProperty = DependencyProperty.Register(
+        nameof(Compact),
+        typeof(bool),
+        typeof(StatusChip),
+        new PropertyMetadata(false, OnVisualPropertyChanged));
+
     public StatusChip()
     {
         InitializeComponent();
@@ -36,6 +42,12 @@ public sealed partial class StatusChip : UserControl
         set => SetValue(ToneProperty, value);
     }
 
+    public bool Compact
+    {
+        get => (bool)GetValue(CompactProperty);
+        set => SetValue(CompactProperty, value);
+    }
+
     private static void OnVisualPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         (d as StatusChip)?.Render();
@@ -44,6 +56,25 @@ public sealed partial class StatusChip : UserControl
     private void Render()
     {
         ChipText.Text = Label;
+
+        if (Compact)
+        {
+            ChipBorder.Padding = new Thickness(8, 3, 8, 3);
+            ChipBorder.CornerRadius = new CornerRadius(8);
+            ToneDot.Width = 7;
+            ToneDot.Height = 7;
+            ChipText.FontSize = 12;
+            ChipContent.Spacing = 5;
+        }
+        else
+        {
+            ChipBorder.Padding = new Thickness(12, 6, 12, 6);
+            ChipBorder.CornerRadius = new CornerRadius(16);
+            ToneDot.Width = 9;
+            ToneDot.Height = 9;
+            ChipText.FontSize = 13;
+            ChipContent.Spacing = 7;
+        }
 
         var normalizedTone = (Tone ?? string.Empty).ToLowerInvariant();
         var (backgroundKey, foregroundKey) = normalizedTone switch

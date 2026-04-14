@@ -10,19 +10,21 @@
         x:Name="CardBorder"
         Style="{StaticResource CardBorderStyle}"
         MinWidth="180"
-        Padding="16">
-        <StackPanel Spacing="9">
+        MinHeight="168"
+        Padding="18,16">
+        <StackPanel Spacing="12">
             <Grid ColumnSpacing="8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <Border
                     x:Name="IconHost"
-                    Width="34"
-                    Height="34"
-                    CornerRadius="8"
+                    Width="36"
+                    Height="36"
+                    CornerRadius="9"
                     Background="{ThemeResource SurfaceAltBrush}">
                     <FontIcon
                         x:Name="GlyphIcon"
@@ -37,19 +39,57 @@
                     x:Name="TitleText"
                     Grid.Column="1"
                     Style="{StaticResource MutedTextStyle}"
-                    VerticalAlignment="Center" />
+                    VerticalAlignment="Center"
+                    TextWrapping="Wrap"
+                    MaxLines="2"
+                    Margin="4,0,0,0" />
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
+                    <Border
+                        x:Name="StatusBadgeHost"
+                        Visibility="Collapsed"
+                        CornerRadius="10"
+                        Padding="8,4">
+                        <TextBlock x:Name="StatusBadgeText" FontSize="12" FontWeight="SemiBold" />
+                    </Border>
+                    <Border
+                        x:Name="CountBadgeHost"
+                        Visibility="Collapsed"
+                        CornerRadius="12"
+                        Padding="8,4">
+                        <TextBlock x:Name="CountBadgeText" FontSize="12" FontWeight="SemiBold" />
+                    </Border>
+                </StackPanel>
             </Grid>
 
             <TextBlock
                 x:Name="ValueText"
                 FontSize="28"
                 FontWeight="SemiBold"
-                Foreground="{ThemeResource TextPrimaryBrush}" />
+                Foreground="{ThemeResource TextPrimaryBrush}"
+                TextWrapping="Wrap"
+                MaxLines="1" />
 
-            <TextBlock
-                x:Name="SubtitleText"
-                Style="{StaticResource MutedTextStyle}"
-                TextWrapping="Wrap" />
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock
+                    x:Name="SubtitleText"
+                    Style="{StaticResource MutedTextStyle}"
+                    TextWrapping="Wrap"
+                    MaxLines="2" />
+
+                <TextBlock
+                    x:Name="DeltaTextBlock"
+                    Grid.Column="1"
+                    Visibility="Collapsed"
+                    FontSize="13"
+                    FontWeight="SemiBold"
+                    VerticalAlignment="Bottom" />
+            </Grid>
         </StackPanel>
     </Border>
 </UserControl>

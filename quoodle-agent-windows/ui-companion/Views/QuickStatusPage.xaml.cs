@@ -1,6 +1,8 @@
-﻿using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Quoodle.Agent.UiCompanion.ViewModels;
+using System.ComponentModel;
 
 namespace Quoodle.Agent.UiCompanion.Views;
 
@@ -12,100 +14,118 @@ public sealed partial class QuickStatusPage : Page
     {
         InitializeComponent();
         _vm = new QuickStatusViewModel(App.StateStore);
-        _vm.PropertyChanged += (_, _) => Render();
+        _vm.PropertyChanged += HandleViewModelPropertyChanged;
+        Unloaded += OnPageUnloaded;
         Render();
+    }
+
+    private void HandleViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (DispatcherQueue.HasThreadAccess)
+        {
+            Render();
+            return;
+        }
+
+        _ = DispatcherQueue.TryEnqueue(Render);
     }
 
     private void Render()
     {
-        ConnectionChip.Label = _vm.Connection;
-        ConnectionChip.Tone = ResolveConnectionTone(_vm.Connection);
+        ConnectionPillText.Text = _vm.Connection;
+        var toneBrush = BrushOf(ToneToBrushKey(_vm.ConnectionTone));
+        ConnectionPillDot.Fill = toneBrush;
+        ConnectionPillIcon.Foreground = toneBrush;
+        ConnectionPillText.Foreground = toneBrush;
+        ConnectionPill.BorderBrush = toneBrush;
+        ConnectionPill.Background = ToneToBackground(_vm.ConnectionTone);
 
         DeviceNameText.Text = _vm.DeviceName;
         DeviceIdText.Text = _vm.DeviceId;
         AgentVersionText.Text = _vm.AgentVersion;
-        LatencyHeaderText.Text = _vm.ReconnectAttempts == 0 ? "24h 0m" : $"{_vm.ReconnectAttempts} reconnects";
-        PolicyHashText.Text = $"sha256:{Math.Abs(_vm.DeviceId.GetHashCode()):x8}";
-
-        HealthChip.Label = _vm.Health;
-        HealthChip.Tone = _vm.Health switch
-        {
-            "Healthy" => "Success",
-            "Warning" => "Warning",
-            "Critical" => "Danger",
-            _ => "Neutral"
-        };
+        UptimeText.Text = _vm.UptimeLabel;
+        PolicyHashText.Text = _vm.PolicyHash;
 
         LastSyncCard.Title = "Last Sync";
-        LastSyncCard.Value = FormatAsAgo(_vm.LastSync);
+        LastSyncCard.Value = _vm.LastSyncAge;
         LastSyncCard.Subtitle = "Auto-sync every 30s";
         LastSyncCard.Tone = "Info";
 
         CpuCard.Title = "CPU Usage";
-        CpuCard.Value = $"{_vm.CpuPercent:0.0}%";
+        CpuCard.Value = _vm.CpuUsageLabel;
         CpuCard.Subtitle = "Agent process only";
-        CpuCard.Tone = _vm.Connection == "Connected" ? "Success" : "Info";
+        CpuCard.Tone = _vm.ConnectionTone == "Success" ? "Success" : "Info";
 
         MemoryCard.Title = "Memory";
-        MemoryCard.Value = $"{Math.Max(12, _vm.MemoryPercent) * 1.1:0.0} MB";
+        MemoryCard.Value = _vm.MemoryMbLabel;
         MemoryCard.Subtitle = "Resident set size";
         MemoryCard.Tone = "Info";
 
         EventsCard.Title = "Pending Events";
         EventsCard.Value = _vm.PendingEvents.ToString();
         EventsCard.Subtitle = "Awaiting flush";
-        EventsCard.Tone = _vm.PendingEvents > 0 ? "Warning" : "Success";
+        EventsCard.BadgeText = _vm.HasPendingEvents ? _vm.PendingEvents.ToString() : string.Empty;
+        EventsCard.BadgeTone = _vm.HasPendingEvents ? "Warning" : "Neutral";
+        EventsCard.Tone = _vm.HasPendingEvents ? "Warning" : "Success";
 
-        ActivityText.Text = _vm.Activity;
-        HeartbeatText.Text = $"Last heartbeat {FormatAsAgo(_vm.LastHeartbeat)}";
-        ReconnectText.Text = _vm.ReconnectAttempts == 0
-            ? "Stable transport path"
-            : $"Reconnect attempts {_vm.ReconnectAttempts}";
+        ActivityText.Text = _vm.ActivityTitle;
+        ActivityDetailsText.Text = $"{_vm.ActivityDetails} - last heartbeat {_vm.LastHeartbeatAge}";
 
-        WarningTitleText.Text = _vm.PendingEvents > 0
-            ? $"{_vm.PendingEvents} kernel events pending review"
-            : "No queued events";
-        SyncText.Text = _vm.PendingEvents > 0
-            ? "Events are queued for flush. Trigger a sync or inspect diagnostics."
-            : "Transport is healthy and the mock queue is clear.";
+        WarningTitleText.Text = _vm.WarningTitle;
+        WarningDetailsText.Text = _vm.WarningDetails;
+        WarningReviewText.Text = _vm.HasPendingEvents ? "Review ->" : "Healthy";
+
+        WarningPanel.Background = _vm.HasPendingEvents
+            ? BrushOf("WarningPanelBackgroundBrush")
+            : BrushOf("SurfaceAltBrush");
+        WarningPanel.BorderBrush = _vm.HasPendingEvents
+            ? BrushOf("WarningPanelBorderBrush")
+            : BrushOf("BorderBrush");
+
+        var warningTextBrush = _vm.HasPendingEvents
+            ? BrushOf("ChipWarningForegroundBrush")
+            : BrushOf("TextSecondaryBrush");
+        WarningTitleText.Foreground = warningTextBrush;
+        WarningDetailsText.Foreground = warningTextBrush;
+        WarningReviewText.Foreground = warningTextBrush;
     }
 
-    private static string FormatAsAgo(string hhmmss)
+    private Brush BrushOf(string key)
     {
-        if (!TimeSpan.TryParse(hhmmss, out var time))
+        if (Resources.TryGetValue(key, out var localObj) && localObj is Brush localBrush)
         {
-            return hhmmss;
+            return localBrush;
         }
 
-        var now = DateTime.Now.TimeOfDay;
-        var diff = now - time;
-        if (diff < TimeSpan.Zero)
+        if (Application.Current.Resources.TryGetValue(key, out var appObj) && appObj is Brush appBrush)
         {
-            diff += TimeSpan.FromDays(1);
+            return appBrush;
         }
 
-        if (diff.TotalSeconds < 60)
-        {
-            return $"{Math.Max(1, (int)diff.TotalSeconds)}s ago";
-        }
-
-        if (diff.TotalMinutes < 60)
-        {
-            return $"{(int)diff.TotalMinutes}m ago";
-        }
-
-        return $"{(int)diff.TotalHours}h ago";
+        return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
     }
 
-    private static string ResolveConnectionTone(string connection)
+    private Brush ToneToBackground(string tone)
     {
-        return connection switch
+        return tone switch
         {
-            "Connected" => "Success",
-            "Reconnecting" => "Warning",
-            "Offline" => "Danger",
-            "AuthFailed" => "Danger",
-            _ => "Info"
+            "Success" => BrushOf("ChipSuccessBackgroundBrush"),
+            "Warning" => BrushOf("ChipWarningBackgroundBrush"),
+            "Danger" => BrushOf("ChipDangerBackgroundBrush"),
+            "Info" => BrushOf("ChipInfoBackgroundBrush"),
+            _ => BrushOf("SurfaceAltBrush")
+        };
+    }
+
+    private static string ToneToBrushKey(string tone)
+    {
+        return tone switch
+        {
+            "Success" => "SuccessBrush",
+            "Warning" => "WarningBrush",
+            "Danger" => "DangerBrush",
+            "Info" => "InfoBrush",
+            _ => "TextSecondaryBrush"
         };
     }
 
@@ -125,5 +145,12 @@ public sealed partial class QuickStatusPage : Page
     private void OnViewLogs(object sender, RoutedEventArgs e)
     {
         Frame?.Navigate(typeof(ActivityDiagnosticsPage));
+    }
+
+    private void OnPageUnloaded(object sender, RoutedEventArgs e)
+    {
+        Unloaded -= OnPageUnloaded;
+        _vm.PropertyChanged -= HandleViewModelPropertyChanged;
+        _vm.Dispose();
     }
 }

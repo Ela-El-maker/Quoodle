@@ -4,18 +4,83 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:models="using:Quoodle.Agent.UiCompanion.Models"
+    xmlns:controls="using:Quoodle.Agent.UiCompanion.Controls"
+    xmlns:viewmodels="using:Quoodle.Agent.UiCompanion.ViewModels"
     mc:Ignorable="d"
     Background="{ThemeResource AppBackgroundBrush}">
 
-    <Grid Padding="16,8,16,16" MaxWidth="1320" RowSpacing="12">
+    <Page.Resources>
+        <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#FF2A303C" />
+        <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#FF323947" />
+        <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="#FF232936" />
+        <SolidColorBrush x:Key="ListViewItemForegroundSelected" Color="#FFE9EDF5" />
+
+        <Style x:Key="DiagnosticsTabButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="11" />
+        </Style>
+
+        <Style x:Key="DiagnosticsToolButtonStyle" TargetType="Button">
+            <Setter Property="Foreground" Value="{ThemeResource TextSecondaryBrush}" />
+            <Setter Property="Background" Value="{ThemeResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource InputBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="DiagnosticsHeaderButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="Foreground" Value="{ThemeResource TextMutedBrush}" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="DiagnosticsTableCellStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{ThemeResource TextSecondaryBrush}" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="PagerButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#1B212D" />
+            <Setter Property="BorderBrush" Value="{ThemeResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Foreground" Value="{ThemeResource TextSecondaryBrush}" />
+            <Setter Property="Padding" Value="14,6" />
+            <Setter Property="FontSize" Value="15" />
+        </Style>
+
+        <Style x:Key="DiagnosticsRowItemStyle" TargetType="ListViewItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Margin" Value="0" />
+        </Style>
+    </Page.Resources>
+
+    <Grid Padding="18,8,18,18" MaxWidth="1336" RowSpacing="14">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <StackPanel Spacing="4">
+        <StackPanel Spacing="5">
             <TextBlock Text="Activity &amp; Diagnostics" Style="{StaticResource PageTitleTextStyle}" />
             <TextBlock Text="Full audit trail of WSS messages, command history, and kernel events." Style="{StaticResource PageSubtitleTextStyle}" />
         </StackPanel>
@@ -23,39 +88,66 @@
         <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="10">
             <Grid ColumnSpacing="10">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <Border Background="{ThemeResource SurfaceAltBrush}" BorderBrush="{ThemeResource BorderBrush}" BorderThickness="1" CornerRadius="9" Padding="14,8">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBlock Text="WSS Message Log" FontWeight="SemiBold" />
-                        <Border Background="{ThemeResource ChipNeutralBackgroundBrush}" CornerRadius="8" Padding="8,2">
-                            <TextBlock x:Name="TabCountText" Foreground="{ThemeResource ChipNeutralForegroundBrush}" />
-                        </Border>
-                    </StackPanel>
-                </Border>
+                <Button
+                    x:Name="WssTabButton"
+                    Grid.Column="0"
+                    Click="OnWssTabClick"
+                    Style="{StaticResource DiagnosticsTabButtonStyle}">
+                    <Border x:Name="WssTabSurface" CornerRadius="10" Padding="18,11" BorderThickness="1">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock x:Name="WssTabLabelText" Text="WSS Message Log" FontWeight="SemiBold" FontSize="15" />
+                            <Border x:Name="WssTabBadge" CornerRadius="7" Padding="8,2">
+                                <TextBlock x:Name="WssTabCountText" FontSize="12" FontWeight="SemiBold" />
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </Button>
 
-                <Border Grid.Column="1" Background="{ThemeResource SurfaceAltBrush}" BorderBrush="{ThemeResource BorderBrush}" BorderThickness="1" CornerRadius="9" Padding="14,8">
-                    <TextBlock Text="Command History" Style="{StaticResource PageSubtitleTextStyle}" />
-                </Border>
+                <Button
+                    x:Name="CommandTabButton"
+                    Grid.Column="1"
+                    Click="OnCommandTabClick"
+                    Style="{StaticResource DiagnosticsTabButtonStyle}">
+                    <Border x:Name="CommandTabSurface" CornerRadius="10" Padding="18,11" BorderThickness="1">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock x:Name="CommandTabLabelText" Text="Command History" FontWeight="SemiBold" FontSize="15" />
+                            <Border x:Name="CommandTabBadge" CornerRadius="7" Padding="8,2">
+                                <TextBlock x:Name="CommandTabCountText" FontSize="12" FontWeight="SemiBold" />
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </Button>
 
-                <Border Grid.Column="2" Background="{ThemeResource SurfaceAltBrush}" BorderBrush="{ThemeResource BorderBrush}" BorderThickness="1" CornerRadius="9" Padding="14,8">
-                    <TextBlock Text="Kernel Events" Style="{StaticResource PageSubtitleTextStyle}" />
-                </Border>
+                <Button
+                    x:Name="KernelTabButton"
+                    Grid.Column="2"
+                    Click="OnKernelTabClick"
+                    Style="{StaticResource DiagnosticsTabButtonStyle}">
+                    <Border x:Name="KernelTabSurface" CornerRadius="10" Padding="18,11" BorderThickness="1">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock x:Name="KernelTabLabelText" Text="Kernel Events" FontWeight="SemiBold" FontSize="15" />
+                            <Border x:Name="KernelTabBadge" CornerRadius="7" Padding="8,2">
+                                <TextBlock x:Name="KernelTabCountText" FontSize="12" FontWeight="SemiBold" />
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </Button>
             </Grid>
         </Border>
 
-        <Grid Grid.Row="2" ColumnSpacing="12">
+        <Grid Grid.Row="2" ColumnSpacing="14">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="2.4*" />
-                <ColumnDefinition Width="1.2*" />
+                <ColumnDefinition Width="2.45*" />
+                <ColumnDefinition Width="1.25*" />
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}" Padding="0">
-                <Grid RowSpacing="0">
+                <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -63,106 +155,548 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <Grid Padding="12" ColumnSpacing="8">
+                    <Grid x:Name="ToolbarGrid" Padding="16,14" ColumnSpacing="10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="2.2*" />
-                            <ColumnDefinition Width="1.1*" />
-                            <ColumnDefinition Width="1.1*" />
+                            <ColumnDefinition x:Name="ToolbarSearchColumn" Width="2.2*" />
+                            <ColumnDefinition x:Name="ToolbarFilter1Column" Width="1.2*" />
+                            <ColumnDefinition x:Name="ToolbarFilter2Column" Width="1.2*" />
+                            <ColumnDefinition x:Name="ToolbarFilter3Column" Width="1.2*" />
+                            <ColumnDefinition x:Name="ToolbarExportColumn" Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBox
+                            x:Name="SearchBox"
+                            Grid.Column="0"
+                            PlaceholderText="Search"
+                            FontSize="15"
+                            TextChanged="OnSearchTextChanged" />
+
+                        <ComboBox
+                            x:Name="Filter1Box"
+                            Grid.Column="1"
+                            FontSize="15"
+                            SelectionChanged="OnFilter1Changed" />
+
+                        <ComboBox
+                            x:Name="Filter2Box"
+                            Grid.Column="2"
+                            FontSize="15"
+                            SelectionChanged="OnFilter2Changed" />
+
+                        <ComboBox
+                            x:Name="Filter3Box"
+                            Grid.Column="3"
+                            FontSize="15"
+                            SelectionChanged="OnFilter3Changed" />
+
+                        <Button
+                            x:Name="ExportJsonButton"
+                            Grid.Row="1"
+                            Grid.Column="4"
+                            Margin="0,10,0,0"
+                            Click="OnExportJson"
+                            Style="{StaticResource DiagnosticsToolButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE74D;" FontSize="13" />
+                                <TextBlock Text="Export JSON" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+
+                    <Border Grid.Row="1" Height="1" Background="{ThemeResource BorderBrush}" />
+
+                    <Grid Grid.Row="2">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <ScrollViewer
+                            Grid.RowSpan="2"
+                            HorizontalScrollMode="Auto"
+                            HorizontalScrollBarVisibility="Auto"
+                            VerticalScrollMode="Disabled"
+                            VerticalScrollBarVisibility="Disabled">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+
+                                <Grid
+                                    x:Name="WssHeaderRow"
+                                    Grid.Row="0"
+                                    MinWidth="1200"
+                                    Padding="16,11"
+                                    Background="#AA0E1119"
+                                    ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="90" />
+                                        <ColumnDefinition Width="170" />
+                                        <ColumnDefinition Width="120" />
+                                        <ColumnDefinition Width="170" />
+                                        <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="100" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <Button Tag="seq" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Seq" />
+                                            <TextBlock x:Name="WssSeqSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="1" Tag="type" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Type" />
+                                            <TextBlock x:Name="WssTypeSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="2" Tag="from" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="From" />
+                                            <TextBlock x:Name="WssFromSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="3" Tag="message_id" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Message ID" />
+                                            <TextBlock x:Name="WssMessageIdSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="4" Tag="timestamp" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Timestamp" />
+                                            <TextBlock x:Name="WssTimestampSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="5" Tag="body_summary" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Body Summary" />
+                                            <TextBlock x:Name="WssBodySummarySortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="6" Tag="sig" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Sig" />
+                                            <TextBlock x:Name="WssSigSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+
+                                <Grid
+                                    x:Name="CommandHeaderRow"
+                                    Grid.Row="0"
+                                    MinWidth="1440"
+                                    Padding="16,11"
+                                    Background="#AA0E1119"
+                                    ColumnSpacing="10"
+                                    Visibility="Collapsed">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="170" />
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="110" />
+                                        <ColumnDefinition Width="130" />
+                                        <ColumnDefinition Width="140" />
+                                        <ColumnDefinition Width="160" />
+                                        <ColumnDefinition Width="180" />
+                                        <ColumnDefinition Width="130" />
+                                        <ColumnDefinition Width="120" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <Button Tag="command_id" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Command ID" />
+                                            <TextBlock x:Name="CmdCommandIdSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="1" Tag="method" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Method" />
+                                            <TextBlock x:Name="CmdMethodSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="2" Tag="priority" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Priority" />
+                                            <TextBlock x:Name="CmdPrioritySortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="3" Tag="state" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="State" />
+                                            <TextBlock x:Name="CmdStateSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="4" Tag="exec_path" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Exec Path" />
+                                            <TextBlock x:Name="CmdExecPathSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="5" Tag="kernel_exec_id" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Kernel Exec ID" />
+                                            <TextBlock x:Name="CmdKernelExecIdSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="6" Tag="issued_at" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Issued At" />
+                                            <TextBlock x:Name="CmdIssuedAtSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="7" Tag="duration" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Duration" />
+                                            <TextBlock x:Name="CmdDurationSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="8" Tag="origin_user" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Origin User" />
+                                            <TextBlock x:Name="CmdOriginUserSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+
+                                <Grid
+                                    x:Name="KernelHeaderRow"
+                                    Grid.Row="0"
+                                    MinWidth="1500"
+                                    Padding="16,11"
+                                    Background="#AA0E1119"
+                                    ColumnSpacing="10"
+                                    Visibility="Collapsed">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="110" />
+                                        <ColumnDefinition Width="120" />
+                                        <ColumnDefinition Width="130" />
+                                        <ColumnDefinition Width="140" />
+                                        <ColumnDefinition Width="120" />
+                                        <ColumnDefinition Width="160" />
+                                        <ColumnDefinition Width="120" />
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="220" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <Button Tag="event_id" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Event ID" />
+                                            <TextBlock x:Name="KerEventIdSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="1" Tag="event_type" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Event Type" />
+                                            <TextBlock x:Name="KerEventTypeSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="2" Tag="opcode" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Opcode" />
+                                            <TextBlock x:Name="KerOpcodeSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="3" Tag="status" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Status" />
+                                            <TextBlock x:Name="KerStatusSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="4" Tag="error_code" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Error Code" />
+                                            <TextBlock x:Name="KerErrorCodeSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="5" Tag="kernel_exec_id" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Kernel Exec ID" />
+                                            <TextBlock x:Name="KerKernelExecIdSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="6" Tag="agent_seq" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Agent Seq" />
+                                            <TextBlock x:Name="KerAgentSeqSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="7" Tag="command_id" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Command ID" />
+                                            <TextBlock x:Name="KerCommandIdSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="8" Tag="timestamp" Click="OnSortColumnClick" Style="{StaticResource DiagnosticsHeaderButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Timestamp" />
+                                            <TextBlock x:Name="KerTimestampSortGlyph" FontSize="11" />
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+
+                                <ListView
+                                    x:Name="WssListView"
+                                    Grid.Row="1"
+                                    MinWidth="1200"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    SelectionMode="Single"
+                                    SelectionChanged="OnWssRowSelectionChanged"
+                                    ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                                    ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                    ItemContainerStyle="{StaticResource DiagnosticsRowItemStyle}">
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate x:DataType="viewmodels:WssMessageLogRowView">
+                                            <Border BorderBrush="#1D2432" BorderThickness="0,0,0,1">
+                                                <Grid Padding="16,11" ColumnSpacing="10">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="90" />
+                                                        <ColumnDefinition Width="170" />
+                                                        <ColumnDefinition Width="120" />
+                                                        <ColumnDefinition Width="170" />
+                                                        <ColumnDefinition Width="220" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="100" />
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <TextBlock Text="{x:Bind Seq}" Style="{StaticResource DiagnosticsTableCellStyle}" />
+                                                    <controls:StatusChip Grid.Column="1" Label="{x:Bind Type}" Tone="{x:Bind TypeTone}" Compact="True" />
+                                                    <TextBlock Grid.Column="2" Text="{x:Bind From}" Foreground="{ThemeResource InfoBrush}" Style="{StaticResource DiagnosticsTableCellStyle}" />
+                                                    <TextBlock Grid.Column="3" Text="{x:Bind MessageId}" Style="{StaticResource DiagnosticsTableCellStyle}" />
+                                                    <TextBlock Grid.Column="4" Text="{x:Bind Timestamp}" Style="{StaticResource DiagnosticsTableCellStyle}" />
+                                                    <TextBlock Grid.Column="5" Text="{x:Bind BodySummary}" Style="{StaticResource DiagnosticsTableCellStyle}" MaxLines="1" />
+                                                    <controls:StatusChip Grid.Column="6" Label="{x:Bind SigLabel}" Tone="{x:Bind SigTone}" Compact="True" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+
+                                <ListView
+                                    x:Name="CommandListView"
+                                    Grid.Row="1"
+                                    MinWidth="1440"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    SelectionMode="Single"
+                                    SelectionChanged="OnCommandRowSelectionChanged"
+                                    ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                                    ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                    ItemContainerStyle="{StaticResource DiagnosticsRowItemStyle}"
+                                    Visibility="Collapsed">
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate x:DataType="viewmodels:CommandHistoryRowView">
+                                            <Border BorderBrush="#1D2432" BorderThickness="0,0,0,1">
+                                                <Grid Padding="16,11" ColumnSpacing="10">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="170" />
+                                                        <ColumnDefinition Width="150" />
+                                                        <ColumnDefinition Width="110" />
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="140" />
+                                                        <ColumnDefinition Width="160" />
+                                                        <ColumnDefinition Width="180" />
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="120" />
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <TextBlock Text="{x:Bind CommandId}" Style="{StaticResource DiagnosticsTableCellStyle}" />
+                                                    <TextBlock Grid.Column="1" Text="{x:Bind Method}" Foreground="{ThemeResource InfoBrush}" Style="{StaticResource DiagnosticsTableCellStyle}" />
+                                                    <controls:StatusChip Grid.Column="2" Label="{x:Bind Priority}" Tone="{x:Bind PriorityTone}" Compact="True" />
+                                                    <controls:StatusChip Grid.Column="3" Label="{x:Bind State}" Tone="{x:Bind StateTone}" Compact="True" />
+                                                    <TextBlock Grid.Column="4" Text="{x:Bind ExecPath}" Foreground="{ThemeResource InfoBrush}" Style="{StaticResource DiagnosticsTableCellStyle}" />
+                                                    <TextBlock Grid.Column="5" Text="{x:Bind KernelExecId}" Style="{StaticResource DiagnosticsTableCellStyle}" />
+                                                    <TextBlock Grid.Column="6" Text="{x:Bind IssuedAt}" Style="{StaticResource DiagnosticsTableCellStyle}" />
+                                                    <TextBlock Grid.Column="7" Text="{x:Bind Duration}" Style="{StaticResource DiagnosticsTableCellStyle}" />
+                                                    <TextBlock Grid.Column="8" Text="{x:Bind OriginUser}" Style="{StaticResource DiagnosticsTableCellStyle}" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+
+                                <ListView
+                                    x:Name="KernelListView"
+                                    Grid.Row="1"
+                                    MinWidth="1500"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    SelectionMode="Single"
+                                    SelectionChanged="OnKernelRowSelectionChanged"
+                                    ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                                    ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                    ItemContainerStyle="{StaticResource DiagnosticsRowItemStyle}"
+                                    Visibility="Collapsed">
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate x:DataType="viewmodels:KernelEventRowView">
+                                            <Border BorderBrush="#1D2432" BorderThickness="0,0,0,1">
+                                                <Grid Padding="16,11" ColumnSpacing="10">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="110" />
+                                                        <ColumnDefinition Width="120" />
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="140" />
+                                                        <ColumnDefinition Width="120" />
+                                                        <ColumnDefinition Width="160" />
+                                                        <ColumnDefinition Width="120" />
+                                                        <ColumnDefinition Width="150" />
+                                                        <ColumnDefinition Width="220" />
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <TextBlock Text="{x:Bind EventId}" Style="{StaticResource DiagnosticsTableCellStyle}" />
+                                                    <TextBlock Grid.Column="1" Text="{x:Bind EventType}" Style="{StaticResource DiagnosticsTableCellStyle}" />
+                                                    <controls:StatusChip Grid.Column="2" Label="{x:Bind Opcode}" Tone="{x:Bind OpcodeTone}" Compact="True" />
+                                                    <controls:StatusChip Grid.Column="3" Label="{x:Bind Status}" Tone="{x:Bind StatusTone}" Compact="True" />
+                                                    <TextBlock Grid.Column="4" Text="{x:Bind ErrorCode}" Style="{StaticResource DiagnosticsTableCellStyle}" />
+                                                    <TextBlock Grid.Column="5" Text="{x:Bind KernelExecId}" Style="{StaticResource DiagnosticsTableCellStyle}" />
+                                                    <TextBlock Grid.Column="6" Text="{x:Bind AgentSeq}" Style="{StaticResource DiagnosticsTableCellStyle}" />
+                                                    <TextBlock Grid.Column="7" Text="{x:Bind CommandId}" Style="{StaticResource DiagnosticsTableCellStyle}" />
+                                                    <TextBlock Grid.Column="8" Text="{x:Bind Timestamp}" Style="{StaticResource DiagnosticsTableCellStyle}" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                            </Grid>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <Border Grid.Row="3" Height="1" Background="{ThemeResource BorderBrush}" />
+
+                    <Grid Grid.Row="3" Margin="16,11,16,11">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
-                        <TextBox x:Name="SearchBox" PlaceholderText="Search type, message ID, summary" IsEnabled="False" />
-                        <ComboBox x:Name="FilterBox" Grid.Column="1" SelectionChanged="OnFilterChanged" />
-                        <ComboBox Grid.Column="2" IsEnabled="False">
-                            <ComboBoxItem Content="All Sources" />
-                        </ComboBox>
-                        <Button Grid.Column="3" Content="Export JSON" Style="{StaticResource SecondaryButtonStyle}" IsEnabled="False" />
+                        <TextBlock x:Name="TableFooterText" Style="{StaticResource MutedTextStyle}" VerticalAlignment="Center" />
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                            <Button
+                                x:Name="PrevPageButton"
+                                Click="OnPrevPageClick"
+                                Content="Prev"
+                                Style="{StaticResource PagerButtonStyle}" />
+
+                            <Border
+                                Background="{ThemeResource SurfaceAltBrush}"
+                                BorderBrush="{ThemeResource BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="15,7">
+                                <TextBlock x:Name="CurrentPageText" Foreground="{ThemeResource TextPrimaryBrush}" FontSize="15" FontWeight="SemiBold" />
+                            </Border>
+
+                            <Button
+                                x:Name="NextPageButton"
+                                Click="OnNextPageClick"
+                                Content="Next"
+                                Style="{StaticResource PagerButtonStyle}" />
+                        </StackPanel>
                     </Grid>
-
-                    <Grid Grid.Row="1" Background="#AA121621" Padding="12,10" ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="86" />
-                            <ColumnDefinition Width="120" />
-                            <ColumnDefinition Width="110" />
-                            <ColumnDefinition Width="150" />
-                            <ColumnDefinition Width="200" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="64" />
-                        </Grid.ColumnDefinitions>
-
-                        <TextBlock Text="Seq" Style="{StaticResource MutedTextStyle}" />
-                        <TextBlock Grid.Column="1" Text="Type" Style="{StaticResource MutedTextStyle}" />
-                        <TextBlock Grid.Column="2" Text="From" Style="{StaticResource MutedTextStyle}" />
-                        <TextBlock Grid.Column="3" Text="Message ID" Style="{StaticResource MutedTextStyle}" />
-                        <TextBlock Grid.Column="4" Text="Timestamp" Style="{StaticResource MutedTextStyle}" />
-                        <TextBlock Grid.Column="5" Text="Body Summary" Style="{StaticResource MutedTextStyle}" />
-                        <TextBlock Grid.Column="6" Text="Sig" Style="{StaticResource MutedTextStyle}" />
-                    </Grid>
-
-                    <ListView
-                        Grid.Row="2"
-                        x:Name="ActivityList"
-                        SelectionMode="None"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Padding="0">
-                        <ListView.ItemTemplate>
-                            <DataTemplate x:DataType="models:ActivityEntry">
-                                <Grid Padding="12,10" ColumnSpacing="12" Background="Transparent">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="86" />
-                                        <ColumnDefinition Width="120" />
-                                        <ColumnDefinition Width="110" />
-                                        <ColumnDefinition Width="150" />
-                                        <ColumnDefinition Width="200" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="64" />
-                                    </Grid.ColumnDefinitions>
-
-                                    <TextBlock Text="{x:Bind Timestamp.Second, Mode=OneWay}" Style="{StaticResource PageSubtitleTextStyle}" />
-
-                                    <Border Grid.Column="1" Background="{ThemeResource ChipNeutralBackgroundBrush}" CornerRadius="7" Padding="8,3" HorizontalAlignment="Left">
-                                        <TextBlock Text="{x:Bind Title, Mode=OneWay}" Foreground="{ThemeResource ChipNeutralForegroundBrush}" FontSize="12" FontWeight="SemiBold" />
-                                    </Border>
-
-                                    <TextBlock Grid.Column="2" Text="{x:Bind Source, Mode=OneWay}" Foreground="{ThemeResource BrandBrush}" />
-                                    <TextBlock Grid.Column="3" Text="{x:Bind Title, Mode=OneWay}" Style="{StaticResource PageSubtitleTextStyle}" TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Grid.Column="4" Text="{x:Bind Timestamp, Mode=OneWay, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}" Style="{StaticResource PageSubtitleTextStyle}" TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Grid.Column="5" Text="{x:Bind Details, Mode=OneWay}" Style="{StaticResource PageSubtitleTextStyle}" TextTrimming="CharacterEllipsis" MaxLines="1" />
-                                    <TextBlock Grid.Column="6" Text="ok" Foreground="{ThemeResource SuccessBrush}" FontWeight="SemiBold" HorizontalAlignment="Center" />
-                                </Grid>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
-
-                    <TextBlock
-                        Grid.Row="3"
-                        Text="10 messages • page 1 of 1"
-                        Style="{StaticResource MutedTextStyle}"
-                        Margin="12,8,12,10" />
                 </Grid>
             </Border>
 
             <Border Grid.Column="1" Style="{StaticResource CardBorderStyle}" Padding="0">
-                <StackPanel>
-                    <Grid Padding="16,14" ColumnSpacing="10">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Padding="16,14">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
-                        <TextBlock Text="Raw Message" Style="{StaticResource SectionTitleTextStyle}" />
-                        <TextBlock Grid.Column="1" Text="Copy" Style="{StaticResource PageSubtitleTextStyle}" />
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE943;" Foreground="{ThemeResource TextMutedBrush}" />
+                            <TextBlock Text="Raw Message" Style="{StaticResource SectionTitleTextStyle}" />
+                        </StackPanel>
+
+                        <Button
+                            x:Name="CopyRawButton"
+                            Grid.Column="1"
+                            Click="OnCopyRawClick"
+                            Style="{StaticResource DiagnosticsTabButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                <FontIcon Glyph="&#xE8C8;" Foreground="{ThemeResource TextMutedBrush}" />
+                                <TextBlock Text="Copy" Style="{StaticResource PageSubtitleTextStyle}" />
+                            </StackPanel>
+                        </Button>
                     </Grid>
 
-                    <Border Height="1" Background="{ThemeResource BorderBrush}" />
+                    <Border Grid.Row="0" VerticalAlignment="Bottom" Height="1" Background="{ThemeResource BorderBrush}" />
 
-                    <StackPanel Spacing="10" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24,28,24,28">
-                        <TextBlock Text="&lt;/&gt;" Style="{StaticResource SectionTitleTextStyle}" Foreground="{ThemeResource TextMutedBrush}" HorizontalAlignment="Center" />
-                        <TextBlock Text="No message selected" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" />
-                        <TextBlock Text="Click any row in the log tables to inspect its raw JSON envelope." TextWrapping="Wrap" TextAlignment="Center" Style="{StaticResource PageSubtitleTextStyle}" />
-                    </StackPanel>
-                </StackPanel>
+                    <Grid Grid.Row="1">
+                        <StackPanel
+                            x:Name="RawEmptyStatePanel"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Spacing="8"
+                            Margin="26">
+                            <TextBlock Text="&lt;/&gt;" FontSize="32" Foreground="{ThemeResource TextMutedBrush}" HorizontalAlignment="Center" />
+                            <TextBlock Text="No message selected" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                            <TextBlock
+                                Text="Click any row in the log tables to inspect its raw JSON envelope."
+                                TextWrapping="Wrap"
+                                TextAlignment="Center"
+                                Style="{StaticResource PageSubtitleTextStyle}" />
+                        </StackPanel>
+
+                        <ScrollViewer
+                            x:Name="RawJsonScrollViewer"
+                            Margin="18,16,18,16"
+                            VerticalScrollBarVisibility="Auto"
+                            Visibility="Collapsed">
+                            <TextBlock
+                                x:Name="RawJsonTextBlock"
+                                TextWrapping="Wrap"
+                                FontFamily="Consolas"
+                                Foreground="{ThemeResource TextSecondaryBrush}"
+                                FontSize="15"
+                                LineHeight="22" />
+                        </ScrollViewer>
+                    </Grid>
+
+                    <Border Grid.Row="2" Height="1" Background="{ThemeResource BorderBrush}" />
+
+                    <TextBlock
+                        x:Name="RawSizeTextBlock"
+                        Grid.Row="2"
+                        Margin="16,10,16,10"
+                        Style="{StaticResource MutedTextStyle}" />
+                </Grid>
             </Border>
         </Grid>
     </Grid>
