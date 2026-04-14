@@ -11,6 +11,7 @@ class RuntimeCapabilities
      */
     private const RUNTIME_SUPPORTED_METHODS = [
         'ping',
+        'lock_screen',
         'reboot_device',
         'shutdown_device',
         'collect_system_info',

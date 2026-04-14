@@ -163,5 +163,8 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
     Route::middleware('role:admin')->group(function (): void {
         // Policy Engine management
         Route::post('/policy/validate_bundle', [PolicyController::class, 'validateBundle']);
+        Route::get('/policy/app-lock', [PolicyController::class, 'appLockShow']);
+        Route::put('/policy/app-lock', [PolicyController::class, 'appLockUpsert']);
+        Route::delete('/policy/app-lock', [PolicyController::class, 'appLockClear']);
     });
 });

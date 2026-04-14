@@ -107,7 +107,7 @@ class CommandContractEnforcementTest extends TestCase
         $device = $this->createOwnedDevice($admin);
 
         $this->withHeaders($this->makeHeaders($admin))
-            ->postJson('/api/commands', $this->commandPayload($device, 'lock_screen'))
+            ->postJson('/api/commands', $this->commandPayload($device, 'logout_user'))
             ->assertStatus(422)
             ->assertJsonPath('status', 'rejected')
             ->assertJsonPath('reason', 'not_supported_runtime');
@@ -129,6 +129,7 @@ class CommandContractEnforcementTest extends TestCase
 
         $runtimeSupported = $response->json('runtime_supported_methods');
         $this->assertContains('ping', $runtimeSupported);
+        $this->assertContains('lock_screen', $runtimeSupported);
         $this->assertContains('reboot_device', $runtimeSupported);
         $this->assertContains('shutdown_device', $runtimeSupported);
         $this->assertContains('collect_system_info', $runtimeSupported);
@@ -154,7 +155,7 @@ class CommandContractEnforcementTest extends TestCase
         $this->assertNotContains('shutdown', $canonical);
 
         $rejectionReasons = $response->json('rejection_reasons');
-        $this->assertSame('not_supported_runtime', $rejectionReasons['lock_screen'] ?? null);
+        $this->assertArrayNotHasKey('lock_screen', $rejectionReasons);
     }
 
     /** @test */
@@ -192,6 +193,20 @@ class CommandContractEnforcementTest extends TestCase
 
         $this->withHeaders($this->makeHeaders($admin))
             ->postJson('/api/commands', $this->commandPayload($device, 'collect_system_info'))
+            ->assertCreated()
+            ->assertJsonPath('status', 'accepted');
+    }
+
+    /** @test */
+    public function lock_screen_is_runtime_supported_and_accepted(): void
+    {
+        Queue::fake();
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $device = $this->createOwnedDevice($admin, 'dev-lock-screen');
+
+        $this->withHeaders($this->makeHeaders($admin))
+            ->postJson('/api/commands', $this->commandPayload($device, 'lock_screen'))
             ->assertCreated()
             ->assertJsonPath('status', 'accepted');
     }
