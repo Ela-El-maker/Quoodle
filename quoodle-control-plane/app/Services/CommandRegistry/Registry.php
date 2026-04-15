@@ -158,7 +158,12 @@ class Registry
                 minRole: 'operator',
                 requires2fa: false,
                 allowedInQuarantine: false,
-                paramsRules: []
+                paramsRules: [
+                    'limit' => ['nullable', 'integer', 'min:1', 'max:1000'],
+                    'include_wifi' => ['nullable', 'boolean'],
+                    'include_routes' => ['nullable', 'boolean'],
+                    'include_vpn_signals' => ['nullable', 'boolean'],
+                ]
             ),
             'netinfo' => new CommandDefinition(
                 name: 'netinfo',
@@ -166,7 +171,12 @@ class Registry
                 minRole: 'operator',
                 requires2fa: false,
                 allowedInQuarantine: false,
-                paramsRules: []
+                paramsRules: [
+                    'limit' => ['nullable', 'integer', 'min:1', 'max:1000'],
+                    'include_wifi' => ['nullable', 'boolean'],
+                    'include_routes' => ['nullable', 'boolean'],
+                    'include_vpn_signals' => ['nullable', 'boolean'],
+                ]
             ),
             'list_mounts' => new CommandDefinition(
                 name: 'list_mounts',
@@ -425,7 +435,10 @@ class Registry
                 requires2fa: false,
                 allowedInQuarantine: false,
                 paramsRules: [
-                    'limit' => ['nullable', 'integer', 'min:1', 'max:500'],
+                    'limit' => ['nullable', 'integer', 'min:1', 'max:1000'],
+                    'include_ipv6' => ['nullable', 'boolean'],
+                    'include_udp' => ['nullable', 'boolean'],
+                    'include_process_path' => ['nullable', 'boolean'],
                 ]
             ),
             'block_outbound' => new CommandDefinition(
