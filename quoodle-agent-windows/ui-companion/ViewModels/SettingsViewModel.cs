@@ -1,12 +1,14 @@
-﻿using Quoodle.Agent.UiCompanion.Infrastructure;
+using Quoodle.Agent.UiCompanion.Infrastructure;
 using Quoodle.Agent.UiCompanion.Models;
 using Quoodle.Agent.UiCompanion.Services;
+using Microsoft.UI.Dispatching;
 
 namespace Quoodle.Agent.UiCompanion.ViewModels;
 
 public sealed class SettingsViewModel : ObservableObject, IDisposable
 {
     private readonly AgentStateStore _store;
+    private readonly DispatcherQueue? _dispatcherQueue;
     private bool _isApplyingSnapshot;
     private AgentConfiguration _persistedConfiguration;
 
@@ -85,6 +87,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     public SettingsViewModel(AgentStateStore store)
     {
         _store = store;
+        _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         _persistedConfiguration = AgentConfiguration.CreateDefault(DateTimeOffset.UtcNow, "pending-pairing", Environment.MachineName, "0.0.1", false);
 
         SaveTransportCommand = new RelayCommand(SaveTransport, () => IsTransportDirty && string.IsNullOrWhiteSpace(TransportValidationError));
@@ -712,6 +715,12 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     private void HandleSnapshotChanged(object? sender, AgentStateSnapshot snapshot)
     {
+        if (_dispatcherQueue is not null && !_dispatcherQueue.HasThreadAccess)
+        {
+            _ = _dispatcherQueue.TryEnqueue(() => HandleSnapshotChanged(sender, snapshot));
+            return;
+        }
+
         ApplySnapshot(snapshot);
     }
 
@@ -1084,3 +1093,4 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         _store.SnapshotChanged -= HandleSnapshotChanged;
     }
 }
+

@@ -440,6 +440,16 @@ void WsClient::on_state_change(StateCallback callback)
   state_callback_ = std::move(callback);
 }
 
+void WsClient::request_sync_now()
+{
+  force_sync_requested_.store(true, std::memory_order_release);
+}
+
+void WsClient::request_reconnect()
+{
+  force_reconnect_requested_.store(true, std::memory_order_release);
+}
+
 void WsClient::set_state(ConnectionState new_state, const std::string &reason)
 {
   auto old_state = connection_state_.exchange(new_state, std::memory_order_acq_rel);
@@ -948,6 +958,9 @@ void WsClient::run_disconnected_telemetry_tick(bool extended_scope)
 void WsClient::run()
 {
   ix::initNetSystem();
+  shutdown_requested_.store(false, std::memory_order_release);
+  force_sync_requested_.store(false, std::memory_order_release);
+  force_reconnect_requested_.store(false, std::memory_order_release);
 
   Logger::log(LogLevel::Info, "starting WebSocket client with reconnection support");
   Logger::log(LogLevel::Debug, "reconnection config: initial_delay=" +
@@ -984,7 +997,9 @@ void WsClient::run()
     }
 
     // Calculate delay before next attempt
-    auto delay = calculate_backoff_delay();
+    auto delay = force_reconnect_requested_.exchange(false, std::memory_order_acq_rel)
+                     ? 0U
+                     : calculate_backoff_delay();
     reconnect_attempts_.fetch_add(1, std::memory_order_acq_rel);
 
     set_state(ConnectionState::Reconnecting,
@@ -996,6 +1011,10 @@ void WsClient::run()
     const std::uint32_t check_interval = 100; // Check every 100ms
     while (remaining > 0 && !shutdown_requested_.load(std::memory_order_acquire))
     {
+      if (force_sync_requested_.exchange(false, std::memory_order_acq_rel))
+      {
+        run_disconnected_telemetry_tick(true);
+      }
       const auto now = std::chrono::steady_clock::now();
       if (now >= next_disconnected_heartbeat)
       {
@@ -1696,6 +1715,12 @@ bool WsClient::try_connect()
          !connection_error.load(std::memory_order_acquire) &&
          !shutdown_requested_.load(std::memory_order_acquire))
   {
+    if (force_reconnect_requested_.load(std::memory_order_acquire))
+    {
+      close_reason = "manual_reconnect_requested";
+      break;
+    }
+
     const auto now = std::chrono::steady_clock::now();
     if (authenticated.load(std::memory_order_acquire))
     {
@@ -1707,6 +1732,31 @@ bool WsClient::try_connect()
 
       if (!session_id.empty())
       {
+        if (force_sync_requested_.exchange(false, std::memory_order_acq_rel))
+        {
+          std::lock_guard<std::mutex> send_guard(outbound_send_mutex);
+          const auto hb = build_signed_heartbeat_json(config_.device_id, session_id, "alive", 120, "ok");
+          if (!hb.empty())
+          {
+            socket.sendText(hb);
+            telemetry_stats_.sent += 1;
+          }
+          const auto telemetry = build_signed_telemetry_json(
+              config_.device_id,
+              session_id,
+              "telemetry_extended",
+              state_impl_.policy_hash());
+          if (!telemetry.empty())
+          {
+            socket.sendText(telemetry);
+            telemetry_stats_.sent += 1;
+          }
+          replay_queued_telemetry();
+          last_heartbeat_tick = now;
+          last_telemetry_tick = now;
+          last_replay_tick = now;
+        }
+
         if (now - last_heartbeat_tick >= std::chrono::seconds(config_.heartbeat_interval_s))
         {
           std::lock_guard<std::mutex> send_guard(outbound_send_mutex);

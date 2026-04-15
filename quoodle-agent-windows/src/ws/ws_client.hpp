@@ -89,6 +89,18 @@ public:
   using StateCallback = std::function<void(ConnectionState, const std::string &)>;
   void on_state_change(StateCallback callback);
 
+  /**
+   * Request an immediate heartbeat/telemetry sync tick.
+   * Thread-safe.
+   */
+  void request_sync_now();
+
+  /**
+   * Request transport reconnect as soon as possible.
+   * Thread-safe.
+   */
+  void request_reconnect();
+
 private:
   struct TelemetryStats
   {
@@ -128,6 +140,8 @@ private:
   std::atomic<ConnectionState> connection_state_{ConnectionState::Disconnected};
   std::atomic<bool> shutdown_requested_{false};
   std::atomic<std::uint32_t> reconnect_attempts_{0};
+  std::atomic<bool> force_sync_requested_{false};
+  std::atomic<bool> force_reconnect_requested_{false};
   std::uint32_t current_delay_ms_{0};
 
   // Random number generator for jitter

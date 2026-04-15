@@ -75,6 +75,13 @@ public sealed partial class MainWindow : Window
             return "dashboard";
         }
 
+        // Guardrail: activity route currently has unstable live-update behavior when restored
+        // from a previous session. Start on dashboard for a reliable app launch.
+        if (string.Equals(preferred, "activity", StringComparison.OrdinalIgnoreCase))
+        {
+            return "dashboard";
+        }
+
         return CoreRoutes.Contains(preferred) ? preferred : "dashboard";
     }
 

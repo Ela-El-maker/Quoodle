@@ -91,4 +91,8 @@ dotnet build .\Quoodle.Agent.UiCompanion.csproj -c Release -p:Platform=x64
 
 Current provider:
 - `MockAgentStateProvider` (local interactive state)
-- `UiBridgeProvider` is included as the future seam for named-pipe integration
+- `UiBridgeProvider` uses local named-pipe integration for runtime status/actions
+
+UI bridge runtime pipe (local machine only):
+- `\\.\pipe\QuoodleAgentUiBridge`
+- Ops: `status`, `sync_now`, `reconnect`

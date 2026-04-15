@@ -62,6 +62,21 @@ public:
     client_.on_state_change(std::move(callback));
   }
 
+  /**
+   * Get reconnect attempt counter from transport runtime.
+   */
+  std::uint32_t reconnect_attempts() const { return client_.reconnect_attempts(); }
+
+  /**
+   * Request immediate telemetry/heartbeat sync.
+   */
+  void request_sync_now() { client_.request_sync_now(); }
+
+  /**
+   * Request transport reconnect.
+   */
+  void request_reconnect() { client_.request_reconnect(); }
+
 private:
   WsClient client_;
 };

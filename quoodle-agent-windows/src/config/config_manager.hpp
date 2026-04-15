@@ -79,6 +79,21 @@ namespace detail
         out << generated << "\n";
         return generated;
     }
+
+    inline std::string ReadEnvOrFile(const char *env_name, const char *file_env_name, const std::filesystem::path &default_path)
+    {
+        if (const char *env_value = std::getenv(env_name))
+        {
+            if (*env_value)
+            {
+                return env_value;
+            }
+        }
+
+        const char *path_env = std::getenv(file_env_name);
+        std::filesystem::path path = (path_env && *path_env) ? std::filesystem::path(path_env) : default_path;
+        return ReadFileTrim(path);
+    }
 } // namespace detail
 
 struct ConfigManager
@@ -88,15 +103,19 @@ struct ConfigManager
         AgentConfig cfg;
 
         // Core settings
-        if (const char *val = std::getenv("AGENT_ENDPOINT"))
-            cfg.endpoint = val;
+        cfg.endpoint = detail::ReadEnvOrFile(
+            "AGENT_ENDPOINT",
+            "AGENT_ENDPOINT_FILE",
+            "C:/ProgramData/Quoodle/agent_endpoint");
         // Persistent device identity logic
         cfg.device_id = detail::GetOrCreateIdentity(
             "AGENT_DEVICE_ID",
             "AGENT_DEVICE_ID_FILE",
             "C:/ProgramData/Quoodle/device_id");
-        if (const char *val = std::getenv("AGENT_JWT"))
-            cfg.jwt = val;
+        cfg.jwt = detail::ReadEnvOrFile(
+            "AGENT_JWT",
+            "AGENT_JWT_FILE",
+            "C:/ProgramData/Quoodle/agent_jwt");
 
         // Reconnection settings
         if (const char *val = std::getenv("AGENT_RECONNECT_INITIAL_DELAY_MS"))

@@ -155,6 +155,7 @@ add_executable(agent
   src/ws/ws_client.cpp
   src/ws/ws_protocol.cpp
   src/ws/sequence_manager.cpp
+  src/control/ui_bridge_server.cpp
   src/command/artifact_client.cpp
   src/command/lock_screen_command.cpp
   src/command/observability_command.cpp

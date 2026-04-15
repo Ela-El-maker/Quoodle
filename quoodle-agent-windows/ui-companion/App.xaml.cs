@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Quoodle.Agent.UiCompanion.Services;
+using System.Runtime.InteropServices;
 using System.Text;
 using WinRT.Interop;
 
@@ -10,7 +11,7 @@ public partial class App : Application
 {
     private Window? _window;
 
-    public static IAgentStateProvider StateProvider { get; } = new MockAgentStateProvider();
+    public static IAgentStateProvider StateProvider { get; } = CreateStateProvider();
     public static AgentStateStore StateStore { get; } = new(StateProvider);
     public static Window? MainWindowInstance { get; private set; }
     public static IntPtr MainWindowHandle => MainWindowInstance is null ? IntPtr.Zero : WindowNative.GetWindowHandle(MainWindowInstance);
@@ -18,6 +19,7 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+        StateStore.BindUiContext(SynchronizationContext.Current);
         StateProvider.Start();
         UnhandledException += OnUnhandledException;
     }
@@ -46,6 +48,7 @@ public partial class App : Application
     {
         var details = BuildErrorDetails(context, ex);
         WriteErrorLog(details);
+        ShowFatalErrorDialog(details);
 
 #if DEBUG
         try
@@ -73,6 +76,23 @@ public partial class App : Application
             // Last resort: avoid recursive failures in exception handling.
         }
 #endif
+    }
+
+    [DllImport("user32.dll", EntryPoint = "MessageBoxW", CharSet = CharSet.Unicode)]
+    private static extern int MessageBox(IntPtr hWnd, string text, string caption, uint type);
+
+    private static void ShowFatalErrorDialog(string details)
+    {
+        try
+        {
+            const uint mbIconError = 0x10;
+            const uint mbOk = 0x0;
+            _ = MessageBox(IntPtr.Zero, details, "Quoodle UI Startup Error", mbOk | mbIconError);
+        }
+        catch
+        {
+            // Best effort only.
+        }
     }
 
     private static string BuildErrorDetails(string context, Exception ex)
@@ -114,6 +134,36 @@ public partial class App : Application
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "QuoodleAgentUiCompanion",
             "startup-error.log");
+    }
+
+    private static IAgentStateProvider CreateStateProvider()
+    {
+        if (ReadBoolEnv("QUOODLE_UI_USE_MOCK", false))
+        {
+            return new MockAgentStateProvider();
+        }
+
+        try
+        {
+            return new UiBridgeProvider();
+        }
+        catch
+        {
+            // Fall back to mock mode if the runtime bridge cannot initialize.
+            return new MockAgentStateProvider();
+        }
+    }
+
+    private static bool ReadBoolEnv(string key, bool fallback)
+    {
+        var raw = Environment.GetEnvironmentVariable(key);
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return fallback;
+        }
+
+        var normalized = raw.Trim().ToLowerInvariant();
+        return normalized is "1" or "true" or "yes" or "on";
     }
 
 }

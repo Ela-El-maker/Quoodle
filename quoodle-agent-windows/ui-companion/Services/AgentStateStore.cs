@@ -5,10 +5,12 @@ namespace Quoodle.Agent.UiCompanion.Services;
 public sealed class AgentStateStore : IDisposable
 {
     private readonly IAgentStateProvider _provider;
+    private SynchronizationContext? _uiContext;
 
     public AgentStateStore(IAgentStateProvider provider)
     {
         _provider = provider;
+        _uiContext = SynchronizationContext.Current;
         _provider.SnapshotChanged += HandleSnapshotChanged;
         Snapshot = provider.Snapshot;
     }
@@ -16,6 +18,14 @@ public sealed class AgentStateStore : IDisposable
     public AgentStateSnapshot Snapshot { get; private set; }
 
     public event EventHandler<AgentStateSnapshot>? SnapshotChanged;
+
+    public void BindUiContext(SynchronizationContext? context)
+    {
+        if (context is not null)
+        {
+            _uiContext = context;
+        }
+    }
 
     public void CheckEnrollmentStatus() => _provider.CheckEnrollmentStatus();
 
@@ -55,6 +65,23 @@ public sealed class AgentStateStore : IDisposable
 
     private void HandleSnapshotChanged(object? sender, AgentStateSnapshot snapshot)
     {
+        if (_uiContext is not null && SynchronizationContext.Current != _uiContext)
+        {
+            _uiContext.Post(static state =>
+            {
+                if (state is SnapshotDispatch dispatch)
+                {
+                    dispatch.Store.PublishSnapshot(dispatch.Snapshot);
+                }
+            }, new SnapshotDispatch(this, snapshot));
+            return;
+        }
+
+        PublishSnapshot(snapshot);
+    }
+
+    private void PublishSnapshot(AgentStateSnapshot snapshot)
+    {
         Snapshot = snapshot;
         SnapshotChanged?.Invoke(this, snapshot);
     }
@@ -64,4 +91,6 @@ public sealed class AgentStateStore : IDisposable
         _provider.SnapshotChanged -= HandleSnapshotChanged;
         _provider.Dispose();
     }
+
+    private sealed record SnapshotDispatch(AgentStateStore Store, AgentStateSnapshot Snapshot);
 }

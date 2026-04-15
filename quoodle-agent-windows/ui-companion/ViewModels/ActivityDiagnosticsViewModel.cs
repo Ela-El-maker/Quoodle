@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Text;
 using System.Text.Json;
+using Microsoft.UI.Dispatching;
 using Quoodle.Agent.UiCompanion.Infrastructure;
 using Quoodle.Agent.UiCompanion.Models;
 using Quoodle.Agent.UiCompanion.Services;
@@ -80,6 +81,7 @@ public sealed class ActivityDiagnosticsViewModel : ObservableObject, IDisposable
 
     private readonly AgentStateStore _store;
     private readonly Dictionary<ActivityDiagnosticsTab, TabQueryState> _tabState;
+    private readonly DispatcherQueue? _dispatcherQueue;
 
     private AgentStateSnapshot _snapshot = AgentStateSnapshot.CreateInitial();
     private ActivityDiagnosticsTab _activeTab = ActivityDiagnosticsTab.WssMessageLog;
@@ -113,6 +115,7 @@ public sealed class ActivityDiagnosticsViewModel : ObservableObject, IDisposable
     public ActivityDiagnosticsViewModel(AgentStateStore store)
     {
         _store = store;
+        _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         _store.SnapshotChanged += HandleSnapshotChanged;
 
         _tabState = new()
@@ -429,6 +432,18 @@ public sealed class ActivityDiagnosticsViewModel : ObservableObject, IDisposable
 
     private void HandleSnapshotChanged(object? sender, AgentStateSnapshot snapshot)
     {
+        if (_dispatcherQueue is null)
+        {
+            return;
+        }
+
+        var currentQueue = DispatcherQueue.GetForCurrentThread();
+        if (!ReferenceEquals(currentQueue, _dispatcherQueue))
+        {
+            _ = _dispatcherQueue.TryEnqueue(() => HandleSnapshotChanged(sender, snapshot));
+            return;
+        }
+
         _snapshot = snapshot;
         Rebuild();
     }

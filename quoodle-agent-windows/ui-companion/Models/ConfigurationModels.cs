@@ -80,7 +80,7 @@ public sealed record AgentConfiguration(
     {
         var safeDeviceId = string.IsNullOrWhiteSpace(deviceId) ? "pending-pairing" : deviceId;
         var machineLabel = string.IsNullOrWhiteSpace(deviceName) ? Environment.MachineName : deviceName;
-        var enrolledAt = isEnrolled ? now : null;
+        DateTimeOffset? enrolledAt = isEnrolled ? now : null;
 
         var identity = new DeviceIdentityConfig(
             DeviceId: safeDeviceId,

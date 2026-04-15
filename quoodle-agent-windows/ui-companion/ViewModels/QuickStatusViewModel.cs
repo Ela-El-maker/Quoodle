@@ -1,6 +1,7 @@
 using Quoodle.Agent.UiCompanion.Infrastructure;
 using Quoodle.Agent.UiCompanion.Models;
 using Quoodle.Agent.UiCompanion.Services;
+using Microsoft.UI.Dispatching;
 using System.Linq;
 
 namespace Quoodle.Agent.UiCompanion.ViewModels;
@@ -8,6 +9,7 @@ namespace Quoodle.Agent.UiCompanion.ViewModels;
 public sealed class QuickStatusViewModel : ObservableObject, IDisposable
 {
     private readonly AgentStateStore _store;
+    private readonly DispatcherQueue? _dispatcherQueue;
 
     private string _deviceName = string.Empty;
     private string _deviceId = string.Empty;
@@ -30,6 +32,7 @@ public sealed class QuickStatusViewModel : ObservableObject, IDisposable
     public QuickStatusViewModel(AgentStateStore store)
     {
         _store = store;
+        _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         _store.SnapshotChanged += HandleSnapshotChanged;
         SyncNowCommand = new RelayCommand(() => _store.TriggerSyncNow());
         Apply(_store.Snapshot);
@@ -95,6 +98,12 @@ public sealed class QuickStatusViewModel : ObservableObject, IDisposable
 
     private void HandleSnapshotChanged(object? sender, AgentStateSnapshot snapshot)
     {
+        if (_dispatcherQueue is not null && !_dispatcherQueue.HasThreadAccess)
+        {
+            _ = _dispatcherQueue.TryEnqueue(() => HandleSnapshotChanged(sender, snapshot));
+            return;
+        }
+
         Apply(snapshot);
     }
 

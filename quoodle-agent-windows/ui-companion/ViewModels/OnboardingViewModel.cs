@@ -1,17 +1,20 @@
 using Quoodle.Agent.UiCompanion.Infrastructure;
 using Quoodle.Agent.UiCompanion.Models;
 using Quoodle.Agent.UiCompanion.Services;
+using Microsoft.UI.Dispatching;
 
 namespace Quoodle.Agent.UiCompanion.ViewModels;
 
 public sealed class OnboardingViewModel : ObservableObject, IDisposable
 {
     private readonly AgentStateStore _store;
+    private readonly DispatcherQueue? _dispatcherQueue;
     private AgentStateSnapshot _snapshot;
 
     public OnboardingViewModel(AgentStateStore store)
     {
         _store = store;
+        _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         _snapshot = store.Snapshot;
 
         _store.SnapshotChanged += HandleSnapshotChanged;
@@ -159,6 +162,12 @@ public sealed class OnboardingViewModel : ObservableObject, IDisposable
 
     private void HandleSnapshotChanged(object? sender, AgentStateSnapshot snapshot)
     {
+        if (_dispatcherQueue is not null && !_dispatcherQueue.HasThreadAccess)
+        {
+            _ = _dispatcherQueue.TryEnqueue(() => HandleSnapshotChanged(sender, snapshot));
+            return;
+        }
+
         _snapshot = snapshot;
         RaiseAllDerivedProperties();
         RefreshCommandStates();

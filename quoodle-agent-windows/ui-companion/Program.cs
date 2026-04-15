@@ -25,7 +25,8 @@ public static class Program
         catch (Exception ex)
         {
             WriteStartupError(ex);
-            throw;
+            ShowStartupErrorDialog(ex);
+            Environment.Exit(1);
         }
         finally
         {
@@ -85,6 +86,32 @@ public static class Program
             sb.AppendLine($"UTC: {DateTimeOffset.UtcNow:O}");
             sb.AppendLine(ex.ToString());
             File.WriteAllText(Path.Combine(dir, "program-startup-error.log"), sb.ToString());
+        }
+        catch
+        {
+            // no-op
+        }
+    }
+
+    [DllImport("user32.dll", EntryPoint = "MessageBoxW", CharSet = CharSet.Unicode)]
+    private static extern int MessageBox(IntPtr hWnd, string text, string caption, uint type);
+
+    private static void ShowStartupErrorDialog(Exception ex)
+    {
+        try
+        {
+            var logPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "QuoodleAgentUiCompanion",
+                "program-startup-error.log");
+            var message =
+                "Quoodle Agent UI failed to start.\n\n" +
+                ex.Message +
+                "\n\nSee log:\n" +
+                logPath;
+            const uint mbIconError = 0x10;
+            const uint mbOk = 0x0;
+            _ = MessageBox(IntPtr.Zero, message, "Quoodle Agent UI", mbOk | mbIconError);
         }
         catch
         {
