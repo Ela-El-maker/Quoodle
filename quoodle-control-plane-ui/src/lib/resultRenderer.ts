@@ -463,6 +463,38 @@ function normalizeNetworkAdaptersArray(data: unknown): Array<Record<string, unkn
   return [];
 }
 
+function normalizeTopTalkersArray(data: unknown): Array<Record<string, unknown>> {
+  if (!isObject(data) || !Array.isArray(data.top_talkers_by_connection_count)) return [];
+  return data.top_talkers_by_connection_count.filter((item): item is Record<string, unknown> => isObject(item));
+}
+
+function normalizeRoutesArray(data: unknown): Array<Record<string, unknown>> {
+  if (!isObject(data) || !Array.isArray(data.default_routes)) return [];
+  return data.default_routes.filter((item): item is Record<string, unknown> => isObject(item));
+}
+
+function normalizeWifiPayload(data: unknown): Record<string, unknown> {
+  if (!isObject(data) || !isObject(data.wifi)) return {};
+  return data.wifi;
+}
+
+function normalizeVpnSummaryPayload(data: unknown): Record<string, unknown> {
+  if (!isObject(data) || !isObject(data.vpn_summary)) return {};
+  return data.vpn_summary;
+}
+
+function readSnapshotCounts(data: unknown): { count: number; totalSeen: number | null } {
+  if (!isObject(data)) return { count: 0, totalSeen: null };
+  const countRaw = data.count;
+  const totalRaw = data.total_seen;
+  const count = typeof countRaw === 'number' && Number.isFinite(countRaw) ? Math.max(0, Math.trunc(countRaw)) : 0;
+  const totalSeen =
+    typeof totalRaw === 'number' && Number.isFinite(totalRaw)
+      ? Math.max(0, Math.trunc(totalRaw))
+      : null;
+  return { count, totalSeen };
+}
+
 function normalizeActiveWindowPayload(data: unknown): Record<string, unknown> {
   return isObject(data) ? data : {};
 }
@@ -684,20 +716,45 @@ function buildListConnections(row: NormalizedCommandResult): ResultViewModel {
   const model = buildBaseModel(row, 'list_connections', methodTitleMap.list_connections);
   const data = extractStructuredData(row);
   const connections = normalizeConnectionsArray(data);
+  const topTalkers = normalizeTopTalkersArray(data);
   const table = buildProcessTable(connections);
+  const topTalkersTable = buildProcessTable(topTalkers);
+  const counts = readSnapshotCounts(data);
+  const truncated = counts.totalSeen != null && counts.totalSeen > counts.count;
 
   model.hero = [
     { label: 'Status', value: toDisplayValue(row.resultStatus ?? row.state), tone: 'info' },
-    { label: 'Connections', value: String(connections.length), tone: 'success' },
+    { label: 'Connections', value: String(counts.count || connections.length), tone: 'success' },
+    {
+      label: 'Total Seen',
+      value: counts.totalSeen == null ? 'Not collected' : String(counts.totalSeen),
+      tone: truncated ? 'warning' : 'default',
+    },
   ];
   model.diagnostics = buildDiagnosticsFromRow(row);
+  if (truncated) {
+    model.diagnostics.push({
+      severity: 'warning',
+      reason: 'truncated_to_limit',
+      message: `Showing ${counts.count} connection rows from ${counts.totalSeen} observed.`,
+    });
+  }
   model.sections = [
     {
       id: 'overview',
       title: 'Overview',
       widget: 'stats',
       stats: model.hero,
-      description: connections.length > 250 ? 'Showing first 250 rows' : undefined,
+      description: truncated
+        ? `Bounded snapshot: showing ${counts.count} of ${counts.totalSeen} rows.`
+        : undefined,
+    },
+    {
+      id: 'talkers',
+      title: 'Top Talkers',
+      widget: 'table',
+      table: topTalkersTable,
+      emptySummary: topTalkers.length === 0 ? 'No top-talker summary was returned' : null,
     },
     {
       id: 'connections',
@@ -758,27 +815,71 @@ function buildNetworkInfo(row: NormalizedCommandResult): ResultViewModel {
   const model = buildBaseModel(row, 'network_info', methodTitleMap.network_info);
   const data = extractStructuredData(row);
   const adapters = normalizeNetworkAdaptersArray(data);
-  const table = buildProcessTable(adapters);
+  const routes = normalizeRoutesArray(data);
+  const wifi = normalizeWifiPayload(data);
+  const vpnSummary = normalizeVpnSummaryPayload(data);
+  const adapterTable = buildProcessTable(adapters);
+  const routesTable = buildProcessTable(routes);
+  const wifiBlock = objectEntries(wifi, { hideNull: true });
+  const vpnBlock = objectEntries(vpnSummary, { hideNull: true });
+  const counts = readSnapshotCounts(data);
+  const truncated = counts.totalSeen != null && counts.totalSeen > counts.count;
 
   model.hero = [
     { label: 'Status', value: toDisplayValue(row.resultStatus ?? row.state), tone: 'info' },
-    { label: 'Adapters', value: String(adapters.length), tone: 'success' },
+    { label: 'Adapters', value: String(counts.count || adapters.length), tone: 'success' },
+    {
+      label: 'Wi-Fi',
+      value: wifi.connected === true ? toDisplayValue(wifi.ssid ?? 'Connected') : 'Not connected',
+      tone: wifi.connected === true ? 'success' : 'default',
+    },
+    {
+      label: 'VPN Candidate',
+      value: vpnSummary.detected === true ? 'Detected' : 'Not detected',
+      tone: vpnSummary.detected === true ? 'warning' : 'success',
+    },
   ];
   model.diagnostics = buildDiagnosticsFromRow(row);
+  if (truncated) {
+    model.diagnostics.push({
+      severity: 'warning',
+      reason: 'truncated_to_limit',
+      message: `Showing ${counts.count} adapters from ${counts.totalSeen} observed.`,
+    });
+  }
   model.sections = [
     {
       id: 'overview',
       title: 'Overview',
       widget: 'stats',
       stats: model.hero,
-      description: adapters.length > 250 ? 'Showing first 250 rows' : undefined,
+      description: truncated
+        ? `Bounded snapshot: showing ${counts.count} of ${counts.totalSeen} adapters.`
+        : undefined,
     },
     {
-      id: 'adapters',
-      title: 'Adapters',
+      id: 'interfaces',
+      title: 'Interfaces',
       widget: 'table',
-      table,
+      table: adapterTable,
       emptySummary: adapters.length === 0 ? 'No adapter rows were returned' : null,
+    },
+    {
+      id: 'wifi',
+      title: 'Wi-Fi',
+      widget: 'kv',
+      keyValues: wifiBlock.keyValues,
+      emptySummary: wifiBlock.keyValues.length === 0 ? 'No Wi-Fi details were returned' : null,
+    },
+    {
+      id: 'vpn-routes',
+      title: 'VPN & Routes',
+      widget: 'table',
+      table: routesTable,
+      description: vpnBlock.keyValues.length > 0
+        ? vpnBlock.keyValues.map((item) => `${item.label}: ${item.value}`).join(' | ')
+        : undefined,
+      emptySummary: routes.length === 0 ? 'No default route rows were returned' : null,
     },
     {
       id: 'diagnostics',

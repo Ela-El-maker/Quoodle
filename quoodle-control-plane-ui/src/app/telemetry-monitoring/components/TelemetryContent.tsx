@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, RefreshCw, Monitor, ChevronDown, ChevronUp } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import TelemetryCpuChart from './TelemetryCpuChart';
 import TelemetryRamChart from './TelemetryRamChart';
 import TelemetryDiskChart from './TelemetryDiskChart';
@@ -19,6 +20,7 @@ import {
   telemetryRisk,
   telemetryText,
 } from '@/lib/telemetry';
+import { mapCommandListRow, type CommandListRowApi, type NormalizedCommandResult } from '@/lib/commandResults';
 
 type DeviceOption = { id: string; label: string };
 
@@ -66,6 +68,15 @@ type TelemetryActivityResponse = {
   }>;
 };
 
+type CommandsApiResponse = {
+  commands?: CommandListRowApi[];
+};
+
+type NetworkSnapshotState = {
+  networkInfo: NormalizedCommandResult | null;
+  listConnections: NormalizedCommandResult | null;
+};
+
 type ChartPoint = { time: string; value: number };
 type NetworkPoint = { time: string; tx: number; rx: number };
 type RiskPoint = { time: string; score: number; event: string | null };
@@ -86,6 +97,32 @@ function toIsoHoursAgo(hours: number): string {
   return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseCount(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(0, Math.trunc(value));
+  }
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return Math.max(0, Math.trunc(parsed));
+  }
+  return null;
+}
+
+function latestCompletedByMethod(rows: NormalizedCommandResult[], method: string): NormalizedCommandResult | null {
+  const filtered = rows
+    .filter((row) => row.method === method && row.state === 'completed')
+    .sort((a, b) => {
+      const aTime = Date.parse(a.completedAt ?? a.queuedAt ?? '') || 0;
+      const bTime = Date.parse(b.completedAt ?? b.queuedAt ?? '') || 0;
+      return bTime - aTime;
+    });
+  return filtered[0] ?? null;
+}
+
 export default function TelemetryContent() {
   const searchParams = useSearchParams();
   const initialDevice = searchParams?.get('device') ?? '';
@@ -100,6 +137,13 @@ export default function TelemetryContent() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activityError, setActivityError] = useState<string | null>(null);
+  const [networkError, setNetworkError] = useState<string | null>(null);
+  const [networkRefreshing, setNetworkRefreshing] = useState(false);
+  const [networkDispatching, setNetworkDispatching] = useState(false);
+  const [networkSnapshots, setNetworkSnapshots] = useState<NetworkSnapshotState>({
+    networkInfo: null,
+    listConnections: null,
+  });
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [kernelCategoryFilter, setKernelCategoryFilter] = useState<'all' | ParsedKernelTelemetryEvent['category']>('all');
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -136,19 +180,22 @@ export default function TelemetryContent() {
           setHistory([]);
           setActivity([]);
           setActivityError(null);
+          setNetworkSnapshots({ networkInfo: null, listConnections: null });
+          setNetworkError(null);
           setLastUpdated(new Date().toISOString());
           return;
         }
 
         const selectedWindow = timeWindows.find((window) => window.key === timeWindow) ?? timeWindows[2];
         const from = toIsoHoursAgo(selectedWindow.hours);
-        const [latestResult, historyResult, activityResult] = await Promise.allSettled([
+        const [latestResult, historyResult, activityResult, commandResult] = await Promise.allSettled([
           fetch(`/api/telemetry/devices/${encodeURIComponent(effectiveDevice)}/latest`, { credentials: 'include', cache: 'no-store' }),
           fetch(
             `/api/telemetry/devices/${encodeURIComponent(effectiveDevice)}/history?from=${encodeURIComponent(from)}&to=${encodeURIComponent(new Date().toISOString())}&bucket=raw`,
             { credentials: 'include', cache: 'no-store' },
           ),
           fetch(`/api/telemetry/activity?device_id=${encodeURIComponent(effectiveDevice)}&limit=100`, { credentials: 'include', cache: 'no-store' }),
+          fetch(`/api/commands?device_id=${encodeURIComponent(effectiveDevice)}&limit=200`, { credentials: 'include', cache: 'no-store' }),
         ]);
 
         if (latestResult.status !== 'fulfilled' || historyResult.status !== 'fulfilled') {
@@ -176,10 +223,27 @@ export default function TelemetryContent() {
           setActivityError('Activity feed is temporarily unavailable.');
         }
 
+        if (commandResult.status === 'fulfilled' && commandResult.value.ok) {
+          const commandPayload = (await commandResult.value.json()) as CommandsApiResponse;
+          const normalized = (commandPayload.commands ?? []).map((row) => mapCommandListRow(row));
+          setNetworkSnapshots({
+            networkInfo: latestCompletedByMethod(normalized, 'network_info'),
+            listConnections: latestCompletedByMethod(normalized, 'list_connections'),
+          });
+          setNetworkError(null);
+        } else {
+          setNetworkSnapshots({
+            networkInfo: null,
+            listConnections: null,
+          });
+          setNetworkError('Network snapshot history is temporarily unavailable.');
+        }
+
         setLastUpdated(new Date().toISOString());
       } catch (fetchError) {
         console.error('Telemetry load failed', fetchError);
         setError('Failed to load telemetry snapshot.');
+        setNetworkError('Failed to load network snapshot.');
       } finally {
         if (mode === 'initial') setLoading(false);
         if (mode === 'refresh') setRefreshing(false);
@@ -469,6 +533,111 @@ export default function TelemetryContent() {
     return Number.isFinite(ageMs) && ageMs <= 120_000;
   }, [latest?.timestamp]);
 
+  const networkSnapshotSummary = useMemo(() => {
+    const networkInfoData = isRecord(networkSnapshots.networkInfo?.result?.data)
+      ? networkSnapshots.networkInfo?.result?.data
+      : null;
+    const listConnectionsData = isRecord(networkSnapshots.listConnections?.result?.data)
+      ? networkSnapshots.listConnections?.result?.data
+      : null;
+
+    const adapterCount = parseCount(networkInfoData?.count) ?? 0;
+    const routeCount = Array.isArray(networkInfoData?.default_routes) ? networkInfoData.default_routes.length : 0;
+    const wifiConnected = networkInfoData?.wifi && isRecord(networkInfoData.wifi) && networkInfoData.wifi.connected === true;
+    const vpnDetected = networkInfoData?.vpn_summary && isRecord(networkInfoData.vpn_summary) && networkInfoData.vpn_summary.detected === true;
+
+    const connectionCount = parseCount(listConnectionsData?.count) ?? 0;
+    const topTalkersCount = Array.isArray(listConnectionsData?.top_talkers_by_connection_count)
+      ? listConnectionsData.top_talkers_by_connection_count.length
+      : 0;
+    const totalSeen = parseCount(listConnectionsData?.total_seen);
+    const truncated = totalSeen != null && totalSeen > connectionCount;
+
+    const latestTimestamp = [networkSnapshots.networkInfo?.completedAt, networkSnapshots.listConnections?.completedAt]
+      .filter((value): value is string => typeof value === 'string' && value.trim() !== '')
+      .sort((a, b) => (Date.parse(b) || 0) - (Date.parse(a) || 0))[0] ?? null;
+
+    return {
+      adapterCount,
+      routeCount,
+      wifiConnected,
+      vpnDetected,
+      connectionCount,
+      topTalkersCount,
+      totalSeen,
+      truncated,
+      latestTimestamp,
+    };
+  }, [networkSnapshots]);
+
+  const dispatchNetworkSnapshot = useCallback(async () => {
+    if (!selectedDevice) {
+      toast.error('No device selected');
+      return;
+    }
+
+    setNetworkDispatching(true);
+    try {
+      const common = {
+        credentials: 'include' as const,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      };
+
+      const payloads = [
+        {
+          client_message_id: crypto.randomUUID(),
+          device_id: selectedDevice,
+          method: 'network_info',
+          params: {
+            limit: 1000,
+            include_wifi: true,
+            include_routes: true,
+            include_vpn_signals: true,
+          },
+        },
+        {
+          client_message_id: crypto.randomUUID(),
+          device_id: selectedDevice,
+          method: 'list_connections',
+          params: {
+            limit: 1000,
+            include_ipv6: true,
+            include_udp: true,
+            include_process_path: true,
+          },
+        },
+      ];
+
+      const responses = await Promise.all(
+        payloads.map((payload) =>
+          fetch('/api/commands', {
+            ...common,
+            body: JSON.stringify(payload),
+          }),
+        ),
+      );
+
+      for (const response of responses) {
+        if (!response.ok) {
+          const errorPayload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+          throw new Error(String(errorPayload.message ?? `Dispatch failed (${response.status})`));
+        }
+      }
+
+      toast.success('Network snapshot commands dispatched');
+      setNetworkRefreshing(true);
+      await loadTelemetryBundle('silent');
+      setNetworkRefreshing(false);
+    } catch (dispatchError) {
+      const message = dispatchError instanceof Error ? dispatchError.message : 'Network snapshot dispatch failed';
+      toast.error(message);
+    } finally {
+      setNetworkDispatching(false);
+      setNetworkRefreshing(false);
+    }
+  }, [loadTelemetryBundle, selectedDevice]);
+
   return (
     <div className="space-y-5 fade-in">
       <div className="flex items-center justify-between">
@@ -549,8 +718,66 @@ export default function TelemetryContent() {
 
       {error ? <p className="text-xs text-red-400">{error}</p> : null}
       {!error && activityError ? <p className="text-xs text-amber-400">{activityError}</p> : null}
+      {!error && networkError ? <p className="text-xs text-amber-400">{networkError}</p> : null}
       {loading ? <p className="text-xs text-muted-foreground">Loading telemetry data...</p> : null}
       {!loading && !error && history.length === 0 ? <p className="text-xs text-muted-foreground">No data available</p> : null}
+
+      <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div>
+            <h3 className="text-sm font-semibold">Network Snapshot</h3>
+            <p className="text-xs text-muted-foreground">
+              Latest completed `network_info` and `list_connections` snapshots for this device.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                void loadTelemetryBundle('refresh');
+              }}
+              disabled={networkRefreshing}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] border border-border rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/40 disabled:opacity-60"
+            >
+              <RefreshCw size={12} className={networkRefreshing ? 'animate-spin' : ''} />
+              Refresh snapshot
+            </button>
+            <button
+              onClick={() => {
+                void dispatchNetworkSnapshot();
+              }}
+              disabled={networkDispatching || !selectedDevice}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] border border-primary/30 rounded-md text-primary hover:bg-primary/10 disabled:opacity-60"
+            >
+              <Activity size={12} />
+              {networkDispatching ? 'Dispatching...' : 'Run deep snapshot'}
+            </button>
+            <Link
+              href={`/command-results?device=${encodeURIComponent(selectedDevice || '')}`}
+              className="px-2.5 py-1.5 text-[11px] border border-border rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/40"
+            >
+              View command results
+            </Link>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-4 gap-3">
+          {[
+            { label: 'Adapters', value: String(networkSnapshotSummary.adapterCount), color: 'text-blue-400' },
+            { label: 'Default Routes', value: String(networkSnapshotSummary.routeCount), color: 'text-cyan-400' },
+            { label: 'Connections', value: String(networkSnapshotSummary.connectionCount), color: 'text-green-400' },
+            { label: 'Top Talkers', value: String(networkSnapshotSummary.topTalkersCount), color: 'text-amber-400' },
+            { label: 'Wi-Fi', value: networkSnapshotSummary.wifiConnected ? 'Connected' : 'Not connected', color: networkSnapshotSummary.wifiConnected ? 'text-green-400' : 'text-muted-foreground' },
+            { label: 'VPN Signal', value: networkSnapshotSummary.vpnDetected ? 'Detected' : 'Not detected', color: networkSnapshotSummary.vpnDetected ? 'text-amber-400' : 'text-green-400' },
+            { label: 'Connection Truncation', value: networkSnapshotSummary.truncated ? 'Yes' : 'No', color: networkSnapshotSummary.truncated ? 'text-amber-400' : 'text-green-400' },
+            { label: 'Last Snapshot', value: telemetryText(networkSnapshotSummary.latestTimestamp, 'No snapshot yet'), color: 'text-muted-foreground' },
+          ].map((item) => (
+            <div key={`net-snap-${item.label}`} className="bg-muted/20 border border-border rounded-md px-3 py-2.5">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{item.label}</p>
+              <p className={`text-sm font-semibold mt-1 ${item.color}`}>{item.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-2 gap-4">
         <TelemetryCpuChart deviceId={selectedDevice} timeWindow={timeWindow} data={chartData.cpu} loading={loading} error={error} />
