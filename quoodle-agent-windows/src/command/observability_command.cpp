@@ -6,15 +6,20 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cctype>
 #include <cstdio>
 #include <cstdint>
+#include <cstring>
 #include <ctime>
 #include <filesystem>
+#include <map>
 #include <sstream>
 #include <string>
 #include <system_error>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #ifdef _WIN32
@@ -22,9 +27,12 @@
 #include <windows.h>
 #include <ws2tcpip.h>
 #include <iphlpapi.h>
+#include <netioapi.h>
 #include <tlhelp32.h>
+#include <wlanapi.h>
 #include <winsvc.h>
 #pragma comment(lib, "iphlpapi.lib")
+#pragma comment(lib, "wlanapi.lib")
 #endif
 
 namespace command
@@ -66,6 +74,22 @@ struct DownloadOptions
 {
   std::filesystem::path file_path;
   std::uint64_t max_bytes{kDefaultDownloadMaxBytes};
+};
+
+struct ListConnectionsOptions
+{
+  std::size_t limit{kDefaultLimit};
+  bool include_ipv6{true};
+  bool include_udp{true};
+  bool include_process_path{true};
+};
+
+struct NetworkInfoOptions
+{
+  std::size_t limit{kDefaultLimit};
+  bool include_wifi{true};
+  bool include_routes{true};
+  bool include_vpn_signals{true};
 };
 
 std::string lowercase_copy(std::string value)
@@ -312,6 +336,36 @@ bool parse_download_options(const std::string &params_json, DownloadOptions &out
   return true;
 }
 
+bool parse_list_connections_options(const std::string &params_json, ListConnectionsOptions &out)
+{
+  nlohmann::json parsed = nlohmann::json::object();
+  if (!parse_params_object(params_json, parsed))
+  {
+    return true;
+  }
+
+  out.limit = json_size_t(parsed, "limit", kDefaultLimit, kMaxLimit);
+  out.include_ipv6 = json_bool(parsed, "include_ipv6", true);
+  out.include_udp = json_bool(parsed, "include_udp", true);
+  out.include_process_path = json_bool(parsed, "include_process_path", true);
+  return true;
+}
+
+bool parse_network_info_options(const std::string &params_json, NetworkInfoOptions &out)
+{
+  nlohmann::json parsed = nlohmann::json::object();
+  if (!parse_params_object(params_json, parsed))
+  {
+    return true;
+  }
+
+  out.limit = json_size_t(parsed, "limit", kDefaultLimit, kMaxLimit);
+  out.include_wifi = json_bool(parsed, "include_wifi", true);
+  out.include_routes = json_bool(parsed, "include_routes", true);
+  out.include_vpn_signals = json_bool(parsed, "include_vpn_signals", true);
+  return true;
+}
+
 ObservabilityExecutionResult fail_result(int code, const std::string &reason, const std::string &notes, const std::string &meta_json = {})
 {
   ObservabilityExecutionResult out{};
@@ -361,6 +415,12 @@ std::string now_unix_string()
 }
 
 #ifdef _WIN32
+std::string wide_to_utf8(const wchar_t *value);
+std::string ansi_to_utf8(const std::string &value);
+std::string socket_address_to_string(const SOCKADDR *address);
+std::string mac_to_string(const BYTE *data, ULONG length);
+std::string file_name_from_path(const std::string &path);
+
 std::string ipv4_to_string(std::uint32_t network_order_ipv4)
 {
   const std::uint32_t host_order = ntohl(network_order_ipv4);
@@ -462,6 +522,352 @@ std::string oper_status_to_string(IF_OPER_STATUS status)
   default:
     return "unknown";
   }
+}
+
+std::string lowercase_wide_to_utf8(const wchar_t *value)
+{
+  return lowercase_copy(wide_to_utf8(value));
+}
+
+std::string ipv6_bytes_to_string(const UCHAR *bytes)
+{
+  if (bytes == nullptr)
+  {
+    return {};
+  }
+
+  IN6_ADDR addr{};
+  std::memcpy(&addr, bytes, sizeof(addr));
+  char buffer[INET6_ADDRSTRLEN] = {};
+  if (InetNtopA(AF_INET6, &addr, buffer, static_cast<DWORD>(sizeof(buffer))) == nullptr)
+  {
+    return {};
+  }
+  return buffer;
+}
+
+std::string endpoint_to_string(const std::string &address, std::uint32_t port, bool ipv6)
+{
+  if (address.empty())
+  {
+    return {};
+  }
+  if (port == 0)
+  {
+    return address;
+  }
+  if (ipv6)
+  {
+    return "[" + address + "]:" + std::to_string(port);
+  }
+  return address + ":" + std::to_string(port);
+}
+
+std::uint64_t bits_to_mbps(ULONG64 bits_per_second)
+{
+  constexpr std::uint64_t one_mbps = 1000ull * 1000ull;
+  return bits_per_second / one_mbps;
+}
+
+std::vector<std::string> adapter_vpn_signals(const IP_ADAPTER_ADDRESSES *adapter)
+{
+  std::vector<std::string> signals;
+  if (adapter == nullptr)
+  {
+    return signals;
+  }
+
+  const std::string adapter_name = adapter->AdapterName == nullptr ? std::string() : lowercase_copy(adapter->AdapterName);
+  const std::string friendly_name = lowercase_wide_to_utf8(adapter->FriendlyName);
+  const std::string description = lowercase_wide_to_utf8(adapter->Description);
+
+  const auto has_keyword = [&](const std::string &keyword) {
+    return (!adapter_name.empty() && adapter_name.find(keyword) != std::string::npos) ||
+           (!friendly_name.empty() && friendly_name.find(keyword) != std::string::npos) ||
+           (!description.empty() && description.find(keyword) != std::string::npos);
+  };
+
+  if (adapter->IfType == IF_TYPE_TUNNEL)
+  {
+    signals.emplace_back("if_type_tunnel");
+  }
+  if (adapter->IfType == IF_TYPE_SOFTWARE_LOOPBACK)
+  {
+    signals.emplace_back("if_type_loopback");
+  }
+
+  const std::array<const char *, 12> vpn_keywords = {
+      "vpn",
+      "wireguard",
+      "tailscale",
+      "openvpn",
+      "tunnel",
+      "tap",
+      "tun",
+      "ppp",
+      "virtual",
+      "hyper-v",
+      "wintun",
+      "zerotier"};
+
+  for (const char *keyword : vpn_keywords)
+  {
+    if (has_keyword(keyword))
+    {
+      signals.push_back(std::string("keyword:") + keyword);
+    }
+  }
+
+  std::sort(signals.begin(), signals.end());
+  signals.erase(std::unique(signals.begin(), signals.end()), signals.end());
+  return signals;
+}
+
+std::string wifi_auth_to_string(DOT11_AUTH_ALGORITHM auth)
+{
+  switch (auth)
+  {
+  case DOT11_AUTH_ALGO_80211_OPEN:
+    return "open";
+  case DOT11_AUTH_ALGO_80211_SHARED_KEY:
+    return "shared";
+  case DOT11_AUTH_ALGO_WPA:
+    return "wpa";
+  case DOT11_AUTH_ALGO_WPA_PSK:
+    return "wpa_psk";
+  case DOT11_AUTH_ALGO_WPA_NONE:
+    return "wpa_none";
+  case DOT11_AUTH_ALGO_RSNA:
+    return "wpa2_enterprise";
+  case DOT11_AUTH_ALGO_RSNA_PSK:
+    return "wpa2_psk";
+#ifdef DOT11_AUTH_ALGO_WPA3
+  case DOT11_AUTH_ALGO_WPA3:
+    return "wpa3_enterprise";
+#endif
+#ifdef DOT11_AUTH_ALGO_WPA3_SAE
+  case DOT11_AUTH_ALGO_WPA3_SAE:
+    return "wpa3_sae";
+#endif
+  default:
+    return "unknown";
+  }
+}
+
+std::string wifi_cipher_to_string(DOT11_CIPHER_ALGORITHM cipher)
+{
+  switch (cipher)
+  {
+  case DOT11_CIPHER_ALGO_NONE:
+    return "none";
+  case DOT11_CIPHER_ALGO_WEP40:
+  case DOT11_CIPHER_ALGO_WEP104:
+    return "wep";
+  case DOT11_CIPHER_ALGO_TKIP:
+    return "tkip";
+  case DOT11_CIPHER_ALGO_CCMP:
+    return "ccmp";
+#ifdef DOT11_CIPHER_ALGO_GCMP
+  case DOT11_CIPHER_ALGO_GCMP:
+    return "gcmp";
+#endif
+  default:
+    return "unknown";
+  }
+}
+
+std::string wifi_phy_to_string(DOT11_PHY_TYPE phy)
+{
+  switch (phy)
+  {
+  case dot11_phy_type_fhss:
+    return "fhss";
+  case dot11_phy_type_dsss:
+    return "dsss";
+  case dot11_phy_type_irbaseband:
+    return "ir";
+  case dot11_phy_type_ofdm:
+    return "ofdm";
+  case dot11_phy_type_hrdsss:
+    return "hrdsss";
+  case dot11_phy_type_erp:
+    return "802.11g";
+  case dot11_phy_type_ht:
+    return "802.11n";
+  case dot11_phy_type_vht:
+    return "802.11ac";
+#ifdef dot11_phy_type_he
+  case dot11_phy_type_he:
+    return "802.11ax";
+#endif
+#ifdef dot11_phy_type_eht
+  case dot11_phy_type_eht:
+    return "802.11be";
+#endif
+  default:
+    return "unknown";
+  }
+}
+
+std::string wifi_band_from_channel(ULONG channel)
+{
+  if (channel >= 1 && channel <= 14)
+  {
+    return "2.4ghz";
+  }
+  if (channel >= 32 && channel <= 177)
+  {
+    return "5ghz";
+  }
+  if (channel >= 1 && channel <= 233)
+  {
+    return "6ghz";
+  }
+  return "unknown";
+}
+
+nlohmann::json collect_wifi_info()
+{
+  nlohmann::json wifi = {
+      {"connected", false},
+  };
+
+  HANDLE wlan_handle = nullptr;
+  DWORD negotiated = 0;
+  if (WlanOpenHandle(2, nullptr, &negotiated, &wlan_handle) != ERROR_SUCCESS)
+  {
+    return wifi;
+  }
+
+  PWLAN_INTERFACE_INFO_LIST interface_list = nullptr;
+  if (WlanEnumInterfaces(wlan_handle, nullptr, &interface_list) != ERROR_SUCCESS || interface_list == nullptr)
+  {
+    if (interface_list != nullptr)
+    {
+      WlanFreeMemory(interface_list);
+    }
+    WlanCloseHandle(wlan_handle, nullptr);
+    return wifi;
+  }
+
+  for (unsigned int i = 0; i < interface_list->dwNumberOfItems; ++i)
+  {
+    const WLAN_INTERFACE_INFO &interface_info = interface_list->InterfaceInfo[i];
+    if (interface_info.isState != wlan_interface_state_connected)
+    {
+      continue;
+    }
+
+    PWLAN_CONNECTION_ATTRIBUTES connection = nullptr;
+    DWORD data_size = 0;
+    WLAN_OPCODE_VALUE_TYPE opcode_type = wlan_opcode_value_type_invalid;
+    if (WlanQueryInterface(
+            wlan_handle,
+            &interface_info.InterfaceGuid,
+            wlan_intf_opcode_current_connection,
+            nullptr,
+            &data_size,
+            reinterpret_cast<PVOID *>(&connection),
+            &opcode_type) != ERROR_SUCCESS ||
+        connection == nullptr)
+    {
+      continue;
+    }
+
+    const auto &ssid = connection->wlanAssociationAttributes.dot11Ssid;
+    std::string ssid_value(reinterpret_cast<const char *>(ssid.ucSSID), reinterpret_cast<const char *>(ssid.ucSSID) + ssid.uSSIDLength);
+    std::string bssid_value = mac_to_string(connection->wlanAssociationAttributes.dot11Bssid, 6);
+    const ULONG quality = connection->wlanAssociationAttributes.wlanSignalQuality;
+    const long rssi = static_cast<long>(quality / 2) - 100;
+
+    ULONG channel = 0;
+    PVOID channel_probe = nullptr;
+    DWORD channel_size = 0;
+    if (WlanQueryInterface(
+            wlan_handle,
+            &interface_info.InterfaceGuid,
+            wlan_intf_opcode_channel_number,
+            nullptr,
+            &channel_size,
+            &channel_probe,
+            &opcode_type) == ERROR_SUCCESS &&
+        channel_probe != nullptr &&
+        channel_size >= sizeof(ULONG))
+    {
+      channel = *reinterpret_cast<ULONG *>(channel_probe);
+    }
+    if (channel_probe != nullptr)
+    {
+      WlanFreeMemory(channel_probe);
+    }
+
+    wifi = {
+        {"connected", true},
+        {"interface_description", wide_to_utf8(interface_info.strInterfaceDescription)},
+        {"ssid", ansi_to_utf8(ssid_value)},
+        {"bssid", bssid_value},
+        {"signal_quality_pct", quality},
+        {"rssi_dbm", rssi},
+        {"channel", channel},
+        {"band", wifi_band_from_channel(channel)},
+        {"auth", wifi_auth_to_string(connection->wlanSecurityAttributes.dot11AuthAlgorithm)},
+        {"cipher", wifi_cipher_to_string(connection->wlanSecurityAttributes.dot11CipherAlgorithm)},
+        {"phy", wifi_phy_to_string(connection->wlanAssociationAttributes.dot11PhyType)},
+    };
+
+    WlanFreeMemory(connection);
+    break;
+  }
+
+  WlanFreeMemory(interface_list);
+  WlanCloseHandle(wlan_handle, nullptr);
+  return wifi;
+}
+
+std::vector<nlohmann::json> collect_default_routes()
+{
+  std::vector<nlohmann::json> routes;
+  PMIB_IPFORWARD_TABLE2 table = nullptr;
+  if (GetIpForwardTable2(AF_UNSPEC, &table) != NO_ERROR || table == nullptr)
+  {
+    return routes;
+  }
+
+  for (ULONG i = 0; i < table->NumEntries; ++i)
+  {
+    const MIB_IPFORWARD_ROW2 &row = table->Table[i];
+    const SOCKADDR_INET &destination = row.DestinationPrefix.Prefix;
+    if (row.DestinationPrefix.PrefixLength != 0)
+    {
+      continue;
+    }
+    if (destination.si_family != AF_INET && destination.si_family != AF_INET6)
+    {
+      continue;
+    }
+
+    const std::string family = destination.si_family == AF_INET ? "ipv4" : "ipv6";
+    const std::string next_hop = socket_address_to_string(reinterpret_cast<const SOCKADDR *>(&row.NextHop));
+
+    routes.push_back({
+        {"family", family},
+        {"interface_index", row.InterfaceIndex},
+        {"next_hop", next_hop},
+        {"metric", row.Metric},
+    });
+  }
+
+  FreeMibTable(table);
+  std::sort(routes.begin(), routes.end(), [](const nlohmann::json &a, const nlohmann::json &b) {
+    const auto af = a.value("family", std::string());
+    const auto bf = b.value("family", std::string());
+    if (af != bf)
+    {
+      return af < bf;
+    }
+    return a.value("metric", 0u) < b.value("metric", 0u);
+  });
+  return routes;
 }
 
 std::string socket_address_to_string(const SOCKADDR *address)
@@ -1036,66 +1442,237 @@ bool collect_services(std::size_t limit, nlohmann::json &data, std::string &reas
   return true;
 }
 
-bool collect_connections(std::size_t limit, nlohmann::json &data, std::string &reason, std::string &notes)
+std::unordered_map<DWORD, std::string> build_process_name_index()
 {
-  std::vector<nlohmann::json> rows;
-  rows.reserve(limit);
-  std::size_t total_seen = 0;
-
-  DWORD tcp_size = 0;
-  GetExtendedTcpTable(nullptr, &tcp_size, TRUE, AF_INET, TCP_TABLE_OWNER_PID_ALL, 0);
-  if (tcp_size > 0)
+  std::unordered_map<DWORD, std::string> index;
+  HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  if (snapshot == INVALID_HANDLE_VALUE)
   {
-    std::vector<BYTE> tcp_buffer(tcp_size);
-    if (GetExtendedTcpTable(tcp_buffer.data(), &tcp_size, TRUE, AF_INET, TCP_TABLE_OWNER_PID_ALL, 0) == NO_ERROR)
+    return index;
+  }
+
+  PROCESSENTRY32 entry{};
+  entry.dwSize = sizeof(entry);
+  if (Process32First(snapshot, &entry))
+  {
+    do
     {
-      auto *table = reinterpret_cast<MIB_TCPTABLE_OWNER_PID *>(tcp_buffer.data());
+      index[entry.th32ProcessID] = ansi_to_utf8(std::string(entry.szExeFile));
+    } while (Process32Next(snapshot, &entry));
+  }
+
+  CloseHandle(snapshot);
+  return index;
+}
+
+std::string query_process_path(DWORD pid);
+
+bool collect_connections(const ListConnectionsOptions &options, nlohmann::json &data, std::string &reason, std::string &notes)
+{
+  struct ProcessMetadata
+  {
+    std::string name;
+    std::string path;
+  };
+
+  std::vector<nlohmann::json> rows;
+  rows.reserve(options.limit);
+  std::size_t total_seen = 0;
+  std::unordered_map<DWORD, std::size_t> talker_counts;
+  std::unordered_map<DWORD, ProcessMetadata> process_cache;
+  const auto process_name_index = build_process_name_index();
+
+  const auto resolve_process = [&](DWORD pid) -> ProcessMetadata & {
+    auto found = process_cache.find(pid);
+    if (found != process_cache.end())
+    {
+      return found->second;
+    }
+
+    ProcessMetadata meta{};
+    auto it = process_name_index.find(pid);
+    if (it != process_name_index.end())
+    {
+      meta.name = it->second;
+    }
+    meta.path = query_process_path(pid);
+    if (!meta.path.empty())
+    {
+      const std::string from_path = file_name_from_path(meta.path);
+      if (!from_path.empty())
+      {
+        meta.name = from_path;
+      }
+    }
+    if (meta.name.empty())
+    {
+      meta.name = "pid_" + std::to_string(pid);
+    }
+
+    auto inserted = process_cache.emplace(pid, std::move(meta));
+    return inserted.first->second;
+  };
+
+  const auto add_connection_row = [&](const char *proto,
+                                      const char *family,
+                                      const std::string &local_address,
+                                      std::uint32_t local_port,
+                                      const std::string &remote_address,
+                                      std::uint32_t remote_port,
+                                      const std::string &state_text,
+                                      DWORD pid,
+                                      bool ipv6) {
+    ++total_seen;
+    talker_counts[pid] += 1;
+    if (rows.size() >= options.limit)
+    {
+      return;
+    }
+
+    auto &process = resolve_process(pid);
+    const std::string endpoint_local = endpoint_to_string(local_address, local_port, ipv6);
+    const std::string endpoint_remote = endpoint_to_string(remote_address, remote_port, ipv6);
+
+    std::string direction_hint = "unknown";
+    if (state_text == "listen")
+    {
+      direction_hint = "inbound_listen";
+    }
+    else if (std::strncmp(proto, "udp", 3) == 0)
+    {
+      direction_hint = "connectionless";
+    }
+    else if (remote_port > 0)
+    {
+      direction_hint = "outbound_or_peer";
+    }
+
+    nlohmann::json row = {
+        {"proto", proto},
+        {"state", state_text},
+        {"local_address", local_address},
+        {"local_port", local_port},
+        {"remote_address", remote_address},
+        {"remote_port", remote_port},
+        {"pid", static_cast<std::uint32_t>(pid)},
+        {"process_name", process.name},
+        {"endpoint_local", endpoint_local},
+        {"endpoint_remote", endpoint_remote},
+        {"protocol_family", family},
+        {"direction_hint", direction_hint},
+    };
+    if (options.include_process_path && !process.path.empty())
+    {
+      row["process_path"] = process.path;
+    }
+    rows.push_back(std::move(row));
+  };
+
+  DWORD tcp4_size = 0;
+  GetExtendedTcpTable(nullptr, &tcp4_size, TRUE, AF_INET, TCP_TABLE_OWNER_PID_ALL, 0);
+  if (tcp4_size > 0)
+  {
+    std::vector<BYTE> tcp4_buffer(tcp4_size);
+    if (GetExtendedTcpTable(tcp4_buffer.data(), &tcp4_size, TRUE, AF_INET, TCP_TABLE_OWNER_PID_ALL, 0) == NO_ERROR)
+    {
+      auto *table = reinterpret_cast<MIB_TCPTABLE_OWNER_PID *>(tcp4_buffer.data());
       for (DWORD i = 0; i < table->dwNumEntries; ++i)
       {
-        ++total_seen;
-        if (rows.size() >= limit)
-        {
-          continue;
-        }
         const auto &entry = table->table[i];
-        rows.push_back({
-            {"proto", "tcp4"},
-            {"local_address", ipv4_to_string(entry.dwLocalAddr)},
-            {"local_port", static_cast<std::uint32_t>(ntohs(static_cast<u_short>(entry.dwLocalPort)))},
-            {"remote_address", ipv4_to_string(entry.dwRemoteAddr)},
-            {"remote_port", static_cast<std::uint32_t>(ntohs(static_cast<u_short>(entry.dwRemotePort)))},
-            {"state", tcp_state_to_string(entry.dwState)},
-            {"pid", static_cast<std::uint32_t>(entry.dwOwningPid)},
-        });
+        add_connection_row(
+            "tcp4",
+            "ipv4",
+            ipv4_to_string(entry.dwLocalAddr),
+            static_cast<std::uint32_t>(ntohs(static_cast<u_short>(entry.dwLocalPort))),
+            ipv4_to_string(entry.dwRemoteAddr),
+            static_cast<std::uint32_t>(ntohs(static_cast<u_short>(entry.dwRemotePort))),
+            tcp_state_to_string(entry.dwState),
+            entry.dwOwningPid,
+            false);
       }
     }
   }
 
-  DWORD udp_size = 0;
-  GetExtendedUdpTable(nullptr, &udp_size, TRUE, AF_INET, UDP_TABLE_OWNER_PID, 0);
-  if (udp_size > 0)
+  if (options.include_ipv6)
   {
-    std::vector<BYTE> udp_buffer(udp_size);
-    if (GetExtendedUdpTable(udp_buffer.data(), &udp_size, TRUE, AF_INET, UDP_TABLE_OWNER_PID, 0) == NO_ERROR)
+    DWORD tcp6_size = 0;
+    GetExtendedTcpTable(nullptr, &tcp6_size, TRUE, AF_INET6, TCP_TABLE_OWNER_PID_ALL, 0);
+    if (tcp6_size > 0)
     {
-      auto *table = reinterpret_cast<MIB_UDPTABLE_OWNER_PID *>(udp_buffer.data());
-      for (DWORD i = 0; i < table->dwNumEntries; ++i)
+      std::vector<BYTE> tcp6_buffer(tcp6_size);
+      if (GetExtendedTcpTable(tcp6_buffer.data(), &tcp6_size, TRUE, AF_INET6, TCP_TABLE_OWNER_PID_ALL, 0) == NO_ERROR)
       {
-        ++total_seen;
-        if (rows.size() >= limit)
+        auto *table = reinterpret_cast<MIB_TCP6TABLE_OWNER_PID *>(tcp6_buffer.data());
+        for (DWORD i = 0; i < table->dwNumEntries; ++i)
         {
-          continue;
+          const auto &entry = table->table[i];
+          add_connection_row(
+              "tcp6",
+              "ipv6",
+              ipv6_bytes_to_string(entry.ucLocalAddr),
+              static_cast<std::uint32_t>(ntohs(static_cast<u_short>(entry.dwLocalPort))),
+              ipv6_bytes_to_string(entry.ucRemoteAddr),
+              static_cast<std::uint32_t>(ntohs(static_cast<u_short>(entry.dwRemotePort))),
+              tcp_state_to_string(entry.dwState),
+              entry.dwOwningPid,
+              true);
         }
-        const auto &entry = table->table[i];
-        rows.push_back({
-            {"proto", "udp4"},
-            {"local_address", ipv4_to_string(entry.dwLocalAddr)},
-            {"local_port", static_cast<std::uint32_t>(ntohs(static_cast<u_short>(entry.dwLocalPort)))},
-            {"remote_address", ""},
-            {"remote_port", 0},
-            {"state", "open"},
-            {"pid", static_cast<std::uint32_t>(entry.dwOwningPid)},
-        });
+      }
+    }
+  }
+
+  if (options.include_udp)
+  {
+    DWORD udp4_size = 0;
+    GetExtendedUdpTable(nullptr, &udp4_size, TRUE, AF_INET, UDP_TABLE_OWNER_PID, 0);
+    if (udp4_size > 0)
+    {
+      std::vector<BYTE> udp4_buffer(udp4_size);
+      if (GetExtendedUdpTable(udp4_buffer.data(), &udp4_size, TRUE, AF_INET, UDP_TABLE_OWNER_PID, 0) == NO_ERROR)
+      {
+        auto *table = reinterpret_cast<MIB_UDPTABLE_OWNER_PID *>(udp4_buffer.data());
+        for (DWORD i = 0; i < table->dwNumEntries; ++i)
+        {
+          const auto &entry = table->table[i];
+          add_connection_row(
+              "udp4",
+              "ipv4",
+              ipv4_to_string(entry.dwLocalAddr),
+              static_cast<std::uint32_t>(ntohs(static_cast<u_short>(entry.dwLocalPort))),
+              "",
+              0,
+              "open",
+              entry.dwOwningPid,
+              false);
+        }
+      }
+    }
+
+    if (options.include_ipv6)
+    {
+      DWORD udp6_size = 0;
+      GetExtendedUdpTable(nullptr, &udp6_size, TRUE, AF_INET6, UDP_TABLE_OWNER_PID, 0);
+      if (udp6_size > 0)
+      {
+        std::vector<BYTE> udp6_buffer(udp6_size);
+        if (GetExtendedUdpTable(udp6_buffer.data(), &udp6_size, TRUE, AF_INET6, UDP_TABLE_OWNER_PID, 0) == NO_ERROR)
+        {
+          auto *table = reinterpret_cast<MIB_UDP6TABLE_OWNER_PID *>(udp6_buffer.data());
+          for (DWORD i = 0; i < table->dwNumEntries; ++i)
+          {
+            const auto &entry = table->table[i];
+            add_connection_row(
+                "udp6",
+                "ipv6",
+                ipv6_bytes_to_string(entry.ucLocalAddr),
+                static_cast<std::uint32_t>(ntohs(static_cast<u_short>(entry.dwLocalPort))),
+                "",
+                0,
+                "open",
+                entry.dwOwningPid,
+                true);
+          }
+        }
       }
     }
   }
@@ -1116,15 +1693,50 @@ bool collect_connections(std::size_t limit, nlohmann::json &data, std::string &r
     return a.value("pid", 0u) < b.value("pid", 0u);
   });
 
+  std::vector<nlohmann::json> top_talkers;
+  top_talkers.reserve(10);
+  std::vector<std::pair<DWORD, std::size_t>> talker_rank(talker_counts.begin(), talker_counts.end());
+  std::sort(talker_rank.begin(), talker_rank.end(), [](const auto &a, const auto &b) {
+    if (a.second != b.second)
+    {
+      return a.second > b.second;
+    }
+    return a.first < b.first;
+  });
+
+  for (const auto &[pid, count] : talker_rank)
+  {
+    if (top_talkers.size() >= 10)
+    {
+      break;
+    }
+    auto &process = resolve_process(pid);
+    nlohmann::json row = {
+        {"pid", static_cast<std::uint32_t>(pid)},
+        {"process_name", process.name},
+        {"connection_count", count},
+    };
+    if (options.include_process_path && !process.path.empty())
+    {
+      row["process_path"] = process.path;
+    }
+    top_talkers.push_back(std::move(row));
+  }
+
   data = {
-      {"schema_version", "v1"},
+      {"schema_version", "v2"},
       {"snapshot_type", "list_connections"},
       {"kernel_mode", true},
       {"collection_ts_unix", now_unix_string()},
       {"count", rows.size()},
       {"total_seen", total_seen},
       {"connections", rows},
+      {"top_talkers_by_connection_count", top_talkers},
   };
+  if (total_seen > rows.size())
+  {
+    notes = "truncated_to_limit";
+  }
   return true;
 }
 
@@ -1219,7 +1831,7 @@ bool collect_mounts(std::size_t limit, nlohmann::json &data, std::string &reason
   return true;
 }
 
-bool collect_network_info(std::size_t limit, nlohmann::json &data, std::string &reason, std::string &notes)
+bool collect_network_info(const NetworkInfoOptions &options, nlohmann::json &data, std::string &reason, std::string &notes)
 {
   ULONG size = 0;
   constexpr ULONG flags = GAA_FLAG_INCLUDE_PREFIX | GAA_FLAG_INCLUDE_GATEWAYS;
@@ -1242,13 +1854,15 @@ bool collect_network_info(std::size_t limit, nlohmann::json &data, std::string &
   }
 
   std::vector<nlohmann::json> adapters;
-  adapters.reserve(limit);
+  adapters.reserve(options.limit);
   std::size_t total_seen = 0;
+  std::unordered_map<ULONG, bool> vpn_interface_index;
+  std::unordered_set<std::string> vpn_reasons;
 
   for (const auto *adapter = addresses; adapter != nullptr; adapter = adapter->Next)
   {
     ++total_seen;
-    if (adapters.size() >= limit)
+    if (adapters.size() >= options.limit)
     {
       continue;
     }
@@ -1295,6 +1909,31 @@ bool collect_network_info(std::size_t limit, nlohmann::json &data, std::string &
       }
     }
 
+    const std::vector<std::string> signals = adapter_vpn_signals(adapter);
+    const bool is_vpn_candidate = !signals.empty();
+    const bool is_virtual =
+        adapter->IfType == IF_TYPE_SOFTWARE_LOOPBACK ||
+        adapter->IfType == IF_TYPE_TUNNEL ||
+        std::any_of(signals.begin(), signals.end(), [](const std::string &signal) {
+          return signal.find("virtual") != std::string::npos ||
+                 signal.find("tap") != std::string::npos ||
+                 signal.find("tun") != std::string::npos ||
+                 signal.find("vpn") != std::string::npos;
+        });
+
+    if (is_vpn_candidate)
+    {
+      vpn_interface_index[adapter->IfIndex] = true;
+      if (adapter->Ipv6IfIndex != 0)
+      {
+        vpn_interface_index[adapter->Ipv6IfIndex] = true;
+      }
+      for (const auto &signal : signals)
+      {
+        vpn_reasons.insert(signal);
+      }
+    }
+
     nlohmann::json row = {
         {"name", ansi_to_utf8(adapter->AdapterName == nullptr ? "" : adapter->AdapterName)},
         {"friendly_name", wide_to_utf8(adapter->FriendlyName)},
@@ -1310,6 +1949,11 @@ bool collect_network_info(std::size_t limit, nlohmann::json &data, std::string &
         {"unicast", unicast},
         {"gateways", gateways},
         {"dns_servers", dns_servers},
+        {"link_speed_rx_mbps", bits_to_mbps(adapter->ReceiveLinkSpeed)},
+        {"link_speed_tx_mbps", bits_to_mbps(adapter->TransmitLinkSpeed)},
+        {"is_virtual", is_virtual},
+        {"is_vpn_candidate", is_vpn_candidate},
+        {"vpn_signals", options.include_vpn_signals ? nlohmann::json(signals) : nlohmann::json::array()},
     };
     adapters.push_back(std::move(row));
   }
@@ -1317,14 +1961,37 @@ bool collect_network_info(std::size_t limit, nlohmann::json &data, std::string &
   std::sort(adapters.begin(), adapters.end(), [](const nlohmann::json &a, const nlohmann::json &b)
             { return a.value("friendly_name", std::string()) < b.value("friendly_name", std::string()); });
 
+  const nlohmann::json wifi = options.include_wifi ? collect_wifi_info() : nlohmann::json({{"connected", false}, {"status", "disabled"}});
+  const std::vector<nlohmann::json> routes = options.include_routes ? collect_default_routes() : std::vector<nlohmann::json>{};
+
+  for (const auto &route : routes)
+  {
+    const auto index_it = route.find("interface_index");
+    if (index_it == route.end() || !index_it->is_number_unsigned())
+    {
+      continue;
+    }
+    const ULONG interface_index = index_it->get<ULONG>();
+    if (vpn_interface_index.find(interface_index) != vpn_interface_index.end())
+    {
+      vpn_reasons.insert("default_route_via_vpn_candidate");
+    }
+  }
+
+  std::vector<std::string> vpn_reason_list(vpn_reasons.begin(), vpn_reasons.end());
+  std::sort(vpn_reason_list.begin(), vpn_reason_list.end());
+
   data = {
-      {"schema_version", "v1"},
+      {"schema_version", "v2"},
       {"snapshot_type", "network_info"},
       {"kernel_mode", true},
       {"collection_ts_unix", now_unix_string()},
       {"count", adapters.size()},
       {"total_seen", total_seen},
       {"adapters", adapters},
+      {"wifi", wifi},
+      {"default_routes", routes},
+      {"vpn_summary", {{"detected", !vpn_reason_list.empty()}, {"reasons", vpn_reason_list}}},
   };
   if (total_seen > adapters.size())
   {
@@ -1440,6 +2107,10 @@ ObservabilityExecutionResult ExecuteObservabilityCommand(
 {
   const std::string canonical = canonical_method(method);
   const std::size_t limit = parse_limit(params_json);
+  ListConnectionsOptions list_connections_options{};
+  NetworkInfoOptions network_info_options{};
+  parse_list_connections_options(params_json, list_connections_options);
+  parse_network_info_options(params_json, network_info_options);
 
   IoctlClient ioctl;
   KernelExecResult auth{};
@@ -1553,7 +2224,8 @@ ObservabilityExecutionResult ExecuteObservabilityCommand(
   }
   else if (canonical == "list_connections")
   {
-    collected = collect_connections(limit, data, reason, notes);
+    list_connections_options.limit = std::min(list_connections_options.limit, kMaxLimit);
+    collected = collect_connections(list_connections_options, data, reason, notes);
   }
   else if (canonical == "list_mounts")
   {
@@ -1561,7 +2233,8 @@ ObservabilityExecutionResult ExecuteObservabilityCommand(
   }
   else if (canonical == "network_info")
   {
-    collected = collect_network_info(limit, data, reason, notes);
+    network_info_options.limit = std::min(network_info_options.limit, kMaxLimit);
+    collected = collect_network_info(network_info_options, data, reason, notes);
   }
   else if (canonical == "get_active_window")
   {

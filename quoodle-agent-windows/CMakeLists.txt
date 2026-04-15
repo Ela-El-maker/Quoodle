@@ -175,7 +175,7 @@ target_include_directories(agent PRIVATE src ${SQLITE3_INCLUDE_DIR})
 target_link_libraries(agent PRIVATE ixwebsocket::ixwebsocket nlohmann_json::nlohmann_json ${SQLITE3_LIB})
 # Link Windows-specific system libraries used by telemetry and networking
 if(WIN32)
-  target_link_libraries(agent PRIVATE pdh iphlpapi crypt32 advapi32 winhttp wtsapi32 userenv gdiplus gdi32 user32)
+  target_link_libraries(agent PRIVATE pdh iphlpapi wlanapi crypt32 advapi32 winhttp wtsapi32 userenv gdiplus gdi32 user32)
 endif()
 if(HAVE_SODIUM)
   target_include_directories(agent PRIVATE ${SODIUM_INCLUDE_DIR})
