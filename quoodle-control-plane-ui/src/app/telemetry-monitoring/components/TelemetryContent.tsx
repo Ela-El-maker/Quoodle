@@ -80,6 +80,7 @@ type NetworkSnapshotState = {
 type ChartPoint = { time: string; value: number };
 type NetworkPoint = { time: string; tx: number; rx: number };
 type RiskPoint = { time: string; score: number; event: string | null };
+type SavedWifiProfile = { ssid: string; password: string };
 
 const timeWindows = [
   { key: '1h', label: '1h', hours: 1 },
@@ -110,6 +111,52 @@ function parseCount(value: unknown): number | null {
     if (Number.isFinite(parsed)) return Math.max(0, Math.trunc(parsed));
   }
   return null;
+}
+
+function parseStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
+function parseSavedWifiProfiles(value: unknown): SavedWifiProfile[] {
+  if (!Array.isArray(value)) return [];
+  const profiles: SavedWifiProfile[] = [];
+
+  for (const item of value) {
+    if (typeof item === 'string') {
+      const ssid = item.trim();
+      if (ssid.length === 0) continue;
+      profiles.push({ ssid, password: '(no saved password or open network)' });
+      continue;
+    }
+
+    if (!isRecord(item)) continue;
+    const ssid = typeof item.ssid === 'string' ? item.ssid.trim() : '';
+    if (ssid.length === 0) continue;
+    const password = typeof item.password === 'string' ? item.password.trim() : '';
+    profiles.push({
+      ssid,
+      password: password.length > 0 ? password : '(no saved password or open network)',
+    });
+  }
+
+  return profiles;
+}
+
+function formatSavedWifiProfilesReport(profiles: SavedWifiProfile[]): string {
+  if (profiles.length === 0) {
+    return 'Saved Wi-Fi networks and passwords:\n\n(no saved Wi-Fi profiles found)';
+  }
+  const lines: string[] = ['Saved Wi-Fi networks and passwords:', ''];
+  for (const profile of profiles) {
+    lines.push(`SSID: ${profile.ssid}`);
+    lines.push(`Password: ${profile.password}`);
+    lines.push('----------------------------------------');
+  }
+  return lines.join('\n');
 }
 
 function latestCompletedByMethod(rows: NormalizedCommandResult[], method: string): NormalizedCommandResult | null {
@@ -543,8 +590,12 @@ export default function TelemetryContent() {
 
     const adapterCount = parseCount(networkInfoData?.count) ?? 0;
     const routeCount = Array.isArray(networkInfoData?.default_routes) ? networkInfoData.default_routes.length : 0;
+    const savedWifiProfiles = parseSavedWifiProfiles(networkInfoData?.saved_wifi_profiles);
+    const wifiRiskSignals = parseStringArray(networkInfoData?.wifi_risk_signals);
     const wifiConnected = networkInfoData?.wifi && isRecord(networkInfoData.wifi) && networkInfoData.wifi.connected === true;
     const vpnDetected = networkInfoData?.vpn_summary && isRecord(networkInfoData.vpn_summary) && networkInfoData.vpn_summary.detected === true;
+    const wifiPasswordsCollected = networkInfoData?.wifi_passwords_collected === true;
+    const savedWifiPasswordCount = parseCount(networkInfoData?.saved_wifi_password_count) ?? 0;
 
     const connectionCount = parseCount(listConnectionsData?.count) ?? 0;
     const topTalkersCount = Array.isArray(listConnectionsData?.top_talkers_by_connection_count)
@@ -562,6 +613,12 @@ export default function TelemetryContent() {
       routeCount,
       wifiConnected,
       vpnDetected,
+      savedWifiProfileCount: savedWifiProfiles.length,
+      savedWifiProfilesReport: formatSavedWifiProfilesReport(savedWifiProfiles),
+      savedWifiPasswordCount,
+      wifiRiskSignalCount: wifiRiskSignals.length,
+      wifiRiskSignals,
+      wifiPasswordsCollected,
       connectionCount,
       topTalkersCount,
       totalSeen,
@@ -766,9 +823,13 @@ export default function TelemetryContent() {
             { label: 'Default Routes', value: String(networkSnapshotSummary.routeCount), color: 'text-cyan-400' },
             { label: 'Connections', value: String(networkSnapshotSummary.connectionCount), color: 'text-green-400' },
             { label: 'Top Talkers', value: String(networkSnapshotSummary.topTalkersCount), color: 'text-amber-400' },
+            { label: 'Saved Wi-Fi Profiles', value: String(networkSnapshotSummary.savedWifiProfileCount), color: 'text-blue-400' },
+            { label: 'Wi-Fi Risk Signals', value: String(networkSnapshotSummary.wifiRiskSignalCount), color: networkSnapshotSummary.wifiRiskSignalCount > 0 ? 'text-amber-400' : 'text-green-400' },
             { label: 'Wi-Fi', value: networkSnapshotSummary.wifiConnected ? 'Connected' : 'Not connected', color: networkSnapshotSummary.wifiConnected ? 'text-green-400' : 'text-muted-foreground' },
             { label: 'VPN Signal', value: networkSnapshotSummary.vpnDetected ? 'Detected' : 'Not detected', color: networkSnapshotSummary.vpnDetected ? 'text-amber-400' : 'text-green-400' },
             { label: 'Connection Truncation', value: networkSnapshotSummary.truncated ? 'Yes' : 'No', color: networkSnapshotSummary.truncated ? 'text-amber-400' : 'text-green-400' },
+            { label: 'Saved Wi-Fi Passwords', value: String(networkSnapshotSummary.savedWifiPasswordCount), color: networkSnapshotSummary.savedWifiPasswordCount > 0 ? 'text-amber-400' : 'text-green-400' },
+            { label: 'Passwords Found', value: networkSnapshotSummary.wifiPasswordsCollected ? 'Yes' : 'No', color: networkSnapshotSummary.wifiPasswordsCollected ? 'text-amber-400' : 'text-green-400' },
             { label: 'Last Snapshot', value: telemetryText(networkSnapshotSummary.latestTimestamp, 'No snapshot yet'), color: 'text-muted-foreground' },
           ].map((item) => (
             <div key={`net-snap-${item.label}`} className="bg-muted/20 border border-border rounded-md px-3 py-2.5">
@@ -776,6 +837,16 @@ export default function TelemetryContent() {
               <p className={`text-sm font-semibold mt-1 ${item.color}`}>{item.value}</p>
             </div>
           ))}
+        </div>
+        {networkSnapshotSummary.wifiRiskSignals.length > 0 ? (
+          <p className="text-[11px] text-amber-400">
+            Wi-Fi risk signals: {networkSnapshotSummary.wifiRiskSignals.join(', ')}
+          </p>
+        ) : null}
+        <div className="rounded-md border border-border bg-zinc-950/70 p-3">
+          <pre className="text-xs font-mono text-green-300 whitespace-pre-wrap">
+            {networkSnapshotSummary.savedWifiProfilesReport}
+          </pre>
         </div>
       </div>
 

@@ -483,6 +483,58 @@ function normalizeVpnSummaryPayload(data: unknown): Record<string, unknown> {
   return data.vpn_summary;
 }
 
+function normalizeStringArrayField(data: unknown, key: string): string[] {
+  if (!isObject(data) || !Array.isArray(data[key])) return [];
+  return (data[key] as unknown[])
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
+type SavedWifiProfile = {
+  ssid: string;
+  password: string;
+};
+
+function normalizeSavedWifiProfilesField(data: unknown, key: string): SavedWifiProfile[] {
+  if (!isObject(data) || !Array.isArray(data[key])) return [];
+  const rows = data[key] as unknown[];
+  const profiles: SavedWifiProfile[] = [];
+
+  for (const row of rows) {
+    if (typeof row === 'string') {
+      const ssid = row.trim();
+      if (ssid.length === 0) continue;
+      profiles.push({ ssid, password: '(no saved password or open network)' });
+      continue;
+    }
+
+    if (!isObject(row)) continue;
+    const ssid = typeof row.ssid === 'string' ? row.ssid.trim() : '';
+    if (ssid.length === 0) continue;
+    const passwordRaw = typeof row.password === 'string' ? row.password.trim() : '';
+    profiles.push({
+      ssid,
+      password: passwordRaw.length > 0 ? passwordRaw : '(no saved password or open network)',
+    });
+  }
+
+  return profiles;
+}
+
+function formatSavedWifiProfilesLog(profiles: SavedWifiProfile[]): string {
+  if (profiles.length === 0) {
+    return 'Saved Wi-Fi networks and passwords:\n\n(no saved Wi-Fi profiles found)';
+  }
+  const lines: string[] = ['Saved Wi-Fi networks and passwords:', ''];
+  for (const profile of profiles) {
+    lines.push(`SSID: ${profile.ssid}`);
+    lines.push(`Password: ${profile.password}`);
+    lines.push('----------------------------------------');
+  }
+  return lines.join('\n');
+}
+
 function readSnapshotCounts(data: unknown): { count: number; totalSeen: number | null } {
   if (!isObject(data)) return { count: 0, totalSeen: null };
   const countRaw = data.count;
@@ -818,9 +870,20 @@ function buildNetworkInfo(row: NormalizedCommandResult): ResultViewModel {
   const routes = normalizeRoutesArray(data);
   const wifi = normalizeWifiPayload(data);
   const vpnSummary = normalizeVpnSummaryPayload(data);
+  const savedProfiles = normalizeSavedWifiProfilesField(data, 'saved_wifi_profiles');
+  const wifiRiskSignals = normalizeStringArrayField(data, 'wifi_risk_signals');
   const adapterTable = buildProcessTable(adapters);
   const routesTable = buildProcessTable(routes);
-  const wifiBlock = objectEntries(wifi, { hideNull: true });
+  const wifiView = {
+    ...wifi,
+    saved_wifi_profile_count: savedProfiles.length,
+    saved_wifi_profiles_preview: savedProfiles.slice(0, 12).map((profile) => profile.ssid).join(', '),
+    wifi_risk_signal_count: wifiRiskSignals.length,
+    wifi_risk_signals: wifiRiskSignals.join(', '),
+    wifi_passwords_collected: isObject(data) ? data.wifi_passwords_collected : false,
+    saved_wifi_password_count: isObject(data) ? data.saved_wifi_password_count : 0,
+  };
+  const wifiBlock = objectEntries(wifiView, { hideNull: true });
   const vpnBlock = objectEntries(vpnSummary, { hideNull: true });
   const counts = readSnapshotCounts(data);
   const truncated = counts.totalSeen != null && counts.totalSeen > counts.count;
@@ -869,7 +932,16 @@ function buildNetworkInfo(row: NormalizedCommandResult): ResultViewModel {
       title: 'Wi-Fi',
       widget: 'kv',
       keyValues: wifiBlock.keyValues,
+      description: wifiRiskSignals.length > 0
+        ? `Risk signals: ${wifiRiskSignals.join(', ')}`
+        : undefined,
       emptySummary: wifiBlock.keyValues.length === 0 ? 'No Wi-Fi details were returned' : null,
+    },
+    {
+      id: 'saved-wifi',
+      title: 'Saved Wi-Fi Networks',
+      widget: 'log',
+      logText: formatSavedWifiProfilesLog(savedProfiles),
     },
     {
       id: 'vpn-routes',
