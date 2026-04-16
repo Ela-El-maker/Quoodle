@@ -288,7 +288,7 @@
                             <TextBlock Text="Scan this QR code with the QuoodleAgent mobile companion app to complete enrollment." Style="{StaticResource OnboardingSubtitleTextStyle}" TextWrapping="Wrap" />
 
                             <Border Background="#FFF4F5F7" CornerRadius="10" Padding="12" HorizontalAlignment="Center">
-                                <Image x:Name="QrImage" Width="260" Height="260" Stretch="Fill" />
+                                <Image x:Name="QrImage" Width="320" Height="320" Stretch="Fill" />
                             </Border>
 
                             <Button x:Name="CopyPairingButton" Style="{StaticResource PairModeTabButtonStyle}" HorizontalAlignment="Center" Click="OnCopyPairingString">
@@ -336,6 +336,17 @@
                                     </Grid>
                                 </StackPanel>
                             </Border>
+
+                            <StackPanel Spacing="4" Margin="0,4,0,0">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="Last Paired:" Style="{StaticResource OnboardingBodyTextStyle}" />
+                                    <TextBlock x:Name="RegisteringLastPairedText" Style="{StaticResource DetailsValueTextStyle}" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="Last Synced:" Style="{StaticResource OnboardingBodyTextStyle}" />
+                                    <TextBlock x:Name="RegisteringLastSyncedText" Style="{StaticResource DetailsValueTextStyle}" />
+                                </StackPanel>
+                            </StackPanel>
 
                             <TextBlock x:Name="RegisteringStatusText" Style="{StaticResource OnboardingBodyTextStyle}" TextAlignment="Center" />
                         </StackPanel>
@@ -408,6 +419,15 @@
                                     <Grid Padding="14,13" ColumnSpacing="12">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                         <StackPanel Orientation="Horizontal" Spacing="9">
+                                            <FontIcon Glyph="&#xE823;" FontSize="16" Foreground="{ThemeResource TextMutedBrush}" />
+                                            <TextBlock Text="Last Synced" Style="{StaticResource OnboardingBodyTextStyle}" />
+                                        </StackPanel>
+                                        <TextBlock x:Name="EnrollmentLastSyncedText" Grid.Column="1" Style="{StaticResource DetailsValueTextStyle}" />
+                                    </Grid>
+                                    <Border Height="1" Background="{ThemeResource BorderBrush}" />
+                                    <Grid Padding="14,13" ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                        <StackPanel Orientation="Horizontal" Spacing="9">
                                             <FontIcon Glyph="&#xE128;" FontSize="16" Foreground="{ThemeResource TextMutedBrush}" />
                                             <TextBlock Text="Policy Hash" Style="{StaticResource OnboardingBodyTextStyle}" />
                                         </StackPanel>
@@ -432,6 +452,18 @@
                                 </Button>
                             </StackPanel>
                         </StackPanel>
+
+                        <Button
+                            x:Name="HardResetPairingButton"
+                            HorizontalAlignment="Center"
+                            Style="{StaticResource OnboardingNeutralButtonStyle}"
+                            Click="OnHardResetPairing"
+                            MinWidth="300">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="&#xE72C;" FontSize="16" />
+                                <TextBlock Text="Reset Pairing (Clear Local Session)" FontSize="15" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" />
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
                 </Border>
             </StackPanel>

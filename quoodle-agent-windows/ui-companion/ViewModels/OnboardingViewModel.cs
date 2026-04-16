@@ -31,6 +31,7 @@ public sealed class OnboardingViewModel : ObservableObject, IDisposable
             () => !IsPaired && IsPairStage);
         VerifyTokenCommand = new RelayCommand(() => _store.VerifyTokenPairing(), () => !IsPaired && CanVerifyToken);
         RetryPairingCommand = new RelayCommand(() => _store.RetryPairing(), () => !IsPaired && IsTokenFailed);
+        HardResetPairingCommand = new RelayCommand(() => _store.HardResetPairing(), () => IsConfirmStage || IsPaired);
 
         RefreshCommandStates();
     }
@@ -46,6 +47,8 @@ public sealed class OnboardingViewModel : ObservableObject, IDisposable
     public RelayCommand VerifyTokenCommand { get; }
 
     public RelayCommand RetryPairingCommand { get; }
+
+    public RelayCommand HardResetPairingCommand { get; }
 
     public bool IsPaired => _snapshot.IsPaired;
 
@@ -123,6 +126,17 @@ public sealed class OnboardingViewModel : ObservableObject, IDisposable
     public string EnrollmentAgentVersion => _snapshot.AgentVersion;
 
     public string EnrollmentAt => (Flow.EnrolledAtUtc ?? DateTimeOffset.UtcNow).LocalDateTime.ToString("M/d/yyyy, h:mm:ss tt");
+
+    public string LastPairedAt
+    {
+        get
+        {
+            var pairedAt = Flow.EnrolledAtUtc ?? _snapshot.Configuration.DeviceIdentity.EnrolledAtUtc;
+            return FormatTimestamp(pairedAt);
+        }
+    }
+
+    public string LastSyncedAt => FormatTimestamp(_snapshot.LastSyncUtc);
 
     public string EnrollmentPolicyHash => _snapshot.PolicyHash;
 
@@ -223,6 +237,8 @@ public sealed class OnboardingViewModel : ObservableObject, IDisposable
         RaisePropertyChanged(nameof(EnrollmentPlatform));
         RaisePropertyChanged(nameof(EnrollmentAgentVersion));
         RaisePropertyChanged(nameof(EnrollmentAt));
+        RaisePropertyChanged(nameof(LastPairedAt));
+        RaisePropertyChanged(nameof(LastSyncedAt));
         RaisePropertyChanged(nameof(EnrollmentPolicyHash));
         RaisePropertyChanged(nameof(StatusLine));
     }
@@ -235,6 +251,27 @@ public sealed class OnboardingViewModel : ObservableObject, IDisposable
         SelectQrModeCommand.RaiseCanExecuteChanged();
         VerifyTokenCommand.RaiseCanExecuteChanged();
         RetryPairingCommand.RaiseCanExecuteChanged();
+        HardResetPairingCommand.RaiseCanExecuteChanged();
+    }
+
+    private static string FormatTimestamp(DateTimeOffset? timestamp)
+    {
+        if (timestamp is null || timestamp.Value == default)
+        {
+            return "Never";
+        }
+
+        return timestamp.Value.LocalDateTime.ToString("M/d/yyyy, h:mm:ss tt");
+    }
+
+    private static string FormatTimestamp(DateTimeOffset timestamp)
+    {
+        if (timestamp == default)
+        {
+            return "Never";
+        }
+
+        return timestamp.LocalDateTime.ToString("M/d/yyyy, h:mm:ss tt");
     }
 
     public void Dispose()

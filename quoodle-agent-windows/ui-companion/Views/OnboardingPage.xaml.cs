@@ -174,6 +174,8 @@ public sealed partial class OnboardingPage : Page
 
         PendingDeviceNameText.Text = _vm.EnrollmentDeviceName;
         PendingDeviceIdSuffixText.Text = _vm.EnrollmentDeviceIdSuffix;
+        RegisteringLastPairedText.Text = _vm.LastPairedAt;
+        RegisteringLastSyncedText.Text = _vm.LastSyncedAt;
         RegisteringStatusText.Text = _vm.StatusLine;
 
         EnrollmentDeviceNameText.Text = _vm.EnrollmentDeviceName;
@@ -181,10 +183,12 @@ public sealed partial class OnboardingPage : Page
         EnrollmentPlatformText.Text = _vm.EnrollmentPlatform;
         EnrollmentAgentVersionText.Text = _vm.EnrollmentAgentVersion;
         EnrollmentAtText.Text = _vm.EnrollmentAt;
+        EnrollmentLastSyncedText.Text = _vm.LastSyncedAt;
         EnrollmentPolicyHashText.Text = _vm.EnrollmentPolicyHash;
 
         OpenDashboardButton.IsEnabled = _vm.IsEnrollmentComplete;
         ConfigureAgentButton.IsEnabled = _vm.IsEnrollmentComplete;
+        HardResetPairingButton.IsEnabled = _vm.HardResetPairingCommand.CanExecute(null);
     }
 
     private void ApplyStepVisual(
@@ -257,7 +261,7 @@ public sealed partial class OnboardingPage : Page
         using var generator = new QRCodeGenerator();
         using var qrData = generator.CreateQrCode(safePayload, QRCodeGenerator.ECCLevel.M);
         var qrPng = new PngByteQRCode(qrData);
-        var pngBytes = qrPng.GetGraphic(8);
+        var pngBytes = qrPng.GetGraphic(10);
 
         using var stream = new InMemoryRandomAccessStream();
         await stream.WriteAsync(pngBytes.AsBuffer());
@@ -418,6 +422,14 @@ public sealed partial class OnboardingPage : Page
     private void OnConfigureAgent(object sender, RoutedEventArgs e)
     {
         Frame?.Navigate(typeof(SettingsPage));
+    }
+
+    private void OnHardResetPairing(object sender, RoutedEventArgs e)
+    {
+        if (_vm.HardResetPairingCommand.CanExecute(null))
+        {
+            _vm.HardResetPairingCommand.Execute(null);
+        }
     }
 
     private void OnPageUnloaded(object sender, RoutedEventArgs e)

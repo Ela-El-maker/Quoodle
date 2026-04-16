@@ -20,6 +20,7 @@ public sealed class UiBridgeProvider : IAgentStateProvider
     private const string AgentEndpointPath = @"C:\ProgramData\Quoodle\agent_endpoint";
     private const string AgentPubkeyPath = @"C:\ProgramData\Quoodle\agent_pubkey";
     private const string UiBridgePipeName = "QuoodleAgentUiBridge";
+    private const string UnpairedDeviceId = "pending-pairing";
     private const int PipeTimeoutMs = 1200;
     private const int PairingPollMaxAttempts = 90;
     private const int PairingKeyWarmupAttempts = 8;
@@ -418,6 +419,69 @@ public sealed class UiBridgeProvider : IAgentStateProvider
         AddBridgeActivity(DateTimeOffset.UtcNow, ActivitySeverity.Warning, "Re-pair requested", "Device marked for re-pairing in UI state.");
     }
 
+    public void HardResetPairing()
+    {
+        _ = NextOnboardingOperationId();
+        ClearPendingPairingData();
+
+        TryStopService();
+
+        var clearedDeviceId = TryDeleteRuntimeValue(DeviceIdPath);
+        var clearedJwt = TryDeleteRuntimeValue(AgentJwtPath);
+        var clearedPubkey = TryDeleteRuntimeValue(AgentPubkeyPath);
+        if (!clearedDeviceId)
+        {
+            clearedDeviceId = TryWriteRuntimeValue(DeviceIdPath, UnpairedDeviceId);
+        }
+        if (!clearedJwt)
+        {
+            clearedJwt = TryWriteRuntimeValue(AgentJwtPath, string.Empty);
+        }
+        if (!clearedPubkey)
+        {
+            clearedPubkey = TryWriteRuntimeValue(AgentPubkeyPath, string.Empty);
+        }
+
+        Environment.SetEnvironmentVariable("AGENT_DEVICE_ID", null, EnvironmentVariableTarget.Process);
+        Environment.SetEnvironmentVariable("AGENT_JWT", null, EnvironmentVariableTarget.Process);
+        Environment.SetEnvironmentVariable("AGENT_EXPECTED_PUBKEY_B64", null, EnvironmentVariableTarget.Process);
+        lock (_gate)
+        {
+            _lastRuntimeAgentPubkey = string.Empty;
+        }
+
+        UpdateBaseline(snapshot => snapshot with
+        {
+            IsPaired = false,
+            DeviceId = UnpairedDeviceId,
+            Onboarding = OnboardingFlowState.CreateInitial() with
+            {
+                DetectState = OnboardingDetectState.NotEnrolled,
+                PairError = string.Empty
+            },
+            CurrentActivity = "Pairing reset. Ready for a fresh enrollment",
+            Configuration = snapshot.Configuration with
+            {
+                DeviceIdentity = snapshot.Configuration.DeviceIdentity with
+                {
+                    DeviceId = UnpairedDeviceId,
+                    EnrolledState = "Not Enrolled",
+                    EnrolledAtUtc = null
+                }
+            }
+        });
+
+        AddBridgeActivity(
+            DateTimeOffset.UtcNow,
+            ActivitySeverity.Warning,
+            "Hard reset pairing",
+            $"Cleared local artifacts (device_id={clearedDeviceId}, agent_jwt={clearedJwt}, agent_pubkey={clearedPubkey}).");
+
+        TryStartService();
+        _ = TrySendPipeCommand("reconnect", out _);
+        PollRuntime();
+    }
+
     public void ResetUiSession()
     {
         _ = NextOnboardingOperationId();
@@ -548,6 +612,8 @@ public sealed class UiBridgeProvider : IAgentStateProvider
     private AgentStateSnapshot MergeSnapshot(AgentStateSnapshot baseline, RuntimeProbe probe)
     {
         var pendingDeviceId = _pendingPairDeviceId;
+        var stalePairingDetected = IsPairingInvalidationAuthState(probe.AuthState)
+            && string.IsNullOrWhiteSpace(pendingDeviceId);
         var runtimeDeviceId = !string.IsNullOrWhiteSpace(probe.EffectiveDeviceId)
             ? probe.EffectiveDeviceId
             : (string.IsNullOrWhiteSpace(probe.DeviceId) ? baseline.DeviceId : probe.DeviceId);
@@ -560,7 +626,12 @@ public sealed class UiBridgeProvider : IAgentStateProvider
             // Runtime pipe can still be reporting a stale local device id from a previous run.
             effectiveDeviceId = pendingDeviceId;
         }
-        var ownershipPaired = probe.IsPaired || baseline.IsPaired;
+        else if (stalePairingDetected && baseline.Onboarding.Stage != OnboardingStage.Pair)
+        {
+            effectiveDeviceId = UnpairedDeviceId;
+            runtimeDeviceId = UnpairedDeviceId;
+        }
+        var ownershipPaired = (probe.IsPaired || baseline.IsPaired) && !stalePairingDetected;
         var expectedDeviceId = !string.IsNullOrWhiteSpace(pendingDeviceId)
             ? pendingDeviceId
             : (string.IsNullOrWhiteSpace(baseline.DeviceId) ? runtimeDeviceId : baseline.DeviceId);
@@ -581,6 +652,21 @@ public sealed class UiBridgeProvider : IAgentStateProvider
                     ? (baseline.Onboarding.EnrolledAtUtc ?? probe.ObservedAtUtc)
                     : baseline.Onboarding.EnrolledAtUtc,
                 PairError = string.Empty
+            };
+        }
+        else if (stalePairingDetected && baseline.Onboarding.Stage != OnboardingStage.Pair)
+        {
+            onboarding = baseline.Onboarding with
+            {
+                Stage = OnboardingStage.Detect,
+                DetectState = OnboardingDetectState.NotEnrolled,
+                PairMode = OnboardingPairMode.Token,
+                PairState = OnboardingPairState.TokenEntry,
+                ConfirmState = OnboardingConfirmState.Registering,
+                TokenDigits = string.Empty,
+                PairingString = string.Empty,
+                PairError = "Stored pairing is no longer valid. Pair this device again.",
+                EnrolledAtUtc = null
             };
         }
 
@@ -630,6 +716,10 @@ public sealed class UiBridgeProvider : IAgentStateProvider
         {
             activityText = "Enrollment complete";
         }
+        else if (stalePairingDetected && baseline.Onboarding.Stage != OnboardingStage.Pair)
+        {
+            activityText = "Stored pairing rejected by gateway. Start pairing again";
+        }
         else if (!string.IsNullOrWhiteSpace(baseline.CurrentActivity) &&
                  (baseline.Onboarding.Stage == OnboardingStage.Detect || baseline.Onboarding.Stage == OnboardingStage.Pair))
         {
@@ -676,6 +766,33 @@ public sealed class UiBridgeProvider : IAgentStateProvider
                 : $"Agent service auth failed ({probe.AuthState})",
             _ => "Agent service state unknown"
         };
+    }
+
+    private static bool IsAuthFailureState(string authState)
+    {
+        var normalized = (authState ?? string.Empty).Trim();
+        if (normalized.Length == 0)
+        {
+            return false;
+        }
+
+        return normalized.StartsWith("auth_error:", StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains("invalid_jwt", StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains("unknown_device", StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains("invalid_signature", StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains("replay", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsPairingInvalidationAuthState(string authState)
+    {
+        var normalized = (authState ?? string.Empty).Trim();
+        if (normalized.Length == 0)
+        {
+            return false;
+        }
+
+        return normalized.Contains("AUTH_UNKNOWN_DEVICE", StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains("AUTH_INVALID_JWT", StringComparison.OrdinalIgnoreCase);
     }
 
     private static IReadOnlyList<ActivityEntry> MergeActivity(
@@ -926,6 +1043,31 @@ public sealed class UiBridgeProvider : IAgentStateProvider
         }
     }
 
+    private static void TryStopService()
+    {
+        try
+        {
+            using var controller = new ServiceController(ServiceName);
+            controller.Refresh();
+            if (controller.Status is ServiceControllerStatus.Running or ServiceControllerStatus.StartPending or ServiceControllerStatus.ContinuePending)
+            {
+                controller.Stop();
+                try
+                {
+                    controller.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(4));
+                }
+                catch
+                {
+                    // Best-effort wait only.
+                }
+            }
+        }
+        catch
+        {
+            // Best-effort only: keep UI responsive even when stop attempts fail.
+        }
+    }
+
     private bool TryProbeViaPipe(out PipeRuntimeStatus status)
     {
         status = new PipeRuntimeStatus(
@@ -981,9 +1123,20 @@ public sealed class UiBridgeProvider : IAgentStateProvider
             statusLabel = $"{statusLabel} - initializing";
         }
 
+        var parsedConnection = ParseConnectionFromWire(connectionRaw);
+        var resolvedConnection = connected ? ConnectionState.Connected : parsedConnection;
+        if (!authenticated && IsAuthFailureState(authState))
+        {
+            resolvedConnection = ConnectionState.AuthFailed;
+        }
+        else if (parsedConnection == ConnectionState.AuthFailed)
+        {
+            resolvedConnection = ConnectionState.AuthFailed;
+        }
+
         status = new PipeRuntimeStatus(
             statusLabel,
-            connected ? ConnectionState.Connected : ParseConnectionFromWire(connectionRaw),
+            resolvedConnection,
             endpoint,
             deviceId,
             effectiveDeviceId,
@@ -1277,6 +1430,10 @@ public sealed class UiBridgeProvider : IAgentStateProvider
                 return;
             }
 
+            var pairSessionId = string.IsNullOrWhiteSpace(pairCode)
+                ? await TryCreatePairSessionAsync().ConfigureAwait(false)
+                : string.Empty;
+
             var hwid = ResolveHwid();
             var payload = new Dictionary<string, object?>
             {
@@ -1287,6 +1444,10 @@ public sealed class UiBridgeProvider : IAgentStateProvider
             if (!string.IsNullOrWhiteSpace(pairCode))
             {
                 payload["pair_code"] = new string(pairCode.Where(char.IsDigit).Take(6).ToArray());
+            }
+            else if (!string.IsNullOrWhiteSpace(pairSessionId))
+            {
+                payload["pair_session_id"] = pairSessionId;
             }
 
             using var pairResp = await _pairingHttp.PostAsJsonAsync($"{_controlPlaneBaseUrl}/api/pair/request", payload).ConfigureAwait(false);
@@ -1327,9 +1488,6 @@ public sealed class UiBridgeProvider : IAgentStateProvider
                 return;
             }
 
-            var pairSessionId = string.IsNullOrWhiteSpace(pairCode)
-                ? await TryCreatePairSessionAsync().ConfigureAwait(false)
-                : string.Empty;
             var pairingString = BuildPairingPayload(pairToken, pairSessionId, deviceId);
 
             if (!IsCurrentOnboardingOperation(operationId))
@@ -1753,12 +1911,13 @@ public sealed class UiBridgeProvider : IAgentStateProvider
             return pairToken;
         }
 
+        // Keep QR payload compact for better camera detection on mobile scanners.
+        // Mobile app can resolve pair_token via /api/pair/session/{pair_session_id}.
         var payload = new Dictionary<string, object?>
         {
             ["type"] = "quoodle_pair",
             ["version"] = 1,
             ["device_id"] = deviceId,
-            ["pair_token"] = pairToken,
             ["pair_session_id"] = pairSessionId,
             ["timestamp"] = DateTimeOffset.UtcNow.ToString("O"),
             ["controller_url"] = ResolveControlPlaneBaseUrl(),
@@ -2026,6 +2185,22 @@ public sealed class UiBridgeProvider : IAgentStateProvider
                 Directory.CreateDirectory(directory);
             }
             File.WriteAllText(path, value.Trim());
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryDeleteRuntimeValue(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
             return true;
         }
         catch

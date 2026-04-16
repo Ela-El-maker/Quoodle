@@ -545,6 +545,38 @@ public sealed class MockAgentStateProvider : IAgentStateProvider
         Publish(Snapshot);
     }
 
+    public void HardResetPairing()
+    {
+        lock (_gate)
+        {
+            _onboardingOperationId += 1;
+            _snapshot = _snapshot with
+            {
+                IsPaired = false,
+                DeviceId = "pending-pairing",
+                Onboarding = OnboardingFlowState.CreateInitial() with
+                {
+                    DetectState = OnboardingDetectState.NotEnrolled
+                },
+                CurrentActivity = "Local pairing data cleared. Ready to pair again",
+                Configuration = _snapshot.Configuration with
+                {
+                    DeviceIdentity = _snapshot.Configuration.DeviceIdentity with
+                    {
+                        DeviceId = "pending-pairing",
+                        EnrolledState = "Not Enrolled",
+                        EnrolledAtUtc = null
+                    }
+                }
+            };
+
+            AddActivityLocked(ActivitySeverity.Warning, "ui", "Hard reset pairing", "Cleared local pairing state for a clean onboarding run.");
+            RebuildDeviceFactsLocked(DateTimeOffset.UtcNow);
+        }
+
+        Publish(Snapshot);
+    }
+
     public void ResetUiSession()
     {
         lock (_gate)

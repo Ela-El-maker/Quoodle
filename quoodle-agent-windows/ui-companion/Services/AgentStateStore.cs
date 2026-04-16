@@ -61,6 +61,8 @@ public sealed class AgentStateStore : IDisposable
 
     public void BeginRePairFlow() => _provider.BeginRePairFlow();
 
+    public void HardResetPairing() => _provider.HardResetPairing();
+
     public void ResetUiSession() => _provider.ResetUiSession();
 
     private void HandleSnapshotChanged(object? sender, AgentStateSnapshot snapshot)

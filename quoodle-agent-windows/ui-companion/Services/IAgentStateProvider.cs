@@ -46,5 +46,7 @@ public interface IAgentStateProvider : IDisposable
 
     void BeginRePairFlow();
 
+    void HardResetPairing();
+
     void ResetUiSession();
 }
