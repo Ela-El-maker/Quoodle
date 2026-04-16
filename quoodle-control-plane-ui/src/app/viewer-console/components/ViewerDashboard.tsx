@@ -1,12 +1,35 @@
 'use client';
-import React, { useState } from 'react';
-import { Monitor, Bell, ShieldCheck, ChevronRight, Search, AlertTriangle, CheckCircle2, Info, Lock,  } from 'lucide-react';
+
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Monitor, ShieldCheck, ChevronRight, Search, CheckCircle2, Info, Lock, Link2 } from 'lucide-react';
 import StatusBadge from '@/components/ui/StatusBadge';
+import DevicePairingModal from '@/components/DevicePairingModal';
+import { useAuth } from '@/contexts/AuthContext';
+import { roleHomePath } from '@/lib/auth';
+import { formatNowLocalTime } from '@/lib/dateTime';
 import Link from 'next/link';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 type DeviceStatus = 'online' | 'offline' | 'quarantined' | 'degraded';
 type ComplianceStatus = 'compliant' | 'non_compliant' | 'drift';
+type ComplianceSignal = 'pass' | 'fail' | 'warning';
+
+interface DeviceApiRow {
+  device_id?: string;
+  owner_email?: string | null;
+  device_name?: string | null;
+  lifecycle_state?: string | null;
+  compliance_status?: string | null;
+  resolved_compliance_status?: string | null;
+  resolved_presence_state?: string | null;
+  risk_score?: number | string | null;
+  last_seen?: string | null;
+  os_build?: string | null;
+  resolved_os_build?: string | null;
+}
+
+interface DevicesApiResponse {
+  devices?: DeviceApiRow[];
+}
 
 interface Device {
   id: string;
@@ -14,103 +37,217 @@ interface Device {
   status: DeviceStatus;
   riskScore: number;
   compliance: ComplianceStatus;
-  lastSeen: string;
+  lastSeenIso: string | null;
   os: string;
   owner: string;
 }
 
-interface Alert {
-  id: string;
-  title: string;
-  severity: 'critical' | 'warning' | 'info';
-  deviceName: string;
-  time: string;
-}
-
 interface ComplianceItem {
   control: string;
-  status: 'pass' | 'fail' | 'warning';
+  status: ComplianceSignal;
   score: number;
   lastChecked: string;
 }
 
-// ─── Mock data (viewer-scoped — read-only view of fleet) ──────────────────────
-const viewableDevices: Device[] = [
-  { id: 'PC001', hostname: 'WKSTN-001', status: 'online', riskScore: 0.12, compliance: 'compliant', lastSeen: '1 min ago', os: 'Windows 11', owner: 'sarah.chen@quoodle.io' },
-  { id: 'PC002', hostname: 'WKSTN-002', status: 'online', riskScore: 0.08, compliance: 'compliant', lastSeen: '2 min ago', os: 'Windows 11', owner: 'james.wright@quoodle.io' },
-  { id: 'SRV-PROD-01', hostname: 'SRV-PROD-01', status: 'online', riskScore: 0.19, compliance: 'drift', lastSeen: '2 min ago', os: 'Windows Server 2022', owner: 'devops@quoodle.io' },
-  { id: 'WKSTN-007', hostname: 'WKSTN-007', status: 'degraded', riskScore: 0.61, compliance: 'drift', lastSeen: '5 min ago', os: 'Windows 11', owner: 'mike.torres@quoodle.io' },
-  { id: 'WKSTN-019', hostname: 'WKSTN-019', status: 'offline', riskScore: 0.15, compliance: 'compliant', lastSeen: '25 min ago', os: 'Windows 10', owner: 'alex.kumar@quoodle.io' },
-  { id: 'SRV-PROD-04', hostname: 'SRV-PROD-04', status: 'quarantined', riskScore: 0.89, compliance: 'non_compliant', lastSeen: '2h ago', os: 'Windows Server 2022', owner: 'devops@quoodle.io' },
-];
-
-const viewableAlerts: Alert[] = [
-  { id: 'ALT-301', title: 'Attestation failure on SRV-PROD-04', severity: 'critical', deviceName: 'SRV-PROD-04', time: '19:14:02' },
-  { id: 'ALT-302', title: 'Risk score elevated', severity: 'warning', deviceName: 'WKSTN-007', time: '21:05:58' },
-  { id: 'ALT-303', title: 'Policy drift detected', severity: 'warning', deviceName: 'SRV-PROD-01', time: '20:51:12' },
-  { id: 'ALT-304', title: 'Device offline', severity: 'info', deviceName: 'WKSTN-019', time: '20:41:17' },
-];
-
-const complianceItems: ComplianceItem[] = [
-  { control: 'Risk Score Threshold', status: 'fail', score: 62, lastChecked: '21:06:00' },
-  { control: 'Policy Hash Sync', status: 'warning', score: 78, lastChecked: '21:06:00' },
-  { control: 'Kernel Guard Coverage', status: 'warning', score: 83, lastChecked: '21:06:00' },
-  { control: 'Device Compliance Rate', status: 'pass', score: 91, lastChecked: '21:06:00' },
-  { control: 'Command Success Rate', status: 'pass', score: 99, lastChecked: '21:06:00' },
-];
-
-const severityColors: Record<string, string> = {
-  critical: 'text-red-400 bg-red-500/10 border-red-500/20',
-  warning: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
-  info: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
-};
-
-const complianceStatusColors: Record<string, string> = {
+const complianceStatusColors: Record<ComplianceSignal, string> = {
   pass: 'text-green-400',
   warning: 'text-amber-400',
   fail: 'text-red-400',
 };
 
-export default function ViewerDashboard() {
-  const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'devices' | 'alerts' | 'compliance'>('devices');
+function normalizeStatus(value: string | null | undefined): DeviceStatus {
+  const normalized = String(value ?? '').toLowerCase();
+  if (normalized === 'online' || normalized === 'active') return 'online';
+  if (normalized === 'quarantined') return 'quarantined';
+  if (normalized === 'degraded' || normalized === 'stale') return 'degraded';
+  return 'offline';
+}
 
-  const filteredDevices = viewableDevices.filter((d) =>
-    !search ||
-    d.hostname.toLowerCase().includes(search.toLowerCase()) ||
-    d.id.toLowerCase().includes(search.toLowerCase()) ||
-    d.owner.toLowerCase().includes(search.toLowerCase())
+function normalizeCompliance(value: string | null | undefined): ComplianceStatus {
+  const normalized = String(value ?? '').toLowerCase();
+  if (normalized === 'compliant') return 'compliant';
+  if (normalized === 'drift' || normalized === 'non_compliant') return 'drift';
+  return 'non_compliant';
+}
+
+function normalizeRisk(value: number | string | null | undefined): number {
+  const parsed = typeof value === 'number' ? value : Number(value ?? 0);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  if (parsed > 1) return Math.max(0, Math.min(1, parsed / 100));
+  return Math.max(0, Math.min(1, parsed));
+}
+
+function toRelativeTime(iso: string | null | undefined): string {
+  if (!iso) return 'Never';
+  const ts = Date.parse(iso);
+  if (!Number.isFinite(ts)) return '-';
+  const diffSeconds = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (diffSeconds < 60) return `${diffSeconds}s ago`;
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
+}
+
+function scoreToSignal(score: number): ComplianceSignal {
+  if (score >= 90) return 'pass';
+  if (score >= 70) return 'warning';
+  return 'fail';
+}
+
+function percent(part: number, whole: number): number {
+  if (whole <= 0) return 0;
+  return Math.round((part / whole) * 100);
+}
+
+export default function ViewerDashboard() {
+  const { refreshUser } = useAuth();
+  const [search, setSearch] = useState('');
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [activeTab, setActiveTab] = useState<'devices' | 'compliance'>('devices');
+  const [loading, setLoading] = useState(true);
+  const [showPairModal, setShowPairModal] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadDevices = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/devices?per_page=200', {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        throw new Error(`devices_fetch_failed_${response.status}`);
+      }
+      const payload = (await response.json()) as DevicesApiResponse;
+      const mapped = (payload.devices ?? [])
+        .map((row): Device | null => {
+          const id = String(row.device_id ?? '').trim();
+          if (!id) return null;
+          return {
+            id,
+            hostname: row.device_name?.trim() || id,
+            status: normalizeStatus(row.resolved_presence_state ?? row.lifecycle_state),
+            riskScore: normalizeRisk(row.risk_score),
+            compliance: normalizeCompliance(row.resolved_compliance_status ?? row.compliance_status),
+            lastSeenIso: row.last_seen ?? null,
+            os: row.resolved_os_build?.trim() || row.os_build?.trim() || 'Unknown',
+            owner: row.owner_email?.trim() || 'Unknown',
+          };
+        })
+        .filter((row): row is Device => row !== null);
+      setDevices(mapped);
+      setError(null);
+    } catch (loadError) {
+      console.error('viewer-dashboard-devices-load-failed', loadError);
+      setDevices([]);
+      setError('Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadDevices();
+  }, [loadDevices]);
+
+  const filteredDevices = useMemo(
+    () =>
+      devices.filter((d) =>
+        !search ||
+        d.hostname.toLowerCase().includes(search.toLowerCase()) ||
+        d.id.toLowerCase().includes(search.toLowerCase()) ||
+        d.owner.toLowerCase().includes(search.toLowerCase()),
+      ),
+    [devices, search],
   );
+
+  const onlineCount = devices.filter((d) => d.status === 'online').length;
+  const compliantCount = devices.filter((d) => d.compliance === 'compliant').length;
+  const driftCount = devices.filter((d) => d.compliance !== 'compliant').length;
+  const highRiskCount = devices.filter((d) => d.riskScore >= 0.6).length;
+  const checkedInRecentlyCount = devices.filter((d) => {
+    if (!d.lastSeenIso) return false;
+    const ts = Date.parse(d.lastSeenIso);
+    if (!Number.isFinite(ts)) return false;
+    return Date.now() - ts <= 30 * 60 * 1000;
+  }).length;
+  const complianceRate = percent(compliantCount, devices.length);
+
+  const complianceItems = useMemo<ComplianceItem[]>(() => {
+    const lastChecked = formatNowLocalTime();
+    const driftExposureScore = 100 - percent(driftCount, devices.length);
+    const highRiskExposureScore = 100 - percent(highRiskCount, devices.length);
+    const onlineCoverageScore = percent(onlineCount, devices.length);
+    const checkinCoverageScore = percent(checkedInRecentlyCount, devices.length);
+
+    return [
+      {
+        control: 'Device Compliance Rate',
+        score: complianceRate,
+        status: scoreToSignal(complianceRate),
+        lastChecked,
+      },
+      {
+        control: 'Policy Drift Exposure',
+        score: driftExposureScore,
+        status: scoreToSignal(driftExposureScore),
+        lastChecked,
+      },
+      {
+        control: 'High Risk Device Exposure',
+        score: highRiskExposureScore,
+        status: scoreToSignal(highRiskExposureScore),
+        lastChecked,
+      },
+      {
+        control: 'Fleet Online Coverage',
+        score: onlineCoverageScore,
+        status: scoreToSignal(onlineCoverageScore),
+        lastChecked,
+      },
+      {
+        control: 'Recent Check-in Coverage',
+        score: checkinCoverageScore,
+        status: scoreToSignal(checkinCoverageScore),
+        lastChecked,
+      },
+    ];
+  }, [checkedInRecentlyCount, complianceRate, devices.length, driftCount, highRiskCount, onlineCount]);
 
   const riskColor = (score: number) =>
     score > 0.6 ? 'text-red-400' : score > 0.3 ? 'text-amber-400' : 'text-green-400';
 
-  const onlineCount = viewableDevices.filter((d) => d.status === 'online').length;
-  const criticalAlerts = viewableAlerts.filter((a) => a.severity === 'critical').length;
-  const compliantCount = viewableDevices.filter((d) => d.compliance === 'compliant').length;
-
   return (
     <div className="space-y-6 fade-in">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Viewer Console</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Read-only fleet overview · No command access</p>
+          <p className="text-sm text-muted-foreground mt-0.5">Read-only fleet overview · Pair to unlock operator actions</p>
         </div>
-        {/* Read-only badge */}
-        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted/30 border border-border rounded-md text-[11px] text-muted-foreground">
-          <Lock size={11} />
-          Read-only access
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowPairModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-border rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+          >
+            <Link2 size={13} />
+            Pair Device
+          </button>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted/30 border border-border rounded-md text-[11px] text-muted-foreground">
+            <Lock size={11} />
+            Read-only access
+          </div>
         </div>
       </div>
 
-      {/* KPI row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: 'Total Devices', value: viewableDevices.length, icon: Monitor, color: 'text-primary' },
+          { label: 'Total Devices', value: devices.length, icon: Monitor, color: 'text-primary' },
           { label: 'Online', value: onlineCount, icon: CheckCircle2, color: 'text-green-400' },
-          { label: 'Critical Alerts', value: criticalAlerts, icon: AlertTriangle, color: criticalAlerts > 0 ? 'text-red-400' : 'text-muted-foreground' },
-          { label: 'Compliant', value: `${compliantCount}/${viewableDevices.length}`, icon: ShieldCheck, color: 'text-green-400' },
+          { label: 'Compliant', value: `${compliantCount}/${devices.length}`, icon: ShieldCheck, color: 'text-green-400' },
+          { label: 'Policy Drift', value: driftCount, icon: ShieldCheck, color: driftCount > 0 ? 'text-amber-400' : 'text-muted-foreground' },
         ].map((kpi) => (
           <div key={kpi.label} className="bg-card border border-border rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
@@ -122,20 +259,17 @@ export default function ViewerDashboard() {
         ))}
       </div>
 
-      {/* Read-only notice */}
       <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg px-4 py-3 flex items-center gap-2.5">
         <Info size={14} className="text-blue-400 flex-shrink-0" />
         <p className="text-[11px] text-blue-400">
-          You have <strong>viewer access</strong>. You can monitor devices, alerts, and compliance — but cannot dispatch commands, acknowledge alerts, or modify any settings.
-          Contact an operator or admin to take action.
+          You have <strong>viewer access</strong>. You can monitor devices and compliance, and pair a device to be promoted to
+          operator.
         </p>
       </div>
 
-      {/* Tab navigation */}
       <div className="flex items-center gap-1 bg-muted/20 rounded-lg p-1 w-fit">
         {[
           { id: 'devices', label: 'Devices', icon: Monitor },
-          { id: 'alerts', label: 'Alerts', icon: Bell },
           { id: 'compliance', label: 'Compliance', icon: ShieldCheck },
         ].map((tab) => (
           <button
@@ -151,7 +285,12 @@ export default function ViewerDashboard() {
         ))}
       </div>
 
-      {/* ── Devices tab ─────────────────────────────────────────────────────── */}
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 text-xs text-red-400">
+          {error}
+        </div>
+      )}
+
       {activeTab === 'devices' && (
         <div className="bg-card border border-border rounded-lg overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
@@ -166,97 +305,58 @@ export default function ViewerDashboard() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search devices…"
+                placeholder="Search devices..."
                 className="pl-7 pr-3 py-1.5 text-xs bg-muted/60 border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 w-48"
               />
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-border bg-muted/20">
-                  {['Hostname', 'Status', 'Risk', 'Compliance', 'OS', 'Owner', 'Last Seen'].map((h) => (
-                    <th key={h} className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filteredDevices.map((device) => (
-                  <tr key={device.id} className="hover:bg-muted/20 transition-colors">
-                    <td className="px-4 py-3">
-                      <p className="font-mono font-medium">{device.hostname}</p>
-                      <p className="text-[10px] text-muted-foreground">{device.id}</p>
-                    </td>
-                    <td className="px-4 py-3"><StatusBadge variant={device.status} /></td>
-                    <td className="px-4 py-3">
-                      <span className={`font-mono font-semibold ${riskColor(device.riskScore)}`}>
-                        {(device.riskScore * 100).toFixed(0)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`capitalize text-[11px] font-medium ${
-                        device.compliance === 'compliant' ? 'text-green-400' :
-                        device.compliance === 'drift' ? 'text-amber-400' : 'text-red-400'
-                      }`}>
-                        {device.compliance.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">{device.os}</td>
-                    <td className="px-4 py-3 text-muted-foreground truncate max-w-[140px]">{device.owner}</td>
-                    <td className="px-4 py-3 text-muted-foreground tabular-nums">{device.lastSeen}</td>
+          {loading ? (
+            <div className="px-4 py-6 text-xs text-muted-foreground">Loading devices...</div>
+          ) : filteredDevices.length === 0 ? (
+            <div className="px-4 py-6 text-xs text-muted-foreground">No devices available</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border bg-muted/20">
+                    {['Hostname', 'Status', 'Risk', 'Compliance', 'OS', 'Owner', 'Last Seen'].map((h) => (
+                      <th key={h} className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* ── Alerts tab ──────────────────────────────────────────────────────── */}
-      {activeTab === 'alerts' && (
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-            <div className="flex items-center gap-2">
-              <Bell size={14} className="text-primary" />
-              <h2 className="text-sm font-semibold">Active Alerts</h2>
-              {criticalAlerts > 0 && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 font-semibold">{criticalAlerts} critical</span>
-              )}
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filteredDevices.map((device) => (
+                    <tr key={device.id} className="hover:bg-muted/20 transition-colors">
+                      <td className="px-4 py-3">
+                        <p className="font-mono font-medium">{device.hostname}</p>
+                        <p className="text-[10px] text-muted-foreground">{device.id}</p>
+                      </td>
+                      <td className="px-4 py-3"><StatusBadge variant={device.status} /></td>
+                      <td className="px-4 py-3">
+                        <span className={`font-mono font-semibold ${riskColor(device.riskScore)}`}>
+                          {(device.riskScore * 100).toFixed(0)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`capitalize text-[11px] font-medium ${
+                          device.compliance === 'compliant' ? 'text-green-400' :
+                          device.compliance === 'drift' ? 'text-amber-400' : 'text-red-400'
+                        }`}>
+                          {device.compliance.replace('_', ' ')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{device.os}</td>
+                      <td className="px-4 py-3 text-muted-foreground truncate max-w-[140px]">{device.owner}</td>
+                      <td className="px-4 py-3 text-muted-foreground tabular-nums">{toRelativeTime(device.lastSeenIso)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <Link href="/alerts" className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors">
-              Full view <ChevronRight size={11} />
-            </Link>
-          </div>
-          <div className="divide-y divide-border">
-            {viewableAlerts.map((alert) => (
-              <div key={alert.id} className="flex items-start gap-3 px-4 py-3">
-                <div className={`flex-shrink-0 mt-0.5 w-5 h-5 rounded-full flex items-center justify-center ${
-                  alert.severity === 'critical' ? 'bg-red-500/10' : alert.severity === 'warning' ? 'bg-amber-500/10' : 'bg-blue-500/10'
-                }`}>
-                  {alert.severity === 'critical' ? <AlertTriangle size={11} className="text-red-400" /> :
-                   alert.severity === 'warning' ? <AlertTriangle size={11} className="text-amber-400" /> :
-                   <Info size={11} className="text-blue-400" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${severityColors[alert.severity]}`}>
-                      {alert.severity}
-                    </span>
-                  </div>
-                  <p className="text-xs font-medium">{alert.title}</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{alert.deviceName} · {alert.time}</p>
-                </div>
-                {/* Viewer cannot acknowledge — show lock indicator */}
-                <div className="flex-shrink-0 p-1.5 rounded-md text-muted-foreground/40 cursor-not-allowed" title="Acknowledgment requires operator or admin role">
-                  <Lock size={12} />
-                </div>
-              </div>
-            ))}
-          </div>
+          )}
         </div>
       )}
 
-      {/* ── Compliance tab ──────────────────────────────────────────────────── */}
       {activeTab === 'compliance' && (
         <div className="bg-card border border-border rounded-lg overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
@@ -295,6 +395,22 @@ export default function ViewerDashboard() {
             ))}
           </div>
         </div>
+      )}
+
+      {showPairModal && (
+        <DevicePairingModal
+          onClose={() => setShowPairModal(false)}
+          onPaired={async () => {
+            const refreshedUser = await refreshUser();
+            const nextRole = refreshedUser?.role;
+            if (nextRole) {
+              window.location.href = roleHomePath(nextRole);
+              return;
+            }
+            setShowPairModal(false);
+            await loadDevices();
+          }}
+        />
       )}
     </div>
   );

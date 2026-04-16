@@ -16,8 +16,13 @@ export const AUTH_COOKIE = {
 } as const;
 
 export function normalizeRole(value: string | null | undefined): UserRole | null {
-  if (value === 'admin' || value === 'operator' || value === 'viewer') {
-    return value;
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (normalized === 'admin' || normalized === 'operator' || normalized === 'viewer') {
+    return normalized as UserRole;
+  }
+
+  if (normalized === 'user') {
+    return 'viewer';
   }
 
   return null;
@@ -49,7 +54,6 @@ export const VIEWER_ALLOWED_PREFIXES: readonly string[] = [
   '/viewer-console',
   '/device-management',
   '/device-detail',
-  '/alerts',
   '/notifications',
   '/compliance',
   '/audit',

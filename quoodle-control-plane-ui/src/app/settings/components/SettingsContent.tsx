@@ -122,6 +122,7 @@ const PERMISSION_KEYS = [
   { key: 'manage_users', label: 'Manage Users' },
   { key: 'manage_settings', label: 'Manage Settings' },
   { key: 'export_data', label: 'Export Data' },
+  { key: 'pair_devices', label: 'Pair Devices' },
 ];
 
 const initialRoles: RolePermission[] = [
@@ -130,7 +131,7 @@ const initialRoles: RolePermission[] = [
     permissions: {
       view_devices: true, manage_devices: true, send_commands: true, send_sensitive_commands: true,
       view_alerts: true, acknowledge_alerts: true, view_compliance: true, manage_compliance: true,
-      view_audit: true, manage_users: true, manage_settings: true, export_data: true,
+      view_audit: true, manage_users: true, manage_settings: true, export_data: true, pair_devices: true,
     },
   },
   {
@@ -138,15 +139,15 @@ const initialRoles: RolePermission[] = [
     permissions: {
       view_devices: true, manage_devices: false, send_commands: true, send_sensitive_commands: false,
       view_alerts: true, acknowledge_alerts: true, view_compliance: true, manage_compliance: false,
-      view_audit: true, manage_users: false, manage_settings: false, export_data: true,
+      view_audit: true, manage_users: false, manage_settings: false, export_data: true, pair_devices: true,
     },
   },
   {
     role: 'viewer',
     permissions: {
       view_devices: true, manage_devices: false, send_commands: false, send_sensitive_commands: false,
-      view_alerts: true, acknowledge_alerts: false, view_compliance: true, manage_compliance: false,
-      view_audit: true, manage_users: false, manage_settings: false, export_data: false,
+      view_alerts: false, acknowledge_alerts: false, view_compliance: true, manage_compliance: false,
+      view_audit: true, manage_users: false, manage_settings: false, export_data: false, pair_devices: true,
     },
   },
 ];

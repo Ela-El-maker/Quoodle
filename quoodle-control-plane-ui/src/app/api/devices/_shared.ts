@@ -29,6 +29,33 @@ interface ProxyRequestOptions {
   headers?: Record<string, string>;
 }
 
+function extractPayloadMessage(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  const record = payload as Record<string, unknown>;
+  if (typeof record.message === 'string' && record.message.trim() !== '') {
+    return record.message;
+  }
+  const nestedError = record.error;
+  if (nestedError && typeof nestedError === 'object' && !Array.isArray(nestedError)) {
+    const nestedRecord = nestedError as Record<string, unknown>;
+    if (typeof nestedRecord.message === 'string' && nestedRecord.message.trim() !== '') {
+      return nestedRecord.message;
+    }
+  }
+  return null;
+}
+
+async function readUpstreamPayload(response: Response): Promise<unknown> {
+  const contentType = response.headers.get('content-type') ?? '';
+  if (contentType.toLowerCase().includes('application/json')) {
+    return response.json().catch(() => null);
+  }
+
+  const text = await response.text().catch(() => '');
+  if (!text.trim()) return null;
+  return { message: text };
+}
+
 export async function proxyAuthedRequest(
   request: NextRequest,
   upstreamPath: string,
@@ -51,6 +78,7 @@ export async function proxyAuthedRequest(
   const method = options.method ?? 'GET';
   const upstreamHeaders: Record<string, string> = {
     Authorization: `Bearer ${activeJwt}`,
+    Accept: 'application/json',
     ...options.headers,
   };
 
@@ -69,6 +97,7 @@ export async function proxyAuthedRequest(
       activeRefreshToken = refreshed.refreshToken;
       const retryHeaders: Record<string, string> = {
         Authorization: `Bearer ${activeJwt}`,
+        Accept: 'application/json',
         ...options.headers,
       };
       upstreamResponse = await fetch(controlPlaneApiUrl(upstreamPath), {
@@ -86,18 +115,28 @@ export async function proxyAuthedRequest(
     return response;
   }
 
-  const payload = (await upstreamResponse.json().catch(() => null)) as unknown;
-  const response = NextResponse.json(
-    payload ?? { message: 'upstream_error' },
-    { status: payload ? upstreamResponse.status : 502 },
-  );
+  const payload = await readUpstreamPayload(upstreamResponse);
+  const message = extractPayloadMessage(payload);
+  const normalizedPayload =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (message ? { ...(payload as Record<string, unknown>), message } : payload)
+      : payload ?? { message: 'upstream_error' };
+  const response = NextResponse.json(normalizedPayload, {
+    status: payload ? upstreamResponse.status : 502,
+  });
 
-  if (didRefresh && activeRefreshToken && sessionId) {
+  const payloadRole =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? normalizeRole(String((payload as Record<string, unknown>).user_role ?? ''))
+      : null;
+  const effectiveRole = payloadRole ?? role;
+
+  if ((didRefresh || payloadRole) && activeRefreshToken && sessionId) {
     attachTokenCookies(response, {
       jwt: activeJwt,
       refreshToken: activeRefreshToken,
       sessionId,
-      role,
+      role: effectiveRole,
     });
   }
 

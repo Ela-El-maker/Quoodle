@@ -84,7 +84,6 @@ const viewerNavGroups = [
     items: [
       { label: 'Viewer Console',   icon: Eye,             path: '/viewer-console',       badge: null },
       { label: 'Devices',          icon: Monitor,         path: '/device-management',    badge: null },
-      { label: 'Alerts',           icon: Bell,            path: '/alerts',               badge: null },
       { label: 'Notifications',    icon: Bell,            path: '/notifications',        badge: null },
     ],
   },

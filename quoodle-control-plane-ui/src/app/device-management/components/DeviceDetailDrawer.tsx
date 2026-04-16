@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { X, Monitor, Terminal, Shield, Activity, Clock, Cpu, HardDrive, Wifi, ChevronRight, AlertTriangle, CheckCircle, XCircle, RotateCcw, Bell, Layers, ExternalLink, Radio, Loader2, Network, Users, Camera, Folder, Info, Lock } from 'lucide-react';
 import StatusBadge from '@/components/ui/StatusBadge';
+import { useAuth } from '@/contexts/AuthContext';
 import { formatLocalTime } from '@/lib/dateTime';
 import { resolveCommandMethod } from '@/lib/commandMethodResolver';
 import Link from 'next/link';
@@ -81,6 +82,12 @@ const QUICK_COMMANDS: QuickCommand[] = [
 ];
 
 export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDrawerProps) {
+  const { user } = useAuth();
+  const canViewAlerts = user?.role ? user.role !== 'viewer' : false;
+  const drawerTabs = useMemo(
+    () => (canViewAlerts ? DRAWER_TABS : DRAWER_TABS.filter((tab) => tab !== 'Alerts')),
+    [canViewAlerts],
+  );
   const [activeTab, setActiveTab] = useState('Overview');
   const [currentDevice, setCurrentDevice] = useState<Device>(device);
   const [dispatchingCmd, setDispatchingCmd] = useState<string | null>(null);
@@ -104,6 +111,12 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
     timestamp: null,
   });
   const bundleAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (!canViewAlerts && activeTab === 'Alerts') {
+      setActiveTab('Overview');
+    }
+  }, [activeTab, canViewAlerts]);
 
   const riskColor = currentDevice.riskScore > 0.6 ? 'text-red-400' : currentDevice.riskScore > 0.3 ? 'text-amber-400' : 'text-green-400';
 
@@ -138,13 +151,16 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
     const controller = new AbortController();
     bundleAbortRef.current = controller;
     const encodedId = encodeURIComponent(device.id);
+    const alertsRequest = canViewAlerts
+      ? fetch(`/api/devices/${encodedId}/alerts?limit=100`, { credentials: 'include', cache: 'no-store', signal: controller.signal })
+      : Promise.resolve(new Response(JSON.stringify({ alerts: [] }), { status: 200 }));
 
     try {
       const [detailRes, commandsRes, telemetryRes, alertsRes, auditRes, capsRes] = await Promise.allSettled([
         fetch(`/api/devices/${encodedId}`, { credentials: 'include', cache: 'no-store', signal: controller.signal }),
         fetch(`/api/devices/${encodedId}/commands?limit=40`, { credentials: 'include', cache: 'no-store', signal: controller.signal }),
         fetch(`/api/devices/${encodedId}/telemetry`, { credentials: 'include', cache: 'no-store', signal: controller.signal }),
-        fetch(`/api/devices/${encodedId}/alerts?limit=100`, { credentials: 'include', cache: 'no-store', signal: controller.signal }),
+        alertsRequest,
         fetch(`/api/devices/${encodedId}/audit?limit=100`, { credentials: 'include', cache: 'no-store', signal: controller.signal }),
         fetch(`/api/commands/capabilities?device_id=${encodedId}`, { credentials: 'include', cache: 'no-store', signal: controller.signal }),
       ]);
@@ -186,7 +202,9 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
         }
       }
 
-      if (alertsRes.status === 'fulfilled' && alertsRes.value.ok) {
+      if (!canViewAlerts) {
+        setAlerts([]);
+      } else if (alertsRes.status === 'fulfilled' && alertsRes.value.ok) {
         const payload = (await alertsRes.value.json()) as DeviceAlertsResponse;
         setAlerts(
           (payload.alerts ?? []).map((alert) => ({
@@ -238,16 +256,31 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
     } finally {
       if (mode === 'initial') setIsLoadingBundle(false);
     }
-  }, [device.id]);
+  }, [canViewAlerts, device.id]);
 
   useEffect(() => {
     setCurrentDevice(device);
     void loadBundle('initial');
-    const interval = window.setInterval(() => {
-      void loadBundle('refresh');
-    }, 30000);
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const startPolling = () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+      const pollMs = document.visibilityState === 'visible' ? 5000 : 30000;
+      interval = setInterval(() => {
+        void loadBundle('refresh');
+      }, pollMs);
+    };
+
+    startPolling();
+    const handleVisibility = () => startPolling();
+    document.addEventListener('visibilitychange', handleVisibility);
+
     return () => {
-      window.clearInterval(interval);
+      if (interval) {
+        clearInterval(interval);
+      }
+      document.removeEventListener('visibilitychange', handleVisibility);
       bundleAbortRef.current?.abort();
     };
   }, [device, loadBundle]);
@@ -372,7 +405,11 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
           >
             <div>
               <p className="text-xs font-semibold text-primary">Open Full Device Console</p>
-              <p className="text-[11px] text-muted-foreground">Commands - Trace - Results - History - Telemetry - Alerts - Audit - everything in one place</p>
+              <p className="text-[11px] text-muted-foreground">
+                {canViewAlerts
+                  ? 'Commands - Trace - Results - History - Telemetry - Alerts - Audit - everything in one place'
+                  : 'Commands - Trace - Results - History - Telemetry - Audit - everything in one place'}
+              </p>
             </div>
             <div className="flex items-center gap-1 text-primary group-hover:gap-2 transition-all">
               <ExternalLink size={14} />
@@ -382,7 +419,7 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
 
         {/* Tabs */}
         <div className="flex border-b border-border px-3 flex-shrink-0 overflow-x-auto scrollbar-thin">
-          {DRAWER_TABS.map((tab) => (
+          {drawerTabs.map((tab) => (
             <button
               key={`drawer-tab-${tab}`}
               onClick={() => setActiveTab(tab)}
@@ -597,7 +634,7 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
           )}
 
           {/* Alerts */}
-          {activeTab === 'Alerts' && (
+          {canViewAlerts && activeTab === 'Alerts' && (
             <div className="space-y-2">
               {isLoadingBundle ? (
                 <p className="text-xs text-muted-foreground">Loading data...</p>
@@ -665,9 +702,11 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
             <Link href="/command-history" className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs border border-border rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
               <Clock size={11} /> History
             </Link>
-            <Link href={`/alerts?device=${currentDevice.id}`} className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs border border-border rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
-              <Bell size={11} /> Alerts
-            </Link>
+            {canViewAlerts && (
+              <Link href={`/alerts?device=${currentDevice.id}`} className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs border border-border rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
+                <Bell size={11} /> Alerts
+              </Link>
+            )}
           </div>
         </div>
       </div>

@@ -5,6 +5,7 @@ import { CheckCircle2, Loader2, Shield, Terminal } from 'lucide-react';
 import { toast } from 'sonner';
 import AppLogo from '@/components/ui/AppLogo';
 import { roleHomePath } from '@/lib/auth';
+import { useAuth } from '@/contexts/AuthContext';
 
 type LoginUser = {
   id: string;
@@ -14,6 +15,7 @@ type LoginUser = {
 };
 
 export default function LoginContent() {
+  const { user, loading } = useAuth();
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [challengeId, setChallengeId] = useState('');
@@ -49,6 +51,11 @@ export default function LoginContent() {
       window.history.replaceState({}, '', next ? `?${next}` : window.location.pathname);
     }
   }, []);
+
+  useEffect(() => {
+    if (loading || !user) return;
+    window.location.href = roleHomePath(user.role);
+  }, [loading, user]);
 
   const resendLabel = useMemo(() => {
     if (resendAfter <= 0) return 'Resend OTP';
@@ -134,7 +141,25 @@ export default function LoginContent() {
         return;
       }
 
-      const role = payload.user?.role ?? 'viewer';
+      let role = payload.user?.role ?? 'viewer';
+      try {
+        const meResponse = await fetch('/api/auth/me', {
+          method: 'GET',
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        if (meResponse.ok) {
+          const mePayload = (await meResponse.json().catch(() => null)) as
+            | { authenticated?: boolean; user?: { role?: 'admin' | 'operator' | 'viewer' } }
+            | null;
+          if (mePayload?.authenticated && mePayload.user?.role) {
+            role = mePayload.user.role;
+          }
+        }
+      } catch {
+        // Best-effort only; fallback to verify response role.
+      }
+
       toast.success('Authenticated successfully');
       window.location.href = roleHomePath(role);
     } finally {

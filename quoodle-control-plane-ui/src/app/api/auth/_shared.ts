@@ -78,14 +78,15 @@ export function deriveDeviceFingerprint(request: NextRequest): string {
 
 export function mapMePayload(payload: MePayload): AuthUser | null {
   const role = normalizeRole(payload.user_role);
-  if (!role || !payload.user_id || !payload.email || !payload.display_name) {
+  const displayName = String(payload.display_name ?? '').trim() || String(payload.email ?? '').trim();
+  if (!role || !payload.user_id || !payload.email || !displayName) {
     return null;
   }
 
   return {
     id: payload.user_id,
     email: payload.email,
-    name: payload.display_name,
+    name: displayName,
     role,
     twoFactorEnabled: Boolean(payload.two_factor_enabled),
   };

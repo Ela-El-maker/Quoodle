@@ -131,12 +131,26 @@ export default function DeviceManagementContent() {
   }, [fetchDevices]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      void fetchDevices('silent');
-    }, 30000);
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const startPolling = () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+      const pollMs = document.visibilityState === 'visible' ? 5000 : 30000;
+      interval = setInterval(() => {
+        void fetchDevices('silent');
+      }, pollMs);
+    };
+
+    startPolling();
+    const handleVisibility = () => startPolling();
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
-      window.clearInterval(interval);
+      if (interval) {
+        clearInterval(interval);
+      }
+      document.removeEventListener('visibilitychange', handleVisibility);
       listAbortRef.current?.abort();
       detailAbortRef.current?.abort();
     };

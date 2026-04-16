@@ -49,17 +49,31 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   let activeJwt = jwt;
   let activeRefreshToken = refreshToken;
 
-  let meResponse = await fetchMeWithJwt(activeJwt);
+  let meResponse: Response;
+  try {
+    meResponse = await fetchMeWithJwt(activeJwt);
+  } catch {
+    return NextResponse.json({ authenticated: false, message: 'auth_upstream_unreachable' }, { status: 503 });
+  }
+
   if (meResponse.status === 401 && refreshToken && sessionId) {
     const refreshed = await refreshJwt(refreshToken);
     if (refreshed) {
       activeJwt = refreshed.jwt;
       activeRefreshToken = refreshed.refreshToken;
-      meResponse = await fetchMeWithJwt(activeJwt);
+      try {
+        meResponse = await fetchMeWithJwt(activeJwt);
+      } catch {
+        return NextResponse.json({ authenticated: false, message: 'auth_upstream_unreachable' }, { status: 503 });
+      }
     }
   }
 
   if (!meResponse.ok) {
+    if (meResponse.status !== 401 && meResponse.status !== 403) {
+      return NextResponse.json({ authenticated: false, message: 'auth_upstream_error' }, { status: 503 });
+    }
+
     const response = NextResponse.json({ authenticated: false }, { status: 401 });
     clearAuthCookies(response);
     return response;

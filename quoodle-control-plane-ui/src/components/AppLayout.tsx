@@ -56,7 +56,7 @@ export default function AppLayout({ children, currentPath = '', userRole = 'view
 
       {/* Main content */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <Topbar onMobileMenuToggle={() => setMobileSidebarOpen(true)} />
+        <Topbar onMobileMenuToggle={() => setMobileSidebarOpen(true)} userRole={effectiveRole} />
         <main className="flex-1 overflow-y-auto scrollbar-thin">
           <div className="max-w-screen-2xl mx-auto px-4 lg:px-6 xl:px-8 2xl:px-10 py-6">
             {children}

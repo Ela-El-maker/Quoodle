@@ -29,8 +29,8 @@ const ROLE_PERMISSIONS: Record<UserRole, Record<PermissionKey, boolean>> = {
   },
   viewer: {
     view_devices: true, manage_devices: false, send_commands: false, send_sensitive_commands: false,
-    view_alerts: true, acknowledge_alerts: false, view_compliance: true, manage_compliance: false,
-    view_audit: true, manage_users: false, manage_settings: false, export_data: false, pair_devices: false,
+    view_alerts: false, acknowledge_alerts: false, view_compliance: true, manage_compliance: false,
+    view_audit: true, manage_users: false, manage_settings: false, export_data: false, pair_devices: true,
   },
 };
 

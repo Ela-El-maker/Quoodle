@@ -6,6 +6,7 @@ import Link from 'next/link';
 import StatusBadge from '@/components/ui/StatusBadge';
 import CommandResultPresentation from '@/components/results/CommandResultPresentation';
 import DeviceAppLockQuickPanel from './DeviceAppLockQuickPanel';
+import { useAuth } from '@/contexts/AuthContext';
 import { formatLocalDateTime, formatLocalTime } from '@/lib/dateTime';
 import { resolveCommandMethod } from '@/lib/commandMethodResolver';
 import {
@@ -552,9 +553,15 @@ const buildTraceSteps = (method: string, state: CommandState): TraceStep[] => {
 const MAIN_TABS = ['Overview', 'Commands', 'Trace', 'Results', 'History', 'Telemetry', 'Alerts', 'Audit'];
 
 export default function DeviceDetailPageContent() {
+  const { user } = useAuth();
   const searchParams = useSearchParams();
   const deviceId = searchParams.get('device') ?? 'WKSTN-055';
-    const [device, setDevice] = useState<Device>(() => getFallbackDevice(deviceId));
+  const canViewAlerts = user?.role ? user.role !== 'viewer' : false;
+  const mainTabs = useMemo(
+    () => (canViewAlerts ? MAIN_TABS : MAIN_TABS.filter((tab) => tab !== 'Alerts')),
+    [canViewAlerts],
+  );
+  const [device, setDevice] = useState<Device>(() => getFallbackDevice(deviceId));
   const [isLoadingDevice, setIsLoadingDevice] = useState(true);
   const [commandHistory, setCommandHistory] = useState<CommandEntry[]>([]);
   const [recentResults, setRecentResults] = useState<NormalizedCommandResult[]>([]);
@@ -602,6 +609,12 @@ export default function DeviceDetailPageContent() {
   });
   const liveRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (!canViewAlerts && activeTab === 'Alerts') {
+      setActiveTab('Overview');
+    }
+  }, [activeTab, canViewAlerts]);
+
   const loadDeviceData = useCallback(async (mode: 'interactive' | 'silent' = 'interactive') => {
     const showToasts = mode === 'interactive';
     if (mode === 'interactive') {
@@ -611,13 +624,16 @@ export default function DeviceDetailPageContent() {
     const encodedId = encodeURIComponent(deviceId);
     const from = new Date(Date.now() - (24 * 60 * 60 * 1000)).toISOString();
     const to = new Date().toISOString();
+    const alertsRequest = canViewAlerts
+      ? fetch('/api/alerts?limit=100', { credentials: 'include', cache: 'no-store' })
+      : Promise.resolve(new Response(JSON.stringify({ alerts: [] }), { status: 200 }));
 
     const [deviceRes, commandsRes, telemetryRes, telemetryHistoryRes, alertsRes, auditRes, capabilitiesRes] = await Promise.allSettled([
       fetch(`/api/devices/${encodedId}`, { credentials: 'include', cache: 'no-store' }),
       fetch(`/api/devices/${encodedId}/commands?limit=20`, { credentials: 'include', cache: 'no-store' }),
       fetch(`/api/telemetry/devices/${encodedId}/latest`, { credentials: 'include', cache: 'no-store' }),
       fetch(`/api/telemetry/devices/${encodedId}/history?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&bucket=raw`, { credentials: 'include', cache: 'no-store' }),
-      fetch('/api/alerts?limit=100', { credentials: 'include', cache: 'no-store' }),
+      alertsRequest,
       fetch(`/api/audit/device/${encodedId}?limit=100`, { credentials: 'include', cache: 'no-store' }),
       fetch(`/api/commands/capabilities?device_id=${encodedId}`, { credentials: 'include', cache: 'no-store' }),
     ]);
@@ -788,7 +804,9 @@ export default function DeviceDetailPageContent() {
       setKernelEvents([]);
     }
 
-    if (alertsRes.status === 'fulfilled' && alertsRes.value.ok) {
+    if (!canViewAlerts) {
+      setAlerts([]);
+    } else if (alertsRes.status === 'fulfilled' && alertsRes.value.ok) {
       const payload = (await alertsRes.value.json()) as AlertsApiResponse;
       setAlerts(
         (payload.alerts ?? [])
@@ -842,19 +860,33 @@ export default function DeviceDetailPageContent() {
     if (mode === 'interactive') {
       setIsLoadingDevice(false);
     }
-  }, [deviceId]);
+  }, [canViewAlerts, deviceId]);
 
   useEffect(() => {
     void loadDeviceData();
   }, [loadDeviceData]);
 
   useEffect(() => {
-    const intervalId = setInterval(() => {
-      void loadDeviceData('silent');
-    }, 15000);
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const startPolling = () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+      const pollMs = document.visibilityState === 'visible' ? 5000 : 30000;
+      intervalId = setInterval(() => {
+        void loadDeviceData('silent');
+      }, pollMs);
+    };
+
+    startPolling();
+    const handleVisibility = () => startPolling();
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
-      clearInterval(intervalId);
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [loadDeviceData]);
   const riskColor = device.riskScore > 0.6 ? 'text-red-400' : device.riskScore > 0.3 ? 'text-amber-400' : 'text-green-400';
@@ -1169,7 +1201,7 @@ export default function DeviceDetailPageContent() {
 
       {/* Main tabs */}
       <div className="flex items-center gap-0.5 border-b border-border overflow-x-auto scrollbar-thin">
-        {MAIN_TABS.map(tab => (
+        {mainTabs.map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -1732,7 +1764,7 @@ export default function DeviceDetailPageContent() {
         </div>
       )}
       {/* ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ Alerts ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ */}
-      {activeTab === 'Alerts' && (
+      {canViewAlerts && activeTab === 'Alerts' && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">Alerts for {device.hostname}</p>

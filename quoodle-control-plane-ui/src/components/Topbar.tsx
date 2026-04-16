@@ -6,9 +6,10 @@ import { formatNowLocalTime } from '@/lib/dateTime';
 
 interface TopbarProps {
   onMobileMenuToggle: () => void;
+  userRole?: 'admin' | 'operator' | 'viewer';
 }
 
-export default function Topbar({ onMobileMenuToggle }: TopbarProps) {
+export default function Topbar({ onMobileMenuToggle, userRole = 'viewer' }: TopbarProps) {
   const [liveConnected] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(() => formatNowLocalTime());
 
@@ -67,15 +68,16 @@ export default function Topbar({ onMobileMenuToggle }: TopbarProps) {
         <RefreshCw size={14} />
       </button>
 
-      {/* Alerts */}
-      <Link
-        href="/alerts"
-        className="relative p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-        aria-label="Alerts"
-      >
-        <Bell size={16} />
-        <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-red-500" />
-      </Link>
+      {userRole !== 'viewer' && (
+        <Link
+          href="/alerts"
+          className="relative p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          aria-label="Alerts"
+        >
+          <Bell size={16} />
+          <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-red-500" />
+        </Link>
+      )}
     </header>
   );
 }

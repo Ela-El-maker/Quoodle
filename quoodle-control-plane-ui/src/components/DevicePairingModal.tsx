@@ -14,9 +14,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type PairingStep = 'init' | 'pending_agent' | 'pending_confirmation' | 'confirming' | 'paired' | 'expired' | 'error';
+type PairingStep = 'init' | 'pending_agent' | 'pending_confirmation' | 'paired' | 'expired' | 'error';
 
 interface PendingDevice {
   deviceId: string;
@@ -32,75 +30,217 @@ interface DevicePairingModalProps {
   onPaired?: (device: PendingDevice) => void;
 }
 
-// ─── Mock pair code generation ─────────────────────────────────────────────────
-// Backend integration point: POST /api/pair/init → { pair_session_id, pair_code, expires_in_seconds }
-const generatePairCode = () => Math.floor(100000 + Math.random() * 900000).toString();
-const PAIR_CODE_TTL = 300; // 5 minutes in seconds
+interface PairSessionPayload {
+  status?: string;
+  pair_code?: string;
+  pair_token?: string;
+  pair_session_id?: string;
+  expires_at?: string;
+  device_id?: string;
+  device_name?: string;
+  device_id_suffix?: string;
+  detected_at?: string;
+  reason?: string;
+  message?: string;
+}
 
-// Simulated pending device (backend integration: GET /api/pair/session/{id})
-const mockPendingDevice: PendingDevice = {
-  deviceId: 'WKSTN-' + Math.floor(100 + Math.random() * 900),
-  deviceName: 'DESKTOP-' + Math.random().toString(36).substring(2, 7).toUpperCase(),
-  deviceIdSuffix: '',
-  os: 'Windows 11 Pro',
-  agentVersion: '1.2.0',
-  detectedAt: new Date().toISOString(),
-};
+const DEFAULT_TTL_SECONDS = 300;
+
+function parseApiError(payload: unknown, fallback: string): string {
+  if (!payload || typeof payload !== 'object') return fallback;
+  const map = payload as Record<string, unknown>;
+  const reason = String(map.reason ?? '').trim();
+  const message = String(map.message ?? '').trim();
+  const status = String(map.status ?? '').trim();
+  if (reason && message) return `${reason}: ${message}`;
+  if (reason) return reason;
+  if (message) return message;
+  if (status) return status;
+  return fallback;
+}
+
+function toPendingDevice(payload: PairSessionPayload): PendingDevice | null {
+  const deviceId = String(payload.device_id ?? '').trim();
+  const deviceName = String(payload.device_name ?? '').trim();
+  if (!deviceId || !deviceName) return null;
+
+  const suffixRaw = String(payload.device_id_suffix ?? '').trim();
+  return {
+    deviceId,
+    deviceName,
+    deviceIdSuffix: (suffixRaw || deviceId.slice(-6)).toUpperCase(),
+    os: 'Windows',
+    agentVersion: 'unknown',
+    detectedAt: String(payload.detected_at ?? new Date().toISOString()),
+  };
+}
 
 export default function DevicePairingModal({ onClose, onPaired }: DevicePairingModalProps) {
   const [step, setStep] = useState<PairingStep>('init');
-  const [pairCode] = useState(generatePairCode);
-  const [pairSessionId] = useState(() => 'pair-sess-' + Math.random().toString(36).substring(2, 10));
-  const [timeLeft, setTimeLeft] = useState(PAIR_CODE_TTL);
+  const [pairCode, setPairCode] = useState('');
+  const [pairSessionId, setPairSessionId] = useState('');
+  const [pairToken, setPairToken] = useState('');
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [expiresAt, setExpiresAt] = useState<number>(0);
   const [pendingDevice, setPendingDevice] = useState<PendingDevice | null>(null);
   const [deviceNameInput, setDeviceNameInput] = useState('');
   const [deviceIdSuffixInput, setDeviceIdSuffixInput] = useState('');
   const [confirmError, setConfirmError] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [pollCount, setPollCount] = useState(0);
+  const [busy, setBusy] = useState(false);
 
-  // ── Countdown timer ──────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (step !== 'pending_agent') return;
-    if (timeLeft <= 0) {
-      setStep('expired');
-      return;
+  const resetState = useCallback(() => {
+    setStep('init');
+    setPairCode('');
+    setPairSessionId('');
+    setPairToken('');
+    setTimeLeft(0);
+    setExpiresAt(0);
+    setPendingDevice(null);
+    setDeviceNameInput('');
+    setDeviceIdSuffixInput('');
+    setConfirmError('');
+    setConfirming(false);
+    setPollCount(0);
+    setBusy(false);
+  }, []);
+
+  const startPairing = useCallback(async () => {
+    setBusy(true);
+    setConfirmError('');
+    setPollCount(0);
+    try {
+      const response = await fetch('/api/pair/init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({}),
+      });
+      const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!response.ok) {
+        throw new Error(parseApiError(payload, `pair_init_failed_${response.status}`));
+      }
+
+      const sessionId = String(payload.pair_session_id ?? '').trim();
+      const code = String(payload.pair_code ?? '').trim();
+      const expiresAtRaw = String(payload.expires_at ?? '').trim();
+      const expiresAtMs = Number.isFinite(Date.parse(expiresAtRaw))
+        ? Date.parse(expiresAtRaw)
+        : Date.now() + DEFAULT_TTL_SECONDS * 1000;
+
+      if (!sessionId || !code) {
+        throw new Error('pair_init_missing_fields');
+      }
+
+      setPairSessionId(sessionId);
+      setPairCode(code);
+      setPairToken('');
+      setPendingDevice(null);
+      setDeviceNameInput('');
+      setDeviceIdSuffixInput('');
+      setExpiresAt(expiresAtMs);
+      setTimeLeft(Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 1000)));
+      setStep('pending_agent');
+      toast.info('Pair code generated. Enter it on your Windows agent.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'pair_init_failed';
+      setConfirmError(message);
+      setStep('error');
+      toast.error(`Failed to start pairing: ${message}`);
+    } finally {
+      setBusy(false);
     }
-    const timer = setInterval(() => {
-      setTimeLeft((t) => {
-        if (t <= 1) {
-          clearInterval(timer);
-          setStep('expired');
-          return 0;
-        }
-        return t - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [step, timeLeft]);
+  }, []);
 
-  // ── Poll for pending device (simulated) ──────────────────────────────────────
-  // Backend integration point: GET /api/pair/session/{pair_session_id} every 3s
   useEffect(() => {
-    if (step !== 'pending_agent') return;
-    const poll = setInterval(() => {
-      setPollCount((c) => {
-        const next = c + 1;
-        // Simulate device appearing after ~9 seconds (3 polls)
-        if (next >= 3) {
-          clearInterval(poll);
-          const detected = {
-            ...mockPendingDevice,
-            deviceIdSuffix: mockPendingDevice.deviceId.slice(-6),
-          };
-          setPendingDevice(detected);
-          setStep('pending_confirmation');
+    if (step !== 'pending_agent' && step !== 'pending_confirmation') return;
+    if (!expiresAt) return;
+
+    const timer = setInterval(() => {
+      const next = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+      setTimeLeft(next);
+      if (next <= 0) {
+        setStep('expired');
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [step, expiresAt]);
+
+  useEffect(() => {
+    if (!pairSessionId) return;
+    if (step !== 'pending_agent' && step !== 'pending_confirmation') return;
+
+    let cancelled = false;
+    const pollOnce = async () => {
+      try {
+        const response = await fetch(`/api/pair/session/${encodeURIComponent(pairSessionId)}`, {
+          method: 'GET',
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        const payload = (await response.json().catch(() => ({}))) as PairSessionPayload;
+
+        if (cancelled) return;
+        if (!response.ok) {
+          if (response.status === 404) {
+            setStep('expired');
+            return;
+          }
+          return;
         }
-        return next;
-      });
+
+        const nextCode = String(payload.pair_code ?? '').trim();
+        if (nextCode) setPairCode(nextCode);
+
+        const nextToken = String(payload.pair_token ?? '').trim();
+        if (nextToken) setPairToken(nextToken);
+
+        const expiryRaw = String(payload.expires_at ?? '').trim();
+        if (expiryRaw) {
+          const nextExpiry = Date.parse(expiryRaw);
+          if (Number.isFinite(nextExpiry)) {
+            setExpiresAt(nextExpiry);
+            setTimeLeft(Math.max(0, Math.ceil((nextExpiry - Date.now()) / 1000)));
+          }
+        }
+
+        const status = String(payload.status ?? '').toLowerCase();
+        if (status === 'expired') {
+          setStep('expired');
+          return;
+        }
+
+        if (status === 'pending_confirmation') {
+          const device = toPendingDevice(payload);
+          if (device) {
+            setPendingDevice(device);
+            setStep('pending_confirmation');
+          }
+          return;
+        }
+
+        if (status === 'paired') {
+          setStep('paired');
+        }
+      } finally {
+        if (!cancelled) {
+          setPollCount((count) => count + 1);
+        }
+      }
+    };
+
+    void pollOnce();
+    const handle = setInterval(() => {
+      void pollOnce();
     }, 3000);
-    return () => clearInterval(poll);
-  }, [step]);
+
+    return () => {
+      cancelled = true;
+      clearInterval(handle);
+    };
+  }, [pairSessionId, step]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -111,13 +251,8 @@ export default function DevicePairingModal({ onClose, onPaired }: DevicePairingM
   const timerColor = timeLeft > 60 ? 'text-green-400' : timeLeft > 30 ? 'text-amber-400' : 'text-red-400';
   const timerBg = timeLeft > 60 ? 'bg-green-500/10 border-green-500/20' : timeLeft > 30 ? 'bg-amber-500/10 border-amber-500/20' : 'bg-red-500/10 border-red-500/20';
 
-  const handleStartPairing = () => {
-    setStep('pending_agent');
-    setPollCount(0);
-    toast.info('Pair code generated — enter it on your Windows agent');
-  };
-
   const handleCopyCode = () => {
+    if (!pairCode) return;
     navigator.clipboard.writeText(pairCode).then(() => toast.success('Pair code copied'));
   };
 
@@ -125,42 +260,57 @@ export default function DevicePairingModal({ onClose, onPaired }: DevicePairingM
     if (!pendingDevice) return;
     setConfirmError('');
 
-    // Validate device name
     if (deviceNameInput.trim() !== pendingDevice.deviceName) {
       setConfirmError('Device name does not match. Check the name shown above and try again.');
       return;
     }
 
-    // Validate device ID suffix (last 6 chars)
     if (deviceIdSuffixInput.trim().toUpperCase() !== pendingDevice.deviceIdSuffix.toUpperCase()) {
       setConfirmError('Device ID suffix does not match. Enter the last 6 characters of the device ID shown above.');
       return;
     }
 
+    if (!pairToken) {
+      setConfirmError('Pair token not available yet. Wait a few seconds and retry.');
+      return;
+    }
+
     setConfirming(true);
-    // Backend integration point: POST /api/pair/confirm
-    // { pair_session_id, device_name_confirmation, device_id_suffix_confirmation }
-    await new Promise((r) => setTimeout(r, 1400));
-    setConfirming(false);
-    setStep('paired');
-    toast.success(`Device ${pendingDevice.deviceName} paired successfully`);
-    onPaired?.(pendingDevice);
+    try {
+      const response = await fetch('/api/pair/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          pair_token: pairToken,
+          pair_session_id: pairSessionId,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!response.ok) {
+        throw new Error(parseApiError(payload, `pair_confirm_failed_${response.status}`));
+      }
+
+      setStep('paired');
+      toast.success(`Device ${pendingDevice.deviceName} paired successfully`);
+      onPaired?.(pendingDevice);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'pair_confirm_failed';
+      setConfirmError(message);
+      toast.error(`Pairing confirmation failed: ${message}`);
+    } finally {
+      setConfirming(false);
+    }
   };
 
   const handleRestart = () => {
-    setStep('init');
-    setTimeLeft(PAIR_CODE_TTL);
-    setPendingDevice(null);
-    setDeviceNameInput('');
-    setDeviceIdSuffixInput('');
-    setConfirmError('');
-    setPollCount(0);
+    resetState();
+    void startPairing();
   };
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
       <div className="bg-zinc-950 border border-border rounded-xl w-full max-w-md shadow-2xl fade-in">
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -176,7 +326,6 @@ export default function DevicePairingModal({ onClose, onPaired }: DevicePairingM
           </button>
         </div>
 
-        {/* ── Step: Init ─────────────────────────────────────────────────────── */}
         {step === 'init' && (
           <div className="p-5 space-y-5">
             <div className="bg-muted/20 border border-border rounded-lg p-4 space-y-3">
@@ -184,38 +333,37 @@ export default function DevicePairingModal({ onClose, onPaired }: DevicePairingM
               <ol className="space-y-2">
                 {[
                   'Click "Generate Pair Code" to get a short-lived 6-digit code.',
-                  'Open the Quoodle Windows Agent on your PC and enter the code.',
-                  'The agent will connect and appear here for your confirmation.',
-                  'Type the device name and last 6 chars of the device ID to confirm.',
-                ].map((step, i) => (
-                  <li key={i} className="flex items-start gap-2.5 text-[11px] text-muted-foreground">
+                  'Open the Windows agent UI and enter that code.',
+                  'When the device appears here, verify details and confirm.',
+                  'After confirmation, the runtime receives credentials and reconnects.',
+                ].map((message, index) => (
+                  <li key={message} className="flex items-start gap-2.5 text-[11px] text-muted-foreground">
                     <span className="flex-shrink-0 w-4 h-4 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center mt-0.5">
-                      {i + 1}
+                      {index + 1}
                     </span>
-                    {step}
+                    {message}
                   </li>
                 ))}
               </ol>
             </div>
             <button
-              onClick={handleStartPairing}
-              className="w-full flex items-center justify-center gap-2 py-2.5 text-xs font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 active:scale-95 transition-all"
+              onClick={() => void startPairing()}
+              disabled={busy}
+              className="w-full flex items-center justify-center gap-2 py-2.5 text-xs font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-60"
             >
-              <Link2 size={13} />
+              {busy ? <Loader2 size={13} className="animate-spin" /> : <Link2 size={13} />}
               Generate Pair Code
             </button>
           </div>
         )}
 
-        {/* ── Step: Pending Agent (code display + countdown) ─────────────────── */}
         {step === 'pending_agent' && (
           <div className="p-5 space-y-5">
-            {/* Pair code display */}
             <div className="text-center space-y-2">
               <p className="text-xs text-muted-foreground">Enter this code on your Windows Agent</p>
               <div className="flex items-center justify-center gap-3">
                 <span className="text-4xl font-bold font-mono tracking-[0.3em] text-foreground select-all">
-                  {pairCode}
+                  {pairCode || '------'}
                 </span>
                 <button
                   onClick={handleCopyCode}
@@ -225,32 +373,28 @@ export default function DevicePairingModal({ onClose, onPaired }: DevicePairingM
                   <Copy size={14} />
                 </button>
               </div>
-              {/* Countdown */}
               <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-mono font-semibold ${timerBg} ${timerColor}`}>
                 <Clock size={11} />
                 Expires in {formatTime(timeLeft)}
               </div>
             </div>
 
-            {/* Session ID */}
             <div className="bg-muted/20 border border-border rounded-lg px-3 py-2 flex items-center justify-between">
               <span className="text-[10px] text-muted-foreground font-mono">Session: {pairSessionId}</span>
-              <span className="text-[10px] text-amber-400 font-medium">Waiting for agent…</span>
+              <span className="text-[10px] text-amber-400 font-medium">Waiting for agent...</span>
             </div>
 
-            {/* Polling indicator */}
             <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
               <Loader2 size={12} className="animate-spin text-primary flex-shrink-0" />
-              Listening for device connection — keep this window open
+              Listening for device connection. Keep this window open.
             </div>
 
-            {/* Progress dots */}
             <div className="flex items-center justify-center gap-1.5">
-              {[0, 1, 2].map((i) => (
+              {[0, 1, 2].map((index) => (
                 <span
-                  key={i}
+                  key={index}
                   className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
-                    pollCount > i ? 'bg-primary' : 'bg-muted'
+                    pollCount % 3 > index ? 'bg-primary' : 'bg-muted'
                   }`}
                 />
               ))}
@@ -265,21 +409,18 @@ export default function DevicePairingModal({ onClose, onPaired }: DevicePairingM
           </div>
         )}
 
-        {/* ── Step: Pending Confirmation ─────────────────────────────────────── */}
         {step === 'pending_confirmation' && pendingDevice && (
           <div className="p-5 space-y-4">
-            {/* Device detected banner */}
             <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 flex items-start gap-2.5">
               <AlertTriangle size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-xs font-semibold text-amber-400">Device detected — confirm ownership</p>
+                <p className="text-xs font-semibold text-amber-400">Device detected. Confirm ownership.</p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                  A device has connected using your pair code. Verify the details below before linking it to your account.
+                  Verify the details below before linking the device to your account.
                 </p>
               </div>
             </div>
 
-            {/* Device identity panel */}
             <div className="bg-muted/20 border border-border rounded-lg p-4 space-y-2.5">
               <div className="flex items-center gap-2 mb-1">
                 <Monitor size={14} className="text-primary" />
@@ -300,13 +441,11 @@ export default function DevicePairingModal({ onClose, onPaired }: DevicePairingM
               </div>
             </div>
 
-            {/* Confirmation fields */}
             <div className="space-y-3">
               <p className="text-[11px] text-muted-foreground">
-                To confirm this is your device, type the device name and the last 6 characters of the device ID exactly as shown above.
+                Type the device name and last 6 characters of device ID exactly as shown above.
               </p>
 
-              {/* Device name */}
               <div>
                 <label className="block text-xs font-medium mb-1.5">
                   Type device name <span className="text-red-400">*</span>
@@ -314,7 +453,7 @@ export default function DevicePairingModal({ onClose, onPaired }: DevicePairingM
                 <input
                   type="text"
                   value={deviceNameInput}
-                  onChange={(e) => { setDeviceNameInput(e.target.value); setConfirmError(''); }}
+                  onChange={(event) => { setDeviceNameInput(event.target.value); setConfirmError(''); }}
                   placeholder={pendingDevice.deviceName}
                   className="w-full text-xs bg-muted/60 border border-border rounded-md px-3 py-2.5 text-foreground font-mono placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors"
                   autoComplete="off"
@@ -322,7 +461,6 @@ export default function DevicePairingModal({ onClose, onPaired }: DevicePairingM
                 />
               </div>
 
-              {/* Device ID suffix */}
               <div>
                 <label className="block text-xs font-medium mb-1.5">
                   Enter last 6 characters of device ID <span className="text-red-400">*</span>
@@ -331,7 +469,7 @@ export default function DevicePairingModal({ onClose, onPaired }: DevicePairingM
                   <input
                     type="text"
                     value={deviceIdSuffixInput}
-                    onChange={(e) => { setDeviceIdSuffixInput(e.target.value.toUpperCase()); setConfirmError(''); }}
+                    onChange={(event) => { setDeviceIdSuffixInput(event.target.value.toUpperCase()); setConfirmError(''); }}
                     placeholder={pendingDevice.deviceIdSuffix}
                     maxLength={6}
                     className="w-full text-xs bg-muted/60 border border-border rounded-md px-3 py-2.5 text-foreground font-mono tracking-widest uppercase placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors"
@@ -344,7 +482,6 @@ export default function DevicePairingModal({ onClose, onPaired }: DevicePairingM
                 </div>
               </div>
 
-              {/* Validation error */}
               {confirmError && (
                 <div className="flex items-start gap-2 text-[11px] text-red-400 bg-red-500/5 border border-red-500/20 rounded-md px-3 py-2">
                   <AlertTriangle size={11} className="flex-shrink-0 mt-0.5" />
@@ -353,7 +490,6 @@ export default function DevicePairingModal({ onClose, onPaired }: DevicePairingM
               )}
             </div>
 
-            {/* Actions */}
             <div className="flex items-center gap-2 pt-1">
               <button
                 onClick={handleRestart}
@@ -369,7 +505,7 @@ export default function DevicePairingModal({ onClose, onPaired }: DevicePairingM
                 {confirming ? (
                   <>
                     <Loader2 size={12} className="animate-spin" />
-                    Confirming…
+                    Confirming...
                   </>
                 ) : (
                   <>
@@ -382,7 +518,6 @@ export default function DevicePairingModal({ onClose, onPaired }: DevicePairingM
           </div>
         )}
 
-        {/* ── Step: Paired ───────────────────────────────────────────────────── */}
         {step === 'paired' && pendingDevice && (
           <div className="p-5 flex flex-col items-center text-center space-y-4">
             <div className="w-14 h-14 rounded-full bg-green-500/10 flex items-center justify-center">
@@ -417,7 +552,6 @@ export default function DevicePairingModal({ onClose, onPaired }: DevicePairingM
           </div>
         )}
 
-        {/* ── Step: Expired ──────────────────────────────────────────────────── */}
         {step === 'expired' && (
           <div className="p-5 flex flex-col items-center text-center space-y-4">
             <div className="w-14 h-14 rounded-full bg-amber-500/10 flex items-center justify-center">
@@ -442,6 +576,35 @@ export default function DevicePairingModal({ onClose, onPaired }: DevicePairingM
               >
                 <RefreshCw size={12} />
                 Generate New Code
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 'error' && (
+          <div className="p-5 flex flex-col items-center text-center space-y-4">
+            <div className="w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center">
+              <AlertTriangle size={28} className="text-red-400" />
+            </div>
+            <div>
+              <p className="font-semibold text-sm">Pairing Failed</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {confirmError || 'Unable to start pairing.'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 w-full">
+              <button
+                onClick={onClose}
+                className="flex-1 py-2 text-xs border border-border rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => void handleRestart()}
+                className="flex-1 flex items-center justify-center gap-2 py-2 text-xs font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 active:scale-95 transition-all"
+              >
+                <RefreshCw size={12} />
+                Retry
               </button>
             </div>
           </div>
