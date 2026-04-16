@@ -26,7 +26,7 @@ final class DispatchCommandToFastApi implements ShouldQueue
         $this->onQueue('fastapi');
     }
 
-    public int $tries = 5;
+    public int $tries = 120;
 
     public function handle(FastAPIDispatcher $dispatcher): void
     {
@@ -38,6 +38,23 @@ final class DispatchCommandToFastApi implements ShouldQueue
         $result = $dispatcher->dispatch($command, $this->policy, $this->compliance);
 
         $status = $result['status'] ?? 'queued';
+        if ($status === 'queued_offline') {
+            $command->update([
+                'state' => 'queued',
+                'execution_state' => 'queued',
+                'dispatched_at' => null,
+                'reason' => $result['reason'] ?? 'device not connected',
+            ]);
+
+            $expiresAt = $command->expires_at;
+            if ($expiresAt && now()->lt($expiresAt)) {
+                // Retry until command TTL expires so transient reconnects do not strand queue rows.
+                $this->release(5);
+            }
+
+            return;
+        }
+
         $state = match ($status) {
             'dispatched' => 'dispatched',
             'queued', 'queued_offline' => 'queued',

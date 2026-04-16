@@ -6,12 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Models\AuthToken;
 use App\Models\Device;
 use App\Models\DeviceLink;
+use App\Models\User;
 use App\Services\Devices\FastApiDeviceKeySync;
 use App\Services\Devices\FastApiDevicePairedWebhook;
 use App\Services\JWT\JWTSigner;
 use App\Services\Mobile\MobileDeviceTracker;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,6 +24,8 @@ use Illuminate\Support\Str;
 class PairingController extends Controller
 {
     private const CACHE_PREFIX = 'pair_session_';
+    private const CODE_CACHE_PREFIX = 'pair_code_';
+    private const PAIR_CODE_LENGTH = 6;
 
     public function __construct(
         private readonly JWTSigner $jwtSigner,
@@ -33,6 +37,11 @@ class PairingController extends Controller
 
     public function init(Request $request): JsonResponse
     {
+        $user = Auth::user();
+        if (! $user) {
+            return response()->json(['status' => 'invalid_session'], 401);
+        }
+
         $validator = Validator::make($request->all(), [
             'device_label' => ['nullable', 'string', 'max:190'],
         ]);
@@ -42,14 +51,29 @@ class PairingController extends Controller
         }
 
         $pairSessionId = Str::uuid()->toString();
-        Cache::put(self::CACHE_PREFIX.$pairSessionId, [
+        $pairCode = $this->generateUniquePairCode();
+        $expiresAt = now()->addMinutes(10);
+        $session = [
             'pair_session_id' => $pairSessionId,
+            'pair_code' => $pairCode,
             'device_label' => $validator->validated()['device_label'] ?? null,
-        ], now()->addMinutes(10));
+            'user_id' => (string) $user->id,
+            'status' => 'pending_agent',
+            'pair_token' => null,
+            'device_id' => null,
+            'device_name' => null,
+            'detected_at' => null,
+            'expires_at' => $expiresAt->toIso8601String(),
+        ];
+
+        Cache::put(self::CACHE_PREFIX.$pairSessionId, $session, $expiresAt);
+        Cache::put(self::CODE_CACHE_PREFIX.$pairCode, $pairSessionId, $expiresAt);
 
         return response()->json([
             'pair_session_id' => $pairSessionId,
-            'expires_at' => now()->addMinutes(10)->toIso8601String(),
+            'pair_code' => $pairCode,
+            'expires_at' => $expiresAt->toIso8601String(),
+            'expires_in_seconds' => max(0, now()->diffInSeconds($expiresAt, false)),
             'qr_metadata' => [
                 'info' => 'Scan with Windows Agent pairing QR',
             ],
@@ -62,6 +86,8 @@ class PairingController extends Controller
             'device_name' => ['required', 'string', 'max:190'],
             'hwid' => ['required', 'string', 'max:190'],
             'pubkey' => ['required', 'string', 'max:2048'],
+            'pair_code' => ['nullable', 'digits:6'],
+            'pair_session_id' => ['nullable', 'string', 'max:64'],
             'identity_version' => ['nullable', 'string', 'max:32'],
             'identity_components' => ['nullable', 'array'],
             'identity_components.mb_uuid' => ['nullable', 'string', 'max:128'],
@@ -110,6 +136,10 @@ class PairingController extends Controller
                     (int) config('jwt.pair_token_ttl', 300),
                 );
 
+                if ($errorResponse = $this->attachPairRequestToSession($data, $device, $pairToken)) {
+                    return $errorResponse;
+                }
+
                 return response()->json([
                     'pair_token' => $pairToken,
                     'expires_at' => now()->addSeconds((int) config('jwt.pair_token_ttl', 300))->toIso8601String(),
@@ -133,6 +163,10 @@ class PairingController extends Controller
                     ],
                     (int) config('jwt.pair_token_ttl', 300),
                 );
+
+                if ($errorResponse = $this->attachPairRequestToSession($data, $device, $pairToken)) {
+                    return $errorResponse;
+                }
 
                 return response()->json([
                     'pair_token' => $pairToken,
@@ -176,10 +210,51 @@ class PairingController extends Controller
             (int) config('jwt.pair_token_ttl', 300),
         );
 
+        if ($errorResponse = $this->attachPairRequestToSession($data, $device, $pairToken)) {
+            return $errorResponse;
+        }
+
         return response()->json([
             'pair_token' => $pairToken,
             'expires_at' => now()->addSeconds((int) config('jwt.pair_token_ttl', 300))->toIso8601String(),
             'device_id' => $device->device_id,
+        ]);
+    }
+
+    public function session(Request $request, string $pairSessionId): JsonResponse
+    {
+        $user = Auth::user();
+        if (! $user) {
+            return response()->json(['status' => 'invalid_session'], 401);
+        }
+
+        $cached = Cache::get(self::CACHE_PREFIX.$pairSessionId);
+        if (! is_array($cached)) {
+            return response()->json([
+                'status' => 'expired',
+                'pair_session_id' => $pairSessionId,
+            ], 404);
+        }
+
+        $sessionUserId = (string) ($cached['user_id'] ?? '');
+        if ($sessionUserId !== '' && $sessionUserId !== (string) $user->id) {
+            return response()->json(['status' => 'forbidden'], 403);
+        }
+
+        $deviceId = (string) ($cached['device_id'] ?? '');
+        $deviceName = (string) ($cached['device_name'] ?? '');
+        $pairToken = (string) ($cached['pair_token'] ?? '');
+
+        return response()->json([
+            'status' => (string) ($cached['status'] ?? 'pending_agent'),
+            'pair_session_id' => $pairSessionId,
+            'pair_code' => (string) ($cached['pair_code'] ?? ''),
+            'expires_at' => (string) ($cached['expires_at'] ?? ''),
+            'device_id' => $deviceId !== '' ? $deviceId : null,
+            'device_name' => $deviceName !== '' ? $deviceName : null,
+            'device_id_suffix' => $deviceId !== '' ? strtoupper(substr($deviceId, -self::PAIR_CODE_LENGTH)) : null,
+            'detected_at' => (string) ($cached['detected_at'] ?? '') ?: null,
+            'pair_token' => $pairToken !== '' ? $pairToken : null,
         ]);
     }
 
@@ -217,9 +292,19 @@ class PairingController extends Controller
 
         $cached = null;
         if (! empty($data['pair_session_id'])) {
-            $cached = Cache::pull(self::CACHE_PREFIX.$data['pair_session_id']);
-            if (! $cached) {
+            $cached = Cache::get(self::CACHE_PREFIX.$data['pair_session_id']);
+            if (! is_array($cached)) {
                 return response()->json(['status' => 'expired', 'device_id' => null, 'device_name' => null, 'lifecycle_state' => null]);
+            }
+
+            $sessionUserId = (string) ($cached['user_id'] ?? '');
+            if ($sessionUserId !== '' && $sessionUserId !== (string) $user->id) {
+                return response()->json(['status' => 'forbidden'], 403);
+            }
+
+            $sessionPairToken = (string) ($cached['pair_token'] ?? '');
+            if ($sessionPairToken !== '' && ! hash_equals($sessionPairToken, (string) $data['pair_token'])) {
+                return response()->json(['status' => 'invalid', 'reason' => 'pair_token_session_mismatch'], 401);
             }
         }
 
@@ -259,6 +344,13 @@ class PairingController extends Controller
                 : $device->ed25519_pubkey_b64,
         ]);
 
+        $rolePromoted = false;
+        if ((string) $user->role === User::ROLE_VIEWER) {
+            $user->forceFill(['role' => User::ROLE_OPERATOR])->save();
+            $user->refresh();
+            $rolePromoted = true;
+        }
+
         $sessionId = $request->attributes->get('jwt_session_id');
         if ($sessionId) {
             $authToken = AuthToken::where('session_id', $sessionId)
@@ -288,7 +380,7 @@ class PairingController extends Controller
             }
         }
 
-        $agentJwtTtl = (int) config('jwt.ttl', 900);
+        $agentJwtTtl = (int) config('jwt.agent_ttl', (int) config('jwt.ttl', 900));
         $agentJwtExpiresAt = now()->addSeconds($agentJwtTtl)->toIso8601String();
         $agentJwt = $this->jwtSigner->issueForDevice($device->device_id, [
             'scope' => 'agent',
@@ -299,6 +391,10 @@ class PairingController extends Controller
             $this->keySync->push($device);
         }
 
+        if (! empty($data['pair_session_id']) && is_array($cached)) {
+            $this->clearPairSession((string) $data['pair_session_id'], $cached);
+        }
+
         $this->pairedWebhook->notify($device, $agentJwt, $agentJwtExpiresAt);
 
         return response()->json([
@@ -306,6 +402,8 @@ class PairingController extends Controller
             'device_id' => $device->device_id,
             'device_name' => $device->device_name,
             'lifecycle_state' => $device->lifecycle_state,
+            'user_role' => (string) $user->role,
+            'role_promoted' => $rolePromoted,
             'agent_jwt' => $agentJwt,
             'agent_jwt_expires_at' => $agentJwtExpiresAt,
         ]);
@@ -346,16 +444,116 @@ class PairingController extends Controller
             return response()->json(['status' => 'invalid', 'reason' => 'device_not_paired'], 409);
         }
 
+        $agentJwtTtl = (int) config('jwt.agent_ttl', (int) config('jwt.ttl', 900));
         $jwt = $this->jwtSigner->issueForDevice($deviceId, [
             'scope' => 'agent',
             'policy_hash' => $policyHash,
-        ]);
+        ], $agentJwtTtl);
 
         return response()->json([
             'status' => 'ok',
             'device_id' => $deviceId,
             'jwt' => $jwt,
         ]);
+    }
+
+    /**
+     * @param array<string, mixed> $requestData
+     */
+    private function attachPairRequestToSession(array $requestData, Device $device, string $pairToken): ?JsonResponse
+    {
+        $rawPairCode = trim((string) ($requestData['pair_code'] ?? ''));
+        $pairSessionId = trim((string) ($requestData['pair_session_id'] ?? ''));
+        if ($rawPairCode === '' && $pairSessionId === '') {
+            return null;
+        }
+
+        $pairCode = preg_replace('/\D+/', '', $rawPairCode ?? '') ?? '';
+        if ($pairCode === '' && $pairSessionId === '') {
+            return response()->json(['status' => 'invalid', 'reason' => 'pair_code_required'], 422);
+        }
+
+        if ($pairSessionId === '' && $pairCode !== '') {
+            $pairSessionId = (string) Cache::get(self::CODE_CACHE_PREFIX.$pairCode, '');
+        }
+        if ($pairSessionId === '') {
+            return response()->json(['status' => 'invalid', 'reason' => 'pair_session_not_found'], 404);
+        }
+
+        $cached = Cache::get(self::CACHE_PREFIX.$pairSessionId);
+        if (! is_array($cached)) {
+            return response()->json(['status' => 'expired', 'reason' => 'pair_session_expired'], 410);
+        }
+
+        $sessionPairCode = preg_replace('/\D+/', '', (string) ($cached['pair_code'] ?? '')) ?? '';
+        if ($pairCode !== '' && $sessionPairCode !== '' && ! hash_equals($sessionPairCode, $pairCode)) {
+            return response()->json(['status' => 'invalid', 'reason' => 'invalid_pair_code'], 401);
+        }
+
+        $status = strtolower((string) ($cached['status'] ?? 'pending_agent'));
+        if ($status === 'paired') {
+            return response()->json(['status' => 'conflict', 'reason' => 'pair_session_already_used'], 409);
+        }
+
+        $expiresAt = $this->resolvePairSessionExpiry($cached);
+        if ($expiresAt->isPast()) {
+            return response()->json(['status' => 'expired', 'reason' => 'pair_session_expired'], 410);
+        }
+
+        $cached['status'] = 'pending_confirmation';
+        $cached['pair_token'] = $pairToken;
+        $cached['device_id'] = (string) $device->device_id;
+        $cached['device_name'] = (string) $device->device_name;
+        $cached['detected_at'] = now()->toIso8601String();
+        if ($sessionPairCode !== '') {
+            $cached['pair_code'] = $sessionPairCode;
+            Cache::put(self::CODE_CACHE_PREFIX.$sessionPairCode, $pairSessionId, $expiresAt);
+        }
+
+        Cache::put(self::CACHE_PREFIX.$pairSessionId, $cached, $expiresAt);
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $cached
+     */
+    private function clearPairSession(string $pairSessionId, array $cached): void
+    {
+        Cache::forget(self::CACHE_PREFIX.$pairSessionId);
+        $pairCode = trim((string) ($cached['pair_code'] ?? ''));
+        if ($pairCode !== '') {
+            Cache::forget(self::CODE_CACHE_PREFIX.$pairCode);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $cached
+     */
+    private function resolvePairSessionExpiry(array $cached): Carbon
+    {
+        $raw = trim((string) ($cached['expires_at'] ?? ''));
+        if ($raw !== '') {
+            try {
+                return Carbon::parse($raw);
+            } catch (\Throwable $e) {
+                // Fallback below.
+            }
+        }
+
+        return now()->addMinutes(10);
+    }
+
+    private function generateUniquePairCode(): string
+    {
+        for ($attempt = 0; $attempt < 8; $attempt++) {
+            $code = str_pad((string) random_int(0, (10 ** self::PAIR_CODE_LENGTH) - 1), self::PAIR_CODE_LENGTH, '0', STR_PAD_LEFT);
+            if (! Cache::has(self::CODE_CACHE_PREFIX.$code)) {
+                return $code;
+            }
+        }
+
+        return str_pad((string) random_int(0, (10 ** self::PAIR_CODE_LENGTH) - 1), self::PAIR_CODE_LENGTH, '0', STR_PAD_LEFT);
     }
 
     private function decodePairToken(string $token): array

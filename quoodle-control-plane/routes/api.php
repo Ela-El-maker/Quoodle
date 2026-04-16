@@ -52,7 +52,7 @@ Route::middleware('api')->group(function (): void {
 |--------------------------------------------------------------------------
 |
 | Route organization by role requirement:
-|   - Viewer (any authenticated): view devices, telemetry, alerts
+|   - Viewer (any authenticated): view devices and telemetry
 |   - Operator (or admin): execute commands, manage devices, ack alerts
 |   - Admin only: policy management, user management
 |
@@ -71,7 +71,7 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
     |----------------------------------------------------------------------
     | Viewer Routes (Any Authenticated User)
     |----------------------------------------------------------------------
-    | Read-only access to devices, telemetry, updates, alerts
+    | Read-only access to devices, telemetry, updates
     */
     Route::middleware('role:viewer')->group(function (): void {
         // Devices listing (read-only)
@@ -102,9 +102,6 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
         // Audit trail (read-only)
         Route::get('/audit/device/{device_id}', [AuditTrailController::class, 'chain']);
 
-        // Alerts listing (read-only)
-        Route::get('/alerts', [AlertsController::class, 'index']);
-
         // Command status (read-only)
         Route::get('/commands', [CommandQueryController::class, 'index']);
         Route::get('/commands/capabilities', [CommandQueryController::class, 'capabilities']);
@@ -119,6 +116,7 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
 
         // Pairing (viewer can pair their own device)
         Route::post('/pair/init', [PairingController::class, 'init']);
+        Route::get('/pair/session/{pair_session_id}', [PairingController::class, 'session']);
         Route::post('/pair/confirm', [PairingController::class, 'confirm']);
         // Deprecated alias for legacy clients
         Route::post('/pair', [PairingController::class, 'confirm']);
@@ -135,13 +133,20 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
         Route::post('/devices/{device_id}/claim', [DeviceController::class, 'claim']);
         Route::post('/devices/{device_id}/rename', [DeviceController::class, 'rename']);
 
+        // Device-scoped app lock policy (operators can manage their owned devices; admins can manage all)
+        Route::get('/policy/app-lock', [PolicyController::class, 'appLockShow']);
+        Route::put('/policy/app-lock', [PolicyController::class, 'appLockUpsert']);
+        Route::delete('/policy/app-lock', [PolicyController::class, 'appLockClear']);
+
+        // Alerts listing and acknowledgment
+        Route::get('/alerts', [AlertsController::class, 'index']);
+
         // Commands execution
         // Commands execution (Token Required)
         Route::middleware('jwt.auth')->post('/commands', [CommandController::class, 'store']);
         // Deprecated alias for legacy clients
         Route::middleware('jwt.auth')->post('/command', [CommandController::class, 'store']);
 
-        // Alert acknowledgment
         Route::post('/alerts/{alert_id}/ack', [AlertsController::class, 'acknowledge']);
 
         // Compliance evaluation
@@ -163,8 +168,5 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
     Route::middleware('role:admin')->group(function (): void {
         // Policy Engine management
         Route::post('/policy/validate_bundle', [PolicyController::class, 'validateBundle']);
-        Route::get('/policy/app-lock', [PolicyController::class, 'appLockShow']);
-        Route::put('/policy/app-lock', [PolicyController::class, 'appLockUpsert']);
-        Route::delete('/policy/app-lock', [PolicyController::class, 'appLockClear']);
     });
 });

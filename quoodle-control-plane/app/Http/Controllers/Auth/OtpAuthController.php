@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class OtpAuthController extends Controller
 {
@@ -84,10 +85,7 @@ class OtpAuthController extends Controller
             'user_agent' => substr((string) $request->userAgent(), 0, 512),
         ]);
 
-        // Pre-provisioned-only access: send OTP only for existing users.
-        if ($user) {
-            Mail::to($email)->send(new AuthOtpCodeMail($otpCode, (int) ceil($ttlSeconds / 60)));
-        }
+        Mail::to($email)->send(new AuthOtpCodeMail($otpCode, (int) ceil($ttlSeconds / 60)));
 
         return response()->json([
             'status' => 'otp_sent',
@@ -137,12 +135,28 @@ class OtpAuthController extends Controller
         }
 
         $user = $challenge->user_id ? User::query()->find($challenge->user_id) : null;
-        if (! $user || strcasecmp($user->email, $email) !== 0) {
+        if (! $user || strcasecmp((string) $user->email, $email) !== 0) {
+            $user = User::query()->where('email', $email)->first();
+        }
+
+        if (! $user) {
+            $user = User::create([
+                'display_name' => $this->displayNameFromEmail($email),
+                'email' => $email,
+                'role' => User::ROLE_VIEWER,
+                'two_factor_enabled' => false,
+            ]);
+        }
+
+        if (strcasecmp((string) $user->email, $email) !== 0) {
             $challenge->consumed_at = now();
             $challenge->save();
             return response()->json(['message' => 'invalid_otp'], 401);
         }
 
+        if ((string) ($challenge->user_id ?? '') !== (string) $user->id) {
+            $challenge->user_id = $user->id;
+        }
         $challenge->consumed_at = now();
         $challenge->save();
 
@@ -151,5 +165,17 @@ class OtpAuthController extends Controller
             $data['device_fingerprint'] ?? null,
             $data['push_token'] ?? null,
         ));
+    }
+
+    private function displayNameFromEmail(string $email): string
+    {
+        $localPart = explode('@', $email)[0] ?? 'User';
+        $normalized = Str::of($localPart)
+            ->replace(['.', '_', '-'], ' ')
+            ->squish()
+            ->title()
+            ->toString();
+
+        return $normalized !== '' ? $normalized : 'User';
     }
 }

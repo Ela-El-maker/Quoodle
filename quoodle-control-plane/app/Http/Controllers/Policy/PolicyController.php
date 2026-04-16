@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Policy;
 use App\Http\Controllers\Controller;
 use App\Models\Device;
 use App\Models\PolicyProfile;
+use App\Models\User;
 use App\Services\CommandRegistry\Registry;
 use App\Services\PolicyEngine\FastApiPolicyPushService;
 use App\Services\PolicyEngine\PolicyEvaluator;
@@ -105,9 +106,14 @@ class PolicyController extends Controller
         ]);
     }
 
-    public function appLockShow(): JsonResponse
+    public function appLockShow(Request $request): JsonResponse
     {
-        $targetDeviceId = $this->normalizeTargetDeviceId(request());
+        $targetDeviceId = $this->normalizeTargetDeviceId($request);
+        $authError = $this->authorizeAppLockScope($request, $targetDeviceId);
+        if ($authError !== null) {
+            return $authError;
+        }
+
         $profileId = $this->appLockProfileId($targetDeviceId);
         $profile = PolicyProfile::query()
             ->where('profile_id', $profileId)
@@ -134,6 +140,11 @@ class PolicyController extends Controller
     public function appLockUpsert(Request $request): JsonResponse
     {
         $targetDeviceId = $this->normalizeTargetDeviceId($request);
+        $authError = $this->authorizeAppLockScope($request, $targetDeviceId);
+        if ($authError !== null) {
+            return $authError;
+        }
+
         $validator = Validator::make($request->all(), [
             'enabled' => ['required', 'boolean'],
             'mode' => ['required', 'in:blocklist'],
@@ -215,6 +226,11 @@ class PolicyController extends Controller
     public function appLockClear(Request $request): JsonResponse
     {
         $targetDeviceId = $this->normalizeTargetDeviceId($request);
+        $authError = $this->authorizeAppLockScope($request, $targetDeviceId);
+        if ($authError !== null) {
+            return $authError;
+        }
+
         $bundle = $this->normalizeAppLockBundle([
             'enabled' => false,
             'mode' => 'blocklist',
@@ -315,5 +331,37 @@ class PolicyController extends Controller
         }
 
         return $normalized;
+    }
+
+    private function authorizeAppLockScope(Request $request, ?string $targetDeviceId): ?JsonResponse
+    {
+        /** @var User|null $user */
+        $user = $request->user();
+        if (! $user) {
+            return response()->json(['message' => 'unauthenticated'], 401);
+        }
+
+        // Global app-lock policy management remains admin-only.
+        if ($targetDeviceId === null) {
+            if (! $user->isAdmin()) {
+                return response()->json([
+                    'message' => 'global_app_lock_requires_admin',
+                ], 403);
+            }
+
+            return null;
+        }
+
+        $device = Device::query()->find($targetDeviceId);
+        if (! $device) {
+            return response()->json(['message' => 'not_found'], 404);
+        }
+
+        // Operators can only manage app-lock policy for devices they own.
+        if (! $user->isAdmin() && $device->user_id !== $user->id) {
+            return response()->json(['message' => 'not_found'], 404);
+        }
+
+        return null;
     }
 }

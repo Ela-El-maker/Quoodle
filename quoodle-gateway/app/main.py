@@ -162,12 +162,9 @@ async def agent_ws(websocket: WebSocket):
         # Load device public key for signature verification.
         agent_pubkey_b64 = device_registry.get_pubkey_b64(device_id)
         if not agent_pubkey_b64:
-            # Fail-closed: do not authenticate, but allow the system to surface the device
-            # as "pending_pairing" in Laravel for discovery UX.
-            agent_info = payload.get("body", {}).get("agent_info", {}) or {}
-            agent_info["connected_at"] = iso_timestamp()
+            # Fail-closed: do not authenticate and avoid presence churn for
+            # unauthenticated reconnect loops.
             logger.warning("AUTH_UNKNOWN_DEVICE for device=%s", device_id)
-            fire_and_forget(notify_device_online(device_id, "unpaired", agent_info))
             await websocket.send_json(build_auth_error(device_id, "AUTH_UNKNOWN_DEVICE", "Unknown device_id"))
             await websocket.close(code=4401)
             return
@@ -385,14 +382,15 @@ async def agent_ws(websocket: WebSocket):
             session_id=session_id_assigned,
             websocket=websocket,
         )
-        fire_and_forget(
-            notify_device_offline(
-                device_id=device_id,
-                session_id=entry.session_id if entry else session_id_assigned,
-                last_seen=iso_timestamp(),
-                reason="disconnect",
+        if session_id_assigned:
+            fire_and_forget(
+                notify_device_offline(
+                    device_id=device_id,
+                    session_id=entry.session_id if entry else session_id_assigned,
+                    last_seen=iso_timestamp(),
+                    reason="disconnect",
+                )
             )
-        )
         try:
             await websocket.close()
         except Exception:

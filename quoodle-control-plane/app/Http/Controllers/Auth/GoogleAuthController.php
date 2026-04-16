@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class GoogleAuthController extends Controller
 {
@@ -68,10 +69,19 @@ class GoogleAuthController extends Controller
             return response()->json(['message' => 'google_email_not_verified'], 401);
         }
 
-        // Pre-provisioned-only access.
         $user = User::query()->where('email', $email)->first();
         if (! $user) {
-            return response()->json(['message' => 'access_denied'], 403);
+            $displayName = trim((string) $userInfoResponse->json('name', ''));
+            if ($displayName === '') {
+                $displayName = $this->displayNameFromEmail($email);
+            }
+
+            $user = User::create([
+                'display_name' => $displayName,
+                'email' => $email,
+                'role' => User::ROLE_VIEWER,
+                'two_factor_enabled' => false,
+            ]);
         }
 
         return response()->json($this->sessionService->issueForUser(
@@ -80,5 +90,16 @@ class GoogleAuthController extends Controller
             $data['push_token'] ?? null,
         ));
     }
-}
 
+    private function displayNameFromEmail(string $email): string
+    {
+        $localPart = explode('@', $email)[0] ?? 'User';
+        $normalized = Str::of($localPart)
+            ->replace(['.', '_', '-'], ' ')
+            ->squish()
+            ->title()
+            ->toString();
+
+        return $normalized !== '' ? $normalized : 'User';
+    }
+}
