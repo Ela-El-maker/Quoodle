@@ -45,6 +45,7 @@ public enum OnboardingDetectState
 {
     Idle,
     Checking,
+    Enrolled,
     NotEnrolled
 }
 

@@ -101,6 +101,23 @@ public sealed class OnboardingViewModel : ObservableObject, IDisposable
 
     public string EnrollmentDeviceId => _snapshot.DeviceId;
 
+    public string EnrollmentDeviceIdSuffix
+    {
+        get
+        {
+            var normalized = new string((EnrollmentDeviceId ?? string.Empty)
+                .Where(char.IsLetterOrDigit)
+                .ToArray())
+                .ToUpperInvariant();
+            if (normalized.Length <= 6)
+            {
+                return normalized;
+            }
+
+            return normalized[^6..];
+        }
+    }
+
     public string EnrollmentPlatform => Environment.OSVersion.VersionString;
 
     public string EnrollmentAgentVersion => _snapshot.AgentVersion;
@@ -202,6 +219,7 @@ public sealed class OnboardingViewModel : ObservableObject, IDisposable
         RaisePropertyChanged(nameof(PairingString));
         RaisePropertyChanged(nameof(EnrollmentDeviceName));
         RaisePropertyChanged(nameof(EnrollmentDeviceId));
+        RaisePropertyChanged(nameof(EnrollmentDeviceIdSuffix));
         RaisePropertyChanged(nameof(EnrollmentPlatform));
         RaisePropertyChanged(nameof(EnrollmentAgentVersion));
         RaisePropertyChanged(nameof(EnrollmentAt));

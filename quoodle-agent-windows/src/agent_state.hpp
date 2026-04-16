@@ -8,6 +8,7 @@ public:
         : device_id_(std::move(device_id)) {}
 
     const std::string& device_id() const { return device_id_; }
+    void set_device_id(const std::string& device_id) { device_id_ = device_id; }
     const std::string& session_id() const { return session_id_; }
     void set_session_id(const std::string& session_id) { session_id_ = session_id; }
 

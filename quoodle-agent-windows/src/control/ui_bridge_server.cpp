@@ -184,10 +184,13 @@ namespace control
             {"service_mode", status.service_mode},
             {"communicator_present", status.communicator_present},
             {"connected", status.connected},
+            {"authenticated", status.authenticated},
             {"connection_state", status.connection_state},
+            {"auth_state", status.auth_state},
             {"reconnect_attempts", status.reconnect_attempts},
             {"endpoint", status.endpoint},
             {"device_id", status.device_id},
+            {"effective_device_id", status.effective_device_id},
             {"agent_pubkey_b64", status.agent_pubkey_b64},
             {"timestamp_utc", status.timestamp_utc},
         };

@@ -85,15 +85,35 @@ static control::UiBridgeStatus read_ui_bridge_status()
     {
         status.communicator_present = true;
         status.connected = comm->is_connected();
+        status.authenticated = comm->is_authenticated();
         status.connection_state = connection_state_to_string(comm->state());
+        status.auth_state = comm->auth_state();
         status.reconnect_attempts = comm->reconnect_attempts();
+        const auto runtimeEndpoint = comm->effective_endpoint();
+        const auto runtimeDeviceId = comm->effective_device_id();
+        if (!runtimeEndpoint.empty())
+        {
+            status.endpoint = runtimeEndpoint;
+        }
+        if (!runtimeDeviceId.empty())
+        {
+            status.device_id = runtimeDeviceId;
+            status.effective_device_id = runtimeDeviceId;
+        }
+        else
+        {
+            status.effective_device_id = status.device_id;
+        }
     }
     else
     {
         status.communicator_present = false;
         status.connected = false;
+        status.authenticated = false;
         status.connection_state = "disconnected";
+        status.auth_state = "disconnected";
         status.reconnect_attempts = 0;
+        status.effective_device_id = status.device_id;
     }
     return status;
 }
@@ -198,8 +218,7 @@ static std::unique_ptr<Communicator> build_communicator()
 
     if (cfg.jwt.empty())
     {
-        Logger::log(LogLevel::Error, "Missing AGENT_JWT environment variable; cannot build AUTH message.");
-        return nullptr;
+        Logger::log(LogLevel::Warn, "AGENT_JWT not set; starting in discovery mode (pending pairing).");
     }
 
     Logger::log(LogLevel::Info, "Agent signing pubkey: " + activePubkey);

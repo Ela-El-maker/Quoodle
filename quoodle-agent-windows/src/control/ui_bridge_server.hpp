@@ -15,10 +15,13 @@ namespace control
     bool service_mode{false};
     bool communicator_present{false};
     bool connected{false};
+    bool authenticated{false};
     std::string connection_state{"disconnected"};
+    std::string auth_state{"disconnected"};
     std::uint32_t reconnect_attempts{0};
     std::string endpoint;
     std::string device_id;
+    std::string effective_device_id;
     std::string agent_pubkey_b64;
     std::string timestamp_utc;
   };

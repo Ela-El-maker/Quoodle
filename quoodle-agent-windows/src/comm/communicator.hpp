@@ -50,9 +50,25 @@ public:
   bool is_connected() const { return client_.is_connected(); }
 
   /**
+   * Check if transport is authenticated.
+   */
+  bool is_authenticated() const { return client_.is_authenticated(); }
+
+  /**
+   * Get latest auth state label.
+   */
+  std::string auth_state() const { return client_.auth_state(); }
+
+  /**
    * Get current connection state.
    */
   ConnectionState state() const { return client_.state(); }
+
+  /**
+   * Get current runtime endpoint/device identity used by transport.
+   */
+  std::string effective_endpoint() const { return client_.effective_endpoint(); }
+  std::string effective_device_id() const { return client_.effective_device_id(); }
 
   /**
    * Set callback for connection state changes.

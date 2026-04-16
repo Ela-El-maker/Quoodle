@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <functional>
+#include <mutex>
 #include <random>
 #include <string>
 #include <cstdint>
@@ -74,6 +75,26 @@ public:
   bool is_connected() const;
 
   /**
+   * Check if the current connection is authenticated.
+   */
+  bool is_authenticated() const;
+
+  /**
+   * Get the latest auth state label.
+   */
+  std::string auth_state() const;
+
+  /**
+   * Get the currently effective runtime endpoint.
+   */
+  std::string effective_endpoint() const;
+
+  /**
+   * Get the currently effective runtime device id.
+   */
+  std::string effective_device_id() const;
+
+  /**
    * Get current connection state.
    */
   ConnectionState state() const;
@@ -142,7 +163,13 @@ private:
   std::atomic<std::uint32_t> reconnect_attempts_{0};
   std::atomic<bool> force_sync_requested_{false};
   std::atomic<bool> force_reconnect_requested_{false};
+  std::atomic<bool> authenticated_{false};
   std::uint32_t current_delay_ms_{0};
+
+  mutable std::mutex runtime_meta_mutex_;
+  std::string runtime_auth_state_{"disconnected"};
+  std::string runtime_effective_endpoint_;
+  std::string runtime_effective_device_id_;
 
   // Random number generator for jitter
   std::mt19937 rng_;
@@ -184,4 +211,7 @@ private:
   bool kernel_category_sampled(const std::string &category);
   std::string normalize_kernel_payload_json(const std::string &payload_json, std::string &category_out, bool &masked);
   std::unordered_map<std::string, std::uint64_t> kernel_category_seen_;
+  void set_auth_state(const std::string &state, bool authenticated);
+  void set_runtime_identity(const std::string &endpoint, const std::string &device_id);
+  void reload_runtime_config();
 };

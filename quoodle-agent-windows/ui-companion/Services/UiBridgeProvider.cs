@@ -22,7 +22,9 @@ public sealed class UiBridgeProvider : IAgentStateProvider
     private const string UiBridgePipeName = "QuoodleAgentUiBridge";
     private const int PipeTimeoutMs = 1200;
     private const int PairingPollMaxAttempts = 90;
+    private const int PairingKeyWarmupAttempts = 8;
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan PairingKeyWarmupDelay = TimeSpan.FromMilliseconds(750);
 
     private readonly object _gate = new();
     private readonly MockAgentStateProvider _fallbackProvider = new();
@@ -35,6 +37,7 @@ public sealed class UiBridgeProvider : IAgentStateProvider
     private AgentStateSnapshot _snapshot = AgentStateSnapshot.CreateInitial();
     private bool _started;
     private bool _disposed;
+    private DateTimeOffset _lastSnapshotPublishedAtUtc = DateTimeOffset.MinValue;
     private bool _lastServiceInstalled;
     private string _lastServiceStatus = string.Empty;
     private string _lastDeviceId = string.Empty;
@@ -54,7 +57,7 @@ public sealed class UiBridgeProvider : IAgentStateProvider
         };
 
         _fallbackProvider.SnapshotChanged += HandleFallbackSnapshotChanged;
-        _baseSnapshot = _fallbackProvider.Snapshot;
+        _baseSnapshot = CreateRuntimeBaseline(_fallbackProvider.Snapshot);
         _snapshot = MergeSnapshot(_baseSnapshot, RuntimeProbeSnapshot());
 
         AddBridgeActivity(
@@ -101,7 +104,7 @@ public sealed class UiBridgeProvider : IAgentStateProvider
         }
 
         _pollTimer.Change(TimeSpan.Zero, PollInterval);
-        Publish(Snapshot);
+        PublishSnapshot(Snapshot, force: true);
     }
 
     public void Stop()
@@ -137,7 +140,7 @@ public sealed class UiBridgeProvider : IAgentStateProvider
 
     public void BeginPairing()
     {
-        var operationId = NextOnboardingOperationId();
+        _ = NextOnboardingOperationId();
         ClearPendingPairingData();
 
         UpdateBaseline(snapshot => snapshot with
@@ -155,10 +158,8 @@ public sealed class UiBridgeProvider : IAgentStateProvider
                 PairError = string.Empty,
                 EnrolledAtUtc = null
             },
-            CurrentActivity = "Requesting pairing token"
+            CurrentActivity = "Awaiting 6-digit pair code from control UI"
         });
-
-        _ = RequestPairingTokenAsync(operationId);
     }
 
     public void SelectPairMode(OnboardingPairMode mode)
@@ -216,14 +217,14 @@ public sealed class UiBridgeProvider : IAgentStateProvider
 
     public void VerifyTokenPairing()
     {
-        string pairToken;
+        string pairCode;
         var operationId = NextOnboardingOperationId();
         lock (_gate)
         {
-            pairToken = _pendingPairToken;
+            pairCode = _baseSnapshot.Onboarding.TokenDigits;
         }
 
-        if (string.IsNullOrWhiteSpace(pairToken))
+        if (pairCode.Length != 6)
         {
             UpdateBaseline(snapshot => snapshot with
             {
@@ -231,7 +232,7 @@ public sealed class UiBridgeProvider : IAgentStateProvider
                 {
                     PairMode = OnboardingPairMode.Token,
                     PairState = OnboardingPairState.TokenFailed,
-                    PairError = "No active pair token yet. Use QR mode to request one first."
+                    PairError = "Enter the 6-digit code shown in Control UI."
                 },
                 CurrentActivity = "Token pairing unavailable"
             });
@@ -246,15 +247,16 @@ public sealed class UiBridgeProvider : IAgentStateProvider
                 PairState = OnboardingPairState.TokenVerifying,
                 PairError = string.Empty
             },
-            CurrentActivity = "Waiting for mobile confirmation"
+            CurrentActivity = "Submitting pair code and waiting for confirmation"
         });
 
-        _ = WaitForPairConfirmationAsync(operationId, preferQrState: false);
+        _ = RequestPairingTokenAsync(operationId, pairCode, waitForConfirmation: true);
     }
 
     public void StartQrPairing()
     {
         var operationId = NextOnboardingOperationId();
+        ClearPendingPairingData();
         UpdateBaseline(snapshot => snapshot with
         {
             Onboarding = snapshot.Onboarding with
@@ -268,19 +270,7 @@ public sealed class UiBridgeProvider : IAgentStateProvider
             CurrentActivity = "Generating QR pairing payload"
         });
 
-        bool hasPendingToken;
-        lock (_gate)
-        {
-            hasPendingToken = !string.IsNullOrWhiteSpace(_pendingPairToken);
-        }
-
-        if (!hasPendingToken)
-        {
-            _ = RequestPairingTokenAsync(operationId);
-            return;
-        }
-
-        _ = WaitForPairConfirmationAsync(operationId, preferQrState: true);
+        _ = RequestPairingTokenAsync(operationId, pairCode: null, waitForConfirmation: true);
     }
 
     public void RetryPairing()
@@ -295,9 +285,10 @@ public sealed class UiBridgeProvider : IAgentStateProvider
                 PairMode = OnboardingPairMode.Token,
                 PairState = OnboardingPairState.TokenEntry,
                 TokenDigits = string.Empty,
+                PairingString = string.Empty,
                 PairError = string.Empty
             },
-            CurrentActivity = "Retry pairing"
+            CurrentActivity = "Awaiting 6-digit pair code from control UI"
         });
     }
 
@@ -483,9 +474,8 @@ public sealed class UiBridgeProvider : IAgentStateProvider
 
             probe = RuntimeProbeSnapshot();
             merged = MergeSnapshot(_baseSnapshot, probe);
-            _snapshot = merged;
         }
-        SnapshotChanged?.Invoke(this, merged);
+        PublishSnapshot(merged, force: true);
     }
 
     private void PollRuntime()
@@ -500,17 +490,21 @@ public sealed class UiBridgeProvider : IAgentStateProvider
         {
             var probe = RuntimeProbeSnapshot();
             merged = MergeSnapshot(_baseSnapshot, probe);
-            _snapshot = merged;
         }
-        SnapshotChanged?.Invoke(this, merged);
+        PublishSnapshot(merged, force: false);
     }
 
     private RuntimeProbe RuntimeProbeSnapshot()
     {
         var now = DateTimeOffset.UtcNow;
+        var agentJwt = ReadAgentJwt();
         if (TryProbeViaPipe(out var pipeStatus))
         {
-            AppendBridgeActivityIfChanged(now, true, pipeStatus.ServiceStatusLabel, pipeStatus.DeviceId);
+            var runtimeDeviceId = string.IsNullOrWhiteSpace(pipeStatus.EffectiveDeviceId)
+                ? pipeStatus.DeviceId
+                : pipeStatus.EffectiveDeviceId;
+            var enrollmentEvidence = IsPersistedEnrollment(runtimeDeviceId, agentJwt);
+            AppendBridgeActivityIfChanged(now, true, pipeStatus.ServiceStatusLabel, runtimeDeviceId);
             return new RuntimeProbe(
                 now,
                 true,
@@ -518,10 +512,13 @@ public sealed class UiBridgeProvider : IAgentStateProvider
                 pipeStatus.Connection,
                 true,
                 pipeStatus.DeviceId,
-                !string.IsNullOrWhiteSpace(pipeStatus.DeviceId),
+                enrollmentEvidence,
                 pipeStatus.ReconnectAttempts,
                 pipeStatus.Endpoint,
-                pipeStatus.AgentPubkey);
+                pipeStatus.AgentPubkey,
+                pipeStatus.IsAuthenticated,
+                pipeStatus.AuthState,
+                runtimeDeviceId);
         }
 
         var deviceId = ReadDeviceId();
@@ -531,6 +528,7 @@ public sealed class UiBridgeProvider : IAgentStateProvider
 
         AppendBridgeActivityIfChanged(now, installed, statusLabel, deviceId);
 
+        var enrollmentEvidenceFromFiles = IsPersistedEnrollment(deviceId, agentJwt);
         return new RuntimeProbe(
             now,
             installed,
@@ -538,26 +536,53 @@ public sealed class UiBridgeProvider : IAgentStateProvider
             connection,
             running,
             deviceId,
-            !string.IsNullOrWhiteSpace(deviceId),
+            enrollmentEvidenceFromFiles,
             0,
             string.Empty,
-            ReadRuntimeValue(AgentPubkeyPath));
+            ReadRuntimeValue(AgentPubkeyPath),
+            false,
+            "bridge_unavailable",
+            deviceId);
     }
 
     private AgentStateSnapshot MergeSnapshot(AgentStateSnapshot baseline, RuntimeProbe probe)
     {
-        var effectiveDeviceId = string.IsNullOrWhiteSpace(probe.DeviceId) ? baseline.DeviceId : probe.DeviceId;
-        var isPaired = probe.IsPaired || baseline.IsPaired;
+        var pendingDeviceId = _pendingPairDeviceId;
+        var runtimeDeviceId = !string.IsNullOrWhiteSpace(probe.EffectiveDeviceId)
+            ? probe.EffectiveDeviceId
+            : (string.IsNullOrWhiteSpace(probe.DeviceId) ? baseline.DeviceId : probe.DeviceId);
+        var effectiveDeviceId = runtimeDeviceId;
+        if (!string.IsNullOrWhiteSpace(pendingDeviceId) &&
+            baseline.Onboarding.Stage == OnboardingStage.Confirm &&
+            baseline.Onboarding.ConfirmState == OnboardingConfirmState.Registering)
+        {
+            // During ownership-confirmation handshake, trust the pairing session id.
+            // Runtime pipe can still be reporting a stale local device id from a previous run.
+            effectiveDeviceId = pendingDeviceId;
+        }
+        var ownershipPaired = probe.IsPaired || baseline.IsPaired;
+        var expectedDeviceId = !string.IsNullOrWhiteSpace(pendingDeviceId)
+            ? pendingDeviceId
+            : (string.IsNullOrWhiteSpace(baseline.DeviceId) ? runtimeDeviceId : baseline.DeviceId);
+        var runtimeIdentityMatches = string.IsNullOrWhiteSpace(expectedDeviceId)
+            || string.Equals(runtimeDeviceId, expectedDeviceId, StringComparison.OrdinalIgnoreCase);
+        var isRealtimeOnline = probe.Connection == ConnectionState.Connected && probe.IsAuthenticated;
+        var enrollmentGateMet = ownershipPaired && isRealtimeOnline && runtimeIdentityMatches;
 
-        var onboarding = isPaired
-            ? baseline.Onboarding with
+        var onboarding = baseline.Onboarding;
+        if (ownershipPaired)
+        {
+            onboarding = baseline.Onboarding with
             {
                 Stage = OnboardingStage.Confirm,
-                ConfirmState = OnboardingConfirmState.EnrollmentComplete,
-                EnrolledAtUtc = baseline.Onboarding.EnrolledAtUtc ?? probe.ObservedAtUtc,
+                DetectState = OnboardingDetectState.Enrolled,
+                ConfirmState = enrollmentGateMet ? OnboardingConfirmState.EnrollmentComplete : OnboardingConfirmState.Registering,
+                EnrolledAtUtc = enrollmentGateMet
+                    ? (baseline.Onboarding.EnrolledAtUtc ?? probe.ObservedAtUtc)
+                    : baseline.Onboarding.EnrolledAtUtc,
                 PairError = string.Empty
-            }
-            : baseline.Onboarding;
+            };
+        }
 
         var health = probe.IsServiceInstalled
             ? (probe.IsServiceRunning ? baseline.Health : HealthState.Warning)
@@ -568,16 +593,19 @@ public sealed class UiBridgeProvider : IAgentStateProvider
         var facts = BuildDeviceFacts(
             baseline.DeviceFacts,
             effectiveDeviceId,
-            isPaired,
+            ownershipPaired,
             probe.ServiceStatusLabel,
             probe.Connection,
-            probe.ObservedAtUtc);
+            probe.IsAuthenticated,
+            probe.AuthState);
 
         var updatedIdentity = baseline.Configuration.DeviceIdentity with
         {
             DeviceId = effectiveDeviceId,
-            EnrolledState = isPaired ? "Enrolled" : "Not Enrolled",
-            EnrolledAtUtc = isPaired ? baseline.Configuration.DeviceIdentity.EnrolledAtUtc ?? probe.ObservedAtUtc : null,
+            EnrolledState = ownershipPaired ? "Enrolled" : "Not Enrolled",
+            EnrolledAtUtc = enrollmentGateMet
+                ? baseline.Configuration.DeviceIdentity.EnrolledAtUtc ?? probe.ObservedAtUtc
+                : baseline.Configuration.DeviceIdentity.EnrolledAtUtc,
             LocalStoragePath = DeviceIdPath
         };
 
@@ -591,21 +619,35 @@ public sealed class UiBridgeProvider : IAgentStateProvider
             Transport = transport
         };
 
-        var showOnboardingActivity = !isPaired || onboarding.ConfirmState != OnboardingConfirmState.EnrollmentComplete;
-        var activityText = showOnboardingActivity && !string.IsNullOrWhiteSpace(baseline.CurrentActivity)
-            ? baseline.CurrentActivity
-            : BuildCurrentActivity(probe);
+        var activityText = BuildCurrentActivity(probe);
+        if (ownershipPaired && !enrollmentGateMet)
+        {
+            activityText = runtimeIdentityMatches
+                ? "Pairing confirmed. Waiting for first authenticated heartbeat"
+                : "Pairing confirmed. Waiting for runtime identity reconciliation";
+        }
+        else if (ownershipPaired && enrollmentGateMet)
+        {
+            activityText = "Enrollment complete";
+        }
+        else if (!string.IsNullOrWhiteSpace(baseline.CurrentActivity) &&
+                 (baseline.Onboarding.Stage == OnboardingStage.Detect || baseline.Onboarding.Stage == OnboardingStage.Pair))
+        {
+            activityText = baseline.CurrentActivity;
+        }
+
+        var shouldAdvanceHeartbeat = probe.IsServiceRunning && probe.IsAuthenticated && probe.Connection == ConnectionState.Connected;
 
         return baseline with
         {
-            IsPaired = isPaired,
+            IsPaired = ownershipPaired,
             Onboarding = onboarding,
             DeviceId = effectiveDeviceId,
             DeviceName = Environment.MachineName,
             Connection = probe.Connection,
             Health = health,
-            LastHeartbeatUtc = probe.IsServiceRunning ? probe.ObservedAtUtc : baseline.LastHeartbeatUtc,
-            LastSyncUtc = probe.IsServiceRunning ? probe.ObservedAtUtc : baseline.LastSyncUtc,
+            LastHeartbeatUtc = shouldAdvanceHeartbeat ? probe.ObservedAtUtc : baseline.LastHeartbeatUtc,
+            LastSyncUtc = shouldAdvanceHeartbeat ? probe.ObservedAtUtc : baseline.LastSyncUtc,
             ReconnectAttempts = probe.ReconnectAttempts > 0 ? probe.ReconnectAttempts : baseline.ReconnectAttempts,
             CurrentActivity = activityText,
             Activity = activity,
@@ -623,11 +665,15 @@ public sealed class UiBridgeProvider : IAgentStateProvider
 
         return probe.Connection switch
         {
-            ConnectionState.Connected => "Agent service running",
+            ConnectionState.Connected => probe.IsAuthenticated
+                ? "Agent service authenticated and online"
+                : "Agent transport connected; authentication pending",
             ConnectionState.Connecting => "Agent service starting",
             ConnectionState.Reconnecting => "Agent service transitioning",
             ConnectionState.Offline => "Agent service offline",
-            ConnectionState.AuthFailed => "Agent service auth failed",
+            ConnectionState.AuthFailed => string.IsNullOrWhiteSpace(probe.AuthState)
+                ? "Agent service auth failed"
+                : $"Agent service auth failed ({probe.AuthState})",
             _ => "Agent service state unknown"
         };
     }
@@ -651,7 +697,8 @@ public sealed class UiBridgeProvider : IAgentStateProvider
         bool isPaired,
         string serviceStatus,
         ConnectionState connection,
-        DateTimeOffset now)
+        bool isAuthenticated,
+        string authState)
     {
         var facts = baseline.ToDictionary(x => $"{x.Category}|{x.Label}", x => x);
 
@@ -659,8 +706,12 @@ public sealed class UiBridgeProvider : IAgentStateProvider
         facts["Identity|Device ID"] = new DeviceFact("Identity", "Device ID", deviceId);
         facts["Runtime|Pairing State"] = new DeviceFact("Runtime", "Pairing State", isPaired ? "Paired" : "Not paired");
         facts["Runtime|Connection"] = new DeviceFact("Runtime", "Connection", connection.ToString());
+        facts["Runtime|Auth"] = new DeviceFact("Runtime", "Auth", isAuthenticated ? "authenticated" : (string.IsNullOrWhiteSpace(authState) ? "pending" : authState));
         facts["Sync/Health|Service Status"] = new DeviceFact("Sync/Health", "Service Status", serviceStatus);
-        facts["Sync/Health|Last Heartbeat"] = new DeviceFact("Sync/Health", "Last Heartbeat", now.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss"));
+        facts["Sync/Health|Last Heartbeat"] = new DeviceFact(
+            "Sync/Health",
+            "Last Heartbeat",
+            connection == ConnectionState.Connected && isAuthenticated ? "live" : "waiting");
 
         return facts.Values
             .OrderBy(x => x.Category, StringComparer.OrdinalIgnoreCase)
@@ -728,6 +779,102 @@ public sealed class UiBridgeProvider : IAgentStateProvider
         }
     }
 
+    private static string ReadAgentJwt()
+    {
+        return ReadRuntimeValue(AgentJwtPath);
+    }
+
+    private static bool HasPersistedEnrollment()
+    {
+        return IsPersistedEnrollment(ReadDeviceId(), ReadAgentJwt());
+    }
+
+    private static bool IsPersistedEnrollment(string deviceId, string agentJwt)
+    {
+        return !string.IsNullOrWhiteSpace(deviceId)
+            && IsAgentJwtUsable(agentJwt);
+    }
+
+    private static bool IsAgentJwtUsable(string agentJwt)
+    {
+        var token = (agentJwt ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return false;
+        }
+
+        var parts = token.Split('.');
+        if (parts.Length < 2)
+        {
+            return false;
+        }
+
+        var payloadJson = TryDecodeBase64Url(parts[1]);
+        if (string.IsNullOrWhiteSpace(payloadJson))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(payloadJson);
+            if (!doc.RootElement.TryGetProperty("exp", out var expNode))
+            {
+                return true;
+            }
+
+            long expUnix;
+            switch (expNode.ValueKind)
+            {
+                case JsonValueKind.Number when expNode.TryGetInt64(out var parsedNumber):
+                    expUnix = parsedNumber;
+                    break;
+                case JsonValueKind.String when long.TryParse(expNode.GetString(), out var parsedString):
+                    expUnix = parsedString;
+                    break;
+                default:
+                    return false;
+            }
+
+            if (expUnix <= 0)
+            {
+                return false;
+            }
+
+            var expiresAt = DateTimeOffset.FromUnixTimeSeconds(expUnix);
+            return expiresAt > DateTimeOffset.UtcNow.AddSeconds(15);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string TryDecodeBase64Url(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var normalized = value.Replace('-', '+').Replace('_', '/');
+        var padding = normalized.Length % 4;
+        if (padding is > 0 and < 4)
+        {
+            normalized = normalized.PadRight(normalized.Length + (4 - padding), '=');
+        }
+
+        try
+        {
+            var bytes = Convert.FromBase64String(normalized);
+            return Encoding.UTF8.GetString(bytes);
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
     private static (bool installed, ServiceControllerStatus status, string label) QueryServiceStatus()
     {
         try
@@ -786,6 +933,9 @@ public sealed class UiBridgeProvider : IAgentStateProvider
             Connection: ConnectionState.Offline,
             Endpoint: string.Empty,
             DeviceId: string.Empty,
+            EffectiveDeviceId: string.Empty,
+            IsAuthenticated: false,
+            AuthState: "bridge_unavailable",
             ReconnectAttempts: 0,
             AgentPubkey: string.Empty);
 
@@ -806,11 +956,22 @@ public sealed class UiBridgeProvider : IAgentStateProvider
         var serviceMode = ReadBool(statusNode, "service_mode", false);
         var communicatorPresent = ReadBool(statusNode, "communicator_present", false);
         var connected = ReadBool(statusNode, "connected", false);
+        var authenticated = ReadBool(statusNode, "authenticated", false);
         var connectionRaw = ReadString(statusNode, "connection_state");
+        var authState = ReadString(statusNode, "auth_state");
         var endpoint = ReadString(statusNode, "endpoint");
         var deviceId = ReadString(statusNode, "device_id");
+        var effectiveDeviceId = ReadString(statusNode, "effective_device_id");
         var reconnectAttempts = ReadInt(statusNode, "reconnect_attempts", 0);
         var agentPubkey = ReadString(statusNode, "agent_pubkey_b64");
+        if (string.IsNullOrWhiteSpace(effectiveDeviceId))
+        {
+            effectiveDeviceId = deviceId;
+        }
+        if (string.IsNullOrWhiteSpace(authState))
+        {
+            authState = authenticated ? "authenticated" : "auth_pending";
+        }
 
         var statusLabel = serviceMode
             ? $"Service ({connectionRaw})"
@@ -825,6 +986,9 @@ public sealed class UiBridgeProvider : IAgentStateProvider
             connected ? ConnectionState.Connected : ParseConnectionFromWire(connectionRaw),
             endpoint,
             deviceId,
+            effectiveDeviceId,
+            authenticated,
+            authState,
             reconnectAttempts,
             agentPubkey);
 
@@ -1025,9 +1189,8 @@ public sealed class UiBridgeProvider : IAgentStateProvider
             _baseSnapshot = updater(_baseSnapshot);
             var probe = RuntimeProbeSnapshot();
             merged = MergeSnapshot(_baseSnapshot, probe);
-            _snapshot = merged;
         }
-        SnapshotChanged?.Invoke(this, merged);
+        PublishSnapshot(merged, force: true);
     }
 
     private async Task CompleteEnrollmentProbeAsync(int operationId)
@@ -1038,10 +1201,16 @@ public sealed class UiBridgeProvider : IAgentStateProvider
             return;
         }
 
+        var probe = RuntimeProbeSnapshot();
+        var persistedEnrollment = probe.IsPaired;
+        var realtimeReady = persistedEnrollment
+            && probe.IsAuthenticated
+            && probe.Connection == ConnectionState.Connected
+            && !string.IsNullOrWhiteSpace(probe.EffectiveDeviceId);
         UpdateBaseline(snapshot =>
         {
-            var paired = snapshot.IsPaired || !string.IsNullOrWhiteSpace(ReadDeviceId());
-            if (paired)
+            var paired = snapshot.IsPaired || persistedEnrollment;
+            if (paired && realtimeReady)
             {
                 var now = DateTimeOffset.UtcNow;
                 return snapshot with
@@ -1055,7 +1224,23 @@ public sealed class UiBridgeProvider : IAgentStateProvider
                         EnrolledAtUtc = snapshot.Onboarding.EnrolledAtUtc ?? now,
                         PairError = string.Empty
                     },
-                    CurrentActivity = "Device already enrolled"
+                    CurrentActivity = "Device already enrolled and authenticated"
+                };
+            }
+
+            if (paired)
+            {
+                return snapshot with
+                {
+                    IsPaired = true,
+                    Onboarding = snapshot.Onboarding with
+                    {
+                        Stage = OnboardingStage.Confirm,
+                        DetectState = OnboardingDetectState.Enrolled,
+                        ConfirmState = OnboardingConfirmState.Registering,
+                        PairError = string.Empty
+                    },
+                    CurrentActivity = "Pairing found. Waiting for first authenticated heartbeat"
                 };
             }
 
@@ -1072,11 +1257,11 @@ public sealed class UiBridgeProvider : IAgentStateProvider
         });
     }
 
-    private async Task RequestPairingTokenAsync(int operationId)
+    private async Task RequestPairingTokenAsync(int operationId, string? pairCode = null, bool waitForConfirmation = false)
     {
         try
         {
-            var pubkey = ResolveAgentPublicKey();
+            var pubkey = await ResolveAgentPublicKeyForPairingAsync().ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(pubkey))
             {
                 UpdateBaseline(snapshot => snapshot with
@@ -1084,7 +1269,7 @@ public sealed class UiBridgeProvider : IAgentStateProvider
                     Onboarding = snapshot.Onboarding with
                     {
                         PairState = OnboardingPairState.TokenFailed,
-                        PairError = "Agent signing public key not available. Start the agent runtime once, then retry."
+                        PairError = "Agent signing key not available. Ensure QuoodleAgent service is running, then retry pairing."
                     },
                     CurrentActivity = "Pairing failed: missing agent key"
                 });
@@ -1099,6 +1284,10 @@ public sealed class UiBridgeProvider : IAgentStateProvider
                 ["hwid"] = hwid,
                 ["pubkey"] = pubkey
             };
+            if (!string.IsNullOrWhiteSpace(pairCode))
+            {
+                payload["pair_code"] = new string(pairCode.Where(char.IsDigit).Take(6).ToArray());
+            }
 
             using var pairResp = await _pairingHttp.PostAsJsonAsync($"{_controlPlaneBaseUrl}/api/pair/request", payload).ConfigureAwait(false);
             var pairRaw = await pairResp.Content.ReadAsStringAsync().ConfigureAwait(false);
@@ -1138,7 +1327,9 @@ public sealed class UiBridgeProvider : IAgentStateProvider
                 return;
             }
 
-            var pairSessionId = await TryCreatePairSessionAsync().ConfigureAwait(false);
+            var pairSessionId = string.IsNullOrWhiteSpace(pairCode)
+                ? await TryCreatePairSessionAsync().ConfigureAwait(false)
+                : string.Empty;
             var pairingString = BuildPairingPayload(pairToken, pairSessionId, deviceId);
 
             if (!IsCurrentOnboardingOperation(operationId))
@@ -1151,19 +1342,29 @@ public sealed class UiBridgeProvider : IAgentStateProvider
             UpdateBaseline(snapshot =>
             {
                 var nextDeviceId = string.IsNullOrWhiteSpace(deviceId) ? snapshot.DeviceId : deviceId;
+                var isTokenPairFlow = !string.IsNullOrWhiteSpace(pairCode);
+                var nextStage = isTokenPairFlow ? OnboardingStage.Confirm : OnboardingStage.Pair;
+                var nextPairMode = isTokenPairFlow ? OnboardingPairMode.Token : snapshot.Onboarding.PairMode;
+                var nextPairState = nextPairMode == OnboardingPairMode.Qr
+                    ? OnboardingPairState.QrWaiting
+                    : (waitForConfirmation ? OnboardingPairState.TokenVerifying : OnboardingPairState.TokenEntry);
                 return snapshot with
                 {
                     DeviceId = nextDeviceId,
                     Onboarding = snapshot.Onboarding with
                     {
-                        Stage = OnboardingStage.Pair,
-                        PairState = snapshot.Onboarding.PairMode == OnboardingPairMode.Qr
-                            ? OnboardingPairState.QrWaiting
-                            : OnboardingPairState.TokenEntry,
+                        Stage = nextStage,
+                        PairMode = nextPairMode,
+                        PairState = nextPairState,
+                        ConfirmState = isTokenPairFlow
+                            ? OnboardingConfirmState.Registering
+                            : snapshot.Onboarding.ConfirmState,
                         PairingString = pairingString,
                         PairError = string.Empty
                     },
-                    CurrentActivity = "Scan QR with phone app and confirm pairing",
+                    CurrentActivity = string.IsNullOrWhiteSpace(pairCode)
+                        ? "Scan QR with phone app and confirm pairing"
+                        : "Code accepted. Confirm device ownership in Control UI",
                     Configuration = snapshot.Configuration with
                     {
                         DeviceIdentity = snapshot.Configuration.DeviceIdentity with
@@ -1176,18 +1377,31 @@ public sealed class UiBridgeProvider : IAgentStateProvider
                 };
             });
 
-            TryWriteRuntimeValue(AgentPubkeyPath, pubkey);
-            AddBridgeActivity(DateTimeOffset.UtcNow, ActivitySeverity.Info, "Pair token issued", "Phone app can now scan the enrollment QR.");
-
-            var shouldWaitForQr = false;
-            lock (_gate)
+            if (!string.IsNullOrWhiteSpace(deviceId))
             {
-                shouldWaitForQr = _baseSnapshot.Onboarding.PairMode == OnboardingPairMode.Qr;
+                // Keep local runtime identity aligned with the control-plane pending device id.
+                _ = TryWriteRuntimeValue(DeviceIdPath, deviceId);
+                Environment.SetEnvironmentVariable("AGENT_DEVICE_ID", deviceId, EnvironmentVariableTarget.Process);
             }
 
-            if (shouldWaitForQr)
+            TryWriteRuntimeValue(AgentPubkeyPath, pubkey);
+            AddBridgeActivity(
+                DateTimeOffset.UtcNow,
+                ActivitySeverity.Info,
+                "Pair token issued",
+                string.IsNullOrWhiteSpace(pairCode)
+                    ? "Phone app can now scan the enrollment QR."
+                    : "Pair code accepted by control plane.");
+
+            var shouldWaitForConfirmation = waitForConfirmation;
+            lock (_gate)
             {
-                _ = WaitForPairConfirmationAsync(operationId, preferQrState: true);
+                shouldWaitForConfirmation = shouldWaitForConfirmation || _baseSnapshot.Onboarding.PairMode == OnboardingPairMode.Qr;
+            }
+
+            if (shouldWaitForConfirmation)
+            {
+                _ = WaitForPairConfirmationAsync(operationId, preferQrState: string.IsNullOrWhiteSpace(pairCode));
             }
         }
         catch (Exception ex)
@@ -1208,6 +1422,34 @@ public sealed class UiBridgeProvider : IAgentStateProvider
             });
             AddBridgeActivity(DateTimeOffset.UtcNow, ActivitySeverity.Error, "Pairing request error", ex.Message);
         }
+    }
+
+    private async Task<string> ResolveAgentPublicKeyForPairingAsync()
+    {
+        var pubkey = ResolveAgentPublicKey();
+        if (!string.IsNullOrWhiteSpace(pubkey))
+        {
+            return pubkey;
+        }
+
+        TryStartService();
+        AddBridgeActivity(
+            DateTimeOffset.UtcNow,
+            ActivitySeverity.Info,
+            "Pairing key warm-up",
+            "Attempting to read agent signing key from running runtime.");
+
+        for (var attempt = 0; attempt < PairingKeyWarmupAttempts; attempt++)
+        {
+            await Task.Delay(PairingKeyWarmupDelay).ConfigureAwait(false);
+            pubkey = ResolveAgentPublicKey();
+            if (!string.IsNullOrWhiteSpace(pubkey))
+            {
+                return pubkey;
+            }
+        }
+
+        return string.Empty;
     }
 
     private async Task<string> TryCreatePairSessionAsync()
@@ -1293,14 +1535,62 @@ public sealed class UiBridgeProvider : IAgentStateProvider
                 {
                     Onboarding = snapshot.Onboarding with
                     {
+                        Stage = OnboardingStage.Pair,
                         PairMode = preferQrState ? OnboardingPairMode.Qr : OnboardingPairMode.Token,
                         PairState = preferQrState ? OnboardingPairState.QrWaiting : OnboardingPairState.TokenFailed,
+                        ConfirmState = preferQrState ? snapshot.Onboarding.ConfirmState : OnboardingConfirmState.Registering,
                         PairError = pollResult.Error
                     },
                     CurrentActivity = "Pairing confirmation failed"
                 });
                 AddBridgeActivity(DateTimeOffset.UtcNow, ActivitySeverity.Error, "Pairing confirmation failed", pollResult.Error);
+                ClearPendingPairingData();
                 return;
+            }
+
+            if (pollResult.Pending && IsCurrentOnboardingOperation(operationId))
+            {
+                var elapsed = (attempt + 1) * 2;
+                UpdateBaseline(snapshot =>
+                {
+                    if (preferQrState && snapshot.Onboarding.Stage != OnboardingStage.Pair)
+                    {
+                        return snapshot;
+                    }
+
+                    if (!preferQrState && snapshot.Onboarding.Stage == OnboardingStage.Confirm)
+                    {
+                        return snapshot with
+                        {
+                            Onboarding = snapshot.Onboarding with
+                            {
+                                ConfirmState = OnboardingConfirmState.Registering,
+                                PairMode = OnboardingPairMode.Token,
+                                PairState = OnboardingPairState.TokenVerifying,
+                                PairError = string.Empty
+                            },
+                            CurrentActivity = $"Waiting for ownership confirmation in Control UI ({elapsed}s)"
+                        };
+                    }
+
+                    if (snapshot.Onboarding.Stage != OnboardingStage.Pair)
+                    {
+                        return snapshot;
+                    }
+
+                    return snapshot with
+                    {
+                        Onboarding = snapshot.Onboarding with
+                        {
+                            PairMode = preferQrState ? OnboardingPairMode.Qr : OnboardingPairMode.Token,
+                            PairState = preferQrState ? OnboardingPairState.QrWaiting : OnboardingPairState.TokenVerifying,
+                            PairError = string.Empty
+                        },
+                        CurrentActivity = preferQrState
+                            ? $"Waiting for mobile confirmation ({elapsed}s)"
+                            : $"Code accepted. Waiting for control-plane confirmation ({elapsed}s)"
+                    };
+                });
             }
 
             await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
@@ -1311,11 +1601,14 @@ public sealed class UiBridgeProvider : IAgentStateProvider
             return;
         }
 
-        var timeoutMessage = "Waiting for phone confirmation timed out. Retry QR pairing.";
+        var timeoutMessage = preferQrState
+            ? "Waiting for phone confirmation timed out. Retry QR pairing."
+            : "Waiting for control-plane confirmation timed out. Retry with a fresh pairing code.";
         UpdateBaseline(snapshot => snapshot with
         {
             Onboarding = snapshot.Onboarding with
             {
+                Stage = OnboardingStage.Pair,
                 PairMode = preferQrState ? OnboardingPairMode.Qr : OnboardingPairMode.Token,
                 PairState = preferQrState ? OnboardingPairState.QrWaiting : OnboardingPairState.TokenFailed,
                 PairError = timeoutMessage
@@ -1323,6 +1616,7 @@ public sealed class UiBridgeProvider : IAgentStateProvider
             CurrentActivity = "Pairing confirmation timed out"
         });
         AddBridgeActivity(DateTimeOffset.UtcNow, ActivitySeverity.Warning, "Pairing timeout", timeoutMessage);
+        ClearPendingPairingData();
     }
 
     private async Task<AgentTokenPollResult> PollAgentTokenAsync(string pairToken)
@@ -1427,25 +1721,26 @@ public sealed class UiBridgeProvider : IAgentStateProvider
                 Onboarding = snapshot.Onboarding with
                 {
                     Stage = OnboardingStage.Confirm,
-                    ConfirmState = OnboardingConfirmState.EnrollmentComplete,
+                    ConfirmState = OnboardingConfirmState.Registering,
                     PairState = OnboardingPairState.TokenEntry,
                     PairError = string.Empty,
-                    EnrolledAtUtc = now
+                    EnrolledAtUtc = snapshot.Onboarding.EnrolledAtUtc
                 },
-                CurrentActivity = "Pairing confirmed. Reconnecting agent runtime",
+                CurrentActivity = "Pairing confirmed. Waiting for first authenticated heartbeat",
                 Configuration = snapshot.Configuration with
                 {
                     DeviceIdentity = snapshot.Configuration.DeviceIdentity with
                     {
                         DeviceId = resolvedDeviceId,
                         EnrolledState = "Enrolled",
-                        EnrolledAtUtc = now
+                        EnrolledAtUtc = snapshot.Configuration.DeviceIdentity.EnrolledAtUtc
                     }
                 }
             };
         });
 
         AddBridgeActivity(now, ActivitySeverity.Info, "Pairing complete", "Persisted agent credentials and requested runtime reconnect.");
+        ClearPendingPairingData();
         TryStartService();
         _ = TrySendPipeCommand("reconnect", out _);
         PollRuntime();
@@ -1795,10 +2090,70 @@ public sealed class UiBridgeProvider : IAgentStateProvider
         return raw.Length <= 220 ? raw : raw[..220];
     }
 
-    private void Publish(AgentStateSnapshot snapshot)
+    private void PublishSnapshot(AgentStateSnapshot snapshot, bool force)
     {
-        Snapshot = snapshot;
+        AgentStateSnapshot previousSnapshot;
+        lock (_gate)
+        {
+            previousSnapshot = _snapshot;
+            _snapshot = snapshot;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var shouldPublish = force
+            || !AreSnapshotsMeaningfullyEqual(previousSnapshot, snapshot)
+            || (now - _lastSnapshotPublishedAtUtc) >= TimeSpan.FromSeconds(15);
+        if (!shouldPublish)
+        {
+            return;
+        }
+
+        _lastSnapshotPublishedAtUtc = now;
         SnapshotChanged?.Invoke(this, snapshot);
+    }
+
+    private static bool AreSnapshotsMeaningfullyEqual(AgentStateSnapshot left, AgentStateSnapshot right)
+    {
+        return left.IsPaired == right.IsPaired
+            && left.Onboarding == right.Onboarding
+            && string.Equals(left.DeviceId, right.DeviceId, StringComparison.Ordinal)
+            && string.Equals(left.DeviceName, right.DeviceName, StringComparison.Ordinal)
+            && left.Connection == right.Connection
+            && left.Health == right.Health
+            && left.ReconnectAttempts == right.ReconnectAttempts
+            && string.Equals(left.CurrentActivity, right.CurrentActivity, StringComparison.Ordinal)
+            && string.Equals(left.PolicyHash, right.PolicyHash, StringComparison.Ordinal)
+            && string.Equals(left.Configuration.DeviceIdentity.DeviceId, right.Configuration.DeviceIdentity.DeviceId, StringComparison.Ordinal)
+            && string.Equals(left.Configuration.DeviceIdentity.EnrolledState, right.Configuration.DeviceIdentity.EnrolledState, StringComparison.Ordinal)
+            && string.Equals(left.Configuration.Transport.Endpoint, right.Configuration.Transport.Endpoint, StringComparison.Ordinal);
+    }
+
+    private static AgentStateSnapshot CreateRuntimeBaseline(AgentStateSnapshot fallbackSnapshot)
+    {
+        var initial = AgentStateSnapshot.CreateInitial();
+        return initial with
+        {
+            IsPaired = false,
+            Onboarding = OnboardingFlowState.CreateInitial(),
+            DeviceId = initial.DeviceId,
+            DeviceName = Environment.MachineName,
+            CurrentActivity = "Waiting for sync",
+            Activity = Array.Empty<ActivityEntry>(),
+            CommandHistory = Array.Empty<CommandExecutionEntry>(),
+            WssMessageLog = Array.Empty<WssMessageLogRow>(),
+            CommandHistoryLog = Array.Empty<CommandHistoryRow>(),
+            KernelEvents = Array.Empty<KernelEventRow>(),
+            Configuration = fallbackSnapshot.Configuration with
+            {
+                DeviceIdentity = fallbackSnapshot.Configuration.DeviceIdentity with
+                {
+                    DeviceId = initial.DeviceId,
+                    EnrolledState = "Not Enrolled",
+                    EnrolledAtUtc = null
+                }
+            },
+            Settings = fallbackSnapshot.Settings
+        };
     }
 
     private sealed record RuntimeProbe(
@@ -1811,13 +2166,19 @@ public sealed class UiBridgeProvider : IAgentStateProvider
         bool IsPaired,
         int ReconnectAttempts,
         string Endpoint,
-        string AgentPubkey);
+        string AgentPubkey,
+        bool IsAuthenticated,
+        string AuthState,
+        string EffectiveDeviceId);
 
     private sealed record PipeRuntimeStatus(
         string ServiceStatusLabel,
         ConnectionState Connection,
         string Endpoint,
         string DeviceId,
+        string EffectiveDeviceId,
+        bool IsAuthenticated,
+        string AuthState,
         int ReconnectAttempts,
         string AgentPubkey);
 

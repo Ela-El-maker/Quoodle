@@ -2,12 +2,13 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Shapes;
+using Microsoft.UI.Xaml.Media.Imaging;
+using QRCoder;
 using Quoodle.Agent.UiCompanion.ViewModels;
 using System.ComponentModel;
-using System.Security.Cryptography;
-using System.Text;
+using System.Runtime.InteropServices.WindowsRuntime;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage.Streams;
 
 namespace Quoodle.Agent.UiCompanion.Views;
 
@@ -16,6 +17,8 @@ public sealed partial class OnboardingPage : Page
     private readonly OnboardingViewModel _vm;
     private readonly TextBox[] _tokenBoxes;
     private bool _syncingTokenBoxes;
+    private bool _renderQueued;
+    private string _lastRenderedQrPayload = string.Empty;
 
     public OnboardingPage()
     {
@@ -36,16 +39,33 @@ public sealed partial class OnboardingPage : Page
 
     private void QueueRender()
     {
-        if (DispatcherQueue.HasThreadAccess)
+        if (_renderQueued)
         {
-            Render();
             return;
         }
 
-        _ = DispatcherQueue.TryEnqueue(Render);
+        _renderQueued = true;
+        if (DispatcherQueue.HasThreadAccess)
+        {
+            _renderQueued = false;
+            RenderCore();
+            return;
+        }
+
+        _ = DispatcherQueue.TryEnqueue(() =>
+        {
+            _renderQueued = false;
+            RenderCore();
+        });
     }
 
     private void Render()
+    {
+        _renderQueued = false;
+        RenderCore();
+    }
+
+    private void RenderCore()
     {
         RenderStepRail();
         RenderDetectStage();
@@ -128,7 +148,16 @@ public sealed partial class OnboardingPage : Page
 
         if (_vm.IsPairQrMode)
         {
-            RenderQrPattern(_vm.PairingString);
+            if (!string.Equals(_lastRenderedQrPayload, _vm.PairingString, StringComparison.Ordinal))
+            {
+                _ = RenderQrPatternAsync(_vm.PairingString);
+                _lastRenderedQrPayload = _vm.PairingString;
+            }
+        }
+        else
+        {
+            _lastRenderedQrPayload = string.Empty;
+            QrImage.Source = null;
         }
     }
 
@@ -142,6 +171,10 @@ public sealed partial class OnboardingPage : Page
 
         RegisteringPanel.Visibility = _vm.IsRegistering ? Visibility.Visible : Visibility.Collapsed;
         EnrollmentCompletePanel.Visibility = _vm.IsEnrollmentComplete ? Visibility.Visible : Visibility.Collapsed;
+
+        PendingDeviceNameText.Text = _vm.EnrollmentDeviceName;
+        PendingDeviceIdSuffixText.Text = _vm.EnrollmentDeviceIdSuffix;
+        RegisteringStatusText.Text = _vm.StatusLine;
 
         EnrollmentDeviceNameText.Text = _vm.EnrollmentDeviceName;
         EnrollmentDeviceIdText.Text = _vm.EnrollmentDeviceId;
@@ -218,84 +251,21 @@ public sealed partial class OnboardingPage : Page
         }
     }
 
-    private void RenderQrPattern(string payload)
+    private async Task RenderQrPatternAsync(string payload)
     {
-        QrGrid.Children.Clear();
-        QrGrid.RowDefinitions.Clear();
-        QrGrid.ColumnDefinitions.Clear();
+        var safePayload = string.IsNullOrWhiteSpace(payload) ? "quoodle_pair_pending" : payload;
+        using var generator = new QRCodeGenerator();
+        using var qrData = generator.CreateQrCode(safePayload, QRCodeGenerator.ECCLevel.M);
+        var qrPng = new PngByteQRCode(qrData);
+        var pngBytes = qrPng.GetGraphic(8);
 
-        const int size = 21;
-        for (var i = 0; i < size; i++)
-        {
-            QrGrid.RowDefinitions.Add(new RowDefinition());
-            QrGrid.ColumnDefinitions.Add(new ColumnDefinition());
-        }
+        using var stream = new InMemoryRandomAccessStream();
+        await stream.WriteAsync(pngBytes.AsBuffer());
+        stream.Seek(0);
 
-        var modules = BuildPseudoQrModules(payload, size);
-        for (var row = 0; row < size; row++)
-        {
-            for (var col = 0; col < size; col++)
-            {
-                var rect = new Rectangle
-                {
-                    Fill = modules[row, col] ? new SolidColorBrush(Microsoft.UI.Colors.Black) : new SolidColorBrush(Microsoft.UI.Colors.White)
-                };
-
-                Grid.SetRow(rect, row);
-                Grid.SetColumn(rect, col);
-                QrGrid.Children.Add(rect);
-            }
-        }
-    }
-
-    private static bool[,] BuildPseudoQrModules(string payload, int size)
-    {
-        var modules = new bool[size, size];
-
-        PlaceFinder(modules, 0, 0);
-        PlaceFinder(modules, 0, size - 7);
-        PlaceFinder(modules, size - 7, 0);
-
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(payload));
-        var bit = 0;
-        for (var row = 0; row < size; row++)
-        {
-            for (var col = 0; col < size; col++)
-            {
-                if (InFinderArea(row, col, size))
-                {
-                    continue;
-                }
-
-                var byteIdx = (bit / 8) % hash.Length;
-                var bitMask = 1 << (bit % 8);
-                modules[row, col] = (hash[byteIdx] & bitMask) != 0;
-                bit++;
-            }
-        }
-
-        return modules;
-    }
-
-    private static bool InFinderArea(int row, int col, int size)
-    {
-        bool topLeft = row < 7 && col < 7;
-        bool topRight = row < 7 && col >= size - 7;
-        bool bottomLeft = row >= size - 7 && col < 7;
-        return topLeft || topRight || bottomLeft;
-    }
-
-    private static void PlaceFinder(bool[,] modules, int rowStart, int colStart)
-    {
-        for (var row = 0; row < 7; row++)
-        {
-            for (var col = 0; col < 7; col++)
-            {
-                var isOuter = row == 0 || row == 6 || col == 0 || col == 6;
-                var isInner = row >= 2 && row <= 4 && col >= 2 && col <= 4;
-                modules[rowStart + row, colStart + col] = isOuter || isInner;
-            }
-        }
+        var bitmap = new BitmapImage();
+        await bitmap.SetSourceAsync(stream);
+        QrImage.Source = bitmap;
     }
 
     private Brush BrushOf(string key)

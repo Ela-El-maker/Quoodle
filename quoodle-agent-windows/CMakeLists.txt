@@ -101,8 +101,36 @@ include(FetchContent)
 # ixwebsocket enables zlib by default and hard-requires a host zlib package.
 # For local Windows E2E builds we keep transport simple and disable zlib to
 # avoid an external dependency that is not otherwise needed.
+option(AGENT_ENABLE_TLS "Enable TLS support for secure wss:// gateway transport" ON)
 set(USE_ZLIB OFF CACHE BOOL "Disable ixwebsocket zlib support" FORCE)
+set(USE_TLS ${AGENT_ENABLE_TLS} CACHE BOOL "Enable ixwebsocket TLS support" FORCE)
 set(IXWEBSOCKET_INSTALL OFF CACHE BOOL "Disable ixwebsocket install target in superbuild" FORCE)
+
+# On Windows, automatically provide mbedTLS for ixwebsocket so wss:// works
+# out-of-the-box without requiring a system-level TLS package install.
+if(WIN32 AND AGENT_ENABLE_TLS)
+  set(USE_OPEN_SSL OFF CACHE BOOL "Do not force OpenSSL on Windows by default" FORCE)
+  set(USE_MBED_TLS ON CACHE BOOL "Use mbedTLS backend for ixwebsocket on Windows" FORCE)
+  set(ENABLE_PROGRAMS OFF CACHE BOOL "Disable mbedTLS programs" FORCE)
+  set(ENABLE_TESTING OFF CACHE BOOL "Disable mbedTLS tests" FORCE)
+  set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "Relax mbedTLS warning policy in superbuild" FORCE)
+
+  FetchContent_Declare(
+    mbedtls
+    URL https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.2/mbedtls-3.6.2.tar.bz2
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  )
+  FetchContent_MakeAvailable(mbedtls)
+
+  # Feed ixwebsocket's expected variables so it doesn't require find_package(MbedTLS).
+  set(MBEDTLS_FOUND TRUE)
+  # We bypass FindMbedTLS, so set this explicitly to enable ixwebsocket's
+  # mbedTLS v3 call-path (mbedtls_pk_parse_keyfile with RNG args).
+  set(MBEDTLS_VERSION_GREATER_THAN_3 TRUE)
+  set(MBEDTLS_INCLUDE_DIRS "${mbedtls_SOURCE_DIR}/include")
+  set(MBEDTLS_LIBRARIES mbedtls mbedx509 mbedcrypto)
+  message(STATUS "Using bundled mbedTLS for ixwebsocket TLS (wss enabled)")
+endif()
 
 FetchContent_Declare(
   ixwebsocket
@@ -136,6 +164,12 @@ endif()
 
 FetchContent_MakeAvailable(ixwebsocket)
 FetchContent_MakeAvailable(nlohmann_json)
+
+if(WIN32 AND AGENT_ENABLE_TLS AND TARGET ixwebsocket)
+  # We inject MBEDTLS_* variables directly (without find_package), so
+  # ixwebsocket's internal v3 check is skipped. Force the v3 API path.
+  target_compile_definitions(ixwebsocket PRIVATE IXWEBSOCKET_USE_MBED_TLS_MIN_VERSION_3)
+endif()
 
 add_executable(agent
   src/main.cpp

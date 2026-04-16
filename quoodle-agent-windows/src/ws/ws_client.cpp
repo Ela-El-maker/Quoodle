@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <cstdlib>
 #include <ctime>
+#include <filesystem>
+#include <fstream>
 #include <mutex>
 #include <sstream>
 
@@ -22,6 +24,7 @@
 #include "../command/lock_screen_command.hpp"
 #include "../command/observability_command.hpp"
 #include "../command/screenshot_command.hpp"
+#include "../config/config_manager.hpp"
 #include "../kernel/ioctl_client.hpp"
 #include "ws_protocol.hpp"
 
@@ -51,7 +54,15 @@ static bool is_signature_verification_required()
 static bool is_kernel_driver_enabled()
 {
   const char *env = std::getenv("QUOODLE_USE_KERNEL_DRIVER");
-  return env && std::string(env) != "0";
+  if (!env || !*env)
+  {
+    return true;
+  }
+
+  std::string value(env);
+  std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch)
+                 { return static_cast<char>(std::tolower(ch)); });
+  return !(value == "0" || value == "false" || value == "off" || value == "no");
 }
 
 static std::string trim_trailing_slash(const std::string &url)
@@ -84,6 +95,147 @@ static std::string now_iso_utc()
                 tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
                 tm.tm_hour, tm.tm_min, tm.tm_sec);
   return std::string(buffer);
+}
+
+static std::string trim_copy(const std::string &value)
+{
+  const auto begin = value.find_first_not_of(" \t\r\n");
+  if (begin == std::string::npos)
+  {
+    return {};
+  }
+  const auto end = value.find_last_not_of(" \t\r\n");
+  return value.substr(begin, end - begin + 1);
+}
+
+static std::string normalize_base64url(std::string value)
+{
+  std::replace(value.begin(), value.end(), '-', '+');
+  std::replace(value.begin(), value.end(), '_', '/');
+  while ((value.size() % 4U) != 0U)
+  {
+    value.push_back('=');
+  }
+  return value;
+}
+
+static bool decode_base64(const std::string &input, std::string &out)
+{
+  static const int kDecodeTable[256] = {
+      -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+      -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+      -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,62,-1,-1,-1,63,
+      52,53,54,55,56,57,58,59,60,61,-1,-1,-1,-1,-1,-1,
+      -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,
+      15,16,17,18,19,20,21,22,23,24,25,-1,-1,-1,-1,-1,
+      -1,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,
+      41,42,43,44,45,46,47,48,49,50,51,-1,-1,-1,-1,-1,
+      -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+      -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+      -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+      -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+      -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+      -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+      -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+      -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+  };
+
+  out.clear();
+  int val = 0;
+  int bits = -8;
+  for (unsigned char c : input)
+  {
+    if (c == '=')
+    {
+      break;
+    }
+    const int decoded = kDecodeTable[c];
+    if (decoded < 0)
+    {
+      return false;
+    }
+    val = (val << 6) + decoded;
+    bits += 6;
+    if (bits >= 0)
+    {
+      out.push_back(static_cast<char>((val >> bits) & 0xFF));
+      bits -= 8;
+    }
+  }
+  return true;
+}
+
+static std::string jwt_sub_from_token(const std::string &jwt)
+{
+  const auto first = jwt.find('.');
+  if (first == std::string::npos)
+  {
+    return {};
+  }
+  const auto second = jwt.find('.', first + 1);
+  if (second == std::string::npos || second <= first + 1)
+  {
+    return {};
+  }
+
+  const auto payload_b64url = jwt.substr(first + 1, second - first - 1);
+  std::string payload_json;
+  if (!decode_base64(normalize_base64url(payload_b64url), payload_json))
+  {
+    return {};
+  }
+
+  try
+  {
+    const auto payload = nlohmann::json::parse(payload_json);
+    if (!payload.contains("sub") || !payload["sub"].is_string())
+    {
+      return {};
+    }
+    return trim_copy(payload["sub"].get<std::string>());
+  }
+  catch (const std::exception &)
+  {
+    return {};
+  }
+}
+
+static std::filesystem::path runtime_device_id_path()
+{
+  if (const char *env = std::getenv("AGENT_DEVICE_ID_FILE"); env && *env)
+  {
+    return std::filesystem::path(env);
+  }
+  return std::filesystem::path("C:/ProgramData/Quoodle/device_id");
+}
+
+static bool write_runtime_device_id(const std::string &device_id, std::string &error_out)
+{
+  try
+  {
+    auto path = runtime_device_id_path();
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream out(path, std::ios::trunc);
+    if (!out)
+    {
+      error_out = "open_failed";
+      return false;
+    }
+    out << device_id << "\n";
+    out.flush();
+    if (!out.good())
+    {
+      error_out = "write_failed";
+      return false;
+    }
+    error_out.clear();
+    return true;
+  }
+  catch (const std::exception &ex)
+  {
+    error_out = ex.what();
+    return false;
+  }
 }
 
 static bool parse_ws_telemetry_to_http_payload(
@@ -389,6 +541,8 @@ WsClient::WsClient(const AgentConfig &config)
       current_delay_ms_(config.reconnection.initial_delay_ms),
       rng_(std::random_device{}())
 {
+  set_runtime_identity(config_.endpoint, config_.device_id);
+  set_auth_state("disconnected", false);
   if (!telemetry_queue_.open())
   {
     Logger::log(LogLevel::Warn, "telemetry queue unavailable; fallback buffering disabled");
@@ -402,6 +556,8 @@ WsClient::WsClient(std::string endpoint, std::string device_id)
 {
   config_.endpoint = std::move(endpoint);
   config_.device_id = std::move(device_id);
+  set_runtime_identity(config_.endpoint, config_.device_id);
+  set_auth_state("disconnected", false);
   current_delay_ms_ = config_.reconnection.initial_delay_ms;
   if (!telemetry_queue_.open())
   {
@@ -423,6 +579,29 @@ void WsClient::shutdown()
 bool WsClient::is_connected() const
 {
   return connection_state_.load(std::memory_order_acquire) == ConnectionState::Connected;
+}
+
+bool WsClient::is_authenticated() const
+{
+  return authenticated_.load(std::memory_order_acquire);
+}
+
+std::string WsClient::auth_state() const
+{
+  std::lock_guard<std::mutex> guard(runtime_meta_mutex_);
+  return runtime_auth_state_;
+}
+
+std::string WsClient::effective_endpoint() const
+{
+  std::lock_guard<std::mutex> guard(runtime_meta_mutex_);
+  return runtime_effective_endpoint_;
+}
+
+std::string WsClient::effective_device_id() const
+{
+  std::lock_guard<std::mutex> guard(runtime_meta_mutex_);
+  return runtime_effective_device_id_;
 }
 
 ConnectionState WsClient::state() const
@@ -448,6 +627,72 @@ void WsClient::request_sync_now()
 void WsClient::request_reconnect()
 {
   force_reconnect_requested_.store(true, std::memory_order_release);
+}
+
+void WsClient::set_auth_state(const std::string &state, bool authenticated)
+{
+  authenticated_.store(authenticated, std::memory_order_release);
+  std::lock_guard<std::mutex> guard(runtime_meta_mutex_);
+  runtime_auth_state_ = state;
+}
+
+void WsClient::set_runtime_identity(const std::string &endpoint, const std::string &device_id)
+{
+  std::lock_guard<std::mutex> guard(runtime_meta_mutex_);
+  runtime_effective_endpoint_ = endpoint;
+  runtime_effective_device_id_ = device_id;
+}
+
+void WsClient::reload_runtime_config()
+{
+  AgentConfig latest;
+  try
+  {
+    latest = ConfigManager::load_from_env();
+  }
+  catch (const std::exception &ex)
+  {
+    Logger::log(LogLevel::Warn, std::string("runtime config reload failed: ") + ex.what());
+    return;
+  }
+  const std::string jwt_sub = jwt_sub_from_token(latest.jwt);
+  if (!jwt_sub.empty() && jwt_sub != latest.device_id)
+  {
+    const auto previous_device_id = latest.device_id;
+    latest.device_id = jwt_sub;
+    std::string write_error;
+    if (write_runtime_device_id(jwt_sub, write_error))
+    {
+      Logger::log(LogLevel::Info, "runtime identity reconciled from JWT sub: " + previous_device_id + " -> " + jwt_sub);
+    }
+    else
+    {
+      Logger::log(LogLevel::Warn, "runtime identity reconcile write failed (" + write_error + "); using JWT sub in-memory");
+    }
+  }
+
+  bool changed = false;
+  if (latest.endpoint != config_.endpoint)
+  {
+    config_.endpoint = latest.endpoint;
+    changed = true;
+  }
+  if (latest.device_id != config_.device_id)
+  {
+    config_.device_id = latest.device_id;
+    state_impl_.set_device_id(config_.device_id);
+    changed = true;
+  }
+  if (latest.jwt != config_.jwt)
+  {
+    config_.jwt = latest.jwt;
+    changed = true;
+  }
+  if (changed)
+  {
+    set_runtime_identity(config_.endpoint, config_.device_id);
+    Logger::log(LogLevel::Info, "runtime transport config hot-reloaded from disk");
+  }
 }
 
 void WsClient::set_state(ConnectionState new_state, const std::string &reason)
@@ -973,6 +1218,8 @@ void WsClient::run()
 
   while (!shutdown_requested_.load(std::memory_order_acquire))
   {
+    reload_runtime_config();
+
     // Check max retries
     auto attempts = reconnect_attempts_.load(std::memory_order_acquire);
     if (config_.reconnection.max_retries > 0 && attempts >= config_.reconnection.max_retries)
@@ -1056,6 +1303,8 @@ void WsClient::run()
 bool WsClient::try_connect()
 {
   set_state(ConnectionState::Connecting);
+  set_auth_state("auth_pending", false);
+  set_runtime_identity(config_.endpoint, config_.device_id);
 
   ix::WebSocket socket;
   socket.setUrl(config_.endpoint);
@@ -1100,6 +1349,7 @@ bool WsClient::try_connect()
         if (msg->type == ix::WebSocketMessageType::Open) {
             connection_opened.store(true, std::memory_order_release);
             set_state(ConnectionState::Connected);
+            set_auth_state("auth_pending", false);
             
             // Reset backoff on successful connection
             if (config_.reconnection.reset_on_success) {
@@ -1108,7 +1358,14 @@ bool WsClient::try_connect()
             
             Logger::log(LogLevel::Info, "connected, sending AUTH");
             std::string auth_message;
-            if (!config_.jwt.empty()) {
+            if (!initial_message_.empty()) {
+                // Legacy fallback for older call sites that pre-build AUTH once.
+                Logger::log(LogLevel::Warn, "Reusing legacy initial AUTH payload");
+                auth_message = initial_message_;
+            } else {
+                if (config_.jwt.empty()) {
+                    Logger::log(LogLevel::Warn, "AGENT_JWT not set; sending discovery AUTH for unpaired visibility.");
+                }
                 auto envelope = build_auth_envelope(config_.device_id, config_.jwt);
                 auth_message = build_signed_auth_json(std::move(envelope));
                 if (auth_message.empty()) {
@@ -1117,15 +1374,6 @@ bool WsClient::try_connect()
                     Logger::log(LogLevel::Error, close_reason);
                     return;
                 }
-            } else if (!initial_message_.empty()) {
-                // Legacy fallback for older call sites that pre-build AUTH once.
-                Logger::log(LogLevel::Warn, "AGENT_JWT not set; reusing legacy initial AUTH payload");
-                auth_message = initial_message_;
-            } else {
-                close_reason = "missing AGENT_JWT and initial AUTH payload";
-                connection_error.store(true, std::memory_order_release);
-                Logger::log(LogLevel::Error, close_reason);
-                return;
             }
 
             {
@@ -1149,6 +1397,7 @@ bool WsClient::try_connect()
                             active_session_id = session_id;
                         }
                         authenticated.store(true, std::memory_order_release);
+                        set_auth_state("authenticated", true);
                         const std::string ack_policy_hash = parsed["body"].value("policy_hash", "");
                         if (!ack_policy_hash.empty()) {
                             state_impl_.set_policy_hash(ack_policy_hash);
@@ -1242,8 +1491,10 @@ bool WsClient::try_connect()
                     const std::string errorMessage = body.value("error_message", "");
                     Logger::log(LogLevel::Error, "AUTH_ERROR from gateway: " + errorCode +
                                                   (errorMessage.empty() ? "" : (" - " + errorMessage)));
+                    set_auth_state("auth_error:" + errorCode, false);
                     if (errorCode == "AUTH_INVALID_JWT" || errorCode == "AUTH_UNKNOWN_DEVICE") {
                         suspend_http_fallback_.store(true, std::memory_order_release);
+                        force_reconnect_requested_.store(true, std::memory_order_release);
                     }
                     close_reason = "auth_error:" + errorCode;
                     connection_error.store(true, std::memory_order_release);
@@ -1667,11 +1918,13 @@ bool WsClient::try_connect()
             
         } else if (msg->type == ix::WebSocketMessageType::Error) {
             connection_error.store(true, std::memory_order_release);
+            set_auth_state("transport_error", false);
             close_reason = msg->errorInfo.reason;
             Logger::log(LogLevel::Error, std::string("ws error: ") + msg->errorInfo.reason);
             
         } else if (msg->type == ix::WebSocketMessageType::Close) {
             connection_closed.store(true, std::memory_order_release);
+            set_auth_state("disconnected", false);
             close_reason = "code=" + std::to_string(msg->closeInfo.code) + 
                           ", reason=" + msg->closeInfo.reason;
             Logger::log(LogLevel::Info, "ws closed: " + close_reason);
@@ -1706,6 +1959,7 @@ bool WsClient::try_connect()
       !connection_opened.load(std::memory_order_acquire))
   {
     socket.stop();
+    set_auth_state("connect_failed", false);
     set_state(ConnectionState::Disconnected, close_reason.empty() ? "connection failed" : close_reason);
     return false;
   }
@@ -1824,10 +2078,12 @@ bool WsClient::try_connect()
 
   if (shutdown_requested_.load(std::memory_order_acquire))
   {
+    set_auth_state("shutdown", false);
     set_state(ConnectionState::Shutdown, "shutdown requested");
     return true;
   }
 
+  set_auth_state("disconnected", false);
   set_state(ConnectionState::Disconnected, close_reason.empty() ? "connection lost" : close_reason);
   return connection_opened.load(std::memory_order_acquire); // Return true if we were connected
 }

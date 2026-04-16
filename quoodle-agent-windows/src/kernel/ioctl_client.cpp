@@ -463,9 +463,18 @@ bool IoctlClient::ensure_connection()
   last_transport_error_message_ = "ipc_failure";
   last_transport_win32_error_ = 0;
 
-  // Prefer kernel driver if enabled and available.
-  const char *preferDriver = std::getenv("QUOODLE_USE_KERNEL_DRIVER");
-  bool allowDriver = preferDriver && std::string(preferDriver) != "0";
+  // Prefer kernel driver by default; allow explicit opt-out for lab/dev scenarios.
+  bool allowDriver = true;
+  if (const char *preferDriver = std::getenv("QUOODLE_USE_KERNEL_DRIVER"))
+  {
+    std::string value(preferDriver);
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch)
+                   { return static_cast<char>(std::tolower(ch)); });
+    if (value == "0" || value == "false" || value == "off" || value == "no")
+    {
+      allowDriver = false;
+    }
+  }
   if (allowDriver)
   {
     if (hDevice != INVALID_HANDLE_VALUE)

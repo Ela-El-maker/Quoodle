@@ -288,7 +288,7 @@
                             <TextBlock Text="Scan this QR code with the QuoodleAgent mobile companion app to complete enrollment." Style="{StaticResource OnboardingSubtitleTextStyle}" TextWrapping="Wrap" />
 
                             <Border Background="#FFF4F5F7" CornerRadius="10" Padding="12" HorizontalAlignment="Center">
-                                <Grid x:Name="QrGrid" Width="260" Height="260" />
+                                <Image x:Name="QrImage" Width="260" Height="260" Stretch="Fill" />
                             </Border>
 
                             <Button x:Name="CopyPairingButton" Style="{StaticResource PairModeTabButtonStyle}" HorizontalAlignment="Center" Click="OnCopyPairingString">
@@ -313,6 +313,31 @@
                         <StackPanel x:Name="RegisteringPanel" Spacing="8" HorizontalAlignment="Center" Visibility="Collapsed">
                             <ProgressRing IsActive="True" Width="22" Height="22" Foreground="{ThemeResource SuccessBrush}" />
                             <TextBlock Text="Registering device with control server..." Style="{StaticResource OnboardingBodyTextStyle}" />
+                            <TextBlock Text="Use these values in Control UI to confirm ownership." Style="{StaticResource OnboardingBodyTextStyle}" TextAlignment="Center" />
+
+                            <Border Background="{ThemeResource SurfaceAltBrush}" BorderBrush="{ThemeResource BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="0" MinWidth="520">
+                                <StackPanel>
+                                    <Grid Padding="14,13" ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Device Name" Style="{StaticResource OnboardingBodyTextStyle}" />
+                                        <TextBlock x:Name="PendingDeviceNameText" Grid.Column="1" Style="{StaticResource DetailsValueTextStyle}" />
+                                    </Grid>
+                                    <Border Height="1" Background="{ThemeResource BorderBrush}" />
+                                    <Grid Padding="14,13" ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Last 6 of Device ID" Style="{StaticResource OnboardingBodyTextStyle}" />
+                                        <TextBlock x:Name="PendingDeviceIdSuffixText" Grid.Column="1" Style="{StaticResource DetailsValueTextStyle}" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock x:Name="RegisteringStatusText" Style="{StaticResource OnboardingBodyTextStyle}" TextAlignment="Center" />
                         </StackPanel>
 
                         <StackPanel x:Name="EnrollmentCompletePanel" Spacing="16" Visibility="Collapsed">
