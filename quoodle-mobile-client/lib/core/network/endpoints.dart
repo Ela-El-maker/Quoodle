@@ -15,6 +15,8 @@ class Endpoints {
   static const telemetryActivity = '/telemetry/activity';
   static const commands = '/commands';
   static const pairConfirm = '/pair/confirm';
+  static String pairSession(String pairSessionId) =>
+      '/pair/session/$pairSessionId';
 
   static String commandById(String commandId) => '/commands/$commandId';
   static String deviceCommands(String deviceId) =>

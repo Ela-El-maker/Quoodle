@@ -23,13 +23,13 @@ class QrPairingData {
 
   static const String expectedType = 'quoodle_pair';
   static const int supportedVersion = 1;
-  static const Duration maxAge = Duration(minutes: 5);
+  static const Duration maxAge = Duration(minutes: 10);
   static const Duration maxFutureSkew = Duration(minutes: 1);
 
   final String type;
   final int version;
   final String deviceId;
-  final String pairToken;
+  final String? pairToken;
   final String pairSessionId;
   final String timestamp;
   final String? controllerUrl;
@@ -68,8 +68,14 @@ class QrPairingData {
     }
 
     final deviceId = _requiredString(json, 'device_id');
-    final pairToken = _requiredString(json, 'pair_token');
+    final pairToken = _optionalString(json, 'pair_token');
     final pairSessionId = _requiredString(json, 'pair_session_id');
+    if ((pairToken == null || pairToken.trim().isEmpty) &&
+        pairSessionId.trim().isEmpty) {
+      throw const QrParseException(
+        'QR payload must include pair_token or pair_session_id',
+      );
+    }
     final timestamp = _requiredString(json, 'timestamp');
 
     _validateTimestamp(timestamp);
@@ -91,7 +97,7 @@ class QrPairingData {
       'type': type,
       'version': version,
       'device_id': deviceId,
-      'pair_token': pairToken,
+      if (pairToken != null) 'pair_token': pairToken,
       'pair_session_id': pairSessionId,
       'timestamp': timestamp,
       if (controllerUrl != null) 'controller_url': controllerUrl,
@@ -103,6 +109,14 @@ class QrPairingData {
     final value = json[key]?.toString();
     if (value == null || value.trim().isEmpty) {
       throw QrParseException('Missing required field: $key');
+    }
+    return value;
+  }
+
+  static String? _optionalString(Map<String, dynamic> json, String key) {
+    final value = json[key]?.toString();
+    if (value == null || value.trim().isEmpty) {
+      return null;
     }
     return value;
   }

@@ -111,7 +111,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
       final qrData = QrPairingData.fromRawString(trimmed);
       return _PairingCandidate(
         rawToken: trimmed,
-        displayToken: qrData.pairToken,
+        displayToken: qrData.pairToken ?? qrData.pairSessionId,
         pairToken: qrData.pairToken,
         pairSessionId: qrData.pairSessionId.trim().isEmpty
             ? null
@@ -135,11 +135,26 @@ class _QrScannerScreenState extends State<QrScannerScreen>
     final container = ProviderScope.containerOf(context, listen: false);
     final apiClient = container.read(apiClientProvider);
 
+    var pairToken = candidate.pairToken?.trim() ?? '';
+    final pairSessionId = candidate.pairSessionId?.trim();
+    if (pairToken.isEmpty) {
+      if (pairSessionId == null || pairSessionId.isEmpty) {
+        throw Exception('QR code is missing pairing credentials.');
+      }
+
+      pairToken = await _resolvePairTokenFromSession(apiClient, pairSessionId);
+      if (pairToken.isEmpty) {
+        throw Exception(
+          'Pair token not ready yet. Keep Agent UI on Pair screen and scan again.',
+        );
+      }
+    }
+
     final payload = <String, dynamic>{
-      'pair_token': candidate.pairToken,
+      'pair_token': pairToken,
     };
-    if (candidate.pairSessionId != null && candidate.pairSessionId!.isNotEmpty) {
-      payload['pair_session_id'] = candidate.pairSessionId;
+    if (pairSessionId != null && pairSessionId.isNotEmpty) {
+      payload['pair_session_id'] = pairSessionId;
     }
 
     try {
@@ -170,6 +185,23 @@ class _QrScannerScreenState extends State<QrScannerScreen>
       return data.trim();
     }
     return null;
+  }
+
+  Future<String> _resolvePairTokenFromSession(
+    dynamic apiClient,
+    String pairSessionId,
+  ) async {
+    try {
+      final response = await apiClient.get(
+        Endpoints.pairSession(Uri.encodeComponent(pairSessionId)),
+      );
+      return (response['pair_token'] ?? '').toString().trim();
+    } on DioException catch (error) {
+      final data = error.response?.data;
+      final message = _extractErrorMessage(data) ??
+          'Unable to resolve pair session (${error.response?.statusCode ?? 'network_error'})';
+      throw Exception(message);
+    }
   }
 
   void _resumeScanning({bool closeDialog = false}) {
@@ -272,7 +304,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
               ),
               const SizedBox(height: 6),
               Text(
-                'Scanning automaticallyâ€¦',
+                'Scanning automatically...',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.ibmPlexSans(
                   fontSize: 12,
@@ -767,7 +799,7 @@ class _PairingCandidate {
 
   final String rawToken;
   final String displayToken;
-  final String pairToken;
+  final String? pairToken;
   final String? pairSessionId;
   final String? deviceId;
   final String sourceLabel;
@@ -899,7 +931,7 @@ class _PairingConfirmationDialogState extends State<_PairingConfirmationDialog> 
                   Expanded(
                     child: Text(
                       widget.candidate.displayToken.length > 32
-                          ? '${widget.candidate.displayToken.substring(0, 32)}…'
+                          ? '${widget.candidate.displayToken.substring(0, 32)}...'
                           : widget.candidate.displayToken,
                       style: GoogleFonts.ibmPlexMono(
                         fontSize: 11,
