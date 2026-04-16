@@ -1,9 +1,14 @@
 import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:secure_device_control/app/di/providers.dart';
 import 'package:secure_device_control/app/router/app_navigator.dart';
+import 'package:secure_device_control/core/network/endpoints.dart';
+import 'package:secure_device_control/models/qr_pairing_data.dart';
 import '../../theme/app_theme.dart';
 
 class QrScannerScreen extends StatefulWidget {
@@ -70,24 +75,111 @@ class _QrScannerScreenState extends State<QrScannerScreen>
   }
 
   void _showPairingConfirmation(String token) {
+    final candidate = _parsePairingCandidate(token);
+    if (candidate == null) {
+      _resumeScanning();
+      return;
+    }
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => _PairingConfirmationDialog(
-        token: token,
-        onConfirm: () {
+        candidate: candidate,
+        onConfirm: () async {
+          await _confirmPairing(candidate);
+        },
+        onSuccess: () {
           Navigator.maybePop(context); // close dialog
-          _navigateToDeviceDetail(token);
+          _navigateToDeviceDetail(candidate.rawToken);
         },
-        onCancel: () {
-          Navigator.maybePop(context);
-          setState(() {
-            _processingCode = false;
-            _scanning = true;
-          });
-        },
+        onCancel: () => _resumeScanning(closeDialog: true),
       ),
     );
+  }
+
+  _PairingCandidate? _parsePairingCandidate(String rawToken) {
+    final trimmed = rawToken.trim();
+    if (trimmed.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Scanned value is empty.')),
+      );
+      return null;
+    }
+
+    try {
+      final qrData = QrPairingData.fromRawString(trimmed);
+      return _PairingCandidate(
+        rawToken: trimmed,
+        displayToken: qrData.pairToken,
+        pairToken: qrData.pairToken,
+        pairSessionId: qrData.pairSessionId.trim().isEmpty
+            ? null
+            : qrData.pairSessionId.trim(),
+        deviceId: qrData.deviceId,
+        sourceLabel: 'QR payload',
+      );
+    } on QrParseException {
+      return _PairingCandidate(
+        rawToken: trimmed,
+        displayToken: trimmed,
+        pairToken: trimmed,
+        pairSessionId: null,
+        deviceId: null,
+        sourceLabel: 'Manual token',
+      );
+    }
+  }
+
+  Future<void> _confirmPairing(_PairingCandidate candidate) async {
+    final container = ProviderScope.containerOf(context, listen: false);
+    final apiClient = container.read(apiClientProvider);
+
+    final payload = <String, dynamic>{
+      'pair_token': candidate.pairToken,
+    };
+    if (candidate.pairSessionId != null && candidate.pairSessionId!.isNotEmpty) {
+      payload['pair_session_id'] = candidate.pairSessionId;
+    }
+
+    try {
+      final response = await apiClient.post(Endpoints.pairConfirm, data: payload);
+      final status = (response['status'] ?? '').toString().toLowerCase();
+      if (status.isNotEmpty && status != 'ok') {
+        throw Exception(response['reason']?.toString() ?? response['message']?.toString() ?? status);
+      }
+    } on DioException catch (error) {
+      final data = error.response?.data;
+      final message = _extractErrorMessage(data) ??
+          'Pairing failed (${error.response?.statusCode ?? 'network_error'})';
+      throw Exception(message);
+    }
+  }
+
+  String? _extractErrorMessage(dynamic data) {
+    if (data is Map<String, dynamic>) {
+      final reason = data['reason']?.toString().trim() ?? '';
+      final message = data['message']?.toString().trim() ?? '';
+      final status = data['status']?.toString().trim() ?? '';
+      if (reason.isNotEmpty && message.isNotEmpty) return '$reason: $message';
+      if (reason.isNotEmpty) return reason;
+      if (message.isNotEmpty) return message;
+      if (status.isNotEmpty) return status;
+    }
+    if (data is String && data.trim().isNotEmpty) {
+      return data.trim();
+    }
+    return null;
+  }
+
+  void _resumeScanning({bool closeDialog = false}) {
+    if (closeDialog) {
+      Navigator.maybePop(context);
+    }
+    setState(() {
+      _processingCode = false;
+      _scanning = true;
+    });
   }
 
   void _navigateToDeviceDetail(String token) {
@@ -663,45 +755,70 @@ class _ControlButton extends StatelessWidget {
   }
 }
 
+class _PairingCandidate {
+  const _PairingCandidate({
+    required this.rawToken,
+    required this.displayToken,
+    required this.pairToken,
+    required this.pairSessionId,
+    required this.deviceId,
+    required this.sourceLabel,
+  });
+
+  final String rawToken;
+  final String displayToken;
+  final String pairToken;
+  final String? pairSessionId;
+  final String? deviceId;
+  final String sourceLabel;
+}
+
 class _PairingConfirmationDialog extends StatefulWidget {
-  final String token;
-  final VoidCallback onConfirm;
-  final VoidCallback onCancel;
   const _PairingConfirmationDialog({
-    required this.token,
+    required this.candidate,
     required this.onConfirm,
+    required this.onSuccess,
     required this.onCancel,
   });
+
+  final _PairingCandidate candidate;
+  final Future<void> Function() onConfirm;
+  final VoidCallback onSuccess;
+  final VoidCallback onCancel;
 
   @override
   State<_PairingConfirmationDialog> createState() =>
       _PairingConfirmationDialogState();
 }
 
-class _PairingConfirmationDialogState
-    extends State<_PairingConfirmationDialog> {
+class _PairingConfirmationDialogState extends State<_PairingConfirmationDialog> {
   bool _isPairing = false;
   bool _paired = false;
-
-  // Simulated device info from token
-  final Map<String, String> _deviceInfo = {
-    'Device Name': 'WKS-NEW-042',
-    'OS': 'Windows 11 Pro',
-    'Agent Version': '2.1.4',
-    'IP Address': '10.0.5.42',
-    'Location': 'HQ – Floor 2',
-  };
+  String _error = '';
 
   Future<void> _confirmPairing() async {
-    setState(() => _isPairing = true);
-    await Future.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
     setState(() {
-      _isPairing = false;
-      _paired = true;
+      _isPairing = true;
+      _error = '';
     });
-    await Future.delayed(const Duration(milliseconds: 800));
-    widget.onConfirm();
+
+    try {
+      await widget.onConfirm();
+      if (!mounted) return;
+      setState(() {
+        _isPairing = false;
+        _paired = true;
+      });
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (!mounted) return;
+      widget.onSuccess();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isPairing = false;
+        _error = error.toString().replaceFirst('Exception: ', '');
+      });
+    }
   }
 
   @override
@@ -764,7 +881,6 @@ class _PairingConfirmationDialogState
               ],
             ),
             const SizedBox(height: 20),
-            // Token display
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -782,9 +898,9 @@ class _PairingConfirmationDialogState
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      widget.token.length > 32
-                          ? '${widget.token.substring(0, 32)}…'
-                          : widget.token,
+                      widget.candidate.displayToken.length > 32
+                          ? '${widget.candidate.displayToken.substring(0, 32)}�'
+                          : widget.candidate.displayToken,
                       style: GoogleFonts.ibmPlexMono(
                         fontSize: 11,
                         color: AppTheme.primary,
@@ -796,8 +912,18 @@ class _PairingConfirmationDialogState
               ),
             ),
             const SizedBox(height: 16),
-            // Device info
-            ..._deviceInfo.entries.map(
+            ...<MapEntry<String, String>>[
+              MapEntry('Source', widget.candidate.sourceLabel),
+              if (widget.candidate.deviceId != null &&
+                  widget.candidate.deviceId!.isNotEmpty)
+                MapEntry('Device ID', widget.candidate.deviceId!),
+              MapEntry(
+                'Pair Session',
+                widget.candidate.pairSessionId?.isNotEmpty == true
+                    ? widget.candidate.pairSessionId!
+                    : 'not provided',
+              ),
+            ].map(
               (e) => Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Row(
@@ -810,18 +936,40 @@ class _PairingConfirmationDialogState
                       ),
                     ),
                     const Spacer(),
-                    Text(
-                      e.value,
-                      style: GoogleFonts.ibmPlexSans(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: AppTheme.textPrimary,
+                    Flexible(
+                      child: Text(
+                        e.value,
+                        textAlign: TextAlign.right,
+                        style: GoogleFonts.ibmPlexSans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: AppTheme.textPrimary,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
             ),
+            if (_error.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppTheme.error.withAlpha(20),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppTheme.error.withAlpha(90)),
+                ),
+                child: Text(
+                  _error,
+                  style: GoogleFonts.ibmPlexSans(
+                    fontSize: 11,
+                    color: AppTheme.error,
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             if (_isPairing)
               Center(
@@ -833,7 +981,7 @@ class _PairingConfirmationDialogState
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Enrolling device…',
+                      'Confirming pairing...',
                       style: GoogleFonts.ibmPlexSans(
                         fontSize: 12,
                         color: AppTheme.textMuted,

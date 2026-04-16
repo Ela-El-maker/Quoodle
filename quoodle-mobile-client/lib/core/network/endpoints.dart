@@ -14,6 +14,7 @@ class Endpoints {
   static const telemetryFleetTimeseries = '/telemetry/fleet/timeseries';
   static const telemetryActivity = '/telemetry/activity';
   static const commands = '/commands';
+  static const pairConfirm = '/pair/confirm';
 
   static String commandById(String commandId) => '/commands/$commandId';
   static String deviceCommands(String deviceId) =>

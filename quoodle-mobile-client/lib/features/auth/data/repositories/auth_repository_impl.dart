@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:secure_device_control/app/bootstrap/env.dart';
 import 'package:secure_device_control/core/errors/failure_mapper.dart';
 import 'package:secure_device_control/core/errors/failures.dart';
 import 'package:secure_device_control/core/errors/result.dart';
@@ -228,6 +229,23 @@ class AuthRepositoryImpl implements AuthRepository {
     if (error is DioException) {
       final statusCode = error.response?.statusCode;
       final serverMessage = _extractServerMessage(error);
+      final serverDetail = _extractServerDetailMessage(error);
+
+      if (_isNetworkReachabilityIssue(error)) {
+        return NetworkFailure(
+          'Cannot reach control API at ${AppEnv.controlPlaneBaseUrl}. '
+          'Set --dart-define=QDO_CONTROL_PLANE_BASE_URL=http://<your-pc-lan-ip>:8088/api '
+          'when running on a physical phone.',
+        );
+      }
+
+      if (serverDetail != null &&
+          serverDetail.isNotEmpty &&
+          statusCode != null &&
+          statusCode >= 400 &&
+          statusCode < 500) {
+        return ValidationFailure(serverDetail);
+      }
 
       if (serverMessage == 'invalid_otp') {
         return const ValidationFailure('Invalid code. Please try again.');
@@ -274,6 +292,13 @@ class AuthRepositoryImpl implements AuthRepository {
     return FailureMapper.fromObject(error);
   }
 
+  bool _isNetworkReachabilityIssue(DioException error) {
+    return error.type == DioExceptionType.connectionError ||
+        error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.sendTimeout ||
+        error.type == DioExceptionType.receiveTimeout;
+  }
+
   String? _extractServerMessage(DioException error) {
     final body = error.response?.data;
     if (body is Map) {
@@ -308,6 +333,43 @@ class AuthRepositoryImpl implements AuthRepository {
         return value.trim();
       }
     }
+    return null;
+  }
+
+  String? _extractServerDetailMessage(DioException error) {
+    final body = error.response?.data;
+    if (body is! Map) {
+      return null;
+    }
+
+    final direct = body['error'];
+    if (direct is String && direct.trim().isNotEmpty) {
+      return direct.trim();
+    }
+
+    final message = body['message'];
+    if (message is String &&
+        message.trim().isNotEmpty &&
+        !message.contains('_')) {
+      return message.trim();
+    }
+
+    final errors = body['errors'];
+    if (errors is Map) {
+      for (final entry in errors.entries) {
+        final value = entry.value;
+        if (value is List && value.isNotEmpty) {
+          final first = value.first;
+          if (first is String && first.trim().isNotEmpty) {
+            return first.trim();
+          }
+        }
+        if (value is String && value.trim().isNotEmpty) {
+          return value.trim();
+        }
+      }
+    }
+
     return null;
   }
 }

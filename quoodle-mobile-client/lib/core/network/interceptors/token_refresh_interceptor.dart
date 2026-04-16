@@ -29,6 +29,7 @@ class TokenRefreshInterceptor extends Interceptor {
 
     if (statusCode != 401 ||
         _isRefreshRequest(requestOptions.path) ||
+        _isPublicAuthRequest(requestOptions.path) ||
         requestOptions.extra['skip_auth_refresh'] == true ||
         requestOptions.extra['retried_after_refresh'] == true) {
       handler.next(err);
@@ -75,6 +76,13 @@ class TokenRefreshInterceptor extends Interceptor {
   bool _isRefreshRequest(String path) {
     return path == Endpoints.refreshSession ||
         path.endsWith(Endpoints.refreshSession);
+  }
+
+  bool _isPublicAuthRequest(String path) {
+    final normalized = path.startsWith('/') ? path : '/$path';
+    return normalized == Endpoints.requestOtp ||
+        normalized == Endpoints.verifyOtp ||
+        normalized == Endpoints.exchangeGoogleCode;
   }
 
   Future<String?> _refreshAccessToken(String refreshToken) async {
