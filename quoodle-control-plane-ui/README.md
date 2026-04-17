@@ -1,55 +1,82 @@
-# Quoodle Control Plane UI
+# quoodle-control-plane-ui
 
-Next.js frontend for the Quoodle control plane.
+Next.js control console for Quoodle operators and viewers.
 
-This app replaces Laravel Blade pages while Laravel remains the backend/API service.
+Primary functions:
 
-## Stack
+- authentication and session UI
+- role-based route surfaces (viewer/operator/admin)
+- pairing and ownership workflow UX
+- device management and telemetry views
+- command trace, results, and audit exploration
 
-- Next.js `16.2.2`
-- React `19.2.4`
+Stack:
+
+- Next.js 16
+- React 19
 - TypeScript
-- Tailwind CSS v4
+- Tailwind CSS
 
-## Local Setup
+## 1. Local Development
 
-1. Install dependencies:
+From `quoodle-control-plane-ui`:
 
-```bash
+```powershell
 npm install
-```
-
-2. Configure environment:
-
-```bash
-cp .env.local.example .env.local
-```
-
-3. Start the app:
-
-```bash
+Copy-Item .env.local.example .env.local -Force
 npm run dev
 ```
 
-4. Open:
+Open: `http://localhost:3000`
 
-`http://localhost:3000`
+## 2. Environment Contract
 
-## Backend Integration
+Key values:
 
-- Laravel base URL: `NEXT_PUBLIC_CONTROL_PLANE_BASE_URL`
-- Laravel API URL: `NEXT_PUBLIC_CONTROL_PLANE_API_URL`
-- Server-side Laravel API URL (for Next route handlers): `CONTROL_PLANE_API_URL`
-- Google OAuth Client ID (for auth redirect start route): `GOOGLE_CLIENT_ID`
+- `NEXT_PUBLIC_CONTROL_PLANE_BASE_URL`
+- `NEXT_PUBLIC_CONTROL_PLANE_API_URL`
+- `CONTROL_PLANE_API_URL` (server-side handlers)
+- `GOOGLE_CLIENT_ID` (if OAuth path enabled)
 
-Default local values target the existing Laravel control-plane service at `http://localhost:8088`.
+Default local target is control plane on `http://localhost:8088`.
 
-## Docker Compose
+## 3. Runtime Behavior
+
+- UI reads session state via auth endpoints.
+- Role guards enforce route accessibility.
+- Pairing flows surface token/QR and ownership confirm states.
+- Command views visualize dispatch lifecycle through backend state.
+
+## 4. Key UX Domains
+
+- Viewer console
+- Operator console
+- Device management
+- Command compose/trace/results
+- Telemetry monitoring
+- Alerts and compliance
+- Audit trails
+
+## 5. Build and Production Run
+
+```powershell
+npm run build
+npm run start
+```
+
+## 6. Docker Mode
 
 From repo root:
 
-```bash
-docker compose up -d --build control-plane control-plane-ui
+```powershell
+docker compose up -d --build control-plane-ui
 ```
 
-UI will be available at `http://localhost:3000`.
+Service is exposed on `http://localhost:3000`.
+
+## 7. Troubleshooting
+
+- login loop: verify `/api/auth/me` behavior and cookies
+- empty devices: verify control plane device API and pairing state
+- stale status: verify polling cadence and backend lifecycle updates
+- pairing modal stuck: inspect pair session endpoints and gateway callbacks

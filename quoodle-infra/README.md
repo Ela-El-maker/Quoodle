@@ -1,27 +1,48 @@
 # quoodle-infra
 
-Infrastructure configuration for deploying and operating Quoodle.
+Infrastructure and deployment assets for Quoodle environments.
 
-## Structure
+## 1. Purpose
 
-| Directory     | Purpose                                                |
-| ------------- | ------------------------------------------------------ |
-| `terraform/`  | Cloud provisioning — RDS, S3, KMS, networking          |
-| `helm/`       | Kubernetes Helm charts for all services                |
-| `k8s/`        | Raw Kubernetes manifests (MySQL, secrets)              |
-| `docker/`     | Dockerfiles and compose overrides per service          |
-| `monitoring/` | Prometheus rules, Grafana dashboards, alert routes     |
-| `logging/`    | Log collectors (Fluent Bit), retention, index mappings |
-| `ci-cd/`      | Build pipelines, signing steps, SBOM generation        |
+This directory contains infra-as-code and operational packaging resources used to provision, deploy, and operate Quoodle outside local development.
 
-## Local Development
+## 2. Structure
 
-```bash
-./scripts/setup_dev.sh
-```
+| Directory | Purpose |
+| --- | --- |
+| `terraform/` | Cloud resource provisioning (network, storage, managed services, security controls) |
+| `helm/` | Kubernetes chart templates and values |
+| `k8s/` | Raw manifests for direct cluster operations |
+| `docker/` | Container build and compose support assets |
+| `monitoring/` | Metrics, alerts, and dashboard definitions |
+| `logging/` | Log shipping and retention configuration |
+| `ci-cd/` | Pipeline scaffolding and supply-chain steps |
 
-Uses `docker-compose.yml` at the repo root to orchestrate Laravel, FastAPI, MySQL, and Redis.
+## 3. Environments
 
-## Production
+Typical targets:
 
-Kubernetes deployment uses Helm charts in `helm/` with environment-specific values files. Secrets are managed via KMS-backed Sealed Secrets.
+- local development (docker-compose from repo root)
+- shared dev/staging clusters
+- production clusters with managed secret workflows
+
+## 4. Operational Focus Areas
+
+- reproducible provisioning
+- service-to-service network boundaries
+- secret handling and rotation paths
+- observability baselines (health, queue, latency, error budgets)
+- backup and disaster recovery hooks
+
+## 5. Local Dev Note
+
+For daily local engineering, use repo root compose flow rather than provisioning assets in this folder.
+
+## 6. Change Management Guidance
+
+When editing infra assets:
+
+- keep service ports/endpoints aligned with application configs
+- version environment changes with clear migration notes
+- validate rollout and rollback paths
+- keep least-privilege defaults

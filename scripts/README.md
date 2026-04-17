@@ -1,43 +1,46 @@
 # scripts
 
-Development, testing, and deployment automation for Quoodle.
+Operational and development automation scripts for Quoodle.
 
-## Setup
+## 1. Scope
 
-### setup_dev.sh
+This folder provides helper scripts for:
 
-One-click setup for the complete development environment.
+- local bootstrap
+- end-to-end validation
+- environment diagnostics
+- platform-specific install helpers
+
+## 2. Key Scripts
+
+### `setup_dev.sh`
+
+Bootstraps the local docker-based environment.
 
 ```bash
 ./scripts/setup_dev.sh
 ```
 
-Creates `.env` files, builds containers (Laravel, FastAPI, MySQL, Redis), runs migrations, and verifies health.
+Typical outcomes:
 
-| Service | URL |
-|---|---|
-| Control Plane | http://localhost:8088 |
-| Gateway | http://localhost:8000 |
-| MySQL | localhost:3307 |
-| Redis | localhost:6379 |
+- containers built and started
+- database migrations run where configured
+- baseline health checks available
 
-## Testing
+### `run_windows_ring0_e2e.ps1`
 
-### run_windows_ring0_e2e.ps1
+Primary Windows end-to-end runner for command path verification.
 
-Primary Windows ring0 end-to-end runner validating control plane -> gateway -> agent -> kernel.
-
-```bash
-pwsh ./scripts/run_windows_ring0_e2e.ps1 -KeepAgentRunning
+```powershell
+pwsh .\scripts\run_windows_ring0_e2e.ps1
+pwsh .\scripts\run_windows_ring0_e2e.ps1 -KeepAgentRunning
 ```
 
-Validates: pairing, WebSocket auth, command signing/delivery, kernel response verification, and telemetry/audit loop.
+Validates pairing, auth, dispatch, kernel path, and result loop.
 
-Logs output to `logs/e2e/`.
+### `install_linux_agent_systemd.sh`
 
-### install_linux_agent_systemd.sh
-
-Install and run the Linux agent services.
+Installs and enables Linux agent services.
 
 ```bash
 ./scripts/install_linux_agent_systemd.sh
@@ -45,19 +48,23 @@ sudo systemctl daemon-reload
 sudo systemctl restart quoodle-privileged quoodle-agent
 ```
 
-### test_telemetry_worker.sh
+### `test_telemetry_worker.sh`
 
-Individual endpoint tests.
+Telemetry worker focused checks.
 
 ```bash
 ./scripts/test_telemetry_worker.sh
 ```
 
-## Environment Variables
+## 3. Common Environment Variables
 
-```bash
-LARAVEL_BASE_URL=http://localhost:8088
-FASTAPI_BASE_URL=http://localhost:8000
-TEST_USER_EMAIL=test@example.com
-TEST_USER_PASSWORD=password
-```
+- `LARAVEL_BASE_URL`
+- `FASTAPI_BASE_URL`
+- `TEST_USER_EMAIL`
+- `TEST_USER_PASSWORD`
+
+## 4. Usage Guidance
+
+- run from repo root unless script says otherwise
+- review script parameters before production-like runs
+- keep script output logs for debugging command-path failures

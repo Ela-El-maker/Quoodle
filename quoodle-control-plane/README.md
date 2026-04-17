@@ -1,108 +1,127 @@
 # quoodle-control-plane
 
-Root of trust for the Quoodle system. Handles identity, certificate authority, policy engine, command authorization, and tamper-evident audit logging.
+Laravel control plane and trust anchor for Quoodle.
 
-**Stack:** Laravel / PHP 8.4
+Primary functions:
 
-## Build & Run
+- authentication and session control
+- role-based access control
+- pairing token/session workflows
+- command authorization and signing handoff
+- persistence of device, command, telemetry, and audit state
 
-**Prerequisites:** PHP 8.4+, Composer, MySQL 8.0+, Redis
+Stack:
 
-For Docker/dev-stack runs, secrets and keys are centralized in repo-root `.env`.
-Use this local `.env.example` only when running Laravel standalone.
+- PHP 8.4
+- Laravel 12
+- MySQL
+- Redis
 
-```bash
+## 1. Responsibilities
+
+The control plane is the policy and identity source of truth. It decides who can issue what command to which device, records the decision, and coordinates dispatch through the gateway.
+
+## 2. Runtime Dependencies
+
+- MySQL for persistent state
+- Redis for queues/cache/sessions (depending on env)
+- Gateway reachable for dispatch and webhooks
+
+## 3. Local Run
+
+From `quoodle-control-plane` (standalone mode):
+
+```powershell
 composer install
-cp .env.example .env
+Copy-Item .env.example .env -Force
 php artisan key:generate
 php artisan migrate
-php artisan quoodle:keys:generate   # Ed25519 system keys
-php artisan serve
+php artisan serve --host=0.0.0.0 --port=8088
 ```
 
-Or via Docker from the repo root:
+Recommended local mode is docker-compose from repo root so all services start together.
 
-```bash
-# centralized env source of truth
-cp .env.example .env
+## 4. Core API Surfaces
 
-./scripts/setup_dev.sh
+Auth/session:
+
+- `POST /api/register`
+- `POST /api/login`
+- `POST /api/token/refresh`
+- `POST /api/logout`
+- `GET /api/auth/me`
+
+Pairing:
+
+- `POST /api/pair/init`
+- `POST /api/pair/request`
+- `POST /api/pair/confirm`
+- `GET /api/pair/session/{id}`
+
+Device operations:
+
+- `GET /api/devices`
+- `GET /api/devices/{id}`
+- `POST /api/devices/{id}/claim`
+
+Command plane:
+
+- `POST /api/commands`
+- `GET /api/commands/{id}`
+- `GET /api/devices/{id}/commands`
+
+Telemetry/audit/alerts:
+
+- `GET /api/devices/{id}/telemetry/latest`
+- `GET /api/audit/device/{id}`
+- `GET /api/alerts`
+- `POST /api/alerts/{id}/ack`
+
+Note: exact route middleware and role access are defined in route files and policy layers.
+
+## 5. Queue and Dispatch Path
+
+Typical path:
+
+1. Command request accepted by API.
+2. Authorization and policy checks.
+3. Envelope/signature creation.
+4. Enqueue dispatch job.
+5. Dispatch to gateway endpoint.
+6. Update command state from webhook receipts.
+
+## 6. Project Layout
+
+- `app/Http/Controllers/` request handlers
+- `app/Jobs/` async dispatch/workers
+- `app/Services/` domain services (pairing, command signing, etc.)
+- `app/Models/` persistence models
+- `routes/` API and web routes
+- `database/migrations/` schema evolution
+- `tests/` feature and unit tests
+
+## 7. Security Notes
+
+- Signing material is sensitive; protect keys by environment.
+- Do not bypass signature path for command dispatch.
+- Maintain strict role boundaries for viewer/operator/admin features.
+
+## 8. Testing
+
+```powershell
+php artisan test
 ```
 
-### TLS (Docker)
+For targeted suites:
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d --build
+```powershell
+php artisan test --filter Pair
+php artisan test --filter Command
 ```
 
-Expects `certs/control-plane.crt` and `certs/control-plane.key`.
+## 9. Ops Troubleshooting
 
-## API Endpoints
-
-### Auth
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/register` | User registration |
-| `POST` | `/api/login` | Login with JWT |
-| `POST` | `/api/token/refresh` | Refresh JWT |
-| `POST` | `/api/logout` | Invalidate session |
-| `POST` | `/api/2fa/setup` | Setup 2FA |
-| `POST` | `/api/2fa/verify` | Verify 2FA code |
-
-### Devices
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/devices` | List all devices |
-| `GET` | `/api/devices/{id}` | Device details |
-| `POST` | `/api/devices/{id}/claim` | Claim device ownership |
-| `POST` | `/api/pair/init` | Initialize pairing |
-| `POST` | `/api/pair/confirm` | Confirm pairing |
-| `POST` | `/api/agent/token` | Generate agent JWT |
-
-### Commands
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/commands` | Execute command on device |
-| `GET` | `/api/commands/{id}` | Command status |
-| `GET` | `/api/devices/{id}/commands` | Device command history |
-
-### Telemetry & Audit
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/devices/{id}/telemetry/latest` | Latest telemetry |
-| `GET` | `/api/audit/device/{id}` | Device audit trail |
-| `POST` | `/api/audit/append` | Append audit entry |
-
-### Alerts & Compliance
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/alerts` | List alerts |
-| `POST` | `/api/alerts/{id}/ack` | Acknowledge alert |
-| `POST` | `/api/compliance/evaluate` | Evaluate compliance |
-| `POST` | `/api/policy/validate_bundle` | Validate policy bundle |
-
-## Project Structure
-
-```
-app/
-├── Http/Controllers/    # API controllers
-├── Models/              # Eloquent models
-├── Services/            # Business logic (signing, audit, compliance)
-├── Providers/           # Service providers
-└── ...
-config/                  # Laravel configuration
-database/migrations/     # Database schema
-routes/api.php           # API route definitions
-tests/                   # PHPUnit tests
-```
-
-## Security
-
-- Stores CA private key and Command Signing key — protect via KMS/HSM in production
-- Trusted by gateway (webhook signature) and agents (CA chain)
-- All commands are Ed25519-signed before dispatch
+- queue stalled: inspect queue worker and failed jobs table
+- webhook drift: inspect gateway logs and signature validation
+- command stuck queued: verify gateway reachable and device online/authenticated
+- auth redirect loops: verify cookie/session config and `auth/me` responses

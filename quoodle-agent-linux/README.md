@@ -1,83 +1,112 @@
 # quoodle-agent-linux
 
-Linux endpoint agent with a privileged daemon for secure command execution. Connects to the gateway over WSS, verifies Ed25519 signatures, and delegates OS actions to an isolated root daemon via Unix Domain Socket.
+Linux endpoint runtime for Quoodle.
 
-**Stack:** C++17 / C / Python
+Components:
 
-## Build & Run
+- unprivileged agent process (networking, signatures, command orchestration)
+- privileged daemon (root boundary for protected operations)
+- CLI and optional local UI utilities
 
-**Prerequisites:** CMake, C++17 compiler, `libsodium`, `pkg-config`
+## 1. Responsibilities
+
+Agent responsibilities:
+
+- connect/authenticate to gateway
+- verify command signatures
+- execute non-privileged handlers
+- forward privileged requests to daemon over UDS
+- return structured results and telemetry
+
+Privileged daemon responsibilities:
+
+- enforce root-only operations
+- validate caller trust boundary
+- return signed or integrity-checked execution receipts
+
+## 2. Build
+
+Prerequisites:
+
+- CMake
+- C++17 compiler
+- libsodium
+- pkg-config
+
+Build:
 
 ```bash
 cmake -S . -B build
 cmake --build build
+```
 
-# Run the agent (unprivileged)
+Run binaries:
+
+```bash
 ./build/quoodle-agent-linux
-
-# Run the privileged daemon (root)
 sudo ./build/quoodle-privileged-daemon
 ```
 
-## CLI
+## 3. CLI Utilities
 
 ```bash
-./cli/quoodle-agent status          # Agent status
-./cli/quoodle-agent doctor          # Diagnostics
-./cli/quoodle-agent logs --follow   # Live logs
-./cli/quoodle-agent attest          # Attestation report
-./cli/quoodle-agent pair \          # Pair without QR
-  --api-base http://localhost:8080 \
-  --user-jwt "$USER_JWT" --update-secrets
+./cli/quoodle-agent status
+./cli/quoodle-agent doctor
+./cli/quoodle-agent logs --follow
+./cli/quoodle-agent attest
+./cli/quoodle-agent pair --api-base http://localhost:8088 --user-jwt "$USER_JWT" --update-secrets
 ```
 
-## UI
+## 4. Local UI Utilities
 
 ```bash
-./ui/quoodle-agent-ui --desktop     # Tkinter desktop UI
-./ui/quoodle-agent-ui --tui         # Terminal UI (curses)
-./ui/quoodle-agent-ui --tray        # System tray (pystray + pillow)
+./ui/quoodle-agent-ui --desktop
+./ui/quoodle-agent-ui --tui
+./ui/quoodle-agent-ui --tray
 ```
 
-## Systemd
+## 5. Service Mode (systemd)
 
 ```bash
-# Install and enable system services
 sudo systemctl enable --now quoodle-agent quoodle-privileged
+```
 
-# User-level UI auto-start
+Optional user-session UI auto-start:
+
+```bash
 ./ui/install_user_service.sh
 systemctl --user enable --now quoodle-agent-ui.service
 ```
 
-## Environment Variables
+## 6. Environment Variables
 
-**Agent:**
+Agent:
 
-| Variable | Description |
-|---|---|
-| `QUOODLE_WS_URL` | Gateway WebSocket URL |
-| `QUOODLE_AGENT_JWT` | Agent authentication token |
-| `QUOODLE_AGENT_PRIVKEY_B64` | Agent Ed25519 private key (base64) |
-| `QUOODLE_CONTROLLER_PUBKEY_B64` | Controller public key for signature verification |
-| `QUOODLE_DAEMON_PUBKEY_B64` | Daemon public key for response verification |
-| `QUOODLE_DEVICE_ID` | Override device ID (default: `/var/lib/quoodle/device_id`) |
+- `QUOODLE_WS_URL`
+- `QUOODLE_AGENT_JWT`
+- `QUOODLE_AGENT_PRIVKEY_B64`
+- `QUOODLE_CONTROLLER_PUBKEY_B64`
+- `QUOODLE_DAEMON_PUBKEY_B64`
+- `QUOODLE_DEVICE_ID`
 
-**Daemon:**
+Daemon:
 
-| Variable | Description |
-|---|---|
-| `QUOODLE_PRIV_SOCKET` | UDS path (default: `/run/quoodle/privileged.sock`) |
-| `QUOODLE_DAEMON_PRIVKEY_B64` | Daemon Ed25519 private key (base64) |
-| `QUOODLE_AGENT_PUBKEY_B64` | Agent public key for request verification |
+- `QUOODLE_PRIV_SOCKET`
+- `QUOODLE_DAEMON_PRIVKEY_B64`
+- `QUOODLE_AGENT_PUBKEY_B64`
 
-## Project Structure
+## 7. Project Layout
 
-```
-agent/       # C++ WSS agent (Ed25519, command execution, telemetry)
-privileged/  # C privileged daemon (root, UDS IPC, policy enforcement)
-cli/         # Python CLI tool
-ui/          # Desktop/TUI/tray interfaces
-systemd/     # System service unit files
-systemd-user/# User service unit files
-```
+- `agent/` core Linux agent
+- `privileged/` privileged daemon
+- `cli/` operator/debug CLI
+- `ui/` desktop/tui/tray tools
+- `systemd/` service units
+- `systemd-user/` user service units
+
+## 8. Troubleshooting
+
+- cannot execute privileged command: verify daemon running and socket permissions
+- signature invalid: verify controller public key and signing chain
+- no telemetry: verify gateway reachability and auth token validity
+- duplicate identity: verify device ID persistence path and overrides

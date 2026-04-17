@@ -1,190 +1,163 @@
 # quoodle-agent-windows
 
-Windows endpoint agent. It can run in console mode or as a Windows Service, connects to the gateway over WSS, verifies signatures, and forwards privileged commands to the kernel driver via IOCTL.
+Windows endpoint runtime for Quoodle.
 
-## Build
+It is a service-first architecture:
 
-**Prerequisites:** CMake 3.20+, Visual Studio 2022
+- background service (`QuoodleAgent`) is the durable runtime
+- UI companion is a local observer/controller over named pipe
+- privileged execution is brokered through kernel guard IOCTL path
 
-```bash
-mkdir build && cd build
-cmake ..
-cmake --build . --config Release
-```
+## 1. Responsibilities
 
-## Run Modes
+Service responsibilities:
 
-Console mode:
+- authenticate to gateway and maintain session
+- verify command signatures
+- execute command handlers and privileged dispatches
+- persist runtime identity artifacts under `C:\ProgramData\Quoodle`
+- expose local UI bridge at `\\.\pipe\QuoodleAgentUiBridge`
 
-```bash
-agent.exe --console
-```
+UI companion responsibilities:
 
-Service mode (for SCM):
+- display runtime onboarding, health, telemetry, and command state
+- trigger sync/reconnect/pairing-related actions through bridge ops
+- never own persistence or enforcement lifecycle
 
-```bash
-agent.exe --service
-```
+## 2. Build
 
-Auto-detect mode (default):
+Prerequisites:
 
-- If started by SCM, runs as service.
-- Otherwise falls back to console mode.
+- Visual Studio 2022 C++ toolchain + Windows SDK
+- CMake 3.20+
 
-## Install Service
-
-```powershell
-.\scripts\install_agent_service.ps1 -ExePath "C:\path\to\agent.exe"
-```
-
-Default service name: `QuoodleAgent`
-
-Optional flags:
-
-- `-DelayedAutoStart`
-- `-RestartDelayMs 5000`
-
-Uninstall:
+From `quoodle-agent-windows`:
 
 ```powershell
-.\scripts\uninstall_agent_service.ps1
+$cmakeCandidates = @("C:\Program Files\CMake\bin\cmake.exe")
+$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+if (Test-Path $vswhere) {
+  $vsRoots = & $vswhere -products * -property installationPath
+  foreach ($r in $vsRoots) {
+    $cmakeCandidates += (Join-Path $r "Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe")
+  }
+}
+$cmakeExe = $cmakeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $cmakeExe) { throw "CMake not found." }
+
+& $cmakeExe -S . -B build --fresh -DUSE_ZLIB=OFF -DIXWEBSOCKET_INSTALL=OFF
+& $cmakeExe --build build --config Release --target agent -- /m:1 /v:minimal
 ```
 
-## Background Runtime Guarantee
+Binary output:
 
-- The service runs in the background (Session 0) independently of any UI process.
-- Closing UI windows does not stop the service.
-- Service recovery is configured to auto-restart on failures.
-- The service worker loop auto-restarts communicator sessions if the WSS loop exits unexpectedly.
+- `build\Release\agent.exe`
 
-## Device Identity
+## 3. Run Modes
 
-Persists to `C:/ProgramData/Quoodle/device_id` (auto-generated on first run).
-
-Override order:
-
-- `AGENT_DEVICE_ID`
-- `AGENT_DEVICE_ID_FILE`
-- default path
-
-## Pairing Bootstrap Mode
-
-- If `AGENT_JWT` is missing, the agent now starts in discovery mode and still sends AUTH to gateway/control-plane.
-- Unknown devices are surfaced as pending pairing (`pending_pairing`) until pairing completes.
-- Once pairing succeeds and `agent_jwt` is written, subsequent AUTH uses the paired credentials automatically.
-
-## Agent Signing Key Bootstrap
-
-Ed25519 private key lookup order:
-
-1. `ED25519_PRIVATE_KEY_B64`
-2. DPAPI vars (`ED25519_PRIVATE_KEY_DPAPI_B64` / `ED25519_PRIVATE_KEY_DPAPI_PATH`)
-3. File path `ED25519_PRIVATE_KEY_PATH` (default `C:/ProgramData/Quoodle/ed25519_private_key.b64`)
-
-If no key exists and the agent is unpaired (no `AGENT_JWT`), a local key is auto-generated and persisted to the default file path.
-
-Disable auto-generation:
+Console diagnostics:
 
 ```powershell
-$env:ED25519_AUTOGEN_PRIVATE_KEY = "0"
+.\build\Release\agent.exe --console
 ```
 
-## Security
-
-- Verifies signed command envelopes from control plane.
-- Forwards privileged operations to `quoodle-kernel-guard` via IOCTL (no direct privileged execution in agent process).
-- Driver transport is enabled by default (fail-closed when driver is unavailable).
-- Explicitly disable driver mode only for lab/dev with `QUOODLE_USE_KERNEL_DRIVER=0`.
-- Explicit pipe fallback is dev/lab only: `QUOODLE_ALLOW_PIPE_FALLBACK=1`.
-- Command signature verification requires controller public key (`CONTROLLER_PUBKEY_B64` or `CONTROLLER_PUBKEY_PATH`).
-
-## Telemetry Runtime Knobs
-
-- `AGENT_HEARTBEAT_INTERVAL_S` (default `30`)
-- `AGENT_TELEMETRY_INTERVAL_S` (default `60`)
-- `AGENT_TELEMETRY_HTTP_FALLBACK` (default `1`)
-- `AGENT_TELEMETRY_FALLBACK_URL` (default `http://localhost:8000`)
-- `AGENT_TELEMETRY_QUEUE_DB_PATH` (default `C:/ProgramData/Quoodle/telemetry_queue.db`)
-- `AGENT_TELEMETRY_BATCH_SIZE` (default `50`)
-- `AGENT_TELEMETRY_MAX_QUEUE_ITEMS` (default `5000`)
-- `AGENT_TELEMETRY_RETRY_BACKOFF_S` (default `5`)
-- `AGENT_TELEMETRY_RETRY_BACKOFF_MAX_S` (default `300`)
-
-## UI Companion (Milestone 1)
-
-Interactive Windows UI shell lives in `ui-companion/` and is intentionally decoupled from ring0 and backend runtime during this phase.
+Service mode:
 
 ```powershell
-cd ui-companion
-dotnet build .\Quoodle.Agent.UiCompanion.csproj -c Release -p:Platform=x64
+.\build\Release\agent.exe --service
 ```
 
-Current provider:
+Do not run console mode while service mode is active; single-instance guard will reject duplicate process.
 
-- `MockAgentStateProvider` (local interactive state)
-- `UiBridgeProvider` uses local named-pipe integration for runtime status/actions
+## 4. Install and Manage Service
 
-UI bridge runtime pipe (local machine only):
-
-- `\\.\pipe\QuoodleAgentUiBridge`
-- Ops: `status`, `sync_now`, `reconnect`
-
-Start with this order so pairing works cleanly.
-
-**1) Bring up backend + web UI**
-Use your repo root `c:\Users\felix\Work-Force\Quoodle`:
+Install/reinstall:
 
 ```powershell
-docker compose up -d --build control-plane gateway control-plane-ui
+.\scripts\install_agent_service.ps1 -ExePath "$PWD\build\Release\agent.exe"
 ```
 
-Open:
-
-- Control UI: `http://localhost:3000`
-- Control API: `http://localhost:8088`
-- Gateway health: `http://localhost:8000/health`
-
-**2) Build Windows agent runtime (C++)**
+Status:
 
 ```powershell
-cd quoodle-agent-windows
-mkdir build
-cd build
-cmake ..
-cmake --build . --config Release --target agent
+sc.exe query QuoodleAgent
 ```
 
-If needed, install/start service:
+The installer configures:
+
+- startup type
+- recovery actions
+- controller pubkey file path
+- service env defaults for kernel driver path
+
+## 5. Runtime Files and Identity
+
+Primary runtime files:
+
+- `C:\ProgramData\Quoodle\device_id`
+- `C:\ProgramData\Quoodle\agent_jwt`
+- `C:\ProgramData\Quoodle\agent_endpoint`
+- `C:\ProgramData\Quoodle\controller_pubkey.b64`
+- `C:\ProgramData\Quoodle\agent_pubkey`
+
+Identity source order:
+
+1. env override
+2. persisted runtime file
+3. generated bootstrap placeholder when unpaired
+
+## 6. Pairing and Enrollment
+
+- unpaired service can still start and expose bridge
+- pairing token/QR flow provisions device identity and JWT
+- ownership confirm in control UI binds device to user
+- service reconnect applies new credentials
+
+## 7. Security Notes
+
+- command signatures are verified locally
+- controller pubkey must match gateway signer
+- kernel-driver transport is default path (`QUOODLE_USE_KERNEL_DRIVER=1`)
+- pipe fallback is lab-only behavior
+
+## 8. UI Companion
+
+Build UI companion:
 
 ```powershell
-# from quoodle-agent-windows
-.\scripts\install_agent_service.ps1 -ExePath "C:\Users\felix\Work-Force\Quoodle\quoodle-agent-windows\build\Release\agent.exe"
-Start-Service QuoodleAgent
+$env:DOTNET_CLI_HOME="C:\Users\felix\Work-Force\Quoodle\.dotnet_cli_home"
+$env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE="1"
+dotnet build -c Release .\ui-companion\Quoodle.Agent.UiCompanion.csproj
 ```
 
-**3) Build + run UI companion**
+Launch UI:
 
 ```powershell
-cd c:\Users\felix\Work-Force\Quoodle\quoodle-agent-windows\ui-companion
-dotnet build .\Quoodle.Agent.UiCompanion.csproj -c Release -p:Platform=x64
+Start-Process ".\ui-companion\bin\Release\net8.0-windows10.0.26100.0\Quoodle.Agent.UiCompanion.exe"
 ```
 
-Then launch the generated UI exe from `bin\Release\...`.
+UI startup behavior:
 
-**4) Run mobile app**
+- checks service install state
+- starts service if stopped
+- waits for pipe bridge readiness
+- attaches to live runtime state
 
-```bash
-cd quoodle-mobile-client
-flutter pub get
-flutter run --dart-define=QDO_CONTROL_PLANE_BASE_URL=http://<YOUR_PC_IP>:8088/api
-```
+## 9. Troubleshooting
 
-- Physical phone: use your PC LAN IP, not `localhost`.
-- Emulator: use emulator loopback rules if needed (`10.0.2.2` on Android emulator).
+Service running but offline in UI/control plane:
 
-**5) Pairing flow (new)**
+1. `sc.exe query QuoodleAgent`
+2. probe `QuoodleAgentUiBridge` status payload
+3. verify `agent_jwt`, `device_id`, endpoint values
+4. verify gateway signing key parity with local `controller_pubkey.b64`
 
-1. In Control UI, open Pair Device and generate 6-digit code.  
-2. In Windows agent UI (Token tab), enter that 6-digit code.  
-3. In Control UI, confirm detected device details.  
-4. Optionally, use QR tab in Windows UI and scan from mobile app; mobile now confirms via `/pair/confirm`.
+Commands stuck queued:
+
+- validate `authenticated=true` in pipe status
+- verify gateway logs show device channel online
+
+Signature invalid:
+
+- compare local `controller_pubkey.b64` with `GET /api/v1/controller/signing-key`
+- restart service after key refresh

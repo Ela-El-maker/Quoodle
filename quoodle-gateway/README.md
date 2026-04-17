@@ -1,64 +1,93 @@
 # quoodle-gateway
 
-Real-time WebSocket gateway and command routing broker. Sits between the Control Plane and endpoint agents — verifies signatures, enforces TTL/replay rules, and routes commands.
+FastAPI gateway for real-time device connectivity and command routing.
 
-**Stack:** FastAPI / Python 3.11
+Primary functions:
 
-## Build & Run
+- terminates agent WebSocket connections
+- tracks online authenticated device presence
+- accepts command dispatch from control plane
+- forwards command envelopes to device channels
+- returns command ACK/results and device lifecycle events via webhooks
 
-**Prerequisites:** Python 3.11+, Redis
+Stack:
 
-```bash
-python3 -m venv venv && source venv/bin/activate
+- Python 3.11
+- FastAPI/Uvicorn
+- Redis (presence and broker support)
+
+## 1. Local Run
+
+From `quoodle-gateway`:
+
+```powershell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-Or via Docker from the repo root:
+Health endpoint:
 
-```bash
-./scripts/setup_dev.sh
+- `GET /health`
+
+## 2. Core Endpoints
+
+HTTP:
+
+- `POST /api/v1/command/dispatch`
+- `POST /api/v1/policy/push`
+- `POST /api/v1/update/deploy`
+- `POST /api/v1/webhook/device/paired`
+- `GET /api/v1/controller/signing-key`
+- admin quarantine endpoints
+
+WebSocket:
+
+- `WS /agent`
+
+## 3. Runtime Data Flow
+
+1. Agent connects to `/agent`.
+2. Agent sends auth payload (device identity + JWT/signature context).
+3. Gateway validates and marks session presence.
+4. Control plane dispatches signed command envelope.
+5. Gateway routes envelope to device channel.
+6. Agent ACK/result is received and relayed to control plane webhook.
+
+## 4. Security Controls
+
+Config toggles:
+
+- `REQUIRE_LARAVEL_SIGNATURE`
+- `SIGN_LARAVEL_WEBHOOKS`
+- `REQUIRE_ED25519`
+
+Operational guidance:
+
+- keep signature verification enabled in non-lab environments
+- avoid accepting unsigned command or webhook payloads
+- reject stale, malformed, or mismatched device envelopes
+
+## 5. Docker Run
+
+From repo root:
+
+```powershell
+docker compose up -d --build gateway
 ```
 
-### TLS (optional)
+## 6. Project Layout
 
-Set `GATEWAY_TLS_CERT_FILE`, `GATEWAY_TLS_KEY_FILE`, and optionally `GATEWAY_TLS_CA_FILE`:
+- `app/main.py` app startup
+- `app/api_controller.py` HTTP API routes
+- `app/ws/` WS protocol and state handling
+- `app/config.py` env config
+- `tests/` unit/integration checks
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
-```
+## 7. Troubleshooting
 
-## Configuration
-
-| Variable                    | Purpose                                                |
-| --------------------------- | ------------------------------------------------------ |
-| `REQUIRE_LARAVEL_SIGNATURE` | Reject unsigned commands from backend (must be `true`) |
-| `SIGN_LARAVEL_WEBHOOKS`     | Sign telemetry updates for Control Plane trust         |
-| `REQUIRE_ED25519`           | Enforce strict agent message signature verification    |
-
-## API Endpoints
-
-| Method   | Path                                   | Description                              |
-| -------- | -------------------------------------- | ---------------------------------------- |
-| `GET`    | `/health`                              | Liveness probe with Redis status         |
-| `WS`     | `/agent`                               | WebSocket endpoint for agent connections |
-| `POST`   | `/api/v1/command/dispatch`             | Dispatch signed commands to agents       |
-| `GET`    | `/api/v1/devices/online`               | List connected devices                   |
-| `POST`   | `/api/v1/policy/push`                  | Push policy to agents                    |
-| `POST`   | `/api/v1/update/deploy`                | Deploy OTA updates                       |
-| `POST`   | `/api/v1/webhook/device/paired`        | Register paired device keys              |
-| `POST`   | `/api/v1/admin/quarantine/{device_id}` | Quarantine a device                      |
-| `DELETE` | `/api/v1/admin/quarantine/{device_id}` | Lift quarantine                          |
-
-## Project Structure
-
-```
-app/
-├── main.py              # FastAPI app entry point
-├── config.py            # Environment configuration
-├── api_controller.py    # HTTP route handlers
-├── ws/                  # WebSocket protocol handling
-└── ...
-services/                # Business logic services
-tests/                   # Unit and integration tests
-```
+- device appears offline while service running: verify WS auth success and presence updates
+- commands stuck queued: verify dispatch endpoint reached gateway and device channel exists
+- signature failures: verify controller public key and envelope signing path
+- webhook mismatch: verify shared signing/verification configuration between gateway and control plane

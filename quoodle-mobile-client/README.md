@@ -1,296 +1,92 @@
 # quoodle-mobile-client
 
-Operator mobile application for Quoodle device fleet operations.
+Flutter mobile operator app for Quoodle.
 
-This app is used to:
+Primary use cases:
 
-- authenticate operators
-- monitor fleet health
-- inspect device details and alerts
-- pair devices via QR/manual token
-- issue privileged/sensitive commands with 2FA flow
-- review command timelines, notifications, scheduler, analytics, and audit views
+- authentication and session management
+- device pairing (QR or token-assisted)
+- fleet/device visibility
+- command issue and result tracking
+- alerts, notifications, scheduling, and audit views
 
-## Stack
+## 1. Stack
 
-- Flutter (Material 3)
+- Flutter
 - Dart
-- Riverpod (state orchestration)
-- GoRouter (routing/redirects)
-- Dio (API client abstraction)
-- Shared Preferences + Secure Storage (local/session persistence)
-- Sizer (responsive helpers)
+- Riverpod
+- GoRouter
+- Dio
+- Shared preferences + secure storage
 
-## Runtime Architecture
+## 2. Architecture
 
-Dependency direction:
+Layer direction:
 
 `presentation -> application/state -> domain <- data`
 
-Key rules:
+Principles:
 
-- presentation does not directly call data sources
+- UI layer does not directly own data source logic
 - repositories implement domain contracts
-- app layer owns bootstrap, routing, and dependency composition
-- core layer owns cross-cutting concerns (errors/network/storage/services)
+- app bootstrap composes dependencies and navigation guards
+- core layer owns networking, storage, and shared services
 
-Reference architecture notes:
+## 3. Startup and Routing
 
-- `docs/mobile-architecture.md`
-- `docs/mobile-feature-template.md`
-
-## Design System (Current App Design)
-
-Source: `lib/theme/app_theme.dart`
-
-- Visual mode: dark command-center UI with glass surfaces
-- Primary color: `#00D4FF`
-- Secondary color: `#10B981`
-- Warning/Error: `#F59E0B` / `#EF4444`
-- Base surfaces:
-  - background `#0B0D10`
-  - surface `#12161B`
-  - surfaceVariant `#181D23`
-  - border `#252B33`
-- Typography:
-  - IBM Plex Sans (UI text)
-  - IBM Plex Mono (technical metadata/code-like labels)
-- Navigation language:
-  - liquid/glass bottom nav on phone
-  - nav rail on tablet
-
-## App Bootstrap
-
-Bootstrap entry:
+Entry points:
 
 - `lib/main.dart`
 - `lib/app/bootstrap/bootstrap.dart`
 
-Startup behavior:
-
-- initializes Flutter bindings
-- configures global error widget
-- locks orientation to portrait
-- initializes notification service post-first-frame
-
-## Routing and Navigation
-
-Router source:
+Router:
 
 - `lib/app/router/app_router.dart`
 
-Route constants:
+Common route surfaces include authentication, dashboard, devices, command timeline, scanner, alerts, settings, scheduler, notifications, and audit views.
 
-- `lib/app/router/route_paths.dart`
-- `lib/app/router/route_names.dart`
+## 4. Command UX Scope
 
-Navigation helper:
+Mobile command flow supports command selection, parameter shaping, sensitive confirmation, OTP verification path (where enabled), and timeline/result inspection.
 
-- `lib/app/router/app_navigator.dart`
+## 5. Networking
 
-Auth redirect guard:
+Endpoint constants live in:
 
-- `lib/app/router/route_guards.dart`
+- `lib/core/network/endpoints.dart`
 
-### Full Page Catalog (All Routes)
+Primary auth/session APIs:
 
-| Route Path                    | Screen                   | Purpose                                      |
-| ----------------------------- | ------------------------ | -------------------------------------------- |
-| `/`                           | AuthenticationScreen     | Initial route, auth gate entry               |
-| `/authentication-screen`      | AuthenticationScreen     | Login / 2FA authentication                   |
-| `/dashboard-screen`           | DashboardScreen          | Fleet overview, KPIs, chart, activity        |
-| `/devices-screen`             | DevicesScreen            | Device inventory and quick actions           |
-| `/device-detail-screen`       | DeviceDetailScreen       | Deep device inspection and actions           |
-| `/command-timeline-screen`    | CommandTimelineScreen    | Command execution timeline and results       |
-| `/alerts-screen`              | AlertsScreen             | Fleet alert triage and drill-in              |
-| `/qr-scanner-screen`          | QrScannerScreen          | Device pairing via QR/manual token           |
-| `/send-command-screen`        | SendCommandScreen        | Command authoring + policy + 2FA submit      |
-| `/settings-screen`            | SettingsScreen           | Profile/account + notification/user settings |
-| `/scheduler-screen`           | SchedulerScreen          | Job scheduling and execution history         |
-| `/notification-center-screen` | NotificationCenterScreen | Notification inbox and read/delete ops       |
-| `/audit-log-screen`           | AuditLogScreen           | Audit event stream                           |
-| `/analytics-screen`           | AnalyticsScreen          | Analytics dashboards and breakdowns          |
+- `/auth/login`
+- `/auth/refresh`
+- `/auth/me`
 
-### Nested Page Sections and Tabs
+Additional device/pair/command APIs are consumed through feature repositories and service adapters.
 
-- Bottom navigation primary tabs:
-  - Fleet
-  - Devices
-  - Commands
-  - Alerts
-  - Profile
+## 6. Build and Run
 
-- Device detail tabs:
-  - Overview
-  - Telemetry
-  - Commands
-  - Alerts
-  - Audit
-
-- Scheduler tabs:
-  - Active
-  - Paused
-  - History
-
-- Analytics tabs:
-  - Commands
-  - Health
-  - Compliance
-  - Operators
-
-- Settings tabs:
-  - Account
-  - Notifications
-  - Command Queue
-
-## Command Catalog (Send Command Screen)
-
-Source: `lib/presentation/send_command_screen/send_command_screen.dart`
-
-Implemented command methods:
-
-| Method ID            | Label        | Sensitive |
-| -------------------- | ------------ | --------- |
-| `screenshot_capture` | Screenshot   | Yes       |
-| `process_list`       | Process List | No        |
-| `running_apps`       | Running Apps | No        |
-| `filesystem`         | Filesystem   | Yes       |
-| `system_info`        | System Info  | No        |
-| `network_info`       | Network Info | No        |
-| `collect_telemetry`  | Telemetry    | No        |
-| `lock_screen`        | Lock Screen  | No        |
-| `policy_sync`        | Policy Sync  | No        |
-| `upload_file`        | Upload File  | Yes       |
-| `create_file`        | Create File  | Yes       |
-| `reboot`             | Reboot       | Yes       |
-
-Command flow:
-
-- operator chooses method
-- method-specific params form is rendered
-- sensitive methods require explicit confirm path
-- operator passes OTP verification
-- app navigates to command timeline with payload/context
-
-## API Endpoint Catalog
-
-This section includes both:
-
-- app-configured endpoints in mobile code
-- system protocol endpoints documented for control-plane/gateway integration
-
-### A) Mobile App Configured Endpoints (Current)
-
-Source: `lib/core/network/endpoints.dart`
-
-| Endpoint             | Purpose                               |
-| -------------------- | ------------------------------------- |
-| `/auth/login`        | operator login                        |
-| `/auth/refresh`      | refresh access token/session          |
-| `/auth/me`           | get operator profile/session identity |
-| `/dashboard/summary` | retrieve dashboard summary payload    |
-
-Notes:
-
-- API client abstraction lives in `lib/core/network/api_client.dart` and `lib/core/network/dio_provider.dart`.
-- These endpoints are the canonical constants currently defined in mobile code.
-
-### B) Quoodle System Protocol Endpoints (Control Plane + Gateway)
-
-Source: `../docs/protocols/api_endpoints.md`
-
-#### Laravel <-> Mobile (REST)
-
-Functional surface documented in protocol:
-
-- register
-- login
-- 2fa/verify
-- token/refresh
-- logout
-- devices list/detail/rename
-- pairing init/confirm
-- commands CRUD
-- telemetry latest/history
-- updates listing
-- alerts list/ack
-- audit trail
-
-#### Laravel -> FastAPI (REST/Webhook)
-
-- `POST /api/v1/command/dispatch`
-- `POST /api/v1/policy/push`
-- `POST /api/v1/update/deploy`
-- `POST /api/v1/webhook/device/paired`
-
-#### FastAPI -> Laravel (REST/Webhook)
-
-- `POST /api/v1/webhook/device/online`
-- `POST /api/v1/webhook/device/offline`
-- `POST /api/v1/webhook/device/activated`
-- `POST /api/v1/webhook/command/result`
-- `POST /api/v1/webhook/command/ack`
-- `POST /api/v1/webhook/telemetry/summary`
-- `POST /api/v1/webhook/security/attestation`
-
-## Project Structure (Current)
-
-```text
-quoodle-mobile-client/
-├── lib/
-│   ├── app/                  # bootstrap, DI, router, app composition
-│   ├── core/                 # cross-cutting infra (errors/network/storage/services)
-│   ├── features/             # feature modules (presentation/domain/data)
-│   ├── models/               # shared model classes
-│   ├── presentation/         # screen implementations
-│   ├── services/             # legacy/compat service facades
-│   ├── theme/                # visual system and theme tokens
-│   └── widgets/              # reusable UI widgets
-├── docs/                     # mobile architecture docs
-├── test/                     # unit/widget/feature tests
-└── pubspec.yaml
-```
-
-## State Management
-
-- Riverpod controllers are primary orchestration surface
-- `ConsumerStatefulWidget` is used for local view state + provider integration
-- local ephemeral state remains via `setState` where appropriate (input/UI toggles)
-
-## Performance and UX Notes
-
-- startup heavy initialization shifted away from first frame where possible
-- non-critical dashboard sections use deferred loading (`DeferredLoader`)
-- overflow protections applied to short-screen scenarios (notably QR manual entry)
-- command timeline includes bottom navigation and safe back behavior
-
-## Security Notes
-
-- sensitive command methods require policy/confirmation + OTP flow
-- secure storage abstractions are present for token/session data handling
-- no local command execution; actions are dispatched as intent/operations flow
-
-## Build and Run
-
-Prerequisites:
-
-- Flutter SDK (stable channel)
-- Android Studio/Xcode toolchain
-
-Install and run:
-
-```bash
+```powershell
+flutter clean
 flutter pub get
 flutter run
 ```
 
-Analyze and test:
+## 7. Analyze and Test
 
-```bash
+```powershell
 flutter analyze lib
 flutter test
 ```
 
-## Maintainer Notes
+## 8. Local Integration Notes
 
-If routes, command methods, or endpoint constants change, update this README in the same PR so docs remain source-aligned.
+- when testing against local backend from physical phone, use host LAN IP, not `localhost`
+- ensure control plane/gateway are reachable from phone network
+- verify token refresh and auth redirects before pairing tests
+
+## 9. Troubleshooting
+
+- scanner not detecting QR: verify camera permission and QR payload format
+- auth loops: inspect refresh interceptor and `/auth/me` response
+- missing devices: verify pairing completed and role assignment updated
+- command submit fails: verify endpoint base URL and session token freshness
