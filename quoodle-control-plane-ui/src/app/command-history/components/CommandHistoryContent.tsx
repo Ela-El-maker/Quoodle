@@ -1,8 +1,27 @@
 'use client';
-import React, { useState, useMemo } from 'react';
-import { Search, RefreshCw, RotateCcw, X, Terminal, CheckCircle, XCircle, Clock, ChevronDown, ChevronUp, Copy, Download, Filter } from 'lucide-react';
+
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Search,
+  RefreshCw,
+  RotateCcw,
+  X,
+  Terminal,
+  CheckCircle,
+  XCircle,
+  Clock,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Download,
+  Filter,
+  Loader2,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import StatusBadge from '@/components/ui/StatusBadge';
+import { mapCommandListRow, resultPreview, type CommandListRowApi } from '@/lib/commandResults';
+import { resolveCommandMethod } from '@/lib/commandMethodResolver';
+import { formatLocalDateTime } from '@/lib/dateTime';
 
 type CommandState = 'queued' | 'dispatched' | 'ack_received' | 'executing' | 'completed' | 'failed' | 'expired' | 'rejected';
 
@@ -15,34 +34,69 @@ interface HistoryCommand {
   state: CommandState;
   actor: string;
   queuedAt: string;
+  queuedAtIso: string | null;
   completedAt: string | null;
+  completedAtIso: string | null;
   duration: string | null;
   errorMessage: string | null;
   priority: 'normal' | 'high';
   batchId: string | null;
   resultPreview: string | null;
   resultType: string | null;
+  params: Record<string, unknown>;
 }
 
-const mockHistory: HistoryCommand[] = [
-  { id: 'CMD-7742', traceId: 'TRACE-7742', deviceId: 'WKSTN-055', hostname: 'WKSTN-055', method: 'system-info', state: 'completed', actor: 'chloe.dubois@quoodle.io', queuedAt: '2026-04-05 21:06:01', completedAt: '2026-04-05 21:06:09', duration: '8s', errorMessage: null, priority: 'normal', batchId: 'BATCH-001', resultPreview: 'Windows 11 Pro 22H2 · 12-core · 32GB RAM · 512GB disk', resultType: 'system-info' },
-  { id: 'CMD-7741', traceId: 'TRACE-7741', deviceId: 'WKSTN-042', hostname: 'WKSTN-042', method: 'lock_screen', state: 'failed', actor: 'raj.mehta@quoodle.io', queuedAt: '2026-04-05 21:01:55', completedAt: '2026-04-05 21:01:58', duration: '3s', errorMessage: 'Kernel opcode not supported', priority: 'normal', batchId: null, resultPreview: null, resultType: null },
-  { id: 'CMD-7740', traceId: 'TRACE-7740', deviceId: 'WKSTN-042', hostname: 'WKSTN-042', method: 'screenshot-capture', state: 'completed', actor: 'admin@quoodle.io', queuedAt: '2026-04-05 21:04:50', completedAt: '2026-04-05 21:04:54', duration: '4s', errorMessage: null, priority: 'normal', batchId: null, resultPreview: '1920×1080 PNG · 2.4 MB', resultType: 'screenshot-capture' },
-  { id: 'CMD-7739', traceId: 'TRACE-7739', deviceId: 'WKSTN-088', hostname: 'WKSTN-088', method: 'process-list', state: 'completed', actor: 'ops.team@quoodle.io', queuedAt: '2026-04-05 21:05:40', completedAt: '2026-04-05 21:05:48', duration: '8s', errorMessage: null, priority: 'normal', batchId: 'BATCH-003', resultPreview: '142 processes · 8 high-CPU · 3 suspicious', resultType: 'process-list' },
-  { id: 'CMD-7738', traceId: 'TRACE-7738', deviceId: 'SRV-PROD-01', hostname: 'SRV-PROD-01', method: 'ping', state: 'expired', actor: 'devops@quoodle.io', queuedAt: '2026-04-05 20:55:00', completedAt: null, duration: null, errorMessage: 'TTL exceeded — dispatch timeout', priority: 'normal', batchId: null, resultPreview: null, resultType: null },
-  { id: 'CMD-7737', traceId: 'TRACE-7737', deviceId: 'WKSTN-001', hostname: 'WKSTN-001', method: 'filesystem', state: 'completed', actor: 'sarah.chen@quoodle.io', queuedAt: '2026-04-05 21:03:10', completedAt: '2026-04-05 21:03:18', duration: '8s', errorMessage: null, priority: 'normal', batchId: null, resultPreview: 'C:\\ · 512 GB · 187 GB used · 4 dirs scanned', resultType: 'filesystem' },
-  { id: 'CMD-7736', traceId: 'TRACE-7736', deviceId: 'WKSTN-019', hostname: 'WKSTN-019', method: 'network-info', state: 'completed', actor: 'alex.kumar@quoodle.io', queuedAt: '2026-04-05 20:45:00', completedAt: '2026-04-05 20:45:06', duration: '6s', errorMessage: null, priority: 'high', batchId: null, resultPreview: '3 interfaces · IPv4 10.0.1.29 · DNS 8.8.8.8', resultType: 'network-info' },
-  { id: 'CMD-7735', traceId: 'TRACE-7735', deviceId: 'PC002', hostname: 'WKSTN-002', method: 'installed-apps', state: 'completed', actor: 'james.wright@quoodle.io', queuedAt: '2026-04-05 20:58:00', completedAt: '2026-04-05 20:58:12', duration: '12s', errorMessage: null, priority: 'normal', batchId: 'BATCH-004', resultPreview: '247 apps · 12 outdated · 2 flagged', resultType: 'installed-apps' },
-  { id: 'CMD-7734', traceId: 'TRACE-7734', deviceId: 'WKSTN-103', hostname: 'WKSTN-103', method: 'event-logs', state: 'completed', actor: 'yuki.tanaka@quoodle.io', queuedAt: '2026-04-05 20:52:00', completedAt: '2026-04-05 20:52:18', duration: '18s', errorMessage: null, priority: 'normal', batchId: null, resultPreview: '1,024 events · 14 errors · 3 critical', resultType: 'event-logs' },
-  { id: 'CMD-7733', traceId: 'TRACE-7733', deviceId: 'WKSTN-007', hostname: 'WKSTN-007', method: 'hardware-info', state: 'completed', actor: 'ops.team@quoodle.io', queuedAt: '2026-04-05 20:40:00', completedAt: '2026-04-05 20:40:09', duration: '9s', errorMessage: null, priority: 'normal', batchId: null, resultPreview: 'Intel i5-11400 · 16GB DDR4 · NVIDIA RTX 3060', resultType: 'hardware-info' },
-  { id: 'CMD-7732', traceId: 'TRACE-7732', deviceId: 'WKSTN-055', hostname: 'WKSTN-055', method: 'performance-metrics', state: 'completed', actor: 'chloe.dubois@quoodle.io', queuedAt: '2026-04-05 20:30:00', completedAt: '2026-04-05 20:30:07', duration: '7s', errorMessage: null, priority: 'normal', batchId: 'BATCH-001', resultPreview: 'CPU 12% · RAM 45% · Disk I/O 8 MB/s', resultType: 'performance-metrics' },
-  { id: 'CMD-7731', traceId: 'TRACE-7731', deviceId: 'WKSTN-001', hostname: 'WKSTN-001', method: 'services-list', state: 'completed', actor: 'sarah.chen@quoodle.io', queuedAt: '2026-04-05 20:20:00', completedAt: '2026-04-05 20:20:11', duration: '11s', errorMessage: null, priority: 'normal', batchId: null, resultPreview: '312 services · 248 running · 4 stopped', resultType: 'services-list' },
-  { id: 'CMD-7730', traceId: 'TRACE-7730', deviceId: 'SRV-PROD-01', hostname: 'SRV-PROD-01', method: 'users-list', state: 'rejected', actor: 'devops@quoodle.io', queuedAt: '2026-04-05 20:10:00', completedAt: null, duration: null, errorMessage: 'Policy evaluation: role authorization denied', priority: 'normal', batchId: null, resultPreview: null, resultType: null },
-];
+interface CommandsApiResponse {
+  commands?: CommandListRowApi[];
+}
 
-const ACTORS = Array.from(new Set(mockHistory.map(c => c.actor)));
-const DEVICES = Array.from(new Set(mockHistory.map(c => c.hostname)));
-const METHODS = Array.from(new Set(mockHistory.map(c => c.method)));
+interface DispatchResponse {
+  command_id?: string;
+  reason?: string;
+  message?: string;
+}
+
+function parseTimeMs(value: string | null | undefined): number {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatDuration(startIso: string | null | undefined, endIso: string | null | undefined): string | null {
+  if (!startIso || !endIso) return null;
+  const start = parseTimeMs(startIso);
+  const end = parseTimeMs(endIso);
+  if (!start || !end || end < start) return null;
+  return `${Math.round((end - start) / 1000)}s`;
+}
+
+function toHistoryCommand(rowApi: CommandListRowApi): HistoryCommand {
+  const normalized = mapCommandListRow(rowApi);
+  const priority = String((rowApi as { priority?: unknown }).priority ?? '').toLowerCase() === 'high' ? 'high' : 'normal';
+  const batchId = (rowApi as { batch_id?: unknown }).batch_id;
+  const resultTypeRaw = (normalized.result?.meta as { kind?: unknown } | undefined)?.kind;
+
+  return {
+    id: normalized.commandId,
+    traceId: normalized.traceId ?? '-',
+    deviceId: normalized.deviceId,
+    hostname: normalized.deviceName || normalized.deviceId,
+    method: normalized.method,
+    state: normalized.state,
+    actor: normalized.actorEmail,
+    queuedAt: formatLocalDateTime(normalized.queuedAt, '-'),
+    queuedAtIso: normalized.queuedAt,
+    completedAt: normalized.completedAt ? formatLocalDateTime(normalized.completedAt, '-') : null,
+    completedAtIso: normalized.completedAt,
+    duration: formatDuration(normalized.queuedAt, normalized.completedAt),
+    errorMessage: normalized.errorMessage ?? normalized.reason,
+    priority,
+    batchId: typeof batchId === 'string' && batchId.trim() ? batchId.trim() : null,
+    resultPreview: resultPreview(normalized),
+    resultType: typeof resultTypeRaw === 'string' && resultTypeRaw.trim() ? resultTypeRaw.trim() : null,
+    params: normalized.params ?? {},
+  };
+}
 
 export default function CommandHistoryContent() {
   const [search, setSearch] = useState('');
@@ -56,73 +110,211 @@ export default function CommandHistoryContent() {
   const [sortKey, setSortKey] = useState<keyof HistoryCommand>('queuedAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
+  const [history, setHistory] = useState<HistoryCommand[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isReplaying, setIsReplaying] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string | null>(null);
+
+  const listAbortRef = useRef<AbortController | null>(null);
+
+  const fetchHistory = useCallback(async (mode: 'initial' | 'refresh' | 'silent' = 'initial') => {
+    if (mode === 'initial') setIsLoading(true);
+    if (mode === 'refresh') setIsRefreshing(true);
+
+    listAbortRef.current?.abort();
+    const controller = new AbortController();
+    listAbortRef.current = controller;
+
+    try {
+      const response = await fetch('/api/commands?limit=300', {
+        credentials: 'include',
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`http_${response.status}`);
+      const payload = (await response.json()) as CommandsApiResponse;
+      const mapped = (payload.commands ?? [])
+        .map(toHistoryCommand)
+        .sort((a, b) => parseTimeMs(b.queuedAtIso) - parseTimeMs(a.queuedAtIso));
+      setHistory(mapped);
+      setError(null);
+    } catch (fetchError) {
+      if ((fetchError as Error).name === 'AbortError') return;
+      console.error('command-history-load-failed', fetchError);
+      setError('Failed to load data');
+      if (mode === 'initial') setHistory([]);
+    } finally {
+      if (mode === 'initial') setIsLoading(false);
+      if (mode === 'refresh') setIsRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchHistory('initial');
+  }, [fetchHistory]);
+
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const startPolling = () => {
+      if (interval) clearInterval(interval);
+      const pollMs = document.visibilityState === 'visible' ? 15000 : 30000;
+      interval = setInterval(() => {
+        void fetchHistory('silent');
+      }, pollMs);
+    };
+
+    startPolling();
+    const handleVisibility = () => startPolling();
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      if (interval) clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      listAbortRef.current?.abort();
+    };
+  }, [fetchHistory]);
+
+  const actors = useMemo(() => Array.from(new Set(history.map((command) => command.actor))).sort(), [history]);
+  const devices = useMemo(() => Array.from(new Set(history.map((command) => command.hostname))).sort(), [history]);
+  const methods = useMemo(() => Array.from(new Set(history.map((command) => command.method))).sort(), [history]);
+
   const filtered = useMemo(() => {
-    let data = mockHistory.filter(c => {
-      const matchSearch = !search || c.id.toLowerCase().includes(search.toLowerCase()) || c.hostname.toLowerCase().includes(search.toLowerCase()) || c.method.toLowerCase().includes(search.toLowerCase()) || c.actor.toLowerCase().includes(search.toLowerCase()) || c.traceId.toLowerCase().includes(search.toLowerCase());
-      const matchDevice = deviceFilter === 'all' || c.hostname === deviceFilter;
-      const matchMethod = methodFilter === 'all' || c.method === methodFilter;
-      const matchActor = actorFilter === 'all' || c.actor === actorFilter;
-      const matchState = stateFilter === 'all' || c.state === stateFilter;
-      return matchSearch && matchDevice && matchMethod && matchActor && matchState;
+    const lowered = search.trim().toLowerCase();
+    const fromMs = dateFrom ? parseTimeMs(`${dateFrom}T00:00:00`) : 0;
+    const toMs = dateTo ? parseTimeMs(`${dateTo}T23:59:59`) : 0;
+
+    const data = history.filter((command) => {
+      const queuedMs = parseTimeMs(command.queuedAtIso);
+      const matchSearch = !lowered
+        || command.id.toLowerCase().includes(lowered)
+        || command.hostname.toLowerCase().includes(lowered)
+        || command.method.toLowerCase().includes(lowered)
+        || command.actor.toLowerCase().includes(lowered)
+        || command.traceId.toLowerCase().includes(lowered);
+      const matchDevice = deviceFilter === 'all' || command.hostname === deviceFilter;
+      const matchMethod = methodFilter === 'all' || command.method === methodFilter;
+      const matchActor = actorFilter === 'all' || command.actor === actorFilter;
+      const matchState = stateFilter === 'all' || command.state === stateFilter;
+      const matchFrom = fromMs === 0 || queuedMs >= fromMs;
+      const matchTo = toMs === 0 || queuedMs <= toMs;
+      return matchSearch && matchDevice && matchMethod && matchActor && matchState && matchFrom && matchTo;
     });
+
     data.sort((a, b) => {
-      const av = a[sortKey] ?? '';
-      const bv = b[sortKey] ?? '';
-      if (typeof av === 'string' && typeof bv === 'string') return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
-      return 0;
+      const direction = sortDir === 'asc' ? 1 : -1;
+      if (sortKey === 'queuedAt' || sortKey === 'completedAt') {
+        const aValue = sortKey === 'queuedAt' ? a.queuedAtIso : a.completedAtIso;
+        const bValue = sortKey === 'queuedAt' ? b.queuedAtIso : b.completedAtIso;
+        return (parseTimeMs(aValue) - parseTimeMs(bValue)) * direction;
+      }
+      const av = String(a[sortKey] ?? '');
+      const bv = String(b[sortKey] ?? '');
+      return av.localeCompare(bv) * direction;
     });
+
     return data;
-  }, [search, deviceFilter, methodFilter, actorFilter, stateFilter, sortKey, sortDir]);
+  }, [history, search, deviceFilter, methodFilter, actorFilter, stateFilter, sortKey, sortDir, dateFrom, dateTo]);
 
   const toggleSort = (key: keyof HistoryCommand) => {
-    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortKey(key); setSortDir('desc'); }
+    if (sortKey === key) setSortDir((value) => (value === 'asc' ? 'desc' : 'asc'));
+    else {
+      setSortKey(key);
+      setSortDir(key === 'queuedAt' ? 'desc' : 'asc');
+    }
   };
 
-  const SortIcon = ({ k }: { k: keyof HistoryCommand }) =>
-    sortKey === k ? (sortDir === 'asc' ? <ChevronUp size={11} className="text-primary" /> : <ChevronDown size={11} className="text-primary" />) : <ChevronUp size={11} className="text-muted-foreground/30" />;
+  const SortIcon = ({ k }: { k: keyof HistoryCommand }) => (
+    sortKey === k
+      ? (sortDir === 'asc' ? <ChevronUp size={11} className="text-primary" /> : <ChevronDown size={11} className="text-primary" />)
+      : <ChevronUp size={11} className="text-muted-foreground/30" />
+  );
 
-  const stateIcon = (s: CommandState) => {
-    if (s === 'completed') return <CheckCircle size={12} className="text-green-400 flex-shrink-0" />;
-    if (s === 'failed' || s === 'expired' || s === 'rejected') return <XCircle size={12} className="text-red-400 flex-shrink-0" />;
+  const stateIcon = (state: CommandState) => {
+    if (state === 'completed') return <CheckCircle size={12} className="text-green-400 flex-shrink-0" />;
+    if (state === 'failed' || state === 'expired' || state === 'rejected') return <XCircle size={12} className="text-red-400 flex-shrink-0" />;
     return <Clock size={12} className="text-amber-400 flex-shrink-0" />;
   };
 
-  const replayCommand = (cmd: HistoryCommand) => {
-    toast.promise(
-      new Promise(resolve => setTimeout(resolve, 1000)),
-      { loading: `Re-dispatching ${cmd.method} to ${cmd.hostname}…`, success: `Command replayed — new ID assigned`, error: 'Replay failed' }
-    );
+  const replayCommand = async (command: HistoryCommand) => {
+    setIsReplaying((prev) => new Set(prev).add(command.id));
+    try {
+      const response = await fetch('/api/commands', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          client_message_id: `history-replay-${command.deviceId}-${command.method}-${crypto.randomUUID()}`,
+          device_id: command.deviceId,
+          method: resolveCommandMethod(command.method),
+          params: command.params ?? {},
+          sensitive: command.priority === 'high',
+        }),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as DispatchResponse;
+      if (!response.ok || !payload.command_id) {
+        const reason = payload.reason ?? payload.message ?? `http_${response.status}`;
+        throw new Error(reason);
+      }
+
+      toast.success(`Replay queued (${payload.command_id})`);
+      void fetchHistory('refresh');
+    } catch (replayError) {
+      const message = replayError instanceof Error ? replayError.message : 'Failed to load data';
+      toast.error(`Replay failed: ${message}`);
+    } finally {
+      setIsReplaying((prev) => {
+        const next = new Set(prev);
+        next.delete(command.id);
+        return next;
+      });
+    }
   };
 
   const clearFilters = () => {
-    setSearch(''); setDeviceFilter('all'); setMethodFilter('all');
-    setActorFilter('all'); setStateFilter('all'); setDateFrom(''); setDateTo('');
+    setSearch('');
+    setDeviceFilter('all');
+    setMethodFilter('all');
+    setActorFilter('all');
+    setStateFilter('all');
+    setDateFrom('');
+    setDateTo('');
   };
 
   const hasFilters = search || deviceFilter !== 'all' || methodFilter !== 'all' || actorFilter !== 'all' || stateFilter !== 'all' || dateFrom || dateTo;
 
   return (
     <div className="space-y-4 fade-in">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Command History</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {filtered.length} of {mockHistory.length} commands · Searchable with one-click replay
+            {filtered.length} of {history.length} commands - Searchable with one-click replay
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => toast.info('History refreshed')} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground border border-border rounded-md hover:bg-muted/60 transition-colors">
-            <RefreshCw size={13} /> Refresh
+          <button
+            onClick={() => { void fetchHistory('refresh'); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground border border-border rounded-md hover:bg-muted/60 transition-colors"
+          >
+            <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} /> Refresh
           </button>
-          <button onClick={() => toast.success('Exporting history…')} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground border border-border rounded-md hover:bg-muted/60 transition-colors">
+          <button
+            onClick={() => toast.success('Exporting history...')}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground border border-border rounded-md hover:bg-muted/60 transition-colors"
+          >
             <Download size={13} /> Export
           </button>
         </div>
       </div>
 
-      {/* Filters */}
+      {error && (
+        <div className="bg-card border border-red-500/20 rounded-lg px-4 py-3 text-sm text-red-300">
+          Failed to load data
+        </div>
+      )}
+
       <div className="bg-card border border-border rounded-lg p-4 space-y-3">
         <div className="flex items-center gap-2">
           <Filter size={13} className="text-muted-foreground" />
@@ -138,25 +330,25 @@ export default function CommandHistoryContent() {
             <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search ID, device, method, actor…"
+              placeholder="Search ID, device, method, actor..."
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={(event) => setSearch(event.target.value)}
               className="w-full pl-7 pr-3 py-1.5 text-xs bg-muted/60 border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
             />
           </div>
-          <select value={deviceFilter} onChange={e => setDeviceFilter(e.target.value)} className="text-xs bg-muted/60 border border-border rounded-md px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
+          <select value={deviceFilter} onChange={(event) => setDeviceFilter(event.target.value)} className="text-xs bg-muted/60 border border-border rounded-md px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
             <option value="all">All Devices</option>
-            {DEVICES.map(d => <option key={d} value={d}>{d}</option>)}
+            {devices.map((device) => <option key={device} value={device}>{device}</option>)}
           </select>
-          <select value={methodFilter} onChange={e => setMethodFilter(e.target.value)} className="text-xs bg-muted/60 border border-border rounded-md px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
+          <select value={methodFilter} onChange={(event) => setMethodFilter(event.target.value)} className="text-xs bg-muted/60 border border-border rounded-md px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
             <option value="all">All Commands</option>
-            {METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+            {methods.map((method) => <option key={method} value={method}>{method}</option>)}
           </select>
-          <select value={actorFilter} onChange={e => setActorFilter(e.target.value)} className="text-xs bg-muted/60 border border-border rounded-md px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
+          <select value={actorFilter} onChange={(event) => setActorFilter(event.target.value)} className="text-xs bg-muted/60 border border-border rounded-md px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
             <option value="all">All Actors</option>
-            {ACTORS.map(a => <option key={a} value={a}>{a.split('@')[0]}</option>)}
+            {actors.map((actor) => <option key={actor} value={actor}>{actor.split('@')[0]}</option>)}
           </select>
-          <select value={stateFilter} onChange={e => setStateFilter(e.target.value)} className="text-xs bg-muted/60 border border-border rounded-md px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
+          <select value={stateFilter} onChange={(event) => setStateFilter(event.target.value)} className="text-xs bg-muted/60 border border-border rounded-md px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
             <option value="all">All States</option>
             <option value="completed">Completed</option>
             <option value="failed">Failed</option>
@@ -166,7 +358,6 @@ export default function CommandHistoryContent() {
         </div>
       </div>
 
-      {/* Results */}
       <div className="bg-card border border-border rounded-lg overflow-hidden">
         <div className="overflow-x-auto scrollbar-thin">
           <table className="w-full text-xs">
@@ -180,13 +371,13 @@ export default function CommandHistoryContent() {
                   { key: 'actor' as keyof HistoryCommand, label: 'Actor' },
                   { key: 'queuedAt' as keyof HistoryCommand, label: 'Queued At' },
                   { key: 'duration' as keyof HistoryCommand, label: 'Duration' },
-                ].map(col => (
+                ].map((column) => (
                   <th
-                    key={col.key}
+                    key={column.key}
                     className="px-3 py-3 text-left font-semibold text-muted-foreground tracking-wide uppercase text-[10px] cursor-pointer hover:text-foreground transition-colors whitespace-nowrap"
-                    onClick={() => toggleSort(col.key)}
+                    onClick={() => toggleSort(column.key)}
                   >
-                    <span className="flex items-center gap-1">{col.label}<SortIcon k={col.key} /></span>
+                    <span className="flex items-center gap-1">{column.label}<SortIcon k={column.key} /></span>
                   </th>
                 ))}
                 <th className="px-3 py-3 text-left font-semibold text-muted-foreground tracking-wide uppercase text-[10px] whitespace-nowrap">Result Preview</th>
@@ -194,94 +385,112 @@ export default function CommandHistoryContent() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filtered.length === 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={9} className="px-4 py-12 text-center">
+                    <Loader2 size={32} className="mx-auto text-muted-foreground/30 mb-3 animate-spin" />
+                    <p className="text-sm font-medium text-muted-foreground">Loading data...</p>
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="px-4 py-12 text-center">
                     <Terminal size={32} className="mx-auto text-muted-foreground/30 mb-3" />
-                    <p className="text-sm font-medium text-muted-foreground">No commands match your filters</p>
+                    <p className="text-sm font-medium text-muted-foreground">No data available</p>
                   </td>
                 </tr>
-              ) : filtered.map(cmd => (
-                <React.Fragment key={cmd.id}>
+              ) : filtered.map((command) => (
+                <React.Fragment key={command.id}>
                   <tr
-                    className={`hover:bg-muted/20 transition-colors cursor-pointer ${expandedId === cmd.id ? 'bg-muted/10' : ''}`}
-                    onClick={() => setExpandedId(expandedId === cmd.id ? null : cmd.id)}
+                    className={`hover:bg-muted/20 transition-colors cursor-pointer ${expandedId === command.id ? 'bg-muted/10' : ''}`}
+                    onClick={() => setExpandedId(expandedId === command.id ? null : command.id)}
                   >
-                    <td className="px-3 py-3 font-mono text-[11px] text-primary font-semibold">{cmd.id}</td>
-                    <td className="px-3 py-3 font-mono text-[11px]">{cmd.hostname}</td>
+                    <td className="px-3 py-3 font-mono text-[11px] text-primary font-semibold">{command.id}</td>
+                    <td className="px-3 py-3 font-mono text-[11px]">{command.hostname}</td>
                     <td className="px-3 py-3">
-                      <span className="px-2 py-0.5 bg-muted/60 rounded text-[11px] font-mono">{cmd.method}</span>
+                      <span className="px-2 py-0.5 bg-muted/60 rounded text-[11px] font-mono">{command.method}</span>
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex items-center gap-1.5">
-                        {stateIcon(cmd.state)}
-                        <StatusBadge variant={cmd.state} size="sm" />
+                        {stateIcon(command.state)}
+                        <StatusBadge variant={command.state} size="sm" />
                       </div>
                     </td>
-                    <td className="px-3 py-3 text-[11px] text-muted-foreground max-w-[120px] truncate">{cmd.actor.split('@')[0]}</td>
-                    <td className="px-3 py-3 text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">{cmd.queuedAt}</td>
-                    <td className="px-3 py-3 text-[11px] text-muted-foreground">{cmd.duration ?? '—'}</td>
+                    <td className="px-3 py-3 text-[11px] text-muted-foreground max-w-[120px] truncate">{command.actor.split('@')[0]}</td>
+                    <td className="px-3 py-3 text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">{command.queuedAt}</td>
+                    <td className="px-3 py-3 text-[11px] text-muted-foreground">{command.duration ?? '-'}</td>
                     <td className="px-3 py-3 text-[11px] text-muted-foreground max-w-[180px] truncate italic">
-                      {cmd.resultPreview ?? (cmd.errorMessage ? <span className="text-red-400 not-italic">{cmd.errorMessage}</span> : '—')}
+                      {command.resultPreview ?? (command.errorMessage ? <span className="text-red-400 not-italic">{command.errorMessage}</span> : '-')}
                     </td>
                     <td className="px-3 py-3">
-                      <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
-                        {(cmd.state === 'completed' || cmd.state === 'failed') && (
+                      <div className="flex items-center gap-1.5" onClick={(event) => event.stopPropagation()}>
+                        {(command.state === 'completed' || command.state === 'failed') && (
                           <button
-                            onClick={() => replayCommand(cmd)}
+                            onClick={() => { void replayCommand(command); }}
+                            disabled={isReplaying.has(command.id)}
                             title="Replay command"
-                            className="flex items-center gap-1 px-2 py-1 text-[11px] bg-primary/10 border border-primary/20 text-primary rounded hover:bg-primary/20 transition-colors"
+                            className="flex items-center gap-1 px-2 py-1 text-[11px] bg-primary/10 border border-primary/20 text-primary rounded hover:bg-primary/20 transition-colors disabled:opacity-60"
                           >
-                            <RotateCcw size={10} /> Replay
+                            {isReplaying.has(command.id) ? <Loader2 size={10} className="animate-spin" /> : <RotateCcw size={10} />} Replay
                           </button>
                         )}
                       </div>
                     </td>
                   </tr>
-                  {expandedId === cmd.id && (
+                  {expandedId === command.id && (
                     <tr className="bg-muted/10">
                       <td colSpan={9} className="px-4 py-4">
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                           <div className="bg-muted/30 rounded-lg p-3">
                             <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Trace ID</p>
-                            <p className="text-xs font-mono">{cmd.traceId}</p>
+                            <p className="text-xs font-mono">{command.traceId}</p>
                           </div>
                           <div className="bg-muted/30 rounded-lg p-3">
                             <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Device ID</p>
-                            <p className="text-xs font-mono">{cmd.deviceId}</p>
+                            <p className="text-xs font-mono">{command.deviceId}</p>
                           </div>
                           <div className="bg-muted/30 rounded-lg p-3">
                             <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Priority</p>
-                            <p className="text-xs font-semibold capitalize">{cmd.priority}</p>
+                            <p className="text-xs font-semibold capitalize">{command.priority}</p>
                           </div>
                           <div className="bg-muted/30 rounded-lg p-3">
                             <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Batch ID</p>
-                            <p className="text-xs font-mono">{cmd.batchId ?? '—'}</p>
+                            <p className="text-xs font-mono">{command.batchId ?? '-'}</p>
                           </div>
-                          {cmd.completedAt && (
+                          {command.completedAt && (
                             <div className="bg-muted/30 rounded-lg p-3">
                               <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Completed At</p>
-                              <p className="text-xs font-mono">{cmd.completedAt}</p>
+                              <p className="text-xs font-mono">{command.completedAt}</p>
                             </div>
                           )}
-                          {cmd.resultPreview && (
+                          {command.resultPreview && (
                             <div className="bg-muted/30 rounded-lg p-3 col-span-2">
                               <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Result Summary</p>
-                              <p className="text-xs">{cmd.resultPreview}</p>
+                              <p className="text-xs">{command.resultPreview}</p>
                             </div>
                           )}
-                          {cmd.errorMessage && (
+                          {command.errorMessage && (
                             <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 col-span-2">
                               <p className="text-[10px] text-red-400 uppercase tracking-wide mb-1">Error</p>
-                              <p className="text-xs text-red-400">{cmd.errorMessage}</p>
+                              <p className="text-xs text-red-400">{command.errorMessage}</p>
                             </div>
                           )}
                         </div>
                         <div className="flex items-center gap-2 mt-3">
-                          <button onClick={() => replayCommand(cmd)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary/10 border border-primary/20 text-primary rounded-md hover:bg-primary/20 transition-colors">
-                            <RotateCcw size={11} /> Replay Command
+                          <button
+                            onClick={() => { void replayCommand(command); }}
+                            disabled={isReplaying.has(command.id)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary/10 border border-primary/20 text-primary rounded-md hover:bg-primary/20 transition-colors disabled:opacity-60"
+                          >
+                            {isReplaying.has(command.id) ? <Loader2 size={11} className="animate-spin" /> : <RotateCcw size={11} />} Replay Command
                           </button>
-                          <button onClick={() => { navigator.clipboard.writeText(cmd.id); toast.success('Command ID copied'); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground border border-border rounded-md hover:bg-muted/60 transition-colors">
+                          <button
+                            onClick={async () => {
+                              await navigator.clipboard.writeText(command.id);
+                              toast.success('Command ID copied');
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground border border-border rounded-md hover:bg-muted/60 transition-colors"
+                          >
                             <Copy size={11} /> Copy ID
                           </button>
                         </div>
@@ -297,3 +506,4 @@ export default function CommandHistoryContent() {
     </div>
   );
 }
+
