@@ -14,6 +14,11 @@
 #include <mutex>
 #include <sstream>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <winhttp.h>
+#endif
+
 #include <ixwebsocket/IXNetSystem.h>
 #include <ixwebsocket/IXWebSocket.h>
 #include <nlohmann/json.hpp>
@@ -237,6 +242,272 @@ static bool write_runtime_device_id(const std::string &device_id, std::string &e
     return false;
   }
 }
+
+static std::filesystem::path runtime_controller_pubkey_path()
+{
+  if (const char *env = std::getenv("CONTROLLER_PUBKEY_PATH"); env && *env)
+  {
+    return std::filesystem::path(env);
+  }
+  return std::filesystem::path("C:/ProgramData/Quoodle/controller_pubkey.b64");
+}
+
+static std::string read_trimmed_file(const std::filesystem::path &path)
+{
+  std::ifstream in(path);
+  if (!in)
+  {
+    return {};
+  }
+  std::string value;
+  std::getline(in, value);
+  while (!value.empty() && (value.back() == '\r' || value.back() == '\n' || value.back() == ' ' || value.back() == '\t'))
+  {
+    value.pop_back();
+  }
+  return value;
+}
+
+static bool write_trimmed_file(const std::filesystem::path &path, const std::string &value, std::string &error_out)
+{
+  try
+  {
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream out(path, std::ios::trunc);
+    if (!out)
+    {
+      error_out = "open_failed";
+      return false;
+    }
+    out << value << "\n";
+    out.flush();
+    if (!out.good())
+    {
+      error_out = "write_failed";
+      return false;
+    }
+    return true;
+  }
+  catch (const std::exception &ex)
+  {
+    error_out = ex.what();
+    return false;
+  }
+}
+
+static bool parse_url_parts(const std::string &url, std::string &scheme_out, std::string &host_port_out)
+{
+  const auto scheme_pos = url.find("://");
+  if (scheme_pos == std::string::npos)
+  {
+    return false;
+  }
+  auto scheme = url.substr(0, scheme_pos);
+  std::transform(scheme.begin(), scheme.end(), scheme.begin(), [](unsigned char ch)
+                 { return static_cast<char>(std::tolower(ch)); });
+  if (scheme != "ws" && scheme != "wss" && scheme != "http" && scheme != "https")
+  {
+    return false;
+  }
+
+  std::string rest = url.substr(scheme_pos + 3);
+  const auto slash_pos = rest.find('/');
+  const auto host_port = trim_copy(slash_pos == std::string::npos ? rest : rest.substr(0, slash_pos));
+  if (host_port.empty())
+  {
+    return false;
+  }
+
+  scheme_out = std::move(scheme);
+  host_port_out = host_port;
+  return true;
+}
+
+static std::string controller_pubkey_url_from_endpoint(const std::string &endpoint)
+{
+  std::string scheme;
+  std::string host_port;
+  if (!parse_url_parts(endpoint, scheme, host_port))
+  {
+    return {};
+  }
+
+  const std::string http_scheme = (scheme == "wss" || scheme == "https") ? "https" : "http";
+  return http_scheme + "://" + host_port + "/api/v1/controller/signing-key";
+}
+
+static std::string extract_controller_pubkey_b64(const std::string &json_body)
+{
+  try
+  {
+    const auto root = nlohmann::json::parse(json_body);
+    if (root.contains("controller_pubkey_b64") && root["controller_pubkey_b64"].is_string())
+    {
+      return trim_copy(root["controller_pubkey_b64"].get<std::string>());
+    }
+    if (root.contains("signing_pubkey_b64") && root["signing_pubkey_b64"].is_string())
+    {
+      return trim_copy(root["signing_pubkey_b64"].get<std::string>());
+    }
+    if (root.contains("pubkey_b64") && root["pubkey_b64"].is_string())
+    {
+      return trim_copy(root["pubkey_b64"].get<std::string>());
+    }
+  }
+  catch (const std::exception &)
+  {
+  }
+  return {};
+}
+
+#ifdef _WIN32
+static std::wstring utf8_to_wide(const std::string &s)
+{
+  if (s.empty())
+  {
+    return {};
+  }
+  const int size = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, nullptr, 0);
+  if (size <= 1)
+  {
+    return {};
+  }
+  std::wstring out(static_cast<std::size_t>(size - 1), L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, out.data(), size);
+  return out;
+}
+
+static bool http_get_body(const std::string &url, std::string &body_out, int &status_out, std::string &error_out)
+{
+  const std::wstring wurl = utf8_to_wide(url);
+  if (wurl.empty())
+  {
+    error_out = "invalid_url";
+    return false;
+  }
+
+  URL_COMPONENTS parts{};
+  parts.dwStructSize = sizeof(parts);
+  parts.dwSchemeLength = static_cast<DWORD>(-1);
+  parts.dwHostNameLength = static_cast<DWORD>(-1);
+  parts.dwUrlPathLength = static_cast<DWORD>(-1);
+  parts.dwExtraInfoLength = static_cast<DWORD>(-1);
+  if (!WinHttpCrackUrl(wurl.c_str(), 0, 0, &parts))
+  {
+    error_out = "invalid_url";
+    return false;
+  }
+
+  const std::wstring host(parts.lpszHostName, parts.dwHostNameLength);
+  std::wstring path(parts.lpszUrlPath && parts.dwUrlPathLength ? parts.lpszUrlPath : L"/",
+                    parts.dwUrlPathLength ? parts.dwUrlPathLength : 1);
+  if (parts.dwExtraInfoLength > 0 && parts.lpszExtraInfo)
+  {
+    path.append(parts.lpszExtraInfo, parts.dwExtraInfoLength);
+  }
+  const bool secure = (parts.nScheme == INTERNET_SCHEME_HTTPS);
+
+  HINTERNET h_session = WinHttpOpen(
+      L"QuoodleAgent/1.0",
+      WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+      WINHTTP_NO_PROXY_NAME,
+      WINHTTP_NO_PROXY_BYPASS,
+      0);
+  if (!h_session)
+  {
+    error_out = "session_open_failed";
+    return false;
+  }
+  WinHttpSetTimeouts(h_session, 3000, 3000, 3000, 3000);
+
+  HINTERNET h_connect = WinHttpConnect(h_session, host.c_str(), parts.nPort, 0);
+  if (!h_connect)
+  {
+    WinHttpCloseHandle(h_session);
+    error_out = "connect_failed";
+    return false;
+  }
+
+  const DWORD flags = secure ? WINHTTP_FLAG_SECURE : 0;
+  HINTERNET h_request = WinHttpOpenRequest(
+      h_connect,
+      L"GET",
+      path.c_str(),
+      nullptr,
+      WINHTTP_NO_REFERER,
+      WINHTTP_DEFAULT_ACCEPT_TYPES,
+      flags);
+  if (!h_request)
+  {
+    WinHttpCloseHandle(h_connect);
+    WinHttpCloseHandle(h_session);
+    error_out = "request_open_failed";
+    return false;
+  }
+
+  BOOL sent = WinHttpSendRequest(
+      h_request,
+      WINHTTP_NO_ADDITIONAL_HEADERS,
+      0,
+      WINHTTP_NO_REQUEST_DATA,
+      0,
+      0,
+      0);
+  if (!sent || !WinHttpReceiveResponse(h_request, nullptr))
+  {
+    WinHttpCloseHandle(h_request);
+    WinHttpCloseHandle(h_connect);
+    WinHttpCloseHandle(h_session);
+    error_out = "request_failed";
+    return false;
+  }
+
+  DWORD status_code = 0;
+  DWORD status_code_size = sizeof(status_code);
+  WinHttpQueryHeaders(
+      h_request,
+      WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+      WINHTTP_HEADER_NAME_BY_INDEX,
+      &status_code,
+      &status_code_size,
+      WINHTTP_NO_HEADER_INDEX);
+  status_out = static_cast<int>(status_code);
+
+  std::string response_body;
+  DWORD bytes_available = 0;
+  do
+  {
+    bytes_available = 0;
+    if (!WinHttpQueryDataAvailable(h_request, &bytes_available))
+    {
+      break;
+    }
+    if (bytes_available == 0)
+    {
+      break;
+    }
+
+    std::vector<char> buffer(bytes_available + 1, 0);
+    DWORD bytes_read = 0;
+    if (!WinHttpReadData(h_request, buffer.data(), bytes_available, &bytes_read))
+    {
+      break;
+    }
+    response_body.append(buffer.data(), bytes_read);
+  } while (bytes_available > 0);
+
+  WinHttpCloseHandle(h_request);
+  WinHttpCloseHandle(h_connect);
+  WinHttpCloseHandle(h_session);
+  body_out = std::move(response_body);
+  if (status_out < 200 || status_out >= 300)
+  {
+    error_out = "http_" + std::to_string(status_out);
+    return false;
+  }
+  return true;
+}
+#endif
 
 static bool parse_ws_telemetry_to_http_payload(
     const std::string &ws_envelope_json,
@@ -693,6 +964,76 @@ void WsClient::reload_runtime_config()
     set_runtime_identity(config_.endpoint, config_.device_id);
     Logger::log(LogLevel::Info, "runtime transport config hot-reloaded from disk");
   }
+}
+
+bool WsClient::refresh_controller_pubkey_if_stale(const std::string &reason, bool force)
+{
+  const auto now = std::chrono::steady_clock::now();
+  if (!force && last_controller_key_refresh_attempt_.time_since_epoch().count() != 0)
+  {
+    if (now - last_controller_key_refresh_attempt_ < std::chrono::seconds(30))
+    {
+      return false;
+    }
+  }
+  last_controller_key_refresh_attempt_ = now;
+
+  const auto key_url = controller_pubkey_url_from_endpoint(config_.endpoint);
+  if (key_url.empty())
+  {
+    return false;
+  }
+
+#ifndef _WIN32
+  (void)reason;
+  (void)force;
+  return false;
+#else
+  std::string body;
+  int status_code = 0;
+  std::string fetch_error;
+  if (!http_get_body(key_url, body, status_code, fetch_error))
+  {
+    if (force)
+    {
+      Logger::log(LogLevel::Warn, "controller key refresh skipped (" + reason + "): " + fetch_error);
+    }
+    return false;
+  }
+
+  const auto pubkey_b64 = extract_controller_pubkey_b64(body);
+  if (pubkey_b64.empty())
+  {
+    if (force)
+    {
+      Logger::log(LogLevel::Warn, "controller key refresh returned no pubkey (" + reason + ")");
+    }
+    return false;
+  }
+
+  auto pubkey_path = runtime_controller_pubkey_path();
+  const auto existing = read_trimmed_file(pubkey_path);
+  if (existing == pubkey_b64)
+  {
+    SetEnvironmentVariableA("CONTROLLER_PUBKEY_B64", pubkey_b64.c_str());
+    return false;
+  }
+
+  std::string write_error;
+  if (!write_trimmed_file(pubkey_path, pubkey_b64, write_error))
+  {
+    Logger::log(
+        LogLevel::Warn,
+        "controller key refresh write failed (" + reason + "): " + write_error);
+    return false;
+  }
+
+  SetEnvironmentVariableA("CONTROLLER_PUBKEY_B64", pubkey_b64.c_str());
+  Logger::log(
+      LogLevel::Info,
+      "controller verify key auto-refreshed from gateway (" + reason + ")");
+  return true;
+#endif
 }
 
 void WsClient::set_state(ConnectionState new_state, const std::string &reason)
@@ -1219,6 +1560,7 @@ void WsClient::run()
   while (!shutdown_requested_.load(std::memory_order_acquire))
   {
     reload_runtime_config();
+    refresh_controller_pubkey_if_stale("reconnect_cycle", false);
 
     // Check max retries
     auto attempts = reconnect_attempts_.load(std::memory_order_acquire);
@@ -1570,6 +1912,13 @@ bool WsClient::try_connect()
                             std::string envelope_str = envelope.dump();
                             auto verify_result = crypto::verify_command_envelope(envelope_str, last_command_seq_, "");
                             
+                            if (!verify_result.valid) {
+                                if (verify_result.error_code == "SIGNATURE_INVALID" &&
+                                    refresh_controller_pubkey_if_stale("command_signature_invalid", true)) {
+                                    verify_result = crypto::verify_command_envelope(envelope_str, last_command_seq_, "");
+                                }
+                            }
+
                             if (!verify_result.valid) {
                                 Logger::log(LogLevel::Warn, "COMMAND_DELIVERY signature verification failed: " + 
                                            verify_result.error_code + " - " + verify_result.error_message);

@@ -214,4 +214,6 @@ private:
   void set_auth_state(const std::string &state, bool authenticated);
   void set_runtime_identity(const std::string &endpoint, const std::string &device_id);
   void reload_runtime_config();
+  bool refresh_controller_pubkey_if_stale(const std::string &reason, bool force = false);
+  std::chrono::steady_clock::time_point last_controller_key_refresh_attempt_{};
 };

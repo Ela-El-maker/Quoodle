@@ -63,7 +63,10 @@ function Set-ServiceEnvironmentDefaults {
     $desiredVars = @(
         "QUOODLE_USE_KERNEL_DRIVER=1",
         "QUOODLE_ALLOW_PIPE_FALLBACK=0",
-        "CONTROLLER_PUBKEY_PATH=$ControllerPubKeyPath"
+        "CONTROLLER_PUBKEY_PATH=$ControllerPubKeyPath",
+        # Explicitly clear any stale machine-level guard so service auth is not
+        # blocked by old AGENT_EXPECTED_PUBKEY_B64 values after re-pairing.
+        "AGENT_EXPECTED_PUBKEY_B64="
     )
 
     $existingVars = @()
@@ -86,6 +89,7 @@ function Set-ServiceEnvironmentDefaults {
         if ($entry -like "QUOODLE_USE_KERNEL_DRIVER=*") { continue }
         if ($entry -like "QUOODLE_ALLOW_PIPE_FALLBACK=*") { continue }
         if ($entry -like "CONTROLLER_PUBKEY_PATH=*") { continue }
+        if ($entry -like "AGENT_EXPECTED_PUBKEY_B64=*") { continue }
         $filteredExisting += [string]$entry
     }
 
@@ -103,16 +107,60 @@ function Ensure-ControllerPubKeyFile {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
 
+    $existing = ""
     if (Test-Path $Path) {
         $existing = (Get-Content -Path $Path -ErrorAction SilentlyContinue | Out-String).Trim()
-        if ($existing) {
-            return
-        }
     }
 
     $pubKey = $null
-    if ($env:CONTROLLER_PUBKEY_B64) {
+    $pubKeySource = ""
+
+    # Prefer the currently running gateway signing key endpoint so the agent verifier
+    # always matches the live signer used for COMMAND_DELIVERY envelopes.
+    $agentEndpoint = $null
+    if ($env:AGENT_ENDPOINT) {
+        $agentEndpoint = $env:AGENT_ENDPOINT.Trim()
+    }
+    if (-not $agentEndpoint -and (Test-Path "C:\ProgramData\Quoodle\agent_endpoint")) {
+        $agentEndpoint = (Get-Content "C:\ProgramData\Quoodle\agent_endpoint" -ErrorAction SilentlyContinue | Out-String).Trim()
+    }
+    if (-not $agentEndpoint) {
+        $agentEndpoint = "ws://localhost:8000/agent"
+    }
+
+    try {
+        $base = $agentEndpoint.Trim()
+        $base = $base -replace '^wss://', 'https://'
+        $base = $base -replace '^ws://', 'http://'
+        $uri = [System.Uri]$base
+        $signingKeyUrl = "$($uri.Scheme)://$($uri.Authority)/api/v1/controller/signing-key"
+        $resp = Invoke-RestMethod -Method Get -Uri $signingKeyUrl -TimeoutSec 3 -ErrorAction Stop
+        if ($resp -and $resp.controller_pubkey_b64) {
+            $pubKey = [string]$resp.controller_pubkey_b64
+            $pubKeySource = "gateway-signing-key-endpoint"
+        }
+    } catch {
+        # Best effort only; fall back to static/env/docker sources below.
+    }
+
+    if (-not $pubKey -and $env:CONTROLLER_PUBKEY_B64) {
         $pubKey = $env:CONTROLLER_PUBKEY_B64.Trim()
+        $pubKeySource = "CONTROLLER_PUBKEY_B64"
+    }
+
+    if (-not $pubKey) {
+        $docker = Get-Command docker -ErrorAction SilentlyContinue
+        if ($docker) {
+            try {
+                $gatewayPubEnv = (& docker exec quoodle-gateway /bin/sh -lc "printenv ED25519_PUBLIC_KEY_B64" 2>$null | Out-String).Trim()
+                if ($gatewayPubEnv) {
+                    $pubKey = $gatewayPubEnv
+                    $pubKeySource = "quoodle-gateway:ED25519_PUBLIC_KEY_B64"
+                }
+            } catch {
+                # Best effort only.
+            }
+        }
     }
 
     if (-not $pubKey) {
@@ -161,6 +209,9 @@ if not pub:
 print(base64.b64encode(pub).decode())
 '@
                 $pubKey = ($py | docker exec -i quoodle-gateway python - 2>$null | Out-String).Trim()
+                if ($pubKey) {
+                    $pubKeySource = "quoodle-gateway:ED25519_PRIVATE_KEY_B64/ED25519_PRIVATE_KEY_PATH"
+                }
             } catch {
                 # Best effort only.
             }
@@ -168,10 +219,23 @@ print(base64.b64encode(pub).decode())
     }
 
     if ($pubKey) {
+        if ($existing -eq $pubKey) {
+            Write-Host "Controller public key already up to date at: $Path"
+            return
+        }
+
         Set-Content -Path $Path -Value $pubKey -NoNewline
-        Write-Host "Wrote controller public key to: $Path"
+        if ($existing) {
+            Write-Host "Updated controller public key at: $Path (source: $pubKeySource)"
+        } else {
+            Write-Host "Wrote controller public key to: $Path (source: $pubKeySource)"
+        }
     } else {
-        Write-Warning "CONTROLLER_PUBKEY_B64 was not available and $Path is empty. Populate it manually so signed commands can be verified."
+        if ($existing) {
+            Write-Warning "Could not resolve current controller public key from env/docker; keeping existing value in $Path."
+        } else {
+            Write-Warning "CONTROLLER_PUBKEY_B64 was not available and $Path is empty. Populate it manually so signed commands can be verified."
+        }
     }
 }
 
