@@ -1,30 +1,49 @@
-# quoodle-agent-linux
+﻿# quoodle-agent-linux
 
 Linux endpoint runtime for Quoodle.
 
-Components:
+Design mirrors Windows service-first intent, with a strict unprivileged/privileged split.
 
-- unprivileged agent process (networking, signatures, command orchestration)
-- privileged daemon (root boundary for protected operations)
-- CLI and optional local UI utilities
+## 1. Architecture
 
-## 1. Responsibilities
+### 1.1 Process Topology
 
-Agent responsibilities:
+- Unprivileged agent process: gateway transport, command verification, handler orchestration.
+- Privileged daemon: root-bound operations behind controlled IPC.
+- Optional local UI and CLI tools: diagnostics and operator support.
 
-- connect/authenticate to gateway
-- verify command signatures
-- execute non-privileged handlers
-- forward privileged requests to daemon over UDS
-- return structured results and telemetry
+### 1.2 Trust Boundary
+
+Primary local trust boundary is the Unix domain socket interface between agent and privileged daemon.
+
+Agent must prove caller legitimacy and operation intent; daemon enforces capability constraints.
+
+## 2. Stack and Why
+
+- C++17 for agent runtime logic and predictable system integration.
+- C in privileged path where minimal low-level control is preferred.
+- Python helpers for operational ergonomics and tooling.
+
+## 3. Command and Verification Pipeline
+
+For each inbound envelope:
+
+1. parse envelope and validate schema
+2. validate TTL/timestamp and target identity
+3. verify Ed25519 signature against controller key
+4. route to local handler or privileged daemon request
+5. normalize and emit result
+
+## 4. Privileged Execution Strategy
 
 Privileged daemon responsibilities:
 
-- enforce root-only operations
-- validate caller trust boundary
-- return signed or integrity-checked execution receipts
+- accept only known opcodes/requests
+- enforce argument bounds and policy checks
+- return structured results
+- avoid exposing generic shell-level primitives
 
-## 2. Build
+## 5. Build
 
 Prerequisites:
 
@@ -47,7 +66,22 @@ Run binaries:
 sudo ./build/quoodle-privileged-daemon
 ```
 
-## 3. CLI Utilities
+## 6. Service Mode (systemd)
+
+```bash
+sudo systemctl enable --now quoodle-agent quoodle-privileged
+```
+
+Optional user-session UI service:
+
+```bash
+./ui/install_user_service.sh
+systemctl --user enable --now quoodle-agent-ui.service
+```
+
+## 7. CLI and Local UI Utilities
+
+CLI:
 
 ```bash
 ./cli/quoodle-agent status
@@ -57,7 +91,7 @@ sudo ./build/quoodle-privileged-daemon
 ./cli/quoodle-agent pair --api-base http://localhost:8088 --user-jwt "$USER_JWT" --update-secrets
 ```
 
-## 4. Local UI Utilities
+UI:
 
 ```bash
 ./ui/quoodle-agent-ui --desktop
@@ -65,20 +99,7 @@ sudo ./build/quoodle-privileged-daemon
 ./ui/quoodle-agent-ui --tray
 ```
 
-## 5. Service Mode (systemd)
-
-```bash
-sudo systemctl enable --now quoodle-agent quoodle-privileged
-```
-
-Optional user-session UI auto-start:
-
-```bash
-./ui/install_user_service.sh
-systemctl --user enable --now quoodle-agent-ui.service
-```
-
-## 6. Environment Variables
+## 8. Environment Contract
 
 Agent:
 
@@ -95,18 +116,56 @@ Daemon:
 - `QUOODLE_DAEMON_PRIVKEY_B64`
 - `QUOODLE_AGENT_PUBKEY_B64`
 
-## 7. Project Layout
+## 9. Project Layout
 
-- `agent/` core Linux agent
-- `privileged/` privileged daemon
-- `cli/` operator/debug CLI
-- `ui/` desktop/tui/tray tools
-- `systemd/` service units
-- `systemd-user/` user service units
+- `agent/`: main runtime
+- `privileged/`: privileged boundary implementation
+- `cli/`: command-line operational tools
+- `ui/`: desktop/tui/tray companion
+- `systemd/`: system units
+- `systemd-user/`: user units
 
-## 8. Troubleshooting
+## 10. Troubleshooting
 
-- cannot execute privileged command: verify daemon running and socket permissions
-- signature invalid: verify controller public key and signing chain
-- no telemetry: verify gateway reachability and auth token validity
-- duplicate identity: verify device ID persistence path and overrides
+### Privileged Requests Failing
+
+- verify daemon process is running
+- verify socket path and permissions
+- verify agent and daemon key parity
+
+### Signature Invalid
+
+- verify controller pubkey consistency with gateway/control-plane signer
+- verify no stale key overrides in environment
+
+### Device Offline
+
+- verify websocket endpoint reachability
+- verify agent JWT validity and device identity coherence
+
+## 11. Sequence Diagrams
+
+### 11.1 Linux Command Handling with Privileged Split
+
+```text
+Gateway WS         Linux Agent           Privileged Daemon         OS Resource
+    |                  |                        |                      |
+    | envelope         | verify+route           |                      |
+    |----------------->|----------------------->| root op request      |
+    |                  |                        |--------------------->|
+    |                  |                        |<---------------------|
+    | result           | normalize result       |                      |
+    |<-----------------|                        |                      |
+```
+
+### 11.2 Systemd Recovery Loop
+
+```text
+systemd           quoodle-agent          quoodle-privileged
+   |                   |                        |
+   | start units       |                        |
+   |------------------>|                        |
+   |------------------>|----------------------->|
+   | crash detected    |                        |
+   | restart policy -->|                        |
+```

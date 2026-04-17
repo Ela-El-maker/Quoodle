@@ -1,48 +1,95 @@
-# quoodle-infra
+﻿# quoodle-infra
 
 Infrastructure and deployment assets for Quoodle environments.
 
-## 1. Purpose
+This directory carries provisioning, deployment, and operations strategy for non-local environments.
 
-This directory contains infra-as-code and operational packaging resources used to provision, deploy, and operate Quoodle outside local development.
+## 1. Architecture Strategy
+
+Infrastructure design goals:
+
+- reproducible environment creation
+- strict service boundary control
+- safe secret management and rotation
+- observable runtime with explicit SLO/SLA instrumentation
 
 ## 2. Structure
 
 | Directory | Purpose |
 | --- | --- |
-| `terraform/` | Cloud resource provisioning (network, storage, managed services, security controls) |
-| `helm/` | Kubernetes chart templates and values |
-| `k8s/` | Raw manifests for direct cluster operations |
-| `docker/` | Container build and compose support assets |
-| `monitoring/` | Metrics, alerts, and dashboard definitions |
-| `logging/` | Log shipping and retention configuration |
-| `ci-cd/` | Pipeline scaffolding and supply-chain steps |
+| `terraform/` | cloud provisioning and foundation resources |
+| `helm/` | Kubernetes packaging and environment overlays |
+| `k8s/` | raw manifests for targeted operations |
+| `docker/` | container build/runtime helper assets |
+| `monitoring/` | metrics, dashboards, alerting policies |
+| `logging/` | log ingestion and retention patterns |
+| `ci-cd/` | delivery pipeline assets and controls |
 
-## 3. Environments
+## 3. Environment Model
 
-Typical targets:
+Typical tiers:
 
-- local development (docker-compose from repo root)
-- shared dev/staging clusters
-- production clusters with managed secret workflows
+- local: developer workstation and docker compose
+- dev/staging: shared integration clusters
+- production: hardened cluster and managed secret lifecycle
 
-## 4. Operational Focus Areas
+## 4. Deployment Patterns
 
-- reproducible provisioning
-- service-to-service network boundaries
-- secret handling and rotation paths
-- observability baselines (health, queue, latency, error budgets)
-- backup and disaster recovery hooks
+- immutable image tagging
+- environment-specific values overlays
+- migration-safe rollout sequencing
+- rollback-first deployment planning
 
-## 5. Local Dev Note
+## 5. Security and Compliance Focus
 
-For daily local engineering, use repo root compose flow rather than provisioning assets in this folder.
+- least-privilege IAM and network controls
+- secret scoping and rotation
+- signing key custody discipline
+- audit log retention and access boundaries
 
-## 6. Change Management Guidance
+## 6. Observability Strategy
 
-When editing infra assets:
+Track:
 
-- keep service ports/endpoints aligned with application configs
-- version environment changes with clear migration notes
-- validate rollout and rollback paths
-- keep least-privilege defaults
+- command latency and failure rates
+- queue depth and worker throughput
+- agent online presence stability
+- webhook error rates
+- API auth/session error patterns
+
+## 7. Change Management
+
+When updating infra assets:
+
+- document blast radius
+- include rollout and rollback steps
+- keep app endpoint contracts aligned with infra changes
+- validate in lower environment before promotion
+
+## 8. Local Development Note
+
+For daily local engineering, prefer root `docker compose` flow. Use this folder for deployable environment engineering rather than quick local startup.
+
+## 9. Sequence Diagrams
+
+### 9.1 Environment Rollout Pipeline
+
+```text
+Git Commit      CI/CD Pipeline      Container Registry      Cluster
+    |                 |                     |                  |
+    | push            | build+test          |                  |
+    |---------------->|-------------------->| publish image    |
+    |                 | deploy chart/manif. |----------------->|
+    |                 | verify health       |                  |
+```
+
+### 9.2 Rollback Pattern
+
+```text
+Monitoring Alert      Ops Action         Deploy System
+       |                  |                   |
+       | error budget hit |                   |
+       |----------------->| rollback request  |
+       |                  |------------------>| previous revision
+       |                  | verify recovery   |
+```

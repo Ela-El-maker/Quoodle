@@ -1,31 +1,45 @@
-# quoodle-kernel-guard
+﻿# quoodle-kernel-guard
 
 Privileged execution boundary for Quoodle endpoint operations.
 
-On Windows this is a kernel driver (`QuoodleKernel`) accessed via IOCTL. On Linux this role is provided by the privileged daemon layer.
+On Windows this is a KMDF kernel driver (`QuoodleKernel`). On Linux, equivalent privileged behavior is handled by the root daemon layer.
 
-## 1. Responsibilities
+## 1. Architecture and Intent
 
-- enforce privileged capability boundaries
-- validate transport-level integrity for incoming requests
-- execute allowed privileged opcodes only
-- return bounded, structured responses for upstream verification
+Core intent:
 
-## 2. Windows Driver Scope
+- keep high-risk operations behind a minimal trusted interface
+- validate integrity and sequencing before action
+- return bounded machine-readable responses
 
-Current KMDF hardening phase includes:
+## 2. Windows KMDF Design
 
-- driver path: `driver/kmdf/quoodle_kmdf.c`
+### 2.1 Driver Surface
+
 - device path: `\\.\QuoodleKernel`
-- supported opcodes: `PING`, `REBOOT`, `SHUTDOWN`
-- replay and monotonic sequence enforcement
-- payload bounds and skew validation
-- HMAC-SHA256 request verification and signed responses
-- restrictive device ACL (`SYSTEM` + `Administrators`)
+- IOCTL entrypoints constrained to explicit opcode set
+- ACLs restrict caller classes (SYSTEM/Administrators)
 
-Unsupported opcodes intentionally return `not_supported` until staged rollout enables them.
+### 2.2 Protocol Features
 
-## 3. Build and Install (Windows)
+- monotonic sequence checks to reduce replay
+- request size and skew validation
+- HMAC-SHA256 request verification
+- structured signed response payloads
+
+### 2.3 Capability Rollout
+
+Only explicitly enabled opcodes are accepted. Unsupported operations fail closed with deterministic status.
+
+## 3. Linux Privileged Boundary
+
+Linux privileged daemon serves a similar role:
+
+- root-bound execution scope
+- controlled UDS protocol boundary
+- explicit operation allowlist
+
+## 4. Build and Install (Windows)
 
 From `quoodle-kernel-guard`:
 
@@ -41,33 +55,72 @@ Expected artifact:
 
 - `driver\kmdf\x64\Release\quoodle_kmdf.sys`
 
-## 4. Key Synchronization
+## 5. Key Synchronization Model
 
-Install script writes HMAC key to:
+Shared key location:
 
 - `HKLM\SYSTEM\CurrentControlSet\Services\QuoodleKernel\Parameters\HmacKey`
 
-Agent must use matching value via runtime env/settings.
+Agent and kernel layer must agree on key material to pass request verification.
 
-## 5. Security Model
+## 6. Security Design Principles
 
-- deny by default: unknown capability means no execution path
-- strict structure validation at kernel boundary
-- deterministic failure responses for policy/transport violations
-- no userland UI or operator identity bypass in driver path
+- deny-by-default capability handling
+- minimal exposed interface area
+- strict input validation at privilege boundary
+- deterministic failure semantics for auditability
 
-## 6. Project Layout
+## 7. Layout
 
-- `driver/` Windows driver source
-- `attestation/` integrity and attestation components
-- `integrity-checks/` runtime verification tooling
-- `rollback/` rollback and recovery scaffolding
-- `service/` service management support
-- `tests/` validation coverage
+- `driver/`: kernel driver source
+- `attestation/`: integrity/attestation assets
+- `integrity-checks/`: runtime hardening checks
+- `rollback/`: recovery and rollback support
+- `service/`: service-related support files
+- `tests/`: validation coverage
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
-- service missing: reinstall driver and verify signing mode
-- IOCTL open failure: verify admin rights and ACL
-- auth mismatch: verify shared HMAC key parity
-- opcode unsupported: verify current rollout scope before testing command
+### Driver Not Running
+
+- verify signing mode and install success
+- inspect `sc.exe query QuoodleKernel`
+
+### IOCTL Open Failure
+
+- verify caller privilege level
+- verify device ACL and path
+
+### Auth Mismatch
+
+- verify HMAC key parity between registry and agent runtime config
+
+### Unsupported Operation
+
+- verify opcode is included in current rollout scope
+
+## 9. Sequence Diagrams
+
+### 9.1 Windows IOCTL Verification Path
+
+```text
+Agent Service        Kernel Driver (KMDF)         Device/OS Action
+     |                         |                         |
+     | IOCTL request           | validate seq/hmac       |
+     |------------------------>|------------------------>|
+     |                         | execute allowed opcode  |
+     | structured response     |<------------------------|
+     |<------------------------|                         |
+```
+
+### 9.2 Key Synchronization Check
+
+```text
+Installer/Ops         Registry Key              Agent Runtime
+    |                     |                          |
+    | write HmacKey       |                          |
+    |-------------------->|                          |
+    |                     | read on startup          |
+    |                     |------------------------->|
+    |                     | parity required          |
+```

@@ -1,37 +1,119 @@
-# quoodle-agent-windows
+﻿# quoodle-agent-windows
 
 Windows endpoint runtime for Quoodle.
 
-It is a service-first architecture:
+This component is intentionally service-first:
 
-- background service (`QuoodleAgent`) is the durable runtime
-- UI companion is a local observer/controller over named pipe
-- privileged execution is brokered through kernel guard IOCTL path
+- `QuoodleAgent` Windows service is the durable runtime.
+- UI companion is a bridge client, not a persistence owner.
+- Privileged paths are mediated through kernel guard transport.
 
-## 1. Responsibilities
+## 1. Architecture
 
-Service responsibilities:
+### 1.1 Process Model
 
-- authenticate to gateway and maintain session
-- verify command signatures
-- execute command handlers and privileged dispatches
-- persist runtime identity artifacts under `C:\ProgramData\Quoodle`
-- expose local UI bridge at `\\.\pipe\QuoodleAgentUiBridge`
+- Service process: networking, auth, dispatch, command execution orchestration.
+- Optional UI process: onboarding, telemetry, diagnostics, operator interactions.
+- Kernel driver process space: privileged op execution boundary.
 
-UI companion responsibilities:
+### 1.2 Internal Modules
 
-- display runtime onboarding, health, telemetry, and command state
-- trigger sync/reconnect/pairing-related actions through bridge ops
-- never own persistence or enforcement lifecycle
+- `src/ws/`: WebSocket client, reconnect strategy, session state.
+- `src/command/`: command handlers and dispatch mapping.
+- `src/crypto/`: Ed25519 sign/verify, hash helpers.
+- `src/control/`: local UI bridge server and status publishing.
+- `src/kernel/` and `src/ioctl/`: kernel transport adapters.
+- `src/telemetry/`: telemetry queue and upload lifecycle.
 
-## 2. Build
+### 1.3 Core Runtime Pattern
+
+Pattern: Event-loop orchestrator + state snapshot publishing.
+
+- inbound events: WS messages, timers, service signals.
+- derived state: connectivity, auth, pairing, identity, policy.
+- outbound events: acks/results, telemetry, local bridge snapshots.
+
+## 2. Design Strategy
+
+### 2.1 Source of Truth Strategy
+
+Service is authoritative for:
+
+- effective device identity
+- auth state
+- transport state
+- command execution state
+
+UI is read-mostly and action-request only.
+
+### 2.2 Identity Reconciliation Strategy
+
+At runtime, identity files and JWT claims are reconciled to reduce stale pairing mismatch.
+
+Inputs:
+
+- `device_id` file
+- `agent_jwt` `sub` claim
+- bridge-visible effective identity
+
+Goal:
+
+- keep runtime identity coherent before auth and command acceptance.
+
+### 2.3 Fail-Closed Strategy
+
+When signature/auth requirements fail, command execution is denied with explicit failure codes instead of fallback execution.
+
+## 3. Protocols and Contracts
+
+### 3.1 Gateway Session
+
+Endpoint:
+
+- `ws://.../agent` or `wss://.../agent`
+
+Session phases:
+
+1. transport connect
+2. authentication
+3. command envelope receive
+4. ack/progress/result return
+5. heartbeat/reconnect loop
+
+### 3.2 Command Verification Contract
+
+Before handler execution:
+
+- validate envelope structure
+- validate timestamp/TTL window
+- validate device identity targeting
+- validate Ed25519 signature against controller pubkey
+- validate policy metadata presence
+
+### 3.3 UI Bridge Contract
+
+Named pipe:
+
+- `\\.\pipe\QuoodleAgentUiBridge`
+
+Common operations:
+
+- `status`
+- `sync_now`
+- `reconnect`
+- pairing/status helper operations (depending on build)
+
+Status payload fields include connectivity/auth dimensions, effective identity, and service mode indicators.
+
+## 4. Build Strategy
 
 Prerequisites:
 
-- Visual Studio 2022 C++ toolchain + Windows SDK
-- CMake 3.20+
+- Visual Studio C++ toolchain
+- Windows SDK
+- CMake
 
-From `quoodle-agent-windows`:
+Build from `quoodle-agent-windows`:
 
 ```powershell
 $cmakeCandidates = @("C:\Program Files\CMake\bin\cmake.exe")
@@ -49,27 +131,11 @@ if (-not $cmakeExe) { throw "CMake not found." }
 & $cmakeExe --build build --config Release --target agent -- /m:1 /v:minimal
 ```
 
-Binary output:
+Output:
 
 - `build\Release\agent.exe`
 
-## 3. Run Modes
-
-Console diagnostics:
-
-```powershell
-.\build\Release\agent.exe --console
-```
-
-Service mode:
-
-```powershell
-.\build\Release\agent.exe --service
-```
-
-Do not run console mode while service mode is active; single-instance guard will reject duplicate process.
-
-## 4. Install and Manage Service
+## 5. Service Operations
 
 Install/reinstall:
 
@@ -77,22 +143,24 @@ Install/reinstall:
 .\scripts\install_agent_service.ps1 -ExePath "$PWD\build\Release\agent.exe"
 ```
 
-Status:
+Control:
 
 ```powershell
 sc.exe query QuoodleAgent
+Restart-Service QuoodleAgent
+Stop-Service QuoodleAgent
+Start-Service QuoodleAgent
 ```
 
-The installer configures:
+Expected configuration:
 
-- startup type
-- recovery actions
-- controller pubkey file path
-- service env defaults for kernel driver path
+- auto-start service
+- recovery actions configured
+- runtime files rooted in `C:\ProgramData\Quoodle`
 
-## 5. Runtime Files and Identity
+## 6. Runtime Files
 
-Primary runtime files:
+Primary files:
 
 - `C:\ProgramData\Quoodle\device_id`
 - `C:\ProgramData\Quoodle\agent_jwt`
@@ -100,27 +168,23 @@ Primary runtime files:
 - `C:\ProgramData\Quoodle\controller_pubkey.b64`
 - `C:\ProgramData\Quoodle\agent_pubkey`
 
-Identity source order:
+These files are part of the operational trust chain. Treat them as sensitive runtime artifacts.
 
-1. env override
-2. persisted runtime file
-3. generated bootstrap placeholder when unpaired
+## 7. Security Model
 
-## 6. Pairing and Enrollment
+- Command verification is mandatory before execution.
+- Controller pubkey parity is required for healthy dispatch.
+- Kernel transport can enforce privileged operation boundaries.
+- Service identity state should be consistent with pairing outputs.
 
-- unpaired service can still start and expose bridge
-- pairing token/QR flow provisions device identity and JWT
-- ownership confirm in control UI binds device to user
-- service reconnect applies new credentials
+## 8. Performance and Reliability Techniques
 
-## 7. Security Notes
+- Exponential reconnect backoff.
+- Lightweight runtime status snapshots for UI polling.
+- Queue-based telemetry buffering to survive transient network loss.
+- Single-instance guard for runtime correctness.
 
-- command signatures are verified locally
-- controller pubkey must match gateway signer
-- kernel-driver transport is default path (`QUOODLE_USE_KERNEL_DRIVER=1`)
-- pipe fallback is lab-only behavior
-
-## 8. UI Companion
+## 9. UI Companion Integration
 
 Build UI companion:
 
@@ -130,34 +194,72 @@ $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE="1"
 dotnet build -c Release .\ui-companion\Quoodle.Agent.UiCompanion.csproj
 ```
 
-Launch UI:
+Launch:
 
 ```powershell
 Start-Process ".\ui-companion\bin\Release\net8.0-windows10.0.26100.0\Quoodle.Agent.UiCompanion.exe"
 ```
 
-UI startup behavior:
+## 10. Troubleshooting Matrix
 
-- checks service install state
-- starts service if stopped
-- waits for pipe bridge readiness
-- attaches to live runtime state
+### Service Running but Device Offline
 
-## 9. Troubleshooting
+Check:
 
-Service running but offline in UI/control plane:
+1. pipe status `connected/authenticated` fields
+2. endpoint scheme and reachability
+3. `agent_jwt` validity and `device_id` match
+4. gateway logs for auth errors
 
-1. `sc.exe query QuoodleAgent`
-2. probe `QuoodleAgentUiBridge` status payload
-3. verify `agent_jwt`, `device_id`, endpoint values
-4. verify gateway signing key parity with local `controller_pubkey.b64`
+### Signature Invalid
 
-Commands stuck queued:
+Check:
 
-- validate `authenticated=true` in pipe status
-- verify gateway logs show device channel online
+1. `controller_pubkey.b64` equals gateway signing key endpoint
+2. stale env overrides (for example old expected pubkey vars)
+3. service restart after key updates
 
-Signature invalid:
+### Commands Stuck Queued
 
-- compare local `controller_pubkey.b64` with `GET /api/v1/controller/signing-key`
-- restart service after key refresh
+Check:
+
+1. gateway sees active channel for device
+2. control-plane dispatch job success
+3. agent auth state in bridge status
+
+### UI Shows Stale Enrollment
+
+Check:
+
+1. runtime identity files under `C:\ProgramData\Quoodle`
+2. pairing session completion in control plane
+3. bridge status transition to authenticated session
+
+## 11. Sequence Diagrams
+
+### 11.1 Service Startup and Connect Loop
+
+```text
+SCM               QuoodleAgent Service       Gateway WS
+ |                         |                     |
+ | start service           |                     |
+ |------------------------>| load runtime files  |
+ |                         | open UI bridge pipe |
+ |                         | connect endpoint    |
+ |                         |-------------------->|
+ |                         | auth + heartbeat    |
+ |                         |<------------------->|
+```
+
+### 11.2 Signed Command Execution Path
+
+```text
+Gateway WS          Agent Verifier         Handler Router        Kernel Guard
+    |                    |                      |                    |
+    | envelope           | verify sig/ttl       |                    |
+    |------------------->|--------------------->| select handler     |
+    |                    |                      |----IOCTL if needed->|
+    |                    |                      |<---result-----------|
+    | result/failed      |                      |                    |
+    |<-------------------|                      |                    |
+```

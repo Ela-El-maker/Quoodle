@@ -1,22 +1,87 @@
-# quoodle-gateway
+﻿# quoodle-gateway
 
-FastAPI gateway for real-time device connectivity and command routing.
+FastAPI gateway for real-time device connectivity and signed command dispatch.
 
-Primary functions:
+This service is the transport control plane between control-plane intent and endpoint execution.
 
-- terminates agent WebSocket connections
-- tracks online authenticated device presence
-- accepts command dispatch from control plane
-- forwards command envelopes to device channels
-- returns command ACK/results and device lifecycle events via webhooks
+## 1. Architecture
 
-Stack:
+### 1.1 Core Responsibilities
 
-- Python 3.11
-- FastAPI/Uvicorn
-- Redis (presence and broker support)
+- terminate and manage agent WebSocket sessions
+- maintain authenticated presence state
+- accept dispatch requests from control plane
+- route envelopes to live device channels
+- emit lifecycle and result webhooks back to control plane
 
-## 1. Local Run
+### 1.2 Internal Planes
+
+- HTTP plane: dispatch, pairing callbacks, key publication, admin operations
+- WS plane: agent sessions, auth, command delivery, ack/result stream
+- presence plane: active channel and auth state indexing
+
+## 2. Stack and Why
+
+- Python 3.11 + FastAPI for async I/O and explicit API contracts.
+- Uvicorn for efficient ASGI runtime.
+- Redis for shared transient state and broker support.
+
+## 3. Protocol Contract
+
+### 3.1 Agent Auth Handshake
+
+1. agent connects to `/agent`
+2. agent sends auth payload
+3. gateway validates identity/session context
+4. authenticated channel registered for dispatch
+
+### 3.2 Dispatch Contract
+
+Input:
+
+- signed envelope from control plane
+- device target metadata
+
+Validation:
+
+- envelope structure and required fields
+- signature policy according to gateway config
+- target device channel availability
+
+Output:
+
+- dispatch accepted or rejected with explicit reason
+
+### 3.3 Result Contract
+
+Agent ack/progress/result events are normalized and forwarded to control plane webhook endpoints.
+
+## 4. Security Strategy
+
+Key controls:
+
+- optional hard requirements for Laravel request signatures
+- optional webhook signing to Laravel
+- optional Ed25519 enforcement
+- strict malformed/stale payload rejection
+
+Recommended non-lab posture:
+
+- keep all signature requirements enabled
+
+## 5. Presence and Lifecycle Semantics
+
+Online means:
+
+- authenticated WS session is active
+
+Offline means:
+
+- authenticated session absent or disconnected
+
+This distinction avoids confusing service-process liveness with transport/auth liveness.
+
+## 6. Local Run
 
 From `quoodle-gateway`:
 
@@ -31,45 +96,7 @@ Health endpoint:
 
 - `GET /health`
 
-## 2. Core Endpoints
-
-HTTP:
-
-- `POST /api/v1/command/dispatch`
-- `POST /api/v1/policy/push`
-- `POST /api/v1/update/deploy`
-- `POST /api/v1/webhook/device/paired`
-- `GET /api/v1/controller/signing-key`
-- admin quarantine endpoints
-
-WebSocket:
-
-- `WS /agent`
-
-## 3. Runtime Data Flow
-
-1. Agent connects to `/agent`.
-2. Agent sends auth payload (device identity + JWT/signature context).
-3. Gateway validates and marks session presence.
-4. Control plane dispatches signed command envelope.
-5. Gateway routes envelope to device channel.
-6. Agent ACK/result is received and relayed to control plane webhook.
-
-## 4. Security Controls
-
-Config toggles:
-
-- `REQUIRE_LARAVEL_SIGNATURE`
-- `SIGN_LARAVEL_WEBHOOKS`
-- `REQUIRE_ED25519`
-
-Operational guidance:
-
-- keep signature verification enabled in non-lab environments
-- avoid accepting unsigned command or webhook payloads
-- reject stale, malformed, or mismatched device envelopes
-
-## 5. Docker Run
+## 7. Docker Run
 
 From repo root:
 
@@ -77,17 +104,58 @@ From repo root:
 docker compose up -d --build gateway
 ```
 
-## 6. Project Layout
+## 8. Project Layout
 
-- `app/main.py` app startup
-- `app/api_controller.py` HTTP API routes
-- `app/ws/` WS protocol and state handling
-- `app/config.py` env config
-- `tests/` unit/integration checks
+- `app/main.py`: app startup/wiring
+- `app/api_controller.py`: HTTP routes
+- `app/ws/`: socket protocol/session handling
+- `app/config.py`: environment contract
+- `tests/`: gateway behavior and contract tests
 
-## 7. Troubleshooting
+## 9. Troubleshooting
 
-- device appears offline while service running: verify WS auth success and presence updates
-- commands stuck queued: verify dispatch endpoint reached gateway and device channel exists
-- signature failures: verify controller public key and envelope signing path
-- webhook mismatch: verify shared signing/verification configuration between gateway and control plane
+### Device Offline While Service Running
+
+- check if agent channel is authenticated and present
+- inspect auth failures in gateway logs
+- verify endpoint scheme compatibility (`ws` vs `wss` and TLS support)
+
+### Commands Not Delivering
+
+- verify control plane dispatch call reached gateway
+- verify target device channel exists
+- verify signature requirements are aligned between services
+
+### Signature/Key Drift
+
+- verify key publication endpoint value
+- verify control plane signing key and agent verifier key chain coherence
+
+## 10. Sequence Diagrams
+
+### 10.1 Agent Session Authentication
+
+```text
+Agent Runtime        Gateway WS          Presence Index
+     |                   |                    |
+     | connect /agent    |                    |
+     |------------------>|                    |
+     | auth payload      | verify token       |
+     |------------------>|                    |
+     | auth_ok/auth_err  |                    |
+     |<------------------| mark session       |
+     |                   |------------------->|
+```
+
+### 10.2 Dispatch and Result Relay
+
+```text
+Control Plane        Gateway HTTP/WS        Agent Runtime       Control Webhook
+     |                     |                    |                    |
+     | POST dispatch       |                    |                    |
+     |-------------------->| send envelope      |                    |
+     |                     |------------------->| execute            |
+     |                     |<-------------------| ack/result         |
+     |                     | POST webhook       |                    |
+     |<--------------------|------------------->|                    |
+```

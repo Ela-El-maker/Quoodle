@@ -1,69 +1,84 @@
-# quoodle-mobile-client
+﻿# quoodle-mobile-client
 
 Flutter mobile operator app for Quoodle.
 
-Primary use cases:
+This client brings pairing, fleet awareness, command workflows, and operational visibility into a mobile-first experience.
 
-- authentication and session management
-- device pairing (QR or token-assisted)
-- fleet/device visibility
-- command issue and result tracking
-- alerts, notifications, scheduling, and audit views
+## 1. Architecture
 
-## 1. Stack
-
-- Flutter
-- Dart
-- Riverpod
-- GoRouter
-- Dio
-- Shared preferences + secure storage
-
-## 2. Architecture
-
-Layer direction:
+### 1.1 Layering Model
 
 `presentation -> application/state -> domain <- data`
 
-Principles:
+- Presentation: Flutter widgets and route screens.
+- Application/State: Riverpod providers and state orchestration.
+- Domain: entities/use cases/contracts.
+- Data: repository implementations, network/storage adapters.
 
-- UI layer does not directly own data source logic
-- repositories implement domain contracts
-- app bootstrap composes dependencies and navigation guards
-- core layer owns networking, storage, and shared services
+### 1.2 Why This Model
 
-## 3. Startup and Routing
+- testability through clear boundaries
+- predictable feature growth
+- lower coupling between UI and transport details
 
-Entry points:
+## 2. Stack and Why
 
-- `lib/main.dart`
-- `lib/app/bootstrap/bootstrap.dart`
+- Flutter for shared Android/iOS codebase.
+- Riverpod for explicit dependency/state wiring.
+- GoRouter for declarative route control.
+- Dio for interceptors, retries, and auth token middleware.
+- secure storage + shared preferences for token/session persistence.
 
-Router:
+## 3. Startup and Session Strategy
 
-- `lib/app/router/app_router.dart`
+Boot path:
 
-Common route surfaces include authentication, dashboard, devices, command timeline, scanner, alerts, settings, scheduler, notifications, and audit views.
+- initialize env and dependencies
+- hydrate session/token state
+- run auth guard checks
+- route to authenticated or unauthenticated surfaces
 
-## 4. Command UX Scope
+Token refresh behavior is handled through network interceptors to reduce manual re-auth churn.
 
-Mobile command flow supports command selection, parameter shaping, sensitive confirmation, OTP verification path (where enabled), and timeline/result inspection.
+## 4. Pairing Strategy
 
-## 5. Networking
+Supported pairing patterns:
 
-Endpoint constants live in:
+- token-based claim flow
+- QR scanning flow
+
+Design requirements:
+
+- scanner payload validation
+- explicit pending/confirm/complete states
+- role and ownership update after successful claim
+
+## 5. Command UX Strategy
+
+Command workflow includes:
+
+- device selection
+- command method selection
+- parameter composition
+- sensitive-action confirmation (where required)
+- submission and timeline observation
+- result retrieval and error-state explanation
+
+## 6. Networking and Protocol Usage
+
+Endpoint contracts are centralized under:
 
 - `lib/core/network/endpoints.dart`
 
-Primary auth/session APIs:
+Key API groups:
 
-- `/auth/login`
-- `/auth/refresh`
-- `/auth/me`
+- auth/session (`/auth/login`, `/auth/refresh`, `/auth/me`)
+- pairing
+- device list/detail
+- command submit/result
+- telemetry and alerts
 
-Additional device/pair/command APIs are consumed through feature repositories and service adapters.
-
-## 6. Build and Run
+## 7. Build and Run
 
 ```powershell
 flutter clean
@@ -71,22 +86,68 @@ flutter pub get
 flutter run
 ```
 
-## 7. Analyze and Test
+## 8. Analyze and Test
 
 ```powershell
 flutter analyze lib
 flutter test
 ```
 
-## 8. Local Integration Notes
+## 9. Local Integration Notes
 
-- when testing against local backend from physical phone, use host LAN IP, not `localhost`
-- ensure control plane/gateway are reachable from phone network
-- verify token refresh and auth redirects before pairing tests
+- Use host LAN IP when testing on physical devices.
+- Do not use `localhost` on phone builds for backend access.
+- Verify both control-plane and gateway reachability from phone network.
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
-- scanner not detecting QR: verify camera permission and QR payload format
-- auth loops: inspect refresh interceptor and `/auth/me` response
-- missing devices: verify pairing completed and role assignment updated
-- command submit fails: verify endpoint base URL and session token freshness
+### QR Scan Not Detecting
+
+- confirm camera permissions
+- verify QR payload format and content
+- verify environment base URLs in app bootstrap
+
+### Sign-In Loop
+
+- inspect refresh interceptor behavior
+- inspect `/auth/me` failures and token storage state
+
+### Missing Devices
+
+- confirm pairing and ownership completion
+- verify role permissions and endpoint access
+
+### Command Submit Fails
+
+- confirm token freshness
+- verify endpoint base URL points to reachable backend
+
+## 11. Sequence Diagrams
+
+### 11.1 Mobile Sign-In and Refresh
+
+```text
+Mobile App           API Gateway/Control Plane        Token Storage
+    |                           |                         |
+    | login creds               |                         |
+    |-------------------------->| issue jwt+refresh       |
+    |<--------------------------|                         |
+    | store tokens              |------------------------>|
+    | request protected API     |                         |
+    |-------------------------->| 401? refresh            |
+    | refresh token             |                         |
+    |-------------------------->| new access token        |
+```
+
+### 11.2 Mobile QR Pair Flow
+
+```text
+Mobile Scanner      Control Plane        Gateway          Agent Runtime
+      |                  |                 |                  |
+      | scan QR payload  |                 |                  |
+      |----------------->| pair request    |                  |
+      |                  |---------------> | pair session     |
+      |                  |<--------------- | detected         |
+      | confirm ownership|                 |                  |
+      |----------------->| link device     |                  |
+```

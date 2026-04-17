@@ -1,70 +1,106 @@
-# scripts
+﻿# scripts
 
 Operational and development automation scripts for Quoodle.
 
-## 1. Scope
+Scripts in this folder are designed to accelerate repeatable bring-up, verification, and diagnostics.
 
-This folder provides helper scripts for:
+## 1. Design Principles
 
-- local bootstrap
-- end-to-end validation
-- environment diagnostics
-- platform-specific install helpers
+- idempotent where possible
+- explicit parameters for high-impact actions
+- observable outputs for debugging
+- safe defaults for local development
 
-## 2. Key Scripts
+## 2. Script Categories
+
+- bootstrap scripts
+- e2e validation scripts
+- install/config scripts
+- diagnostics/verification scripts
+
+## 3. Key Scripts
 
 ### `setup_dev.sh`
 
-Bootstraps the local docker-based environment.
+Bootstraps local docker-based environment.
 
 ```bash
 ./scripts/setup_dev.sh
 ```
 
-Typical outcomes:
-
-- containers built and started
-- database migrations run where configured
-- baseline health checks available
-
 ### `run_windows_ring0_e2e.ps1`
 
-Primary Windows end-to-end runner for command path verification.
+Windows-focused end-to-end validation for pairing, dispatch, kernel path, and result return.
 
 ```powershell
 pwsh .\scripts\run_windows_ring0_e2e.ps1
 pwsh .\scripts\run_windows_ring0_e2e.ps1 -KeepAgentRunning
 ```
 
-Validates pairing, auth, dispatch, kernel path, and result loop.
-
 ### `install_linux_agent_systemd.sh`
 
-Installs and enables Linux agent services.
+Installs and enables Linux agent service units.
 
 ```bash
 ./scripts/install_linux_agent_systemd.sh
-sudo systemctl daemon-reload
-sudo systemctl restart quoodle-privileged quoodle-agent
 ```
 
 ### `test_telemetry_worker.sh`
 
-Telemetry worker focused checks.
+Telemetry-path focused checks.
 
 ```bash
 ./scripts/test_telemetry_worker.sh
 ```
 
-## 3. Common Environment Variables
+## 4. Common Environment Variables
 
 - `LARAVEL_BASE_URL`
 - `FASTAPI_BASE_URL`
 - `TEST_USER_EMAIL`
 - `TEST_USER_PASSWORD`
 
-## 4. Usage Guidance
+## 5. Manual End-to-End Strategy
 
-- run from repo root unless script says otherwise
-- review script parameters before production-like runs
-- keep script output logs for debugging command-path failures
+When validating manually:
+
+1. start core backend services
+2. ensure agent service online/authenticated
+3. pair and claim device
+4. issue non-sensitive command
+5. verify trace transitions and result
+6. issue sensitive/privileged command as needed
+7. verify telemetry and audit artifacts
+
+## 6. Safe Usage Guidance
+
+- run from repo root unless script documents otherwise
+- read parameters before running high-impact scripts
+- keep logs from failed runs for incident and regression analysis
+- avoid mixing old runtime artifacts with fresh pairing tests
+
+## 7. Sequence Diagrams
+
+### 7.1 Manual End-to-End Validation
+
+```text
+Operator           Control UI/API         Gateway          Agent Service
+   |                    |                    |                  |
+   | login              |                    |                  |
+   |------------------->|                    |                  |
+   | pair device        |------------------->|<-----------------|
+   | submit command     |------------------->|----------------->|
+   | view result        |<-------------------|<-----------------|
+```
+
+### 7.2 Windows E2E Script Intent
+
+```text
+PowerShell Script     Docker Stack        Agent Service      Assertions
+       |                   |                   |                 |
+       | start deps        |------------------>|                 |
+       | pair + auth check |                   |                 |
+       | dispatch command  |------------------>|                 |
+       | collect result    |<------------------|                 |
+       | assert pass/fail  |                   |---------------> |
+```
