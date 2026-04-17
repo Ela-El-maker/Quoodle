@@ -51,6 +51,7 @@ namespace command
     constexpr int QERR_FS_UPLOAD_REQUEST_FAILED = 5206;
     constexpr int QERR_FS_UPLOAD_FAILED = 5207;
     constexpr std::size_t kDefaultLimit = 250;
+    constexpr std::size_t kDefaultProcessLimit = 1000;
     constexpr std::size_t kMaxLimit = 1000;
     constexpr std::size_t kDefaultFsLimit = 250;
     constexpr std::size_t kMaxFsLimit = 2000;
@@ -137,11 +138,11 @@ namespace command
       return lowered;
     }
 
-    std::size_t parse_limit(const std::string &params_json)
+    std::size_t parse_limit(const std::string &params_json, std::size_t default_limit)
     {
       if (params_json.empty())
       {
-        return kDefaultLimit;
+        return default_limit;
       }
 
       try
@@ -149,17 +150,17 @@ namespace command
         const auto parsed = nlohmann::json::parse(params_json);
         if (!parsed.is_object())
         {
-          return kDefaultLimit;
+          return default_limit;
         }
         if (!parsed.contains("limit") || !parsed["limit"].is_number_integer())
         {
-          return kDefaultLimit;
+          return default_limit;
         }
 
         const auto value = parsed["limit"].get<long long>();
         if (value <= 0)
         {
-          return kDefaultLimit;
+          return default_limit;
         }
         if (value > static_cast<long long>(kMaxLimit))
         {
@@ -169,7 +170,7 @@ namespace command
       }
       catch (const std::exception &)
       {
-        return kDefaultLimit;
+        return default_limit;
       }
     }
 
@@ -2282,7 +2283,9 @@ namespace command
       const std::string &params_json)
   {
     const std::string canonical = canonical_method(method);
-    const std::size_t limit = parse_limit(params_json);
+    const std::size_t limit = parse_limit(
+        params_json,
+        canonical == "list_processes" ? kDefaultProcessLimit : kDefaultLimit);
     ListConnectionsOptions list_connections_options{};
     NetworkInfoOptions network_info_options{};
     parse_list_connections_options(params_json, list_connections_options);

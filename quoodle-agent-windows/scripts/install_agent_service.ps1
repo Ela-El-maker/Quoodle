@@ -1,6 +1,7 @@
 param(
     [string]$ExePath = "$PSScriptRoot\\..\\build\\Release\\agent.exe",
     [string]$ServiceName = "QuoodleAgent",
+    [string]$KernelServiceName = "QuoodleKernel",
     [string]$DisplayName = "Quoodle Agent",
     [string]$Description = "Quoodle endpoint agent service",
     [string]$StartType = "auto",
@@ -289,6 +290,25 @@ function New-ServiceWithRetry {
     }
 }
 
+function Configure-DependencyServices {
+    param(
+        [Parameter(Mandatory = $true)][string]$ServiceName,
+        [Parameter(Mandatory = $true)][string]$KernelServiceName
+    )
+
+    $kernelSvc = Get-Service -Name $KernelServiceName -ErrorAction SilentlyContinue
+    if (-not $kernelSvc) {
+        Write-Warning "Kernel dependency service '$KernelServiceName' was not found. '$ServiceName' will start without service dependencies."
+        return
+    }
+
+    # Ensure SCM starts kernel service before agent service (including on boot).
+    Invoke-Sc -Arguments @("config", $ServiceName, "depend=", $KernelServiceName) | Out-Null
+
+    # Best-effort kernel warm start now so first command after install doesn't fail-closed.
+    Invoke-Sc -Arguments @("start", $KernelServiceName) -IgnoreExitCodes @(1056) | Out-Null
+}
+
 if (!(Test-Path $ExePath)) {
     Write-Host "Agent executable not found: $ExePath"
     exit 1
@@ -311,6 +331,8 @@ New-ServiceWithRetry `
     -DisplayName $DisplayName `
     -Description $Description `
     -StartupType $startupType
+
+Configure-DependencyServices -ServiceName $ServiceName -KernelServiceName $KernelServiceName
 
 Set-ServiceEnvironmentDefaults -ServiceName $ServiceName -ControllerPubKeyPath $ControllerPubKeyPath
 Ensure-ControllerPubKeyFile -Path $ControllerPubKeyPath

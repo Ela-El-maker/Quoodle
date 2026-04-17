@@ -118,6 +118,50 @@ services:
     networks:
       - quoodle-net
 
+  control-plane-scheduler:
+    build:
+      context: ./quoodle-control-plane
+      dockerfile: Dockerfile
+    container_name: quoodle-control-plane-scheduler
+    entrypoint: ["/bin/sh", "-c", "sleep 10 && php artisan schedule:work --no-interaction"]
+    environment:
+      APP_NAME: ${APP_NAME:-Quoodle Control Plane}
+      APP_ENV: ${APP_ENV:-local}
+      APP_KEY: ${APP_KEY:?Set APP_KEY}
+      APP_DEBUG: ${APP_DEBUG:-true}
+      APP_URL: ${CONTROL_PLANE_APP_URL:-http://localhost:${QUOODLE_CONTROL_PLANE_PORT:-8088}}
+
+      DB_CONNECTION: ${DB_CONNECTION:-mysql}
+      DB_HOST: ${DB_HOST:-quoodle-db}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_DATABASE: ${DB_DATABASE:-secure_device}
+      DB_USERNAME: ${DB_USERNAME:-quoodle}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD}
+
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-null}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_CLIENT: ${REDIS_CLIENT:-predis}
+
+      FASTAPI_BASE_URL: ${FASTAPI_BASE_URL:-http://gateway:8000/api/v1}
+      LARAVEL_SERVICE_PRIVATE_KEY_B64: ${LARAVEL_SERVICE_PRIVATE_KEY_B64:?Set LARAVEL_SERVICE_PRIVATE_KEY_B64}
+      FASTAPI_SERVICE_PUBLIC_KEY_B64: ${FASTAPI_SERVICE_PUBLIC_KEY_B64:?Set FASTAPI_SERVICE_PUBLIC_KEY_B64}
+      REQUIRE_FASTAPI_SIGNATURE: ${REQUIRE_FASTAPI_SIGNATURE:-true}
+      POLICY_HASH: ${POLICY_HASH:?Set POLICY_HASH}
+      POLICY_VERSION: ${POLICY_VERSION:-2026-01-21}
+      ALLOW_DEVICE_REPAIR_WITH_HWID: ${ALLOW_DEVICE_REPAIR_WITH_HWID:-false}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      control-plane:
+        condition: service_started
+    volumes:
+      - control_plane_storage:/var/www/storage
+    networks:
+      - quoodle-net
+
   # -----------------------------------------------------------------------------
   # CONTROL PLANE UI (Next.js)
   # -----------------------------------------------------------------------------
