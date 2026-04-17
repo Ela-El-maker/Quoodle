@@ -74,3 +74,13 @@ quoodle-agent-windows/ui-companion/obj/
 kernel-service/build/
 logs/
 assets/photo_*.jpg
+
+# Keep docs local by default; only publish install guide
+docs/**
+!docs/
+!docs/install.md
+
+# Local tool/runtime scratch
+.dotnet_cli_home/
+tmp_*.txt
+tmp_*.php
