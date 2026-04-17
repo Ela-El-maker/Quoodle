@@ -10,6 +10,7 @@ use App\Models\Device;
 use App\Models\DeviceTelemetryLatest;
 use App\Models\TelemetryEvent;
 use App\Models\TelemetryIngestError;
+use App\Services\Scheduling\ScheduledExecutionService;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -283,6 +284,24 @@ Artisan::command('pipeline:readiness-report {--json : Output JSON summary}', fun
 
     return $overallPass ? 0 : 1;
 })->purpose('Readiness gate report for kernel opcode rollout');
+
+Artisan::command('schedules:dispatch-due {--limit=100 : Max schedules to process per run}', function (ScheduledExecutionService $scheduling) {
+    $limit = max(1, (int) $this->option('limit'));
+    $summary = $scheduling->dispatchDueJobs($limit);
+
+    $this->info(sprintf(
+        'Schedule dispatch cycle complete. processed=%d claimed=%d failed=%d',
+        (int) ($summary['processed'] ?? 0),
+        (int) ($summary['claimed'] ?? 0),
+        (int) ($summary['failed'] ?? 0),
+    ));
+
+    return ((int) ($summary['failed'] ?? 0)) > 0 ? 1 : 0;
+})->purpose('Dispatch due scheduled jobs into the existing command pipeline');
+
+Schedule::command('schedules:dispatch-due --limit=100')
+    ->everyMinute()
+    ->withoutOverlapping();
 
 Schedule::command('commands:reconcile-stale --limit=200')
     ->everyMinute()

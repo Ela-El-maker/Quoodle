@@ -111,7 +111,7 @@ class Registry
                 requires2fa: false,
                 allowedInQuarantine: false,
                 paramsRules: [
-                    'limit' => ['nullable', 'integer', 'min:1', 'max:500'],
+                    'limit' => ['nullable', 'integer', 'min:1', 'max:1000'],
                     'user' => ['nullable', 'string', 'max:128'],
                     'name' => ['nullable', 'string', 'max:128'],
                 ]

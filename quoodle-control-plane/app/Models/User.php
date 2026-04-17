@@ -219,6 +219,14 @@ class User extends Authenticatable
         return $this->hasMany(Command::class, 'user_id', 'id');
     }
 
+    /**
+     * Get the scheduled jobs created by this user.
+     */
+    public function scheduledJobs()
+    {
+        return $this->hasMany(ScheduledJob::class, 'created_by_user_id', 'id');
+    }
+
     // =========================================================================
     // Query Scopes
     // =========================================================================

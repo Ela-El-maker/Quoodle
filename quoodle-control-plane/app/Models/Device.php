@@ -71,4 +71,9 @@ class Device extends Model
     {
         return $this->hasMany(DeviceLink::class, 'device_id', 'device_id');
     }
+
+    public function scheduledRunItems()
+    {
+        return $this->hasMany(ScheduledJobRunItem::class, 'device_id', 'device_id');
+    }
 }

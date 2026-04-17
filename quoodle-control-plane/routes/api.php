@@ -19,6 +19,8 @@ use App\Http\Controllers\Audit\AuditTrailController;
 use App\Http\Controllers\Telemetry\TelemetryController;
 use App\Http\Controllers\Telemetry\TelemetryQueryController;
 use App\Http\Controllers\Updates\UpdateController;
+use App\Http\Controllers\Schedules\ScheduleController;
+use App\Http\Controllers\Schedules\ScheduleRunsController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -146,6 +148,14 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
         Route::middleware('jwt.auth')->post('/commands', [CommandController::class, 'store']);
         // Deprecated alias for legacy clients
         Route::middleware('jwt.auth')->post('/command', [CommandController::class, 'store']);
+
+        // Command scheduling
+        Route::get('/schedules', [ScheduleController::class, 'index']);
+        Route::post('/schedules', [ScheduleController::class, 'store']);
+        Route::patch('/schedules/{schedule_id}', [ScheduleController::class, 'update']);
+        Route::delete('/schedules/{schedule_id}', [ScheduleController::class, 'destroy']);
+        Route::post('/schedules/{schedule_id}/run-now', [ScheduleController::class, 'runNow']);
+        Route::get('/schedules/runs', [ScheduleRunsController::class, 'index']);
 
         Route::post('/alerts/{alert_id}/ack', [AlertsController::class, 'acknowledge']);
 
