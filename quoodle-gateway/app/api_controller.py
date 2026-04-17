@@ -28,7 +28,7 @@ from app.state import (
 )
 from app.ws.webhooks import fire_and_forget, forward_telemetry_summary
 from app.ws.connection_manager import ConnectionManager
-from app.ws.protocol import iso_timestamp, compute_sig, validate_kernel_event_metrics
+from app.ws.protocol import iso_timestamp, compute_sig, get_signing_public_key_b64, validate_kernel_event_metrics
 from app.ws.auth import validate_auth_jwt
 
 logger = logging.getLogger("quoodle.api.telemetry")
@@ -286,6 +286,16 @@ def _gateway_upload_url(request: Request) -> str:
 
 def create_router(manager: ConnectionManager) -> APIRouter:
     router = APIRouter(prefix="/api/v1")
+
+    @router.get("/controller/signing-key")
+    async def controller_signing_key():
+        pubkey = get_signing_public_key_b64()
+        if not pubkey:
+            raise HTTPException(status_code=503, detail={"reason": "signing_key_unavailable"})
+        return {
+            "controller_id": settings.controller_id,
+            "controller_pubkey_b64": pubkey,
+        }
 
     @router.get("/devices/online")
     async def devices_online():

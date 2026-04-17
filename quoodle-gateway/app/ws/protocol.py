@@ -24,26 +24,62 @@ def iso_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _resolve_signing_private_key_b64() -> str:
+    sk_b64 = os.getenv("ED25519_PRIVATE_KEY_B64")
+    if sk_b64:
+        return sk_b64.strip()
+
+    p = os.getenv("ED25519_PRIVATE_KEY_PATH")
+    if p and os.path.exists(p):
+        try:
+            with open(p, "rb") as f:
+                value = f.read().decode().strip()
+                if value:
+                    return value
+        except Exception:
+            pass
+
+    if load_dpapi_blob_to_b64:
+        try:
+            value = load_dpapi_blob_to_b64("ED25519_PRIVATE_KEY_DPAPI_B64", "ED25519_PRIVATE_KEY_DPAPI_PATH")
+            if value:
+                return value.strip()
+        except Exception:
+            pass
+
+    return ""
+
+
+def get_signing_public_key_b64() -> str:
+    sk_b64 = _resolve_signing_private_key_b64()
+    if HAVE_PYNACL and sk_b64:
+        try:
+            sk_bytes = base64.b64decode(sk_b64)
+            if len(sk_bytes) == 64:
+                seed = sk_bytes[:32]
+            elif len(sk_bytes) == 32:
+                seed = sk_bytes
+            else:
+                seed = None
+            if seed:
+                signer = SigningKey(seed)
+                return base64.b64encode(bytes(signer.verify_key)).decode()
+        except Exception:
+            pass
+
+    # Fallback only when private-key derivation is unavailable.
+    env_pk = (os.getenv("ED25519_PUBLIC_KEY_B64") or "").strip()
+    if env_pk:
+        return env_pk
+
+    return ""
+
+
 def compute_sig(payload: Dict[str, Any]) -> str:
     canonical = canonicalize_json(strip_sig(payload))
     # Prefer Ed25519 signing when PyNaCl and a signing key are available.
     if HAVE_PYNACL:
-        sk_b64 = os.getenv("ED25519_PRIVATE_KEY_B64")
-        # try file
-        if not sk_b64:
-            p = os.getenv("ED25519_PRIVATE_KEY_PATH")
-            if p and os.path.exists(p):
-                try:
-                    with open(p, "rb") as f:
-                        sk_b64 = f.read().decode().strip()
-                except Exception:
-                    sk_b64 = None
-        # try DPAPI
-        if not sk_b64 and load_dpapi_blob_to_b64:
-            try:
-                sk_b64 = load_dpapi_blob_to_b64("ED25519_PRIVATE_KEY_DPAPI_B64", "ED25519_PRIVATE_KEY_DPAPI_PATH")
-            except Exception:
-                sk_b64 = None
+        sk_b64 = _resolve_signing_private_key_b64()
 
         if sk_b64:
             try:
