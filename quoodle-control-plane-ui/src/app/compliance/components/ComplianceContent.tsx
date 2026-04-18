@@ -1,65 +1,334 @@
 'use client';
-import React, { useState } from 'react';
-import { ShieldCheck, AlertTriangle, CheckCircle2, XCircle, RefreshCw, Download } from 'lucide-react';
-import StatusBadge from '@/components/ui/StatusBadge';
-import AuditTrailSection from '@/components/AuditTrailSection';
-import ExportModal from '@/components/ExportModal';
 
-interface ComplianceCheck {
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ShieldCheck, AlertTriangle, CheckCircle2, XCircle, RefreshCw, Download } from 'lucide-react';
+import { toast } from 'sonner';
+import StatusBadge from '@/components/ui/StatusBadge';
+import AuditTrailSection, { type AuditEntry, type AuditEventType } from '@/components/AuditTrailSection';
+import ExportModal from '@/components/ExportModal';
+import { formatLocalDateTime, formatLocalTime } from '@/lib/dateTime';
+
+type ComplianceStatus = 'compliant' | 'non_compliant' | 'drift' | 'pending';
+type ComplianceSeverity = 'critical' | 'warning' | 'info';
+type ExportFormat = 'csv' | 'pdf';
+
+interface ComplianceCheckRow {
   id: string;
   category: string;
   control: string;
   description: string;
-  status: 'compliant' | 'non_compliant' | 'drift' | 'pending';
+  status: ComplianceStatus;
   affectedDevices: number;
   lastChecked: string;
-  severity: 'critical' | 'warning' | 'info';
+  severity: ComplianceSeverity;
 }
 
-const complianceChecks: ComplianceCheck[] = [
-  { id: 'CC-001', category: 'Attestation', control: 'TPM-ATTEST-01', description: 'All devices must pass TPM attestation on boot', status: 'non_compliant', affectedDevices: 2, lastChecked: '21:06:00', severity: 'critical' },
-  { id: 'CC-002', category: 'Policy Sync', control: 'POL-SYNC-01', description: 'Device policy hash must match fleet policy-2026-04', status: 'drift', affectedDevices: 6, lastChecked: '21:05:55', severity: 'warning' },
-  { id: 'CC-003', category: 'Kernel Guard', control: 'KG-DRIVER-01', description: 'Kernel Guard driver must be active on all managed devices', status: 'non_compliant', affectedDevices: 3, lastChecked: '21:05:50', severity: 'critical' },
-  { id: 'CC-004', category: 'Agent Version', control: 'AGENT-VER-01', description: 'All agents must run version 0.0.1 or higher', status: 'compliant', affectedDevices: 0, lastChecked: '21:05:45', severity: 'info' },
-  { id: 'CC-005', category: 'Encryption', control: 'ENC-DISK-01', description: 'Full disk encryption must be enabled on all endpoints', status: 'compliant', affectedDevices: 0, lastChecked: '21:05:40', severity: 'info' },
-  { id: 'CC-006', category: 'Command Auth', control: 'CMD-AUTH-01', description: 'All commands must be Ed25519 signed and 2FA verified', status: 'compliant', affectedDevices: 0, lastChecked: '21:05:35', severity: 'info' },
-  { id: 'CC-007', category: 'Heartbeat', control: 'HB-INTERVAL-01', description: 'Device heartbeat interval must not exceed 60 seconds', status: 'drift', affectedDevices: 4, lastChecked: '21:05:30', severity: 'warning' },
-  { id: 'CC-008', category: 'Quarantine', control: 'QUAR-POLICY-01', description: 'Quarantined devices must block all non-remediation commands', status: 'compliant', affectedDevices: 0, lastChecked: '21:05:25', severity: 'info' },
-];
+interface ComplianceSummary {
+  compliant: number;
+  nonCompliant: number;
+  drift: number;
+  pending: number;
+  total: number;
+  score: number;
+}
 
-const categories = ['All', 'Attestation', 'Policy Sync', 'Kernel Guard', 'Agent Version', 'Encryption', 'Command Auth', 'Heartbeat', 'Quarantine'];
+interface ComplianceOverviewApiCheck {
+  id?: string;
+  category?: string;
+  control?: string;
+  description?: string;
+  status?: string;
+  affected_devices?: number;
+  last_checked?: string | null;
+  severity?: string;
+}
 
-const statusIcon = {
-  compliant:     <CheckCircle2 size={14} className="text-green-400" />,
+interface ComplianceOverviewResponse {
+  last_scan_at?: string | null;
+  summary?: {
+    compliant?: number;
+    non_compliant?: number;
+    drift?: number;
+    pending?: number;
+    total?: number;
+    score?: number;
+  };
+  checks?: ComplianceOverviewApiCheck[];
+}
+
+interface ComplianceAuditApiEvent {
+  id?: string;
+  timestamp?: string | null;
+  actor?: string;
+  actor_role?: string;
+  event_type?: string;
+  action?: string;
+  target?: string;
+  detail?: string;
+  outcome?: string;
+}
+
+interface ComplianceAuditResponse {
+  events?: ComplianceAuditApiEvent[];
+}
+
+const baseCategories = ['All', 'Attestation', 'Policy Sync', 'Kernel Guard', 'Agent Version', 'Encryption', 'Command Auth', 'Heartbeat', 'Quarantine'];
+
+const statusIcon: Record<ComplianceStatus, React.ReactNode> = {
+  compliant: <CheckCircle2 size={14} className="text-green-400" />,
   non_compliant: <XCircle size={14} className="text-red-400" />,
-  drift:         <AlertTriangle size={14} className="text-amber-400" />,
-  pending:       <RefreshCw size={14} className="text-zinc-400" />,
+  drift: <AlertTriangle size={14} className="text-amber-400" />,
+  pending: <RefreshCw size={14} className="text-zinc-400" />,
 };
 
-const severityBg = {
+const severityBg: Record<ComplianceSeverity, string> = {
   critical: 'border-l-red-500',
-  warning:  'border-l-amber-500',
-  info:     'border-l-zinc-600',
+  warning: 'border-l-amber-500',
+  info: 'border-l-zinc-600',
+};
+
+function normalizeComplianceStatus(value: unknown): ComplianceStatus {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (normalized === 'compliant') return 'compliant';
+  if (normalized === 'drift') return 'drift';
+  if (normalized === 'non_compliant') return 'non_compliant';
+  return 'pending';
+}
+
+function normalizeComplianceSeverity(value: unknown): ComplianceSeverity {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (normalized === 'critical') return 'critical';
+  if (normalized === 'warning') return 'warning';
+  return 'info';
+}
+
+function normalizeAuditEventType(value: unknown): AuditEventType {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (normalized === 'user_action' || normalized === 'command_execution' || normalized === 'policy_change') {
+    return normalized;
+  }
+  return 'system_event';
+}
+
+function normalizeOutcome(value: unknown): AuditEntry['outcome'] {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (normalized === 'success' || normalized === 'failure') {
+    return normalized;
+  }
+  return 'pending';
+}
+
+function labelRole(value: string | null | undefined): string {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (!normalized) return 'System';
+  if (normalized === 'admin') return 'Admin';
+  if (normalized === 'viewer') return 'Viewer';
+  if (normalized === 'operator') return 'Operator';
+  if (normalized === 'system') return 'System';
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function parseFilename(disposition: string | null): string | null {
+  if (!disposition) return null;
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match && utf8Match[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+  const basicMatch = disposition.match(/filename="?([^";]+)"?/i);
+  if (basicMatch && basicMatch[1]) {
+    return basicMatch[1];
+  }
+  return null;
+}
+
+function formatUtcClock(value: string | null | undefined): string {
+  if (!value) return '--:--:--';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '--:--:--';
+  const hh = String(date.getUTCHours()).padStart(2, '0');
+  const mm = String(date.getUTCMinutes()).padStart(2, '0');
+  const ss = String(date.getUTCSeconds()).padStart(2, '0');
+  return `${hh}:${mm}:${ss}`;
+}
+
+const EMPTY_SUMMARY: ComplianceSummary = {
+  compliant: 0,
+  nonCompliant: 0,
+  drift: 0,
+  pending: 0,
+  total: 0,
+  score: 0,
 };
 
 export default function ComplianceContent() {
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showExport, setShowExport] = useState(false);
+  const [checks, setChecks] = useState<ComplianceCheckRow[]>([]);
+  const [summary, setSummary] = useState<ComplianceSummary>(EMPTY_SUMMARY);
+  const [lastScanAt, setLastScanAt] = useState<string | null>(null);
+  const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [auditError, setAuditError] = useState<string | null>(null);
+  const requestAbortRef = useRef<AbortController | null>(null);
 
-  const filtered = complianceChecks.filter((c) => {
-    const matchCat = categoryFilter === 'All' || c.category === categoryFilter;
-    const matchStatus = statusFilter === 'all' || c.status === statusFilter;
-    return matchCat && matchStatus;
-  });
+  const loadCompliance = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
+    if (mode === 'initial') {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
 
-  const summary = {
-    compliant:     complianceChecks.filter((c) => c.status === 'compliant').length,
-    non_compliant: complianceChecks.filter((c) => c.status === 'non_compliant').length,
-    drift:         complianceChecks.filter((c) => c.status === 'drift').length,
-    total:         complianceChecks.length,
-  };
-  const score = Math.round((summary.compliant / summary.total) * 100);
+    requestAbortRef.current?.abort();
+    const controller = new AbortController();
+    requestAbortRef.current = controller;
+
+    const [overviewRes, auditRes] = await Promise.allSettled([
+      fetch('/api/compliance/overview', { credentials: 'include', cache: 'no-store', signal: controller.signal }),
+      fetch('/api/compliance/audit?per_page=120&page=1', { credentials: 'include', cache: 'no-store', signal: controller.signal }),
+    ]);
+
+    if (controller.signal.aborted) return;
+
+    if (overviewRes.status === 'fulfilled' && overviewRes.value.ok) {
+      const payload = (await overviewRes.value.json()) as ComplianceOverviewResponse;
+      const nextChecks = (payload.checks ?? []).map((check): ComplianceCheckRow => ({
+        id: String(check.id ?? 'unknown'),
+        category: String(check.category ?? 'Unknown'),
+        control: String(check.control ?? 'UNKNOWN'),
+        description: String(check.description ?? 'No description'),
+        status: normalizeComplianceStatus(check.status),
+        affectedDevices: Number(check.affected_devices ?? 0),
+        lastChecked: formatLocalTime(check.last_checked ?? null, '--:--:--'),
+        severity: normalizeComplianceSeverity(check.severity),
+      }));
+
+      const providedSummary = payload.summary;
+      const compliant = Number(providedSummary?.compliant ?? nextChecks.filter((check) => check.status === 'compliant').length);
+      const nonCompliant = Number(providedSummary?.non_compliant ?? nextChecks.filter((check) => check.status === 'non_compliant').length);
+      const drift = Number(providedSummary?.drift ?? nextChecks.filter((check) => check.status === 'drift').length);
+      const pending = Number(providedSummary?.pending ?? nextChecks.filter((check) => check.status === 'pending').length);
+      const total = Number(providedSummary?.total ?? nextChecks.length);
+      const score = Number(providedSummary?.score ?? (total > 0 ? Math.round((compliant / total) * 100) : 0));
+
+      setChecks(nextChecks);
+      setSummary({ compliant, nonCompliant, drift, pending, total, score });
+      setLastScanAt(payload.last_scan_at ?? null);
+      setError(null);
+    } else {
+      const status = overviewRes.status === 'fulfilled' ? overviewRes.value.status : 0;
+      console.error('compliance-overview-load-failed', overviewRes.status === 'rejected' ? overviewRes.reason : status);
+      setError('Failed to load data');
+      if (mode === 'initial') {
+        setChecks([]);
+        setSummary(EMPTY_SUMMARY);
+        setLastScanAt(null);
+      }
+    }
+
+    if (auditRes.status === 'fulfilled' && auditRes.value.ok) {
+      const payload = (await auditRes.value.json()) as ComplianceAuditResponse;
+      const mappedEntries: AuditEntry[] = (payload.events ?? []).map((event) => ({
+        id: String(event.id ?? `cmp-audit-${Math.random().toString(36).slice(2, 8)}`),
+        timestamp: formatLocalDateTime(event.timestamp ?? null, '-'),
+        actor: String(event.actor ?? 'system'),
+        actorRole: labelRole(event.actor_role),
+        eventType: normalizeAuditEventType(event.event_type),
+        action: String(event.action ?? 'EVENT'),
+        target: String(event.target ?? 'fleet'),
+        detail: String(event.detail ?? ''),
+        outcome: normalizeOutcome(event.outcome),
+      }));
+      setAuditEntries(mappedEntries);
+      setAuditError(null);
+    } else {
+      const status = auditRes.status === 'fulfilled' ? auditRes.value.status : 0;
+      console.error('compliance-audit-load-failed', auditRes.status === 'rejected' ? auditRes.reason : status);
+      setAuditError('Failed to load data');
+      if (mode === 'initial') {
+        setAuditEntries([]);
+      }
+    }
+
+    if (mode === 'initial') {
+      setLoading(false);
+    } else {
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadCompliance('initial');
+  }, [loadCompliance]);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const startPolling = () => {
+      if (timer) clearInterval(timer);
+      const pollMs = document.visibilityState === 'visible' ? 30000 : 60000;
+      timer = setInterval(() => {
+        void loadCompliance('refresh');
+      }, pollMs);
+    };
+
+    startPolling();
+    const onVisibilityChange = () => startPolling();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      if (timer) clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      requestAbortRef.current?.abort();
+    };
+  }, [loadCompliance]);
+
+  const filtered = useMemo(() => checks.filter((check) => {
+    const matchCategory = categoryFilter === 'All' || check.category === categoryFilter;
+    const matchStatus = statusFilter === 'all' || check.status === statusFilter;
+    return matchCategory && matchStatus;
+  }), [checks, categoryFilter, statusFilter]);
+
+  const categories = useMemo(() => {
+    const merged = new Set<string>(baseCategories);
+    checks.forEach((check) => merged.add(check.category));
+    return Array.from(merged);
+  }, [checks]);
+
+  const runExport = useCallback(async (
+    format: ExportFormat,
+    dateRange: { from: string; to: string },
+    selectedFields: string[],
+  ) => {
+    const params = new URLSearchParams();
+    params.set('format', format);
+    if (dateRange.from) params.set('from', dateRange.from);
+    if (dateRange.to) params.set('to', dateRange.to);
+    if (selectedFields.length > 0) params.set('fields', selectedFields.join(','));
+
+    const response = await fetch(`/api/compliance/export?${params.toString()}`, {
+      credentials: 'include',
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      throw new Error(`http_${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const filename =
+      parseFilename(response.headers.get('content-disposition'))
+      ?? `compliance-export-${Date.now()}.${format === 'pdf' ? 'pdf' : 'csv'}`;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const score = summary.score;
 
   return (
     <div className="space-y-6 fade-in">
@@ -68,6 +337,7 @@ export default function ComplianceContent() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Compliance</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Policy controls and regulatory posture across the fleet</p>
+          {error && <p className="text-xs text-red-400 mt-1.5">{error}</p>}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -78,8 +348,8 @@ export default function ComplianceContent() {
             Export
           </button>
           <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 border border-border rounded-md px-3 py-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 pulse-dot" />
-            Last scan 21:06:00 UTC
+            <span className={`w-1.5 h-1.5 rounded-full ${refreshing ? 'bg-amber-400' : 'bg-green-400'} pulse-dot`} />
+            Last scan {formatUtcClock(lastScanAt)} UTC
           </div>
         </div>
       </div>
@@ -108,30 +378,37 @@ export default function ComplianceContent() {
           className="bg-red-500/5 border border-red-500/20 rounded-lg p-4 text-center cursor-pointer hover:border-red-500/40 transition-colors"
           onClick={() => setStatusFilter(statusFilter === 'non_compliant' ? 'all' : 'non_compliant')}
         >
-          <p className="text-3xl font-bold tabular-nums text-red-400">{summary.non_compliant}</p>
+          <p className="text-3xl font-bold tabular-nums text-red-400">{summary.nonCompliant}</p>
           <p className="text-xs text-red-400/70 mt-1 uppercase tracking-wide font-medium">Non-Compliant</p>
         </div>
       </div>
 
       {/* Category filter */}
       <div className="flex flex-wrap gap-1.5">
-        {categories.map((cat) => (
+        {categories.map((category) => (
           <button
-            key={cat}
-            onClick={() => setCategoryFilter(cat)}
+            key={category}
+            onClick={() => setCategoryFilter(category)}
             className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-              categoryFilter === cat
-                ? 'bg-primary/20 text-primary border border-primary/30' :'bg-muted/40 text-muted-foreground border border-border hover:text-foreground'
+              categoryFilter === category
+                ? 'bg-primary/20 text-primary border border-primary/30'
+                : 'bg-muted/40 text-muted-foreground border border-border hover:text-foreground'
             }`}
           >
-            {cat}
+            {category}
           </button>
         ))}
       </div>
 
       {/* Controls list */}
       <div className="space-y-2">
-        {filtered.map((check) => (
+        {loading && checks.length === 0 && (
+          <div className="bg-card border border-border rounded-lg px-4 py-12 text-center">
+            <RefreshCw size={20} className="mx-auto text-muted-foreground animate-spin mb-3" />
+            <p className="text-sm text-muted-foreground">Loading data...</p>
+          </div>
+        )}
+        {!loading && filtered.map((check) => (
           <div
             key={check.id}
             className={`bg-card border border-border border-l-2 ${severityBg[check.severity]} rounded-lg px-4 py-3 flex items-center gap-4 hover:bg-muted/10 transition-colors`}
@@ -156,7 +433,7 @@ export default function ComplianceContent() {
             </div>
           </div>
         ))}
-        {filtered.length === 0 && (
+        {!loading && filtered.length === 0 && (
           <div className="bg-card border border-border rounded-lg px-4 py-12 text-center">
             <ShieldCheck size={32} className="mx-auto text-muted-foreground/30 mb-3" />
             <p className="text-sm text-muted-foreground">No controls match the selected filters</p>
@@ -165,7 +442,7 @@ export default function ComplianceContent() {
       </div>
 
       {/* Audit trail */}
-      <AuditTrailSection title="Compliance Audit Trail" maxRows={5} />
+      <AuditTrailSection title="Compliance Audit Trail" maxRows={5} entries={auditEntries} loading={loading} error={auditError} />
 
       {showExport && (
         <ExportModal
@@ -181,8 +458,15 @@ export default function ComplianceContent() {
             { key: 'severity', label: 'Severity' },
           ]}
           onClose={() => setShowExport(false)}
+          onExport={(format, dateRange, selectedFields) => {
+            void runExport(format, dateRange, selectedFields).catch((loadError) => {
+              console.error('compliance-export-failed', loadError);
+              toast.error('Failed to export report');
+            });
+          }}
         />
       )}
     </div>
   );
 }
+
