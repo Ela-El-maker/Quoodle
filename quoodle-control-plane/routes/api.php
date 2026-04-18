@@ -103,6 +103,8 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
 
         // Audit trail (read-only)
         Route::get('/audit/device/{device_id}', [AuditTrailController::class, 'chain']);
+        Route::get('/audit/events', [AuditTrailController::class, 'events']);
+        Route::get('/audit/events/export', [AuditTrailController::class, 'export']);
 
         // Command status (read-only)
         Route::get('/commands', [CommandQueryController::class, 'index']);
@@ -112,6 +114,9 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
 
         // Compliance profiles (read-only)
         Route::get('/compliance/profiles', [ComplianceController::class, 'profiles']);
+        Route::get('/compliance/overview', [ComplianceController::class, 'overview']);
+        Route::get('/compliance/audit', [ComplianceController::class, 'audit']);
+        Route::get('/compliance/export', [ComplianceController::class, 'export']);
 
         // Session update (push notifications)
         Route::post('/session/push-token', [SessionController::class, 'updatePushToken']);

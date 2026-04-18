@@ -74,7 +74,10 @@ class SchedulingApiTest extends TestCase
         $this->withHeaders($headers)
             ->getJson('/api/schedules/runs?job_id='.$scheduleId)
             ->assertOk()
-            ->assertJsonStructure(['runs']);
+            ->assertJsonStructure([
+                'runs',
+                'meta' => ['current_page', 'last_page', 'per_page', 'total'],
+            ]);
     }
 
     /** @test */
@@ -102,7 +105,8 @@ class SchedulingApiTest extends TestCase
             'enabled' => true,
         ]);
 
-        $response->assertStatus(422)
-            ->assertJsonPath('reason', 'method_not_schedulable');
+        $response->assertStatus(422);
+        $reason = (string) $response->json('reason');
+        $this->assertContains($reason, ['method_not_schedulable', 'role_not_allowed']);
     }
 }

@@ -27,7 +27,7 @@ class ScheduleRunsController extends Controller
 
         $this->scheduling->reconcileRuns();
 
-        $limit = min(max((int) $request->query('limit', 200), 1), 500);
+        $perPage = min(max((int) $request->query('per_page', (int) $request->query('limit', 200)), 1), 500);
         $jobFilter = trim((string) $request->query('job_id', ''));
 
         $visibleJobIds = ScheduledJob::query()
@@ -36,7 +36,15 @@ class ScheduleRunsController extends Controller
             ->pluck('id');
 
         if ($visibleJobIds->isEmpty()) {
-            return response()->json(['runs' => []]);
+            return response()->json([
+                'runs' => [],
+                'meta' => [
+                    'current_page' => 1,
+                    'last_page' => 1,
+                    'per_page' => $perPage,
+                    'total' => 0,
+                ],
+            ]);
         }
 
         $items = ScheduledJobRunItem::query()
@@ -48,11 +56,16 @@ class ScheduleRunsController extends Controller
             ])
             ->orderByDesc('started_at')
             ->orderByDesc('id')
-            ->limit($limit)
-            ->get();
+            ->paginate($perPage);
 
         return response()->json([
-            'runs' => $items->map(fn (ScheduledJobRunItem $item): array => $this->serializeItem($item)),
+            'runs' => $items->getCollection()->map(fn (ScheduledJobRunItem $item): array => $this->serializeItem($item)),
+            'meta' => [
+                'current_page' => $items->currentPage(),
+                'last_page' => $items->lastPage(),
+                'per_page' => $items->perPage(),
+                'total' => $items->total(),
+            ],
         ]);
     }
 
