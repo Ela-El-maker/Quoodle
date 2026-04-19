@@ -128,8 +128,8 @@ export default function AuditContent() {
       }
 
       const payload = (await response.json()) as AuditEventsResponse;
-      const mapped: AuditEntry[] = (payload.events ?? []).map((event) => ({
-        id: String(event.id ?? `audit-${Math.random().toString(36).slice(2, 10)}`),
+      const mapped: AuditEntry[] = (payload.events ?? []).map((event, index) => ({
+        id: String(event.id ?? ([event.timestamp, event.action, event.target, index].filter(Boolean).join('|') || `audit-${index}`)),
         timestamp: formatLocalDateTime(event.timestamp ?? null, '-'),
         actor: String(event.actor ?? 'system'),
         actorRole: labelRole(event.actor_role),

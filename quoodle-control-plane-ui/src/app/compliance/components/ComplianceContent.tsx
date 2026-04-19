@@ -230,8 +230,8 @@ export default function ComplianceContent() {
 
     if (auditRes.status === 'fulfilled' && auditRes.value.ok) {
       const payload = (await auditRes.value.json()) as ComplianceAuditResponse;
-      const mappedEntries: AuditEntry[] = (payload.events ?? []).map((event) => ({
-        id: String(event.id ?? `cmp-audit-${Math.random().toString(36).slice(2, 8)}`),
+      const mappedEntries: AuditEntry[] = (payload.events ?? []).map((event, index) => ({
+        id: String(event.id ?? ([event.timestamp, event.action, event.target, index].filter(Boolean).join('|') || `cmp-audit-${index}`)),
         timestamp: formatLocalDateTime(event.timestamp ?? null, '-'),
         actor: String(event.actor ?? 'system'),
         actorRole: labelRole(event.actor_role),
@@ -469,4 +469,3 @@ export default function ComplianceContent() {
     </div>
   );
 }
-
