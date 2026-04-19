@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Plus, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react';
+import { Plus, RefreshCw, ShieldAlert, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 type MatchType = 'basename' | 'full_path';
@@ -68,6 +68,7 @@ export default function AppLockManagerSection() {
   const [newValue, setNewValue] = useState('');
   const [newPriority, setNewPriority] = useState(100);
   const [checkValue, setCheckValue] = useState('');
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
 
   const blockedCheck = useMemo(() => {
     const input = checkValue.trim();
@@ -139,7 +140,7 @@ export default function AppLockManagerSection() {
   }
 
   async function clearPolicy() {
-    if (!window.confirm('Clear all app-lock rules and disable enforcement?')) return;
+    setConfirmClearOpen(false);
     setSaving(true);
     try {
       const res = await fetch('/api/policy/app-lock', { method: 'DELETE' });
@@ -204,7 +205,7 @@ export default function AppLockManagerSection() {
             {loading ? 'Loading...' : 'Reload'}
           </button>
           <button
-            onClick={clearPolicy}
+            onClick={() => setConfirmClearOpen(true)}
             disabled={saving}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-red-500/30 text-red-400 rounded-md hover:bg-red-500/10 transition-colors disabled:opacity-60"
           >
@@ -355,6 +356,52 @@ export default function AppLockManagerSection() {
           </div>
         )}
       </div>
+
+      {confirmClearOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => {
+              if (!saving) setConfirmClearOpen(false);
+            }}
+          />
+          <div className="relative w-full max-w-md rounded-xl border border-border bg-zinc-950 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+              <h3 className="text-sm font-semibold">Clear App Lock Policy</h3>
+              <button
+                onClick={() => setConfirmClearOpen(false)}
+                disabled={saving}
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-60"
+                aria-label="Close clear policy dialog"
+              >
+                <X size={15} />
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-2">
+              <p className="text-sm text-foreground">Clear all app-lock rules and disable enforcement?</p>
+              <p className="text-xs text-muted-foreground">
+                This removes every current rule from policy. You can still add rules again afterward.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-4">
+              <button
+                onClick={() => setConfirmClearOpen(false)}
+                disabled={saving}
+                className="px-3 py-1.5 text-xs border border-border rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={clearPolicy}
+                disabled={saving}
+                className="px-3 py-1.5 text-xs border border-red-500/40 rounded-md text-red-300 hover:bg-red-500/10 transition-colors disabled:opacity-60"
+              >
+                {saving ? 'Clearing...' : 'Confirm Clear'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

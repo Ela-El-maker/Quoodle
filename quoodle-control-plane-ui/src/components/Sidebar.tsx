@@ -76,6 +76,12 @@ const operatorNavGroups = [
       { label: 'Audit Trail',      icon: ScrollText,      path: '/audit',                badge: null },
     ],
   },
+  {
+    label: 'Integrations',
+    items: [
+      { label: 'Webhooks',         icon: Webhook,         path: '/webhooks',             badge: null },
+    ],
+  },
 ];
 
 const viewerNavGroups = [
