@@ -31,7 +31,7 @@ export default function DashboardPage() {
 
   const anyError = errors.devices || errors.alerts || errors.commands ? 'Failed to load data' : null;
   const needsAttentionError = errors.devices || errors.commands ? 'Failed to load data' : null;
-  const auditError = errors.alerts || errors.commands ? 'Failed to load data' : null;
+  const auditError = errors.audit;
 
   return (
     <AppLayout currentPath="/dashboard">

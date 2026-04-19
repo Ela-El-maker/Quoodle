@@ -113,6 +113,7 @@ interface DashboardErrors {
   devices: string | null;
   alerts: string | null;
   commands: string | null;
+  audit: string | null;
 }
 
 interface DashboardSnapshot {
@@ -332,6 +333,72 @@ async function fetchCommands(signal: AbortSignal, windowStartMs: number): Promis
   }
 
   return commands;
+}
+
+interface AuditApiRow {
+  id?: string;
+  timestamp?: string | null;
+  actor?: string;
+  actor_role?: string;
+  event_type?: string;
+  action?: string;
+  target?: string;
+  detail?: string;
+  outcome?: string;
+}
+
+interface AuditApiResponse {
+  events?: AuditApiRow[];
+}
+
+function normalizeAuditEventType(value: unknown): AuditEntry['eventType'] {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (normalized === 'user_action' || normalized === 'command_execution' || normalized === 'policy_change') {
+    return normalized;
+  }
+  return 'system_event';
+}
+
+function normalizeAuditOutcome(value: unknown): AuditEntry['outcome'] {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (normalized === 'success' || normalized === 'failure') {
+    return normalized;
+  }
+  return 'pending';
+}
+
+function labelAuditRole(value: unknown): string {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (!normalized) return 'System';
+  if (normalized === 'admin') return 'Admin';
+  if (normalized === 'viewer') return 'Viewer';
+  if (normalized === 'operator') return 'Operator';
+  if (normalized === 'system') return 'System';
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+async function fetchAuditEntries(signal: AbortSignal): Promise<AuditEntry[]> {
+  const response = await fetch('/api/audit/events?page=1&per_page=120', {
+    credentials: 'include',
+    cache: 'no-store',
+    signal,
+  });
+  if (!response.ok) {
+    throw new Error(`audit_fetch_failed_${response.status}`);
+  }
+
+  const payload = (await response.json()) as AuditApiResponse;
+  return (payload.events ?? []).map((event, index) => ({
+    id: String(event.id ?? ([event.timestamp, event.action, event.target, index].filter(Boolean).join('|') || `audit-${index}`)),
+    timestamp: formatAuditTimestamp(event.timestamp ?? null),
+    actor: String(event.actor ?? 'system'),
+    actorRole: labelAuditRole(event.actor_role),
+    eventType: normalizeAuditEventType(event.event_type),
+    action: String(event.action ?? 'EVENT'),
+    target: String(event.target ?? ''),
+    detail: String(event.detail ?? ''),
+    outcome: normalizeAuditOutcome(event.outcome),
+  }));
 }
 
 function buildSnapshot(
@@ -582,6 +649,7 @@ export function useDashboardData(): UseDashboardDataResult {
     devices: null,
     alerts: null,
     commands: null,
+    audit: null,
   });
   const [lastRefreshLabel, setLastRefreshLabel] = useState('');
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -599,10 +667,11 @@ export function useDashboardData(): UseDashboardDataResult {
     const nowMs = Date.now();
     const windowStartMs = nowMs - COMMAND_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
-    const [devicesResult, alertsResult, commandsResult] = await Promise.allSettled([
+    const [devicesResult, alertsResult, commandsResult, auditResult] = await Promise.allSettled([
       fetchDevices(controller.signal),
       fetchAlerts(controller.signal),
       fetchCommands(controller.signal, windowStartMs),
+      fetchAuditEntries(controller.signal),
     ]);
 
     if (controller.signal.aborted) return;
@@ -611,6 +680,7 @@ export function useDashboardData(): UseDashboardDataResult {
       devices: devicesResult.status === 'rejected' ? 'Failed to load data' : null,
       alerts: alertsResult.status === 'rejected' ? 'Failed to load data' : null,
       commands: commandsResult.status === 'rejected' ? 'Failed to load data' : null,
+      audit: auditResult.status === 'rejected' ? 'Failed to load data' : null,
     };
     setErrors(nextErrors);
 
@@ -623,16 +693,23 @@ export function useDashboardData(): UseDashboardDataResult {
     if (commandsResult.status === 'rejected') {
       console.error('[dashboard] commands fetch failed', commandsResult.reason);
     }
+    if (auditResult.status === 'rejected') {
+      console.error('[dashboard] audit fetch failed', auditResult.reason);
+    }
 
     const snapshot = buildSnapshot(
       devicesResult.status === 'fulfilled' ? devicesResult.value : [],
       alertsResult.status === 'fulfilled' ? alertsResult.value : [],
       commandsResult.status === 'fulfilled' ? commandsResult.value : [],
     );
-    const signature = JSON.stringify(snapshot);
+    const finalSnapshot: DashboardSnapshot = {
+      ...snapshot,
+      auditEntries: auditResult.status === 'fulfilled' ? auditResult.value : snapshot.auditEntries,
+    };
+    const signature = JSON.stringify(finalSnapshot);
     if (signature !== dataSignatureRef.current) {
       dataSignatureRef.current = signature;
-      setData(snapshot);
+      setData(finalSnapshot);
     }
 
     setLastRefreshLabel(nowTimeString());
