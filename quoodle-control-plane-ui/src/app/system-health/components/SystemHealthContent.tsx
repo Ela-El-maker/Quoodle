@@ -1,89 +1,330 @@
 'use client';
-import React, { useState, useEffect } from 'react';
-import { HeartPulse, Server, Database, Shield, Activity, Wifi, CheckCircle2, XCircle, AlertTriangle, RefreshCw, Clock } from 'lucide-react';
-import StatusBadge from '@/components/ui/StatusBadge';
-import AuditTrailSection from '@/components/AuditTrailSection';
-import Icon from '@/components/ui/AppIcon';
 
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  Database,
+  HeartPulse,
+  RefreshCw,
+  Server,
+  Shield,
+  Wifi,
+  XCircle,
+  Zap,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import AuditTrailSection, { type AuditEntry } from '@/components/AuditTrailSection';
+import { formatLocalDateTime } from '@/lib/dateTime';
 
-interface ServiceHealth {
+type HealthStatus = 'healthy' | 'degraded' | 'offline';
+
+interface HealthOverview {
+  generated_at: string;
+  overall_status: HealthStatus;
+  component_counts: {
+    healthy: number;
+    degraded: number;
+    offline: number;
+  };
+  infra: {
+    pending_jobs: number;
+    failed_jobs: number;
+    disk_used_percent: number | null;
+    memory_usage_mb: number;
+    memory_peak_mb: number;
+    queue_driver: string;
+    cache_store: string;
+  };
+  pipeline: {
+    stuck_commands: number;
+    replay_rejections_1h: number;
+    critical_alerts_open: number;
+    telemetry_events_1h: number;
+    compliance_drift_devices: number;
+  };
+  webhooks: {
+    sent: number;
+    retrying: number;
+    dead_letter: number;
+    avg_latency_ms: number;
+  };
+}
+
+interface HealthComponent {
   id: string;
   name: string;
   category: string;
-  status: 'healthy' | 'degraded' | 'offline';
-  latencyMs: number;
-  uptime: string;
-  lastCheck: string;
-  description: string;
-  icon: React.ElementType;
+  status: HealthStatus;
+  latency_ms: number | null;
+  checked_at: string;
+  meta: Record<string, unknown>;
 }
 
-const services: ServiceHealth[] = [
-  { id: 'svc-001', name: 'Command Controller', category: 'Core', status: 'healthy',  latencyMs: 12,  uptime: '99.98%', lastCheck: '21:06:08', description: 'Ed25519 command signing and dispatch engine', icon: Shield },
-  { id: 'svc-002', name: 'Agent Gateway',      category: 'Core', status: 'healthy',  latencyMs: 8,   uptime: '99.95%', lastCheck: '21:06:07', description: 'Named pipe and kernel transport broker', icon: Wifi },
-  { id: 'svc-003', name: 'Policy Engine',      category: 'Core', status: 'degraded', latencyMs: 340, uptime: '98.12%', lastCheck: '21:06:06', description: 'Policy hash validation and sync service', icon: Shield },
-  { id: 'svc-004', name: 'Telemetry Ingestor', category: 'Monitoring', status: 'healthy',  latencyMs: 22,  uptime: '99.90%', lastCheck: '21:06:05', description: 'Kernel event stream and metric aggregation', icon: Activity },
-  { id: 'svc-005', name: 'Attestation Service',category: 'Security', status: 'degraded', latencyMs: 520, uptime: '96.40%', lastCheck: '21:06:04', description: 'TPM attestation verification and PCR validation', icon: Shield },
-  { id: 'svc-006', name: 'Alert Processor',    category: 'Monitoring', status: 'healthy',  latencyMs: 15,  uptime: '99.99%', lastCheck: '21:06:03', description: 'Real-time alert correlation and routing', icon: Activity },
-  { id: 'svc-007', name: 'Primary Database',   category: 'Infrastructure', status: 'healthy',  latencyMs: 4,   uptime: '99.99%', lastCheck: '21:06:02', description: 'PostgreSQL primary — command and event store', icon: Database },
-  { id: 'svc-008', name: 'Redis Cache',         category: 'Infrastructure', status: 'healthy',  latencyMs: 1,   uptime: '100%',   lastCheck: '21:06:01', description: 'Session tokens and rate-limit counters', icon: Database },
-  { id: 'svc-009', name: 'Audit Log Store',     category: 'Infrastructure', status: 'healthy',  latencyMs: 6,   uptime: '99.99%', lastCheck: '21:06:00', description: 'Immutable append-only audit event store', icon: Server },
-  { id: 'svc-010', name: 'Auth Service',        category: 'Security', status: 'healthy',  latencyMs: 18,  uptime: '99.97%', lastCheck: '21:05:59', description: 'JWT issuance, MFA verification, RBAC enforcement', icon: Shield },
-];
+interface HealthComponentResponse {
+  generated_at: string;
+  components: HealthComponent[];
+}
 
-const infraMetrics = [
-  { label: 'API Requests / min', value: '2,847', trend: '+12%', trendUp: true },
-  { label: 'Avg Response Time', value: '94ms', trend: '-8ms', trendUp: true },
-  { label: 'Active Connections', value: '312', trend: '+24', trendUp: false },
-  { label: 'Queue Depth', value: '7', trend: '-3', trendUp: true },
-  { label: 'Error Rate', value: '0.04%', trend: '-0.01%', trendUp: true },
-  { label: 'Cache Hit Rate', value: '97.2%', trend: '+0.3%', trendUp: true },
-];
+interface HealthTimeseriesPoint {
+  timestamp: string;
+  commands_completed: number;
+  commands_failed: number;
+  telemetry_ingest: number;
+  webhook_sent: number;
+  webhook_retrying: number;
+  webhook_dead_letter: number;
+  critical_alerts: number;
+}
 
-const statusIcon = {
-  healthy:  <CheckCircle2 size={14} className="text-green-400" />,
+interface HealthTimeseriesResponse {
+  generated_at: string;
+  points: HealthTimeseriesPoint[];
+}
+
+interface HealthEvent {
+  type: string;
+  timestamp: string | null;
+  severity: 'critical' | 'warning' | 'info';
+  title: string;
+  detail: string;
+  meta?: Record<string, unknown>;
+}
+
+interface HealthEventsResponse {
+  generated_at: string;
+  events: HealthEvent[];
+}
+
+interface AuditEventResponseRow {
+  id?: string;
+  timestamp?: string | null;
+  actor?: string;
+  actor_role?: string;
+  event_type?: string;
+  action?: string;
+  target?: string;
+  detail?: string;
+  outcome?: string;
+}
+
+interface AuditEventsResponse {
+  events?: AuditEventResponseRow[];
+}
+
+const statusIcon: Record<HealthStatus, React.ReactNode> = {
+  healthy: <CheckCircle2 size={14} className="text-green-400" />,
   degraded: <AlertTriangle size={14} className="text-amber-400" />,
-  offline:  <XCircle size={14} className="text-red-400" />,
+  offline: <XCircle size={14} className="text-red-400" />,
 };
 
-const latencyColor = (ms: number) =>
-  ms < 50 ? 'text-green-400' : ms < 200 ? 'text-amber-400' : 'text-red-400';
+function normalizeAuditEventType(value: unknown): AuditEntry['eventType'] {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (normalized === 'user_action' || normalized === 'command_execution' || normalized === 'policy_change') {
+    return normalized;
+  }
+  return 'system_event';
+}
+
+function normalizeAuditOutcome(value: unknown): AuditEntry['outcome'] {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (normalized === 'success' || normalized === 'failure') {
+    return normalized;
+  }
+  return 'pending';
+}
+
+function labelRole(value: string | null | undefined): string {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (!normalized) return 'System';
+  if (normalized === 'admin') return 'Admin';
+  if (normalized === 'viewer') return 'Viewer';
+  if (normalized === 'operator') return 'Operator';
+  if (normalized === 'system') return 'System';
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+const componentIconMap: Record<string, React.ElementType> = {
+  db: Database,
+  cache: Database,
+  gateway: Wifi,
+  queue: Server,
+  scheduler: Clock,
+  workers: Activity,
+  webhooks: Zap,
+  pipeline: Shield,
+  fleet: HeartPulse,
+};
+
+function statusClass(status: HealthStatus): string {
+  if (status === 'healthy') return 'text-green-400 bg-green-500/10 border-green-500/20';
+  if (status === 'degraded') return 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+  return 'text-red-400 bg-red-500/10 border-red-500/20';
+}
+
+function safeLocal(value: string | null | undefined): string {
+  if (!value) return '-';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString();
+}
+
+async function requestJson<T>(url: string): Promise<T> {
+  const res = await fetch(url, { cache: 'no-store' });
+  const payload = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    const message = typeof payload.message === 'string' ? payload.message : 'request_failed';
+    throw new Error(message);
+  }
+  return payload as unknown as T;
+}
 
 export default function SystemHealthContent() {
-  const [lastRefresh, setLastRefresh] = useState('21:06:09');
+  const [overview, setOverview] = useState<HealthOverview | null>(null);
+  const [components, setComponents] = useState<HealthComponent[]>([]);
+  const [timeseries, setTimeseries] = useState<HealthTimeseriesPoint[]>([]);
+  const [events, setEvents] = useState<HealthEvent[]>([]);
+  const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
+  const [auditLoading, setAuditLoading] = useState(true);
+  const [auditError, setAuditError] = useState<string | null>(null);
+  const [lastGeneratedAt, setLastGeneratedAt] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const handleRefresh = () => {
+  const loadAll = useCallback(async (showLoader: boolean) => {
+    if (showLoader) setLoading(true);
+    if (showLoader) setAuditLoading(true);
     setRefreshing(true);
-    setTimeout(() => {
+    try {
+      const [overviewPayload, componentsPayload, timeseriesPayload, eventsPayload] = await Promise.all([
+        requestJson<HealthOverview>('/api/system-health/overview'),
+        requestJson<HealthComponentResponse>('/api/system-health/components'),
+        requestJson<HealthTimeseriesResponse>('/api/system-health/timeseries?window_minutes=360&bucket_minutes=5'),
+        requestJson<HealthEventsResponse>('/api/system-health/events?limit=60&window_minutes=180'),
+      ]);
+
+      setOverview(overviewPayload);
+      setComponents(componentsPayload.components ?? []);
+      setTimeseries(timeseriesPayload.points ?? []);
+      setEvents(eventsPayload.events ?? []);
+
+      const candidates = [
+        overviewPayload.generated_at,
+        componentsPayload.generated_at,
+        timeseriesPayload.generated_at,
+        eventsPayload.generated_at,
+      ].filter(Boolean);
+      setLastGeneratedAt(candidates.sort().at(-1) ?? null);
+
+      try {
+        const auditPayload = await requestJson<AuditEventsResponse>('/api/audit/events?page=1&per_page=120');
+        const mappedAuditEntries: AuditEntry[] = (auditPayload.events ?? []).map((event, index) => ({
+          id: String(event.id ?? ([event.timestamp, event.action, event.target, index].filter(Boolean).join('|') || `audit-${index}`)),
+          timestamp: formatLocalDateTime(event.timestamp ?? null, '-'),
+          actor: String(event.actor ?? 'system'),
+          actorRole: labelRole(event.actor_role),
+          eventType: normalizeAuditEventType(event.event_type),
+          action: String(event.action ?? 'EVENT'),
+          target: String(event.target ?? ''),
+          detail: String(event.detail ?? ''),
+          outcome: normalizeAuditOutcome(event.outcome),
+        }));
+        setAuditEntries(mappedAuditEntries);
+        setAuditError(null);
+      } catch (auditLoadError) {
+        console.error('system-health-audit-load-failed', auditLoadError);
+        setAuditEntries([]);
+        setAuditError('Failed to load data');
+      } finally {
+        setAuditLoading(false);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'failed_to_load_system_health';
+      toast.error(message);
+      if (showLoader) {
+        setAuditEntries([]);
+        setAuditError('Failed to load data');
+        setAuditLoading(false);
+      }
+    } finally {
+      setLoading(false);
       setRefreshing(false);
-      const now = new Date();
-      setLastRefresh(`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`);
-    }, 800);
-  };
+    }
+  }, []);
 
-  const summary = {
-    healthy:  services.filter((s) => s.status === 'healthy').length,
-    degraded: services.filter((s) => s.status === 'degraded').length,
-    offline:  services.filter((s) => s.status === 'offline').length,
-  };
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | null = null;
 
-  const overallStatus = summary.offline > 0 ? 'offline' : summary.degraded > 0 ? 'degraded' : 'healthy';
-  const overallColor = overallStatus === 'healthy' ? 'text-green-400' : overallStatus === 'degraded' ? 'text-amber-400' : 'text-red-400';
-  const overallBg = overallStatus === 'healthy' ? 'bg-green-500/10 border-green-500/20' : overallStatus === 'degraded' ? 'bg-amber-500/10 border-amber-500/20' : 'bg-red-500/10 border-red-500/20';
+    const startPolling = (): void => {
+      if (timer) clearInterval(timer);
+      const interval = document.hidden ? 30000 : 5000;
+      timer = setInterval(() => {
+        void loadAll(false);
+      }, interval);
+    };
 
-  const categories = [...new Set(services.map((s) => s.category))];
+    void loadAll(true);
+    startPolling();
+
+    const handleVisibility = (): void => {
+      startPolling();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      if (timer) clearInterval(timer);
+    };
+  }, [loadAll]);
+
+  const groupedComponents = useMemo(() => {
+    return components.reduce<Record<string, HealthComponent[]>>((acc, current) => {
+      const key = current.category || 'other';
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(current);
+      return acc;
+    }, {});
+  }, [components]);
+
+  const latestTs = timeseries.at(-1);
+  const latestPointSummary = latestTs
+    ? {
+        commands: latestTs.commands_completed + latestTs.commands_failed,
+        telemetry: latestTs.telemetry_ingest,
+        webhooks: latestTs.webhook_sent + latestTs.webhook_retrying + latestTs.webhook_dead_letter,
+        critical: latestTs.critical_alerts,
+      }
+    : { commands: 0, telemetry: 0, webhooks: 0, critical: 0 };
+
+  const stale = useMemo(() => {
+    if (!lastGeneratedAt) return true;
+    const parsed = new Date(lastGeneratedAt);
+    if (Number.isNaN(parsed.getTime())) return true;
+    return Date.now() - parsed.getTime() > 90000;
+  }, [lastGeneratedAt]);
+
+  const summary = overview?.component_counts ?? { healthy: 0, degraded: 0, offline: 0 };
+  const overallStatus: HealthStatus = overview?.overall_status ?? 'offline';
+  const overallTitle =
+    overallStatus === 'healthy'
+      ? 'System Operational'
+      : overallStatus === 'degraded'
+      ? 'System Degraded — Some Components Impacted'
+      : 'System Offline / Critical Failure';
 
   return (
     <div className="space-y-6 fade-in">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">System Health</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Infrastructure services, latency, and operational metrics</p>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Live operational visibility for infrastructure, pipeline, runtime, and integrations
+          </p>
         </div>
         <button
-          onClick={handleRefresh}
+          onClick={() => void loadAll(false)}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground border border-border rounded-md hover:bg-muted/60 transition-colors"
         >
           <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
@@ -91,85 +332,86 @@ export default function SystemHealthContent() {
         </button>
       </div>
 
-      {/* Overall status banner */}
-      <div className={`flex items-center gap-4 px-4 py-3 border rounded-lg ${overallBg}`}>
-        <HeartPulse size={20} className={overallColor} />
+      {stale && (
+        <div className="flex items-center gap-2 px-4 py-2 border border-amber-500/30 bg-amber-500/10 rounded-lg text-amber-300 text-xs">
+          <AlertTriangle size={14} className="text-amber-400" />
+          Data appears stale — latest probe {safeLocal(lastGeneratedAt)}
+        </div>
+      )}
+
+      <div className={`flex items-center gap-4 px-4 py-3 border rounded-lg ${statusClass(overallStatus)}`}>
+        <HeartPulse size={20} />
         <div className="flex-1">
-          <p className={`text-sm font-semibold ${overallColor}`}>
-            System {overallStatus === 'healthy' ? 'Operational' : overallStatus === 'degraded' ? 'Degraded — Some Services Impacted' : 'Outage Detected'}
-          </p>
+          <p className="text-sm font-semibold">{overallTitle}</p>
           <p className="text-xs text-muted-foreground mt-0.5">
             {summary.healthy} healthy · {summary.degraded} degraded · {summary.offline} offline
           </p>
         </div>
         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <Clock size={11} />
-          Last checked {lastRefresh} UTC
+          Last checked {safeLocal(lastGeneratedAt)}
         </div>
       </div>
 
-      {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-        <div className="bg-green-500/5 border border-green-500/20 rounded-lg p-4 text-center">
-          <p className="text-3xl font-bold tabular-nums text-green-400">{summary.healthy}</p>
-          <p className="text-xs text-green-400/70 mt-1 uppercase tracking-wide font-medium">Healthy</p>
-        </div>
-        <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-4 text-center">
-          <p className="text-3xl font-bold tabular-nums text-amber-400">{summary.degraded}</p>
-          <p className="text-xs text-amber-400/70 mt-1 uppercase tracking-wide font-medium">Degraded</p>
-        </div>
-        <div className="bg-card border border-border rounded-lg p-4 text-center">
-          <p className="text-3xl font-bold tabular-nums text-zinc-400">{summary.offline}</p>
-          <p className="text-xs text-muted-foreground mt-1 uppercase tracking-wide font-medium">Offline</p>
-        </div>
+        <HealthCountCard label="Healthy" value={summary.healthy} className="text-green-400 border-green-500/20 bg-green-500/5" />
+        <HealthCountCard label="Degraded" value={summary.degraded} className="text-amber-400 border-amber-500/20 bg-amber-500/5" />
+        <HealthCountCard label="Offline" value={summary.offline} className="text-red-400 border-red-500/20 bg-red-500/5" />
       </div>
 
-      {/* Infrastructure metrics */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {infraMetrics.map((m) => (
-          <div key={m.label} className="bg-card border border-border rounded-lg p-3">
-            <p className="text-lg font-bold tabular-nums">{m.value}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{m.label}</p>
-            <p className={`text-[10px] mt-1 font-medium ${m.trendUp ? 'text-green-400' : 'text-amber-400'}`}>{m.trend}</p>
-          </div>
-        ))}
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
+        <MetricCard label="Queue Pending" value={String(overview?.infra.pending_jobs ?? 0)} />
+        <MetricCard label="Queue Failed" value={String(overview?.infra.failed_jobs ?? 0)} />
+        <MetricCard label="Disk Used" value={`${overview?.infra.disk_used_percent ?? 0}%`} />
+        <MetricCard label="Memory MB" value={`${overview?.infra.memory_usage_mb ?? 0}`} />
+        <MetricCard label="Stuck Commands" value={String(overview?.pipeline.stuck_commands ?? 0)} />
+        <MetricCard label="Replay Rejections" value={String(overview?.pipeline.replay_rejections_1h ?? 0)} />
+        <MetricCard label="Webhook DLQ" value={String(overview?.webhooks.dead_letter ?? 0)} />
+        <MetricCard label="Webhook Latency" value={`${Math.round(overview?.webhooks.avg_latency_ms ?? 0)}ms`} />
       </div>
 
-      {/* Services by category */}
-      {categories.map((cat) => (
-        <div key={cat}>
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">{cat}</h3>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label="Latest Bucket Commands" value={String(latestPointSummary.commands)} />
+        <MetricCard label="Latest Bucket Telemetry" value={String(latestPointSummary.telemetry)} />
+        <MetricCard label="Latest Bucket Webhooks" value={String(latestPointSummary.webhooks)} />
+        <MetricCard label="Latest Bucket Critical Alerts" value={String(latestPointSummary.critical)} />
+      </div>
+
+      {Object.entries(groupedComponents).map(([category, items]) => (
+        <div key={category}>
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
+            {category}
+          </h3>
           <div className="space-y-2">
-            {services.filter((s) => s.category === cat).map((svc) => {
-              const Icon = svc.icon;
+            {items.map((component) => {
+              const Icon = componentIconMap[component.id] ?? Server;
+              const latency = component.latency_ms;
               return (
                 <div
-                  key={svc.id}
+                  key={component.id}
                   className="bg-card border border-border rounded-lg px-4 py-3 flex items-center gap-4 hover:bg-muted/10 transition-colors"
                 >
                   <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
                     <Icon size={14} className="text-muted-foreground" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{svc.name}</p>
-                    <p className="text-[11px] text-muted-foreground truncate">{svc.description}</p>
+                    <p className="text-sm font-medium">{component.name}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      checked {safeLocal(component.checked_at)}
+                    </p>
                   </div>
-                  <div className="flex items-center gap-6 flex-shrink-0">
+                  <div className="flex items-center gap-5">
                     <div className="text-right hidden sm:block">
-                      <p className={`text-xs font-semibold tabular-nums ${latencyColor(svc.latencyMs)}`}>{svc.latencyMs}ms</p>
+                      <p className={`text-xs font-semibold tabular-nums ${latency === null ? 'text-muted-foreground' : latency < 50 ? 'text-green-400' : latency < 200 ? 'text-amber-400' : 'text-red-400'}`}>
+                        {latency ?? '—'}{latency !== null ? 'ms' : ''}
+                      </p>
                       <p className="text-[10px] text-muted-foreground">latency</p>
                     </div>
-                    <div className="text-right hidden md:block">
-                      <p className="text-xs font-semibold text-green-400">{svc.uptime}</p>
-                      <p className="text-[10px] text-muted-foreground">uptime</p>
-                    </div>
-                    <div className="text-right hidden lg:block">
-                      <p className="font-mono text-[11px] text-muted-foreground">{svc.lastCheck}</p>
-                      <p className="text-[10px] text-muted-foreground">last check</p>
-                    </div>
                     <div className="flex items-center gap-2">
-                      {statusIcon[svc.status]}
-                      <StatusBadge variant={svc.status} />
+                      {statusIcon[component.status]}
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${statusClass(component.status)}`}>
+                        {component.status.toUpperCase()}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -179,8 +421,79 @@ export default function SystemHealthContent() {
         </div>
       ))}
 
-      {/* Audit trail */}
-      <AuditTrailSection title="System Health Audit Trail" maxRows={4} />
+      <div className="bg-card border border-border rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+          <h3 className="text-sm font-semibold">Recent Health Events</h3>
+          <span className="text-xs text-muted-foreground">{events.length} events</span>
+        </div>
+        <div className="divide-y divide-border">
+          {events.slice(0, 20).map((event, index) => (
+            <div key={`${event.type}-${event.timestamp}-${index}`} className="px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium">{event.title}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{event.detail}</p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p
+                    className={`text-[10px] font-semibold uppercase ${
+                      event.severity === 'critical'
+                        ? 'text-red-400'
+                        : event.severity === 'warning'
+                        ? 'text-amber-400'
+                        : 'text-blue-400'
+                    }`}
+                  >
+                    {event.severity}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">{safeLocal(event.timestamp)}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+          {!loading && events.length === 0 && (
+            <div className="px-4 py-8 text-xs text-muted-foreground text-center">No recent events.</div>
+          )}
+          {loading && (
+            <div className="px-4 py-8 text-xs text-muted-foreground text-center">Loading system health data…</div>
+          )}
+        </div>
+      </div>
+
+      <AuditTrailSection
+        title="System Health Audit Trail"
+        maxRows={4}
+        entries={auditEntries}
+        loading={auditLoading}
+        error={auditError}
+      />
     </div>
   );
 }
+
+function HealthCountCard({
+  label,
+  value,
+  className,
+}: {
+  label: string;
+  value: number;
+  className: string;
+}) {
+  return (
+    <div className={`border rounded-lg p-4 text-center ${className}`}>
+      <p className="text-3xl font-bold tabular-nums">{value}</p>
+      <p className="text-xs mt-1 uppercase tracking-wide font-medium">{label}</p>
+    </div>
+  );
+}
+
+function MetricCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-card border border-border rounded-lg p-3">
+      <p className="text-lg font-bold tabular-nums">{value}</p>
+      <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{label}</p>
+    </div>
+  );
+}
+
