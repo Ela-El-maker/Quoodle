@@ -626,8 +626,8 @@ export default function OperatorDashboard() {
       if (alertsRes.status === 'fulfilled' && alertsRes.value.ok) {
         const payload = (await alertsRes.value.json()) as AlertsApiResponse;
         const mapped = (payload.alerts ?? [])
-          .map((alert): AlertRow => ({
-            id: String(alert.alert_id ?? '').trim() || `alert-${Math.random().toString(36).slice(2, 8)}`,
+          .map((alert, index): AlertRow => ({
+            id: String(alert.alert_id ?? '').trim() || [alert.timestamp, alert.message, alert.severity, index].filter(Boolean).join('|') || `alert-${index}`,
             title: String(alert.message ?? 'Alert').trim() || 'Alert',
             severity: normalizeSeverity(alert.severity),
             deviceName: String(alert.device_id ?? 'unknown').trim() || 'unknown',
