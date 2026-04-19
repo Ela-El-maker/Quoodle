@@ -20,6 +20,9 @@ class User extends Authenticatable
     public const ROLE_ADMIN = 'admin';
     public const ROLE_OPERATOR = 'operator';
     public const ROLE_VIEWER = 'viewer';
+    public const STATUS_ACTIVE = 'active';
+    public const STATUS_INACTIVE = 'inactive';
+    public const STATUS_PENDING = 'pending';
 
     /**
      * Valid roles
@@ -49,6 +52,9 @@ class User extends Authenticatable
         'display_name',
         'email',
         'role',
+        'account_status',
+        'deactivated_at',
+        'invited_by',
         'two_factor_enabled',
         'two_factor_secret',
     ];
@@ -73,6 +79,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'two_factor_enabled' => 'boolean',
             'two_factor_secret' => 'encrypted',
+            'deactivated_at' => 'datetime',
         ];
     }
 
@@ -102,6 +109,11 @@ class User extends Authenticatable
     public function isViewer(): bool
     {
         return $this->role === self::ROLE_VIEWER;
+    }
+
+    public function isActive(): bool
+    {
+        return (string) ($this->account_status ?? self::STATUS_ACTIVE) === self::STATUS_ACTIVE;
     }
 
     /**
@@ -209,6 +221,11 @@ class User extends Authenticatable
     public function deviceLinks()
     {
         return $this->hasMany(DeviceLink::class, 'user_id', 'id');
+    }
+
+    public function deviceAccessGrants()
+    {
+        return $this->hasMany(TeamMemberDeviceAccess::class, 'user_id', 'id');
     }
 
     /**

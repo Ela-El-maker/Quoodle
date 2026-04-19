@@ -20,6 +20,8 @@ class UserFactory extends Factory
         return [
             'display_name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
+            'role' => \App\Models\User::ROLE_VIEWER,
+            'account_status' => \App\Models\User::STATUS_ACTIVE,
             'email_verified_at' => now(),
             'remember_token' => Str::random(10),
         ];
