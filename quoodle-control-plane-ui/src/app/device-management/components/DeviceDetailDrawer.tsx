@@ -221,12 +221,12 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
       if (auditRes.status === 'fulfilled' && auditRes.value.ok) {
         const payload = (await auditRes.value.json()) as DeviceAuditResponse;
         setAuditRows(
-          (payload.entries ?? []).map((entry: DeviceAuditApi) => {
+          (payload.entries ?? []).map((entry: DeviceAuditApi, index: number) => {
             const eventType = entry.event_type?.trim() || 'system_event';
             const lowerSummary = String(entry.summary ?? '').toLowerCase();
             const ok = !lowerSummary.includes('fail') && !lowerSummary.includes('error') && !lowerSummary.includes('reject');
             return {
-              id: entry.id?.trim() || `audit-${Math.random().toString(36).slice(2, 8)}`,
+              id: entry.id?.trim() || [entry.timestamp, entry.summary, index].filter(Boolean).join('|') || `audit-${index}`,
               type: eventType.includes('command') ? 'command' : eventType.includes('policy') ? 'policy' : 'system',
               actor: 'system',
               action: entry.summary?.trim() || eventType.replaceAll('_', ' '),
