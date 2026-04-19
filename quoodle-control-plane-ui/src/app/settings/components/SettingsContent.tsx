@@ -1,51 +1,56 @@
 'use client';
-import React, { useState } from 'react';
+
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertTriangle,
   Bell,
+  CheckCircle2,
+  Edit2,
+  Lock,
+  Plus,
+  RefreshCw,
+  Save,
   Shield,
   ShieldCheck,
-  Users,
-  Plus,
-  Trash2,
-  Edit2,
-  Save,
-  X,
-  ChevronDown,
-  ChevronUp,
   ToggleLeft,
   ToggleRight,
-  AlertTriangle,
-  CheckCircle2,
-  Lock,
-  Eye,
-  Terminal,
-  Monitor,
-  Share2,
-  UserX,
+  Trash2,
+  Users,
   UserCheck,
-  Search,
-  MoreHorizontal,
+  UserX,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import AppLockManagerSection from './AppLockManagerSection';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+type SettingsTab =
+  | 'alert-rules'
+  | 'app-lock'
+  | 'policy-editor'
+  | 'compliance-thresholds'
+  | 'roles-permissions'
+  | 'team-members';
+
+type Role = 'admin' | 'operator' | 'viewer';
+type AccountStatus = 'active' | 'inactive' | 'pending';
+type Severity = 'critical' | 'warning' | 'info';
 
 interface AlertRule {
   id: string;
   name: string;
   condition: string;
-  severity: 'critical' | 'warning' | 'info';
-  channel: string;
+  severity: Severity;
+  channels: string[];
   enabled: boolean;
 }
 
 interface PolicyEntry {
   id: string;
-  key: string;
-  value: string;
-  description: string;
-  editable: boolean;
+  policy_key: string;
+  policy_value: string | null;
+  scope: string;
+  value_type: string;
+  description: string | null;
+  is_mutable: boolean;
 }
 
 interface ComplianceThreshold {
@@ -53,835 +58,52 @@ interface ComplianceThreshold {
   control: string;
   metric: string;
   threshold: number;
-  unit: string;
+  unit: string | null;
   severity: 'critical' | 'warning';
+  enabled: boolean;
 }
 
-interface RolePermission {
-  role: 'admin' | 'operator' | 'viewer';
-  permissions: Record<string, boolean>;
+interface TeamDevice {
+  device_id: string;
+  device_name: string;
+  lifecycle_state: string;
+  os_build: string | null;
 }
 
 interface TeamMember {
   id: string;
-  name: string;
+  display_name: string;
   email: string;
-  role: 'admin' | 'operator' | 'viewer';
-  status: 'active' | 'inactive' | 'pending';
-  lastActive: string;
-  deviceAccess: string[]; // device IDs
+  role: Role;
+  account_status: AccountStatus;
+  device_access: string[];
 }
 
-interface DeviceEntry {
-  id: string;
-  hostname: string;
-  os: string;
-  status: 'online' | 'offline' | 'degraded';
-}
+type PermissionsMatrix = Record<Role, Record<string, boolean>>;
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-
-const initialAlertRules: AlertRule[] = [
-  { id: 'AR-001', name: 'Attestation Failure', condition: 'device.attestation_status == "failed"', severity: 'critical', channel: 'email + webhook', enabled: true },
-  { id: 'AR-002', name: 'Policy Hash Drift', condition: 'device.policy_hash != fleet.policy_hash', severity: 'warning', channel: 'email', enabled: true },
-  { id: 'AR-003', name: 'High Risk Score', condition: 'device.risk_score > 0.7', severity: 'critical', channel: 'email + webhook', enabled: true },
-  { id: 'AR-004', name: 'Device Offline > 5min', condition: 'device.last_seen > 300s', severity: 'warning', channel: 'email', enabled: false },
-  { id: 'AR-005', name: 'Command Failure Rate', condition: 'commands.failure_rate > 0.3 (1h window)', severity: 'warning', channel: 'webhook', enabled: true },
-  { id: 'AR-006', name: 'Kernel Guard Missing', condition: 'device.kernel_guard == false', severity: 'critical', channel: 'email + webhook', enabled: true },
-];
-
-const initialPolicies: PolicyEntry[] = [
-  { id: 'POL-001', key: 'policy.version', value: 'policy-2026-04', description: 'Current active fleet policy version', editable: false },
-  { id: 'POL-002', key: 'command.ttl_seconds', value: '300', description: 'Default command TTL before expiry', editable: true },
-  { id: 'POL-003', key: 'command.require_2fa', value: 'true', description: 'Require 2FA for all sensitive commands', editable: true },
-  { id: 'POL-004', key: 'agent.heartbeat_interval', value: '30', description: 'Agent heartbeat interval in seconds', editable: true },
-  { id: 'POL-005', key: 'quarantine.auto_on_attestation_fail', value: 'true', description: 'Auto-quarantine device on attestation failure', editable: true },
-  { id: 'POL-006', key: 'session.max_idle_minutes', value: '60', description: 'Max idle session duration before forced logout', editable: true },
-  { id: 'POL-007', key: 'dispatch.signature_algo', value: 'Ed25519', description: 'Signing algorithm for command dispatch', editable: false },
-];
-
-const initialThresholds: ComplianceThreshold[] = [
-  { id: 'CT-001', control: 'Risk Score', metric: 'device.risk_score', threshold: 70, unit: '/100', severity: 'critical' },
-  { id: 'CT-002', control: 'Policy Drift', metric: 'fleet.drift_count', threshold: 5, unit: 'devices', severity: 'warning' },
-  { id: 'CT-003', control: 'Offline Devices', metric: 'fleet.offline_pct', threshold: 20, unit: '%', severity: 'warning' },
-  { id: 'CT-004', control: 'Compliance Score', metric: 'fleet.compliance_score', threshold: 75, unit: '%', severity: 'critical' },
-  { id: 'CT-005', control: 'Heartbeat Lag', metric: 'device.heartbeat_lag', threshold: 60, unit: 'seconds', severity: 'warning' },
-  { id: 'CT-006', control: 'Command Failure Rate', metric: 'commands.failure_rate', threshold: 30, unit: '%', severity: 'critical' },
-];
-
-const PERMISSION_KEYS = [
-  { key: 'view_devices', label: 'View Devices' },
-  { key: 'manage_devices', label: 'Manage Devices' },
-  { key: 'send_commands', label: 'Send Commands' },
-  { key: 'send_sensitive_commands', label: 'Sensitive Commands' },
-  { key: 'view_alerts', label: 'View Alerts' },
-  { key: 'acknowledge_alerts', label: 'Acknowledge Alerts' },
-  { key: 'view_compliance', label: 'View Compliance' },
-  { key: 'manage_compliance', label: 'Manage Compliance' },
-  { key: 'view_audit', label: 'View Audit Trail' },
-  { key: 'manage_users', label: 'Manage Users' },
-  { key: 'manage_settings', label: 'Manage Settings' },
-  { key: 'export_data', label: 'Export Data' },
-  { key: 'pair_devices', label: 'Pair Devices' },
-];
-
-const initialRoles: RolePermission[] = [
-  {
-    role: 'admin',
-    permissions: {
-      view_devices: true, manage_devices: true, send_commands: true, send_sensitive_commands: true,
-      view_alerts: true, acknowledge_alerts: true, view_compliance: true, manage_compliance: true,
-      view_audit: true, manage_users: true, manage_settings: true, export_data: true, pair_devices: true,
+async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(init?.headers ?? {}),
     },
-  },
-  {
-    role: 'operator',
-    permissions: {
-      view_devices: true, manage_devices: false, send_commands: true, send_sensitive_commands: false,
-      view_alerts: true, acknowledge_alerts: true, view_compliance: true, manage_compliance: false,
-      view_audit: true, manage_users: false, manage_settings: false, export_data: true, pair_devices: true,
-    },
-  },
-  {
-    role: 'viewer',
-    permissions: {
-      view_devices: true, manage_devices: false, send_commands: false, send_sensitive_commands: false,
-      view_alerts: false, acknowledge_alerts: false, view_compliance: true, manage_compliance: false,
-      view_audit: true, manage_users: false, manage_settings: false, export_data: false, pair_devices: true,
-    },
-  },
-];
-
-const initialTeamMembers: TeamMember[] = [
-  { id: 'USR-001', name: 'Admin User', email: 'admin@quoodle.io', role: 'admin', status: 'active', lastActive: '2 min ago', deviceAccess: ['PC001', 'PC002', 'WKSTN-042', 'WKSTN-007', 'WKSTN-019', 'SRV-PROD-04'] },
-  { id: 'USR-002', name: 'Ops Team', email: 'ops.team@quoodle.io', role: 'operator', status: 'active', lastActive: '5 min ago', deviceAccess: ['PC001', 'PC002', 'WKSTN-042', 'WKSTN-007'] },
-  { id: 'USR-003', name: 'Nina Osei', email: 'nina.osei@quoodle.io', role: 'operator', status: 'active', lastActive: '12 min ago', deviceAccess: ['WKSTN-019', 'SRV-PROD-04'] },
-  { id: 'USR-004', name: 'DevOps', email: 'devops@quoodle.io', role: 'operator', status: 'active', lastActive: '1 hour ago', deviceAccess: ['PC001', 'WKSTN-042'] },
-  { id: 'USR-005', name: 'Viewer User', email: 'viewer@quoodle.io', role: 'viewer', status: 'active', lastActive: '3 hours ago', deviceAccess: ['PC001', 'PC002'] },
-  { id: 'USR-006', name: 'Sarah Chen', email: 'sarah.chen@quoodle.io', role: 'viewer', status: 'inactive', lastActive: '2 days ago', deviceAccess: [] },
-  { id: 'USR-007', name: 'James Okafor', email: 'james.okafor@quoodle.io', role: 'operator', status: 'pending', lastActive: 'Never', deviceAccess: [] },
-];
-
-const allDevices: DeviceEntry[] = [
-  { id: 'PC001', hostname: 'WKSTN-001', os: 'Windows 11', status: 'online' },
-  { id: 'PC002', hostname: 'WKSTN-002', os: 'Windows 11', status: 'online' },
-  { id: 'WKSTN-042', hostname: 'WKSTN-042', os: 'Windows 10', status: 'online' },
-  { id: 'WKSTN-007', hostname: 'WKSTN-007', os: 'Windows 11', status: 'degraded' },
-  { id: 'WKSTN-019', hostname: 'WKSTN-019', os: 'Windows 10', status: 'offline' },
-  { id: 'SRV-PROD-04', hostname: 'SRV-PROD-04', os: 'Windows Server 2022', status: 'online' },
-];
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-const severityBadge = (s: 'critical' | 'warning' | 'info') => {
-  const map = {
-    critical: 'bg-red-500/20 text-red-400 border-red-500/30',
-    warning: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-    info: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  };
-  return (
-    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${map[s]}`}>
-      {s.toUpperCase()}
-    </span>
-  );
-};
-
-// ─── Alert Rules Section ──────────────────────────────────────────────────────
-
-function AlertRulesSection() {
-  const [rules, setRules] = useState<AlertRule[]>(initialAlertRules);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editCondition, setEditCondition] = useState('');
-
-  const toggleRule = (id: string) => {
-    setRules((prev) => prev.map((r) => r.id === id ? { ...r, enabled: !r.enabled } : r));
-    const rule = rules.find((r) => r.id === id);
-    if (rule) toast.success(`Rule "${rule.name}" ${rule.enabled ? 'disabled' : 'enabled'}`);
-  };
-
-  const startEdit = (rule: AlertRule) => {
-    setEditingId(rule.id);
-    setEditName(rule.name);
-    setEditCondition(rule.condition);
-  };
-
-  const saveEdit = (id: string) => {
-    setRules((prev) => prev.map((r) => r.id === id ? { ...r, name: editName, condition: editCondition } : r));
-    setEditingId(null);
-    toast.success('Alert rule updated');
-  };
-
-  const deleteRule = (id: string) => {
-    setRules((prev) => prev.filter((r) => r.id !== id));
-    toast.success('Alert rule deleted');
-  };
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-semibold">Alert Rules</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Configure conditions that trigger operational alerts</p>
-        </div>
-        <button
-          onClick={() => toast.info('Add rule form coming soon')}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary/10 border border-primary/30 text-primary rounded-md hover:bg-primary/20 transition-colors"
-        >
-          <Plus size={12} />
-          Add Rule
-        </button>
-      </div>
-
-      <div className="space-y-2">
-        {rules.map((rule) => (
-          <div
-            key={rule.id}
-            className={`bg-card border rounded-lg px-4 py-3 transition-all ${rule.enabled ? 'border-border' : 'border-border/40 opacity-60'}`}
-          >
-            {editingId === rule.id ? (
-              <div className="space-y-2">
-                <input
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-xs bg-muted/60 border border-border rounded-md text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-                  placeholder="Rule name"
-                />
-                <input
-                  value={editCondition}
-                  onChange={(e) => setEditCondition(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-xs bg-muted/60 border border-border rounded-md font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-                  placeholder="Condition expression"
-                />
-                <div className="flex items-center gap-2">
-                  <button onClick={() => saveEdit(rule.id)} className="flex items-center gap-1 px-2.5 py-1 text-xs bg-green-500/10 border border-green-500/20 text-green-400 rounded-md hover:bg-green-500/20 transition-colors">
-                    <Save size={11} /> Save
-                  </button>
-                  <button onClick={() => setEditingId(null)} className="flex items-center gap-1 px-2.5 py-1 text-xs text-muted-foreground border border-border rounded-md hover:bg-muted/60 transition-colors">
-                    <X size={11} /> Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium">{rule.name}</span>
-                    {severityBadge(rule.severity)}
-                    <span className="text-[10px] text-muted-foreground bg-muted/40 px-1.5 py-0.5 rounded">{rule.channel}</span>
-                  </div>
-                  <p className="font-mono text-[11px] text-muted-foreground mt-0.5 truncate">{rule.condition}</p>
-                </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <button onClick={() => startEdit(rule)} className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                    <Edit2 size={12} />
-                  </button>
-                  <button onClick={() => deleteRule(rule.id)} className="p-1.5 rounded text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors">
-                    <Trash2 size={12} />
-                  </button>
-                  <button onClick={() => toggleRule(rule.id)} className="p-1 rounded transition-colors">
-                    {rule.enabled
-                      ? <ToggleRight size={22} className="text-primary" />
-                      : <ToggleLeft size={22} className="text-muted-foreground" />}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+    cache: 'no-store',
+  });
+  const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!response.ok) {
+    const message =
+      typeof payload.message === 'string'
+        ? payload.message
+        : typeof (payload.error as { message?: string } | undefined)?.message === 'string'
+        ? ((payload.error as { message: string }).message)
+        : 'request_failed';
+    throw new Error(message);
+  }
+  return payload as unknown as T;
 }
 
-// ─── Policy Editor Section ────────────────────────────────────────────────────
-
-function PolicyEditorSection() {
-  const [policies, setPolicies] = useState<PolicyEntry[]>(initialPolicies);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
-
-  const startEdit = (p: PolicyEntry) => {
-    setEditingId(p.id);
-    setEditValue(p.value);
-  };
-
-  const saveEdit = (id: string) => {
-    setPolicies((prev) => prev.map((p) => p.id === id ? { ...p, value: editValue } : p));
-    setEditingId(null);
-    toast.success('Policy updated — changes will propagate on next sync');
-  };
-
-  return (
-    <div className="space-y-3">
-      <div>
-        <h3 className="text-sm font-semibold">Policy Editor</h3>
-        <p className="text-xs text-muted-foreground mt-0.5">Manage fleet-wide policy keys and enforcement values</p>
-      </div>
-
-      <div className="bg-card border border-border rounded-lg overflow-hidden">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-border bg-muted/20">
-              <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Policy Key</th>
-              <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Value</th>
-              <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Description</th>
-              <th className="px-4 py-2.5 w-16" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {policies.map((p) => (
-              <tr key={p.id} className="hover:bg-muted/10 transition-colors">
-                <td className="px-4 py-2.5">
-                  <span className="font-mono text-[11px] text-primary">{p.key}</span>
-                </td>
-                <td className="px-4 py-2.5">
-                  {editingId === p.id ? (
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        className="w-28 px-2 py-1 text-xs bg-muted/60 border border-primary/40 rounded font-mono text-foreground focus:outline-none"
-                        autoFocus
-                      />
-                      <button onClick={() => saveEdit(p.id)} className="p-1 text-green-400 hover:text-green-300 transition-colors"><Save size={12} /></button>
-                      <button onClick={() => setEditingId(null)} className="p-1 text-muted-foreground hover:text-foreground transition-colors"><X size={12} /></button>
-                    </div>
-                  ) : (
-                    <span className="font-mono text-[11px]">{p.value}</span>
-                  )}
-                </td>
-                <td className="px-4 py-2.5 text-muted-foreground hidden md:table-cell">{p.description}</td>
-                <td className="px-4 py-2.5">
-                  {p.editable && editingId !== p.id && (
-                    <button onClick={() => startEdit(p)} className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                      <Edit2 size={12} />
-                    </button>
-                  )}
-                  {!p.editable && (
-                    <Lock size={11} className="text-muted-foreground/40 mx-auto" />
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-// ─── Compliance Thresholds Section ───────────────────────────────────────────
-
-function ComplianceThresholdsSection() {
-  const [thresholds, setThresholds] = useState<ComplianceThreshold[]>(initialThresholds);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
-
-  const startEdit = (t: ComplianceThreshold) => {
-    setEditingId(t.id);
-    setEditValue(String(t.threshold));
-  };
-
-  const saveEdit = (id: string) => {
-    const num = parseFloat(editValue);
-    if (isNaN(num)) { toast.error('Invalid threshold value'); return; }
-    setThresholds((prev) => prev.map((t) => t.id === id ? { ...t, threshold: num } : t));
-    setEditingId(null);
-    toast.success('Compliance threshold updated');
-  };
-
-  return (
-    <div className="space-y-3">
-      <div>
-        <h3 className="text-sm font-semibold">Compliance Thresholds</h3>
-        <p className="text-xs text-muted-foreground mt-0.5">Define metric boundaries that trigger compliance violations</p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {thresholds.map((t) => (
-          <div key={t.id} className="bg-card border border-border rounded-lg px-4 py-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">{t.control}</span>
-                  {severityBadge(t.severity)}
-                </div>
-                <p className="font-mono text-[10px] text-muted-foreground mt-0.5">{t.metric}</p>
-              </div>
-              <button onClick={() => startEdit(t)} className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0">
-                <Edit2 size={12} />
-              </button>
-            </div>
-            <div className="mt-2">
-              {editingId === t.id ? (
-                <div className="flex items-center gap-1.5">
-                  <input
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    type="number"
-                    className="w-20 px-2 py-1 text-xs bg-muted/60 border border-primary/40 rounded font-mono text-foreground focus:outline-none"
-                    autoFocus
-                  />
-                  <span className="text-xs text-muted-foreground">{t.unit}</span>
-                  <button onClick={() => saveEdit(t.id)} className="p-1 text-green-400 hover:text-green-300 transition-colors"><Save size={12} /></button>
-                  <button onClick={() => setEditingId(null)} className="p-1 text-muted-foreground hover:text-foreground transition-colors"><X size={12} /></button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5">
-                  <span className={`text-xl font-bold tabular-nums ${t.severity === 'critical' ? 'text-red-400' : 'text-amber-400'}`}>
-                    {t.threshold}
-                  </span>
-                  <span className="text-xs text-muted-foreground">{t.unit}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Role & Permission Management Section ────────────────────────────────────
-
-function RolePermissionsSection() {
-  const [roles, setRoles] = useState<RolePermission[]>(initialRoles);
-  const [expandedRole, setExpandedRole] = useState<string | null>('admin');
-
-  const togglePermission = (role: string, key: string) => {
-    if (role === 'admin') { toast.error('Admin permissions cannot be modified'); return; }
-    setRoles((prev) =>
-      prev.map((r) =>
-        r.role === role
-          ? { ...r, permissions: { ...r.permissions, [key]: !r.permissions[key] } }
-          : r
-      )
-    );
-  };
-
-  const saveRole = (role: string) => {
-    toast.success(`${role.charAt(0).toUpperCase() + role.slice(1)} permissions saved`);
-  };
-
-  const roleColors: Record<string, string> = {
-    admin: 'text-red-400 bg-red-500/10 border-red-500/20',
-    operator: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
-    viewer: 'text-zinc-400 bg-zinc-500/10 border-zinc-500/20',
-  };
-
-  const roleIcons: Record<string, React.ElementType> = {
-    admin: Lock,
-    operator: Terminal,
-    viewer: Eye,
-  };
-
-  return (
-    <div className="space-y-3">
-      <div>
-        <h3 className="text-sm font-semibold">Role & Permission Management</h3>
-        <p className="text-xs text-muted-foreground mt-0.5">Configure access control for each user role</p>
-      </div>
-
-      <div className="space-y-2">
-        {roles.map((r) => {
-          const RoleIcon = roleIcons[r.role];
-          const isExpanded = expandedRole === r.role;
-          const isAdmin = r.role === 'admin';
-          return (
-            <div key={r.role} className="bg-card border border-border rounded-lg overflow-hidden">
-              <button
-                onClick={() => setExpandedRole(isExpanded ? null : r.role)}
-                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/10 transition-colors"
-              >
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center border ${roleColors[r.role]}`}>
-                  <RoleIcon size={13} />
-                </div>
-                <div className="flex-1 text-left">
-                  <span className="text-sm font-semibold capitalize">{r.role}</span>
-                  <span className="text-xs text-muted-foreground ml-2">
-                    {Object.values(r.permissions).filter(Boolean).length}/{PERMISSION_KEYS.length} permissions
-                  </span>
-                </div>
-                {isAdmin && (
-                  <span className="text-[10px] text-muted-foreground bg-muted/40 px-2 py-0.5 rounded-full">System Role</span>
-                )}
-                {isExpanded ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
-              </button>
-
-              {isExpanded && (
-                <div className="border-t border-border px-4 py-3">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {PERMISSION_KEYS.map((perm) => {
-                      const granted = r.permissions[perm.key];
-                      return (
-                        <label
-                          key={perm.key}
-                          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md border cursor-pointer transition-all ${
-                            isAdmin ? 'opacity-60 cursor-not-allowed' : 'hover:bg-muted/30'
-                          } ${granted ? 'bg-primary/5 border-primary/20' : 'bg-muted/20 border-border'}`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={granted}
-                            disabled={isAdmin}
-                            onChange={() => togglePermission(r.role, perm.key)}
-                            className="w-3 h-3 accent-primary"
-                          />
-                          <span className="text-xs truncate">{perm.label}</span>
-                          {granted
-                            ? <CheckCircle2 size={11} className="text-green-400 ml-auto flex-shrink-0" />
-                            : <X size={11} className="text-muted-foreground/40 ml-auto flex-shrink-0" />}
-                        </label>
-                      );
-                    })}
-                  </div>
-                  {!isAdmin && (
-                    <div className="mt-3 flex justify-end">
-                      <button
-                        onClick={() => saveRole(r.role)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary/10 border border-primary/30 text-primary rounded-md hover:bg-primary/20 transition-colors"
-                      >
-                        <Save size={12} />
-                        Save Changes
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ─── Team Members Section ─────────────────────────────────────────────────────
-
-function TeamMembersSection() {
-  const [members, setMembers] = useState<TeamMember[]>(initialTeamMembers);
-  const [search, setSearch] = useState('');
-  const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
-  const [showDeviceMatrix, setShowDeviceMatrix] = useState(false);
-
-  const filtered = members.filter(
-    (m) =>
-      m.name.toLowerCase().includes(search.toLowerCase()) ||
-      m.email.toLowerCase().includes(search.toLowerCase()) ||
-      m.role.includes(search.toLowerCase())
-  );
-
-  const roleStyle: Record<string, string> = {
-    admin: 'bg-red-500/10 text-red-400 border-red-500/20',
-    operator: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-    viewer: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
-  };
-
-  const statusStyle: Record<string, string> = {
-    active: 'text-green-400',
-    inactive: 'text-muted-foreground',
-    pending: 'text-amber-400',
-  };
-
-  const statusDot: Record<string, string> = {
-    active: 'bg-green-400',
-    inactive: 'bg-zinc-500',
-    pending: 'bg-amber-400 animate-pulse',
-  };
-
-  const toggleDeviceAccess = (memberId: string, deviceId: string) => {
-    setMembers((prev) =>
-      prev.map((m) => {
-        if (m.id !== memberId) return m;
-        const has = m.deviceAccess.includes(deviceId);
-        const updated = has
-          ? m.deviceAccess.filter((d) => d !== deviceId)
-          : [...m.deviceAccess, deviceId];
-        toast.success(has ? `Access revoked: ${deviceId}` : `Access granted: ${deviceId}`);
-        return { ...m, deviceAccess: updated };
-      })
-    );
-    // Update selectedMember if it's the one being modified
-    if (selectedMember?.id === memberId) {
-      setSelectedMember((prev) => {
-        if (!prev) return prev;
-        const has = prev.deviceAccess.includes(deviceId);
-        return {
-          ...prev,
-          deviceAccess: has
-            ? prev.deviceAccess.filter((d) => d !== deviceId)
-            : [...prev.deviceAccess, deviceId],
-        };
-      });
-    }
-  };
-
-  const revokeAllAccess = (memberId: string) => {
-    setMembers((prev) =>
-      prev.map((m) => (m.id === memberId ? { ...m, deviceAccess: [] } : m))
-    );
-    if (selectedMember?.id === memberId) {
-      setSelectedMember((prev) => prev ? { ...prev, deviceAccess: [] } : prev);
-    }
-    toast.success('All device access revoked');
-  };
-
-  const grantAllAccess = (memberId: string) => {
-    const allIds = allDevices.map((d) => d.id);
-    setMembers((prev) =>
-      prev.map((m) => (m.id === memberId ? { ...m, deviceAccess: allIds } : m))
-    );
-    if (selectedMember?.id === memberId) {
-      setSelectedMember((prev) => prev ? { ...prev, deviceAccess: allIds } : prev);
-    }
-    toast.success('Full device access granted');
-  };
-
-  const deactivateMember = (memberId: string) => {
-    setMembers((prev) =>
-      prev.map((m) => (m.id === memberId ? { ...m, status: 'inactive' } : m))
-    );
-    toast.success('Member deactivated');
-  };
-
-  return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h3 className="text-sm font-semibold">Team Members</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Manage users, device access, and share/revoke controls</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowDeviceMatrix(!showDeviceMatrix)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border rounded-md transition-colors ${
-              showDeviceMatrix
-                ? 'bg-primary/10 border-primary/30 text-primary' :'border-border text-muted-foreground hover:text-foreground hover:bg-muted/60'
-            }`}
-          >
-            <Monitor size={12} />
-            {showDeviceMatrix ? 'Hide Matrix' : 'Device Matrix'}
-          </button>
-          <button
-            onClick={() => toast.info('Invite member form coming soon')}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary/10 border border-primary/30 text-primary rounded-md hover:bg-primary/20 transition-colors"
-          >
-            <Plus size={12} />
-            Invite Member
-          </button>
-        </div>
-      </div>
-
-      {/* Search */}
-      <div className="relative">
-        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name, email, or role…"
-          className="w-full pl-8 pr-3 py-2 text-xs bg-muted/40 border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-        />
-      </div>
-
-      {/* Device Access Matrix */}
-      {showDeviceMatrix && (
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-            <Monitor size={13} className="text-muted-foreground" />
-            <h4 className="text-xs font-semibold">Device Access Matrix</h4>
-            <span className="text-[10px] text-muted-foreground">— admin has unrestricted access to all devices</span>
-          </div>
-          <div className="overflow-x-auto scrollbar-thin">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-border bg-muted/20">
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide sticky left-0 bg-muted/20 min-w-[160px]">Member</th>
-                  {allDevices.map((d) => (
-                    <th key={d.id} className="px-3 py-2.5 text-center text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">
-                      <div>{d.hostname}</div>
-                      <div className={`text-[9px] font-normal ${d.status === 'online' ? 'text-green-400' : d.status === 'degraded' ? 'text-amber-400' : 'text-red-400'}`}>
-                        {d.status}
-                      </div>
-                    </th>
-                  ))}
-                  <th className="px-3 py-2.5 text-center text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filtered.map((member) => (
-                  <tr key={member.id} className="hover:bg-muted/10 transition-colors">
-                    <td className="px-3 py-2.5 sticky left-0 bg-card">
-                      <div>
-                        <p className="font-medium text-foreground text-xs">{member.name}</p>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${roleStyle[member.role]}`}>
-                          {member.role}
-                        </span>
-                      </div>
-                    </td>
-                    {allDevices.map((device) => {
-                      const hasAccess = member.role === 'admin' || member.deviceAccess.includes(device.id);
-                      const isAdmin = member.role === 'admin';
-                      return (
-                        <td key={device.id} className="px-3 py-2.5 text-center">
-                          <button
-                            onClick={() => !isAdmin && toggleDeviceAccess(member.id, device.id)}
-                            disabled={isAdmin}
-                            title={isAdmin ? 'Admin has unrestricted access' : hasAccess ? 'Click to revoke' : 'Click to grant'}
-                            className={`w-6 h-6 rounded flex items-center justify-center mx-auto transition-all ${
-                              isAdmin
-                                ? 'cursor-default'
-                                : hasAccess
-                                ? 'hover:bg-red-500/10 cursor-pointer' :'hover:bg-green-500/10 cursor-pointer'
-                            }`}
-                          >
-                            {hasAccess ? (
-                              <CheckCircle2 size={14} className={isAdmin ? 'text-primary/60' : 'text-green-400'} />
-                            ) : (
-                              <X size={14} className="text-muted-foreground/30" />
-                            )}
-                          </button>
-                        </td>
-                      );
-                    })}
-                    <td className="px-3 py-2.5 text-center">
-                      {member.role !== 'admin' && (
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={() => grantAllAccess(member.id)}
-                            title="Grant all device access"
-                            className="p-1 rounded text-green-400 hover:bg-green-500/10 transition-colors"
-                          >
-                            <UserCheck size={12} />
-                          </button>
-                          <button
-                            onClick={() => revokeAllAccess(member.id)}
-                            title="Revoke all device access"
-                            className="p-1 rounded text-red-400 hover:bg-red-500/10 transition-colors"
-                          >
-                            <UserX size={12} />
-                          </button>
-                        </div>
-                      )}
-                      {member.role === 'admin' && (
-                        <Lock size={11} className="text-muted-foreground/40 mx-auto" />
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Member List */}
-      <div className="space-y-2">
-        {filtered.map((member) => (
-          <div
-            key={member.id}
-            className="bg-card border border-border rounded-lg px-4 py-3 hover:border-border/80 transition-all"
-          >
-            <div className="flex items-center gap-3">
-              {/* Avatar */}
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                member.role === 'admin' ? 'bg-red-500/20 text-red-400' :
-                member.role === 'operator'? 'bg-blue-500/20 text-blue-400' : 'bg-zinc-500/20 text-zinc-400'
-              }`}>
-                {member.name.charAt(0).toUpperCase()}
-              </div>
-
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-medium">{member.name}</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${roleStyle[member.role]}`}>
-                    {member.role}
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <span className={`w-1.5 h-1.5 rounded-full ${statusDot[member.status]}`} />
-                    <span className={`text-[10px] ${statusStyle[member.status]}`}>{member.status}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 mt-0.5">
-                  <p className="text-[11px] text-muted-foreground truncate">{member.email}</p>
-                  <span className="text-[10px] text-muted-foreground">Last active: {member.lastActive}</span>
-                  {member.role !== 'admin' && (
-                    <span className="text-[10px] text-muted-foreground">
-                      {member.deviceAccess.length}/{allDevices.length} devices
-                    </span>
-                  )}
-                  {member.role === 'admin' && (
-                    <span className="text-[10px] text-primary">All devices (unrestricted)</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-1 flex-shrink-0">
-                {member.role !== 'admin' && (
-                  <>
-                    <button
-                      onClick={() => { setSelectedMember(member); setShowDeviceMatrix(true); }}
-                      title="Manage device access"
-                      className="flex items-center gap-1 px-2 py-1 text-[11px] border border-border rounded text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
-                    >
-                      <Share2 size={11} />
-                      Access
-                    </button>
-                    {member.status === 'active' && (
-                      <button
-                        onClick={() => deactivateMember(member.id)}
-                        title="Deactivate member"
-                        className="p-1.5 rounded text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                      >
-                        <UserX size={13} />
-                      </button>
-                    )}
-                  </>
-                )}
-                {member.role === 'admin' && (
-                  <div className="flex items-center gap-1 px-2 py-1 text-[11px] border border-primary/20 rounded text-primary bg-primary/5">
-                    <Lock size={10} />
-                    System Admin
-                  </div>
-                )}
-                <button className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                  <MoreHorizontal size={13} />
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
-        {filtered.length === 0 && (
-          <div className="text-center py-8 text-xs text-muted-foreground">
-            No members match your search
-          </div>
-        )}
-      </div>
-
-      {/* Summary stats */}
-      <div className="grid grid-cols-3 gap-3">
-        {(['admin', 'operator', 'viewer'] as const).map((role) => {
-          const count = members.filter((m) => m.role === role).length;
-          const active = members.filter((m) => m.role === role && m.status === 'active').length;
-          return (
-            <div key={role} className={`bg-card border rounded-lg px-3 py-2.5 ${roleStyle[role].replace('text-', 'border-').split(' ')[0]}/20 border-border`}>
-              <p className={`text-xs font-semibold capitalize ${roleStyle[role].split(' ')[1]}`}>{role}s</p>
-              <p className="text-lg font-bold tabular-nums mt-0.5">{count}</p>
-              <p className="text-[10px] text-muted-foreground">{active} active</p>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ─── Main Settings Content ────────────────────────────────────────────────────
-
-const TABS = [
+const TAB_ITEMS: Array<{ key: SettingsTab; label: string; icon: React.ElementType }> = [
   { key: 'alert-rules', label: 'Alert Rules', icon: Bell },
   { key: 'app-lock', label: 'App Lock', icon: Lock },
   { key: 'policy-editor', label: 'Policy Editor', icon: Shield },
@@ -890,26 +112,436 @@ const TABS = [
   { key: 'team-members', label: 'Team Members', icon: Users },
 ];
 
+const BASE_PERMISSION_KEYS = [
+  'view_devices',
+  'manage_devices',
+  'send_commands',
+  'send_sensitive_commands',
+  'view_alerts',
+  'acknowledge_alerts',
+  'view_compliance',
+  'manage_compliance',
+  'view_audit',
+  'manage_users',
+  'manage_settings',
+  'export_data',
+  'pair_devices',
+];
+
+function prettyPermission(value: string): string {
+  return value
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function severityClass(severity: Severity): string {
+  if (severity === 'critical') return 'bg-red-500/20 text-red-400 border-red-500/30';
+  if (severity === 'warning') return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
+  return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+}
+
 export default function SettingsContent() {
-  const [activeTab, setActiveTab] = useState('alert-rules');
+  const [activeTab, setActiveTab] = useState<SettingsTab>('alert-rules');
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const inFlightRef = useRef(false);
+
+  const [alertRules, setAlertRules] = useState<AlertRule[]>([]);
+  const [policyEntries, setPolicyEntries] = useState<PolicyEntry[]>([]);
+  const [thresholds, setThresholds] = useState<ComplianceThreshold[]>([]);
+  const [permissions, setPermissions] = useState<PermissionsMatrix>({
+    admin: {},
+    operator: {},
+    viewer: {},
+  });
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [devices, setDevices] = useState<TeamDevice[]>([]);
+
+  const [newRule, setNewRule] = useState({
+    name: '',
+    condition: '',
+    severity: 'warning' as Severity,
+    channelsCsv: 'email',
+  });
+  const [newThreshold, setNewThreshold] = useState({
+    control: '',
+    metric: '',
+    threshold: '',
+    unit: '',
+    severity: 'warning' as 'critical' | 'warning',
+  });
+  const [newMember, setNewMember] = useState({
+    display_name: '',
+    email: '',
+    role: 'viewer' as Role,
+    account_status: 'pending' as AccountStatus,
+  });
+
+  const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null);
+  const [memberDrafts, setMemberDrafts] = useState<Record<string, TeamMember>>({});
+  const [roleDrafts, setRoleDrafts] = useState<PermissionsMatrix>({
+    admin: {},
+    operator: {},
+    viewer: {},
+  });
+
+  const loadAll = useCallback(async (showLoader: boolean) => {
+    if (inFlightRef.current) {
+      return;
+    }
+    inFlightRef.current = true;
+    if (showLoader) setLoading(true);
+    setRefreshing(true);
+    try {
+      const [
+        rulesRes,
+        policyRes,
+        thresholdsRes,
+        matrixRes,
+        membersRes,
+      ] = await Promise.all([
+        requestJson<{ rules: AlertRule[] }>('/api/settings/alert-rules'),
+        requestJson<{ entries: PolicyEntry[] }>('/api/settings/policy-entries'),
+        requestJson<{ thresholds: ComplianceThreshold[] }>('/api/settings/compliance-thresholds'),
+        requestJson<{ matrix: PermissionsMatrix }>('/api/settings/roles/permissions'),
+        requestJson<{ members: TeamMember[]; devices: TeamDevice[] }>('/api/settings/team-members'),
+      ]);
+
+      const matrix = matrixRes.matrix ?? { admin: {}, operator: {}, viewer: {} };
+      setAlertRules(rulesRes.rules ?? []);
+      setPolicyEntries(policyRes.entries ?? []);
+      setThresholds(thresholdsRes.thresholds ?? []);
+      setPermissions(matrix);
+      setRoleDrafts(matrix);
+      setMembers(membersRes.members ?? []);
+      setDevices(membersRes.devices ?? []);
+      setMemberDrafts(
+        (membersRes.members ?? []).reduce<Record<string, TeamMember>>((acc, member) => {
+          acc[member.id] = { ...member };
+          return acc;
+        }, {}),
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'failed_to_load_settings');
+    } finally {
+      inFlightRef.current = false;
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAll(true);
+  }, [loadAll]);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const schedulePoll = () => {
+      if (timer) {
+        clearInterval(timer);
+      }
+      const intervalMs = document.hidden ? 30000 : 5000;
+      timer = setInterval(() => {
+        void loadAll(false);
+      }, intervalMs);
+    };
+
+    const handleVisibility = () => {
+      schedulePoll();
+      void loadAll(false);
+    };
+
+    schedulePoll();
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      if (timer) {
+        clearInterval(timer);
+      }
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [loadAll]);
+
+  const permissionKeys = useMemo(() => {
+    const dynamic = new Set<string>(BASE_PERMISSION_KEYS);
+    (Object.values(permissions) as Array<Record<string, boolean>>).forEach((matrix) => {
+      Object.keys(matrix ?? {}).forEach((key) => dynamic.add(key));
+    });
+    return Array.from(dynamic.values()).sort();
+  }, [permissions]);
+
+  const handleCreateAlertRule = async (): Promise<void> => {
+    const channels = newRule.channelsCsv
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    if (!newRule.name.trim() || !newRule.condition.trim()) {
+      toast.error('Name and condition are required');
+      return;
+    }
+
+    try {
+      const payload = await requestJson<{ rule: AlertRule }>('/api/settings/alert-rules', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: newRule.name.trim(),
+          condition: newRule.condition.trim(),
+          severity: newRule.severity,
+          channels,
+          enabled: true,
+        }),
+      });
+      setAlertRules((prev) => [payload.rule, ...prev]);
+      setNewRule({ name: '', condition: '', severity: 'warning', channelsCsv: 'email' });
+      toast.success('Alert rule created');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'failed_to_create_rule');
+    }
+  };
+
+  const handleUpdateAlertRule = async (rule: AlertRule, patch: Partial<AlertRule>): Promise<void> => {
+    try {
+      const payload = await requestJson<{ rule: AlertRule }>(`/api/settings/alert-rules/${rule.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      });
+      setAlertRules((prev) => prev.map((item) => (item.id === rule.id ? payload.rule : item)));
+      toast.success('Alert rule updated');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'failed_to_update_rule');
+    }
+  };
+
+  const handleDeleteAlertRule = async (id: string): Promise<void> => {
+    try {
+      await requestJson<{ status: string }>(`/api/settings/alert-rules/${id}`, { method: 'DELETE' });
+      setAlertRules((prev) => prev.filter((item) => item.id !== id));
+      toast.success('Alert rule deleted');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'failed_to_delete_rule');
+    }
+  };
+
+  const handleUpdatePolicy = async (entry: PolicyEntry, value: string): Promise<void> => {
+    try {
+      const payload = await requestJson<{ entry: PolicyEntry }>(`/api/settings/policy-entries/${entry.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ policy_value: value }),
+      });
+      setPolicyEntries((prev) => prev.map((item) => (item.id === entry.id ? payload.entry : item)));
+      toast.success('Policy updated');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'failed_to_update_policy');
+    }
+  };
+
+  const handleCreateThreshold = async (): Promise<void> => {
+    if (!newThreshold.control.trim() || !newThreshold.metric.trim() || newThreshold.threshold === '') {
+      toast.error('Control, metric and threshold are required');
+      return;
+    }
+    try {
+      const payload = await requestJson<{ threshold: ComplianceThreshold }>('/api/settings/compliance-thresholds', {
+        method: 'POST',
+        body: JSON.stringify({
+          control: newThreshold.control.trim(),
+          metric: newThreshold.metric.trim(),
+          threshold: Number(newThreshold.threshold),
+          unit: newThreshold.unit.trim() || null,
+          severity: newThreshold.severity,
+          enabled: true,
+        }),
+      });
+      setThresholds((prev) => [...prev, payload.threshold]);
+      setNewThreshold({ control: '', metric: '', threshold: '', unit: '', severity: 'warning' });
+      toast.success('Compliance threshold created');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'failed_to_create_threshold');
+    }
+  };
+
+  const handleUpdateThreshold = async (
+    threshold: ComplianceThreshold,
+    patch: Partial<ComplianceThreshold>,
+  ): Promise<void> => {
+    try {
+      const payload = await requestJson<{ threshold: ComplianceThreshold }>(
+        `/api/settings/compliance-thresholds/${threshold.id}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(patch),
+        },
+      );
+      setThresholds((prev) => prev.map((item) => (item.id === threshold.id ? payload.threshold : item)));
+      toast.success('Compliance threshold updated');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'failed_to_update_threshold');
+    }
+  };
+
+  const handleDeleteThreshold = async (id: string): Promise<void> => {
+    try {
+      await requestJson<{ status: string }>(`/api/settings/compliance-thresholds/${id}`, { method: 'DELETE' });
+      setThresholds((prev) => prev.filter((item) => item.id !== id));
+      toast.success('Compliance threshold deleted');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'failed_to_delete_threshold');
+    }
+  };
+
+  const handleTogglePermission = (role: Role, key: string): void => {
+    setRoleDrafts((prev) => ({
+      ...prev,
+      [role]: {
+        ...prev[role],
+        [key]: !(prev[role]?.[key] ?? false),
+      },
+    }));
+  };
+
+  const handleSaveRolePermissions = async (role: Role): Promise<void> => {
+    try {
+      const payload = await requestJson<{ role: string; permissions: Record<string, boolean> }>(
+        `/api/settings/roles/${role}/permissions`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ permissions: roleDrafts[role] }),
+        },
+      );
+      setPermissions((prev) => ({ ...prev, [role]: payload.permissions }));
+      setRoleDrafts((prev) => ({ ...prev, [role]: payload.permissions }));
+      toast.success(`${role} permissions updated`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'failed_to_update_permissions');
+    }
+  };
+
+  const handleCreateMember = async (): Promise<void> => {
+    if (!newMember.display_name.trim() || !newMember.email.trim()) {
+      toast.error('Display name and email are required');
+      return;
+    }
+    try {
+      const payload = await requestJson<{ member: TeamMember }>('/api/settings/team-members', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...newMember,
+          display_name: newMember.display_name.trim(),
+          email: newMember.email.trim(),
+          device_access: [],
+        }),
+      });
+      setMembers((prev) => [payload.member, ...prev]);
+      setMemberDrafts((prev) => ({ ...prev, [payload.member.id]: { ...payload.member } }));
+      setNewMember({ display_name: '', email: '', role: 'viewer', account_status: 'pending' });
+      toast.success('Team member created');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'failed_to_create_member');
+    }
+  };
+
+  const updateMemberDraft = (memberId: string, patch: Partial<TeamMember>): void => {
+    setMemberDrafts((prev) => ({
+      ...prev,
+      [memberId]: {
+        ...prev[memberId],
+        ...patch,
+      },
+    }));
+  };
+
+  const toggleMemberDevice = (memberId: string, deviceId: string): void => {
+    const draft = memberDrafts[memberId];
+    if (!draft) return;
+    const exists = draft.device_access.includes(deviceId);
+    const next = exists
+      ? draft.device_access.filter((id) => id !== deviceId)
+      : [...draft.device_access, deviceId];
+    updateMemberDraft(memberId, { device_access: next });
+  };
+
+  const handleSaveMember = async (memberId: string): Promise<void> => {
+    const draft = memberDrafts[memberId];
+    if (!draft) return;
+    try {
+      const payload = await requestJson<{ member: TeamMember }>(`/api/settings/team-members/${memberId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          display_name: draft.display_name,
+          role: draft.role,
+          account_status: draft.account_status,
+          device_access: draft.device_access,
+        }),
+      });
+      setMembers((prev) => prev.map((item) => (item.id === memberId ? payload.member : item)));
+      setMemberDrafts((prev) => ({ ...prev, [memberId]: { ...payload.member } }));
+      toast.success('Team member updated');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'failed_to_update_member');
+    }
+  };
+
+  const handleActivateMember = async (memberId: string): Promise<void> => {
+    try {
+      const payload = await requestJson<{ member: TeamMember }>(`/api/settings/team-members/${memberId}/activate`, {
+        method: 'POST',
+        body: '{}',
+      });
+      setMembers((prev) => prev.map((item) => (item.id === memberId ? payload.member : item)));
+      setMemberDrafts((prev) => ({ ...prev, [memberId]: { ...payload.member } }));
+      toast.success('Member activated');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'failed_to_activate_member');
+    }
+  };
+
+  const handleDeactivateMember = async (memberId: string): Promise<void> => {
+    try {
+      const payload = await requestJson<{ member: TeamMember }>(`/api/settings/team-members/${memberId}/deactivate`, {
+        method: 'POST',
+        body: '{}',
+      });
+      setMembers((prev) => prev.map((item) => (item.id === memberId ? payload.member : item)));
+      setMemberDrafts((prev) => ({ ...prev, [memberId]: { ...payload.member } }));
+      toast.success('Member deactivated');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'failed_to_deactivate_member');
+    }
+  };
+
+  const statusColor = (status: AccountStatus): string => {
+    if (status === 'active') return 'text-green-400';
+    if (status === 'inactive') return 'text-zinc-400';
+    return 'text-amber-400';
+  };
 
   return (
     <div className="space-y-6 fade-in">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Admin configuration — alert rules, policies, compliance, and access control</p>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Admin-controlled system configuration with live backend enforcement
+          </p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-1.5">
-          <AlertTriangle size={12} className="text-amber-400" />
-          <span className="text-amber-400 font-medium">Admin Only</span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => void loadAll(false)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground border border-border rounded-md hover:bg-muted/60 transition-colors"
+          >
+            <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+          <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-1.5">
+            <AlertTriangle size={12} />
+            Admin Only
+          </div>
         </div>
       </div>
 
-      {/* Tab navigation */}
       <div className="flex items-center gap-1 bg-muted/30 rounded-lg p-1 flex-wrap">
-        {TABS.map((tab) => (
+        {TAB_ITEMS.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
@@ -925,15 +557,742 @@ export default function SettingsContent() {
         ))}
       </div>
 
-      {/* Tab content */}
-      <div className="fade-in">
-        {activeTab === 'alert-rules' && <AlertRulesSection />}
-        {activeTab === 'app-lock' && <AppLockManagerSection />}
-        {activeTab === 'policy-editor' && <PolicyEditorSection />}
-        {activeTab === 'compliance-thresholds' && <ComplianceThresholdsSection />}
-        {activeTab === 'roles-permissions' && <RolePermissionsSection />}
-        {activeTab === 'team-members' && <TeamMembersSection />}
-      </div>
+      {loading ? (
+        <div className="bg-card border border-border rounded-lg p-8 text-sm text-muted-foreground text-center">
+          Loading settings...
+        </div>
+      ) : (
+        <>
+          {activeTab === 'alert-rules' && (
+            <div className="space-y-4">
+              <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+                <h3 className="text-sm font-semibold">Create Alert Rule</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <input
+                    value={newRule.name}
+                    onChange={(event) => setNewRule((prev) => ({ ...prev, name: event.target.value }))}
+                    placeholder="Rule name"
+                    className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md"
+                  />
+                  <select
+                    value={newRule.severity}
+                    onChange={(event) =>
+                      setNewRule((prev) => ({ ...prev, severity: event.target.value as Severity }))
+                    }
+                    className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md"
+                  >
+                    <option value="critical">critical</option>
+                    <option value="warning">warning</option>
+                    <option value="info">info</option>
+                  </select>
+                  <input
+                    value={newRule.condition}
+                    onChange={(event) => setNewRule((prev) => ({ ...prev, condition: event.target.value }))}
+                    placeholder='condition, e.g. device.attestation_status == "failed"'
+                    className="md:col-span-2 px-3 py-2 text-xs bg-muted/40 border border-border rounded-md font-mono"
+                  />
+                  <input
+                    value={newRule.channelsCsv}
+                    onChange={(event) => setNewRule((prev) => ({ ...prev, channelsCsv: event.target.value }))}
+                    placeholder="channels (comma separated), e.g. email,webhook"
+                    className="md:col-span-2 px-3 py-2 text-xs bg-muted/40 border border-border rounded-md"
+                  />
+                </div>
+                <button
+                  onClick={() => void handleCreateAlertRule()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary/10 border border-primary/30 text-primary rounded-md hover:bg-primary/20 transition-colors"
+                >
+                  <Plus size={12} />
+                  Add Rule
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {alertRules.map((rule) => (
+                  <AlertRuleRow
+                    key={rule.id}
+                    rule={rule}
+                    onSave={(patch) => void handleUpdateAlertRule(rule, patch)}
+                    onDelete={() => void handleDeleteAlertRule(rule.id)}
+                  />
+                ))}
+                {alertRules.length === 0 && (
+                  <div className="bg-card border border-border rounded-lg p-6 text-xs text-muted-foreground text-center">
+                    No alert rules configured.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'app-lock' && <AppLockManagerSection />}
+
+          {activeTab === 'policy-editor' && (
+            <div className="bg-card border border-border rounded-lg overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border bg-muted/20">
+                    <th className="px-4 py-2.5 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Policy Key
+                    </th>
+                    <th className="px-4 py-2.5 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Value
+                    </th>
+                    <th className="px-4 py-2.5 text-left text-[10px] uppercase tracking-wide text-muted-foreground hidden md:table-cell">
+                      Description
+                    </th>
+                    <th className="px-4 py-2.5 text-left text-[10px] uppercase tracking-wide text-muted-foreground hidden lg:table-cell">
+                      Scope
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {policyEntries.map((entry) => (
+                    <PolicyEntryRow
+                      key={entry.id}
+                      entry={entry}
+                      onSave={(value) => void handleUpdatePolicy(entry, value)}
+                    />
+                  ))}
+                  {policyEntries.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">
+                        No policy entries available.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {activeTab === 'compliance-thresholds' && (
+            <div className="space-y-4">
+              <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+                <h3 className="text-sm font-semibold">Create Compliance Threshold</h3>
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                  <input
+                    value={newThreshold.control}
+                    onChange={(event) =>
+                      setNewThreshold((prev) => ({ ...prev, control: event.target.value }))
+                    }
+                    placeholder="Control"
+                    className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md"
+                  />
+                  <input
+                    value={newThreshold.metric}
+                    onChange={(event) =>
+                      setNewThreshold((prev) => ({ ...prev, metric: event.target.value }))
+                    }
+                    placeholder="Metric"
+                    className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md"
+                  />
+                  <input
+                    type="number"
+                    value={newThreshold.threshold}
+                    onChange={(event) =>
+                      setNewThreshold((prev) => ({ ...prev, threshold: event.target.value }))
+                    }
+                    placeholder="Threshold"
+                    className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md"
+                  />
+                  <input
+                    value={newThreshold.unit}
+                    onChange={(event) =>
+                      setNewThreshold((prev) => ({ ...prev, unit: event.target.value }))
+                    }
+                    placeholder="Unit"
+                    className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md"
+                  />
+                  <select
+                    value={newThreshold.severity}
+                    onChange={(event) =>
+                      setNewThreshold((prev) => ({
+                        ...prev,
+                        severity: event.target.value as 'critical' | 'warning',
+                      }))
+                    }
+                    className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md"
+                  >
+                    <option value="critical">critical</option>
+                    <option value="warning">warning</option>
+                  </select>
+                </div>
+                <button
+                  onClick={() => void handleCreateThreshold()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary/10 border border-primary/30 text-primary rounded-md hover:bg-primary/20 transition-colors"
+                >
+                  <Plus size={12} />
+                  Add Threshold
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {thresholds.map((threshold) => (
+                  <ComplianceThresholdRow
+                    key={threshold.id}
+                    threshold={threshold}
+                    onSave={(patch) => void handleUpdateThreshold(threshold, patch)}
+                    onDelete={() => void handleDeleteThreshold(threshold.id)}
+                  />
+                ))}
+                {thresholds.length === 0 && (
+                  <div className="bg-card border border-border rounded-lg p-6 text-xs text-muted-foreground text-center">
+                    No compliance thresholds configured.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'roles-permissions' && (
+            <div className="space-y-3">
+              {(['admin', 'operator', 'viewer'] as Role[]).map((role) => (
+                <div key={role} className="bg-card border border-border rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold capitalize">{role}</h3>
+                    <button
+                      onClick={() => void handleSaveRolePermissions(role)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary/10 border border-primary/30 text-primary rounded-md hover:bg-primary/20 transition-colors"
+                    >
+                      <Save size={12} />
+                      Save
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+                    {permissionKeys.map((permission) => {
+                      const checked = Boolean(roleDrafts[role]?.[permission]);
+                      return (
+                        <label
+                          key={`${role}-${permission}`}
+                          className={`flex items-center gap-2 px-2.5 py-2 rounded border cursor-pointer ${
+                            checked ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/20'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => handleTogglePermission(role, permission)}
+                            className="w-3 h-3 accent-primary"
+                          />
+                          <span className="text-xs">{prettyPermission(permission)}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {activeTab === 'team-members' && (
+            <div className="space-y-4">
+              <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+                <h3 className="text-sm font-semibold">Add Team Member</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <input
+                    value={newMember.display_name}
+                    onChange={(event) =>
+                      setNewMember((prev) => ({ ...prev, display_name: event.target.value }))
+                    }
+                    placeholder="Display name"
+                    className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md"
+                  />
+                  <input
+                    value={newMember.email}
+                    onChange={(event) => setNewMember((prev) => ({ ...prev, email: event.target.value }))}
+                    placeholder="Email"
+                    className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md"
+                  />
+                  <select
+                    value={newMember.role}
+                    onChange={(event) =>
+                      setNewMember((prev) => ({ ...prev, role: event.target.value as Role }))
+                    }
+                    className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md"
+                  >
+                    <option value="admin">admin</option>
+                    <option value="operator">operator</option>
+                    <option value="viewer">viewer</option>
+                  </select>
+                  <select
+                    value={newMember.account_status}
+                    onChange={(event) =>
+                      setNewMember((prev) => ({
+                        ...prev,
+                        account_status: event.target.value as AccountStatus,
+                      }))
+                    }
+                    className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md"
+                  >
+                    <option value="active">active</option>
+                    <option value="pending">pending</option>
+                    <option value="inactive">inactive</option>
+                  </select>
+                </div>
+                <button
+                  onClick={() => void handleCreateMember()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary/10 border border-primary/30 text-primary rounded-md hover:bg-primary/20 transition-colors"
+                >
+                  <Plus size={12} />
+                  Create Member
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {members.map((member) => {
+                  const draft = memberDrafts[member.id] ?? member;
+                  const expanded = expandedMemberId === member.id;
+                  return (
+                    <div key={member.id} className="bg-card border border-border rounded-lg">
+                      <div className="px-4 py-3 flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium">{member.display_name}</p>
+                          <p className="text-xs text-muted-foreground">{member.email}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-semibold capitalize ${statusColor(member.account_status)}`}>
+                            {member.account_status}
+                          </span>
+                          <button
+                            onClick={() =>
+                              setExpandedMemberId((current) => (current === member.id ? null : member.id))
+                            }
+                            className="flex items-center gap-1 px-2 py-1 text-xs border border-border rounded hover:bg-muted/50"
+                          >
+                            <Edit2 size={11} />
+                            Manage
+                          </button>
+                        </div>
+                      </div>
+
+                      {expanded && (
+                        <div className="px-4 pb-4 space-y-3 border-t border-border/60 pt-3">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <input
+                              value={draft.display_name}
+                              onChange={(event) =>
+                                updateMemberDraft(member.id, { display_name: event.target.value })
+                              }
+                              className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md"
+                            />
+                            <select
+                              value={draft.role}
+                              onChange={(event) =>
+                                updateMemberDraft(member.id, { role: event.target.value as Role })
+                              }
+                              className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md"
+                            >
+                              <option value="admin">admin</option>
+                              <option value="operator">operator</option>
+                              <option value="viewer">viewer</option>
+                            </select>
+                            <select
+                              value={draft.account_status}
+                              onChange={(event) =>
+                                updateMemberDraft(member.id, { account_status: event.target.value as AccountStatus })
+                              }
+                              className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md"
+                            >
+                              <option value="active">active</option>
+                              <option value="pending">pending</option>
+                              <option value="inactive">inactive</option>
+                            </select>
+                          </div>
+
+                          <div className="bg-muted/20 border border-border rounded-lg p-3">
+                            <p className="text-xs font-semibold mb-2">Device Access</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 max-h-56 overflow-auto">
+                              {devices.map((device) => {
+                                const granted = draft.device_access.includes(device.device_id);
+                                return (
+                                  <label
+                                    key={`${member.id}-${device.device_id}`}
+                                    className={`flex items-center justify-between px-2.5 py-2 rounded border cursor-pointer ${
+                                      granted
+                                        ? 'border-primary/40 bg-primary/5'
+                                        : 'border-border bg-card'
+                                    }`}
+                                  >
+                                    <div className="min-w-0">
+                                      <p className="text-xs font-medium truncate">{device.device_name}</p>
+                                      <p className="text-[10px] text-muted-foreground truncate">
+                                        {device.device_id}
+                                      </p>
+                                    </div>
+                                    <input
+                                      type="checkbox"
+                                      checked={granted}
+                                      onChange={() => toggleMemberDevice(member.id, device.device_id)}
+                                      className="w-3 h-3 accent-primary"
+                                    />
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => void handleSaveMember(member.id)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary/10 border border-primary/30 text-primary rounded-md hover:bg-primary/20 transition-colors"
+                            >
+                              <Save size={12} />
+                              Save Member
+                            </button>
+                            {member.account_status !== 'active' ? (
+                              <button
+                                onClick={() => void handleActivateMember(member.id)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-green-500/30 text-green-400 rounded-md hover:bg-green-500/10 transition-colors"
+                              >
+                                <UserCheck size={12} />
+                                Activate
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => void handleDeactivateMember(member.id)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-red-500/30 text-red-400 rounded-md hover:bg-red-500/10 transition-colors"
+                              >
+                                <UserX size={12} />
+                                Deactivate
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {members.length === 0 && (
+                  <div className="bg-card border border-border rounded-lg p-6 text-xs text-muted-foreground text-center">
+                    No team members found.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function AlertRuleRow({
+  rule,
+  onSave,
+  onDelete,
+}: {
+  rule: AlertRule;
+  onSave: (patch: Partial<AlertRule>) => void;
+  onDelete: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(rule);
+
+  useEffect(() => {
+    setDraft(rule);
+  }, [rule]);
+
+  const save = (): void => {
+    onSave({
+      name: draft.name,
+      condition: draft.condition,
+      severity: draft.severity,
+      channels: draft.channels,
+      enabled: draft.enabled,
+    });
+    setEditing(false);
+  };
+
+  return (
+    <div className={`bg-card border rounded-lg p-4 ${rule.enabled ? 'border-border' : 'border-border/40 opacity-70'}`}>
+      {editing ? (
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <input
+              value={draft.name}
+              onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))}
+              className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md"
+            />
+            <select
+              value={draft.severity}
+              onChange={(event) => setDraft((prev) => ({ ...prev, severity: event.target.value as Severity }))}
+              className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md"
+            >
+              <option value="critical">critical</option>
+              <option value="warning">warning</option>
+              <option value="info">info</option>
+            </select>
+          </div>
+          <input
+            value={draft.condition}
+            onChange={(event) => setDraft((prev) => ({ ...prev, condition: event.target.value }))}
+            className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md font-mono w-full"
+          />
+          <input
+            value={draft.channels.join(',')}
+            onChange={(event) =>
+              setDraft((prev) => ({
+                ...prev,
+                channels: event.target.value
+                  .split(',')
+                  .map((item) => item.trim())
+                  .filter(Boolean),
+              }))
+            }
+            className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md w-full"
+          />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={save}
+              className="flex items-center gap-1 px-2.5 py-1 text-xs bg-green-500/10 border border-green-500/20 text-green-400 rounded-md hover:bg-green-500/20 transition-colors"
+            >
+              <Save size={11} />
+              Save
+            </button>
+            <button
+              onClick={() => setEditing(false)}
+              className="px-2.5 py-1 text-xs border border-border rounded-md text-muted-foreground hover:bg-muted/60"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium">{rule.name}</span>
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${severityClass(rule.severity)}`}>
+                {rule.severity.toUpperCase()}
+              </span>
+              <span className="text-[10px] text-muted-foreground bg-muted/40 px-1.5 py-0.5 rounded">
+                {(rule.channels ?? []).join(', ') || 'none'}
+              </span>
+            </div>
+            <p className="font-mono text-[11px] text-muted-foreground mt-0.5 truncate">{rule.condition}</p>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setEditing(true)}
+              className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <Edit2 size={12} />
+            </button>
+            <button
+              onClick={onDelete}
+              className="p-1.5 rounded text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
+            >
+              <Trash2 size={12} />
+            </button>
+            <button
+              onClick={() => onSave({ enabled: !rule.enabled })}
+              className="p-1 rounded transition-colors"
+            >
+              {rule.enabled ? (
+                <ToggleRight size={22} className="text-primary" />
+              ) : (
+                <ToggleLeft size={22} className="text-muted-foreground" />
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PolicyEntryRow({
+  entry,
+  onSave,
+}: {
+  entry: PolicyEntry;
+  onSave: (value: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(entry.policy_value ?? '');
+
+  useEffect(() => {
+    setValue(entry.policy_value ?? '');
+  }, [entry.policy_value]);
+
+  return (
+    <tr className="hover:bg-muted/10 transition-colors">
+      <td className="px-4 py-2.5">
+        <span className="font-mono text-[11px] text-primary">{entry.policy_key}</span>
+      </td>
+      <td className="px-4 py-2.5">
+        {editing ? (
+          <div className="flex items-center gap-1.5">
+            <input
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              className="px-2 py-1 text-xs bg-muted/60 border border-primary/40 rounded font-mono"
+            />
+            <button
+              onClick={() => {
+                onSave(value);
+                setEditing(false);
+              }}
+              className="p-1 text-green-400 hover:text-green-300"
+            >
+              <Save size={12} />
+            </button>
+          </div>
+        ) : (
+          <span className="font-mono text-[11px]">{entry.policy_value ?? ''}</span>
+        )}
+      </td>
+      <td className="px-4 py-2.5 text-muted-foreground hidden md:table-cell">{entry.description ?? '—'}</td>
+      <td className="px-4 py-2.5 hidden lg:table-cell">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] text-muted-foreground">{entry.scope}</span>
+          {entry.is_mutable ? (
+            <button
+              onClick={() => setEditing((prev) => !prev)}
+              className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted"
+            >
+              <Edit2 size={12} />
+            </button>
+          ) : (
+            <Lock size={11} className="text-muted-foreground/40" />
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function ComplianceThresholdRow({
+  threshold,
+  onSave,
+  onDelete,
+}: {
+  threshold: ComplianceThreshold;
+  onSave: (patch: Partial<ComplianceThreshold>) => void;
+  onDelete: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(threshold);
+
+  useEffect(() => {
+    setDraft(threshold);
+  }, [threshold]);
+
+  return (
+    <div className="bg-card border border-border rounded-lg p-4">
+      {editing ? (
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <input
+              value={draft.control}
+              onChange={(event) => setDraft((prev) => ({ ...prev, control: event.target.value }))}
+              className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md"
+            />
+            <input
+              value={draft.metric}
+              onChange={(event) => setDraft((prev) => ({ ...prev, metric: event.target.value }))}
+              className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md"
+            />
+            <input
+              type="number"
+              value={draft.threshold}
+              onChange={(event) =>
+                setDraft((prev) => ({ ...prev, threshold: Number(event.target.value || 0) }))
+              }
+              className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md"
+            />
+            <input
+              value={draft.unit ?? ''}
+              onChange={(event) => setDraft((prev) => ({ ...prev, unit: event.target.value }))}
+              className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md"
+            />
+            <select
+              value={draft.severity}
+              onChange={(event) =>
+                setDraft((prev) => ({ ...prev, severity: event.target.value as 'critical' | 'warning' }))
+              }
+              className="px-3 py-2 text-xs bg-muted/40 border border-border rounded-md"
+            >
+              <option value="critical">critical</option>
+              <option value="warning">warning</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                onSave({
+                  control: draft.control,
+                  metric: draft.metric,
+                  threshold: draft.threshold,
+                  unit: draft.unit,
+                  severity: draft.severity,
+                  enabled: draft.enabled,
+                });
+                setEditing(false);
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 text-xs bg-green-500/10 border border-green-500/20 text-green-400 rounded-md hover:bg-green-500/20 transition-colors"
+            >
+              <Save size={11} />
+              Save
+            </button>
+            <button
+              onClick={() => setEditing(false)}
+              className="px-2.5 py-1 text-xs border border-border rounded-md text-muted-foreground hover:bg-muted/60"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium">{threshold.control}</span>
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${severityClass(threshold.severity)}`}>
+                {threshold.severity.toUpperCase()}
+              </span>
+              {threshold.enabled ? (
+                <span className="text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-1.5 py-0.5 rounded">
+                  ENABLED
+                </span>
+              ) : (
+                <span className="text-[10px] text-zinc-400 bg-zinc-500/10 border border-zinc-500/20 px-1.5 py-0.5 rounded">
+                  DISABLED
+                </span>
+              )}
+            </div>
+            <p className="font-mono text-[11px] text-muted-foreground mt-0.5">
+              {threshold.metric} {'>='} {threshold.threshold}
+              {threshold.unit ? ` ${threshold.unit}` : ''}
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setEditing(true)}
+              className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <Edit2 size={12} />
+            </button>
+            <button
+              onClick={() => onSave({ enabled: !threshold.enabled })}
+              className="p-1 rounded"
+            >
+              {threshold.enabled ? (
+                <ToggleRight size={22} className="text-primary" />
+              ) : (
+                <ToggleLeft size={22} className="text-muted-foreground" />
+              )}
+            </button>
+            <button
+              onClick={onDelete}
+              className="p-1.5 rounded text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
