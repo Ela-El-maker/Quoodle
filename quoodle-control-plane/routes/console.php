@@ -306,3 +306,9 @@ Schedule::command('schedules:dispatch-due --limit=100')
 Schedule::command('commands:reconcile-stale --limit=200')
     ->everyMinute()
     ->withoutOverlapping();
+
+Schedule::call(function (): void {
+    Cache::put('scheduler:last_heartbeat', now()->toIso8601String(), now()->addMinutes(10));
+})
+    ->name('system-health:scheduler-heartbeat')
+    ->everyMinute();

@@ -4,12 +4,17 @@ namespace App\Http\Controllers\Webhooks;
 
 use App\Http\Controllers\Controller;
 use App\Models\Device;
+use App\Services\Integrations\Webhooks\OutboundWebhookPublisher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 class DevicePresenceWebhookController extends Controller
 {
+    public function __construct(private readonly OutboundWebhookPublisher $outboundWebhookPublisher)
+    {
+    }
+
     public function online(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -35,6 +40,7 @@ class DevicePresenceWebhookController extends Controller
         $device = Device::firstOrCreate(['device_id' => $data['device_id']], [
             'device_name' => $data['device_id'],
         ]);
+        $previousLifecycle = (string) $device->lifecycle_state;
 
         $update = [
             'last_seen' => $data['connected_at'],
@@ -47,6 +53,17 @@ class DevicePresenceWebhookController extends Controller
         }
 
         $device->update($update);
+
+        if (($update['lifecycle_state'] ?? null) === 'online' && $previousLifecycle !== 'online') {
+            $this->outboundWebhookPublisher->publish('device.online', [
+                'device_id' => $device->device_id,
+                'device_name' => $device->device_name,
+                'session_id' => $data['session_id'],
+                'connected_at' => $data['connected_at'],
+                'agent_version' => $data['agent_version'] ?? null,
+                'os_build' => $update['os_build'] ?? null,
+            ]);
+        }
 
         return response()->json(['status' => 'ack']);
     }
@@ -68,11 +85,21 @@ class DevicePresenceWebhookController extends Controller
         $device = Device::firstOrCreate(['device_id' => $data['device_id']], [
             'device_name' => $data['device_id'],
         ]);
+        $previousLifecycle = (string) $device->lifecycle_state;
 
         $device->update([
             'last_seen' => $data['activated_at'],
             'policy_hash' => $data['policy_hash'] ?: $device->policy_hash,
             'lifecycle_state' => 'online',
+        ]);
+
+        $this->outboundWebhookPublisher->publish('device.activated', [
+            'device_id' => $device->device_id,
+            'device_name' => $device->device_name,
+            'session_id' => $data['session_id'],
+            'activated_at' => $data['activated_at'],
+            'policy_hash' => $data['policy_hash'] ?: $device->policy_hash,
+            'previous_lifecycle_state' => $previousLifecycle,
         ]);
 
         return response()->json(['status' => 'ack']);
@@ -94,6 +121,7 @@ class DevicePresenceWebhookController extends Controller
         $data = $validator->validated();
         $device = Device::find($data['device_id']);
         if ($device) {
+            $previousLifecycle = (string) $device->lifecycle_state;
             $reason = strtolower((string) $data['reason']);
             $state = match (true) {
                 str_contains($reason, 'quarantine') || str_contains($reason, 'quarantined') => 'quarantined',
@@ -103,6 +131,16 @@ class DevicePresenceWebhookController extends Controller
                 'last_seen' => $data['last_seen'],
                 'lifecycle_state' => $state,
             ]);
+
+            if ($state === 'offline' && $previousLifecycle !== 'offline') {
+                $this->outboundWebhookPublisher->publish('device.offline', [
+                    'device_id' => $device->device_id,
+                    'device_name' => $device->device_name,
+                    'last_seen' => $data['last_seen'],
+                    'reason' => $data['reason'],
+                    'previous_lifecycle_state' => $previousLifecycle,
+                ]);
+            }
         }
 
         return response()->json(['status' => 'ack']);

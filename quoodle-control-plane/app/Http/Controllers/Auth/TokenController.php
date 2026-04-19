@@ -38,6 +38,11 @@ class TokenController extends Controller
             return response()->json(['message' => 'invalid_refresh'], 401);
         }
 
+        if (method_exists($user, 'isActive') && ! $user->isActive()) {
+            $token->update(['revoked_at' => now()]);
+            return response()->json(['message' => 'account_inactive'], 403);
+        }
+
         $sessionId = $token->session_id;
         $newRefresh = Str::uuid()->toString().Str::random(32);
         $token->update([

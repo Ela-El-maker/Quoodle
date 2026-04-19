@@ -144,8 +144,13 @@ class OtpAuthController extends Controller
                 'display_name' => $this->displayNameFromEmail($email),
                 'email' => $email,
                 'role' => User::ROLE_VIEWER,
+                'account_status' => User::STATUS_ACTIVE,
                 'two_factor_enabled' => false,
             ]);
+        }
+
+        if (method_exists($user, 'isActive') && ! $user->isActive()) {
+            return response()->json(['message' => 'account_inactive'], 403);
         }
 
         if (strcasecmp((string) $user->email, $email) !== 0) {

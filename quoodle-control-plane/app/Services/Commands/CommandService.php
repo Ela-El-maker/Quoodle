@@ -9,6 +9,7 @@ use App\Models\Device;
 use App\Models\User;
 use App\Services\CommandRegistry\Registry;
 use App\Services\Compliance\ComplianceChecker;
+use App\Services\Integrations\Webhooks\OutboundWebhookPublisher;
 use App\Services\PolicyEngine\PolicyEvaluator;
 use App\Services\Security\StateVerifier;
 use App\Services\Security\TOTPService;
@@ -45,6 +46,7 @@ class CommandService
         private readonly FastAPIDispatcher $dispatcher,
         private readonly TOTPService $totp,
         private readonly StateVerifier $stateVerifier,
+        private readonly OutboundWebhookPublisher $outboundWebhookPublisher,
     ) {
     }
 
@@ -173,6 +175,14 @@ class CommandService
             'execution_state' => 'queued',
             'ttl_seconds' => $ttlSeconds,
             'expires_at' => $queuedAt->copy()->addSeconds($ttlSeconds),
+        ]);
+        $this->outboundWebhookPublisher->publish('command.queued', [
+            'command_id' => $command->id,
+            'device_id' => $command->device_id,
+            'method' => $command->method,
+            'actor_user_id' => $command->user_id,
+            'queued_at' => $command->queued_at?->toIso8601String(),
+            'trace_id' => $command->trace_id,
         ]);
 
         // Ground-truth loop: after sensitive commands, require telemetry to confirm policy sync.

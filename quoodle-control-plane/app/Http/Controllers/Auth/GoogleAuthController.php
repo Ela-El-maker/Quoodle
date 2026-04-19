@@ -80,8 +80,13 @@ class GoogleAuthController extends Controller
                 'display_name' => $displayName,
                 'email' => $email,
                 'role' => User::ROLE_VIEWER,
+                'account_status' => User::STATUS_ACTIVE,
                 'two_factor_enabled' => false,
             ]);
+        }
+
+        if (method_exists($user, 'isActive') && ! $user->isActive()) {
+            return response()->json(['message' => 'account_inactive'], 403);
         }
 
         return response()->json($this->sessionService->issueForUser(

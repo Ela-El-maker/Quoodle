@@ -24,6 +24,10 @@ class AuthSessionService
      */
     public function issueForUser(User $user, ?string $deviceFingerprint = null, ?string $pushToken = null): array
     {
+        if (method_exists($user, 'isActive') && ! $user->isActive()) {
+            throw new \RuntimeException('account_inactive');
+        }
+
         $sessionId = Str::uuid()->toString();
         $refreshToken = Str::uuid()->toString().Str::random(32);
 
@@ -45,4 +49,3 @@ class AuthSessionService
         ];
     }
 }
-

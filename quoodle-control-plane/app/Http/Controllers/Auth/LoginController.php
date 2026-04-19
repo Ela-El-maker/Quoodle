@@ -52,6 +52,12 @@ class LoginController extends Controller
             ], 401);
         }
 
+        if (method_exists($user, 'isActive') && ! $user->isActive()) {
+            return response()->json([
+                'message' => 'account_inactive',
+            ], 403);
+        }
+
         // TODO: Integrate 2FA per spec in later phase.
         $twoFactorRequired = false;
         $twoFactorPending = false;

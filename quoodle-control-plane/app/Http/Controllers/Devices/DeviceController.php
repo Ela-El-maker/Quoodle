@@ -7,6 +7,7 @@ use App\Models\AuthToken;
 use App\Models\Device;
 use App\Models\DeviceTelemetryLatest;
 use App\Models\TelemetrySnapshot;
+use App\Services\Devices\DeviceVisibilityService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -14,6 +15,10 @@ use Illuminate\Support\Facades\Validator;
 
 class DeviceController extends Controller
 {
+    public function __construct(private readonly DeviceVisibilityService $visibility)
+    {
+    }
+
     private function requireValidSession(string $userId, string $sessionId): bool
     {
         return AuthToken::where('user_id', $userId)
@@ -25,14 +30,7 @@ class DeviceController extends Controller
 
     private function visibleDevicesQuery(Request $request): Builder
     {
-        $user = $request->user();
-        $query = Device::query();
-
-        if (! $user || $user->role !== 'admin') {
-            $query->where('user_id', $user?->id);
-        }
-
-        return $query;
+        return $this->visibility->visibleDevicesQuery($request->user());
     }
 
     public function index(Request $request): JsonResponse
@@ -164,8 +162,7 @@ class DeviceController extends Controller
         if (! $device) {
             return response()->json(['message' => 'not_found'], 404);
         }
-        $user = $request->user();
-        if (! $user || ($user->role !== 'admin' && $device->user_id !== $user->id)) {
+        if (! $this->visibility->canViewDevice($request->user(), $device_id)) {
             return response()->json(['message' => 'not_found'], 404);
         }
 
@@ -312,6 +309,10 @@ class DeviceController extends Controller
 
         $device = Device::find($device_id);
         if (! $device) {
+            return response()->json(['message' => 'not_found'], 404);
+        }
+
+        if (! $this->visibility->canViewDevice($request->user(), $device_id)) {
             return response()->json(['message' => 'not_found'], 404);
         }
 

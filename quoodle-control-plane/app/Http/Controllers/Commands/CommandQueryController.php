@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Commands;
 
 use App\Http\Controllers\Controller;
 use App\Models\Command;
-use App\Models\Device;
 use App\Services\Commands\RuntimeCapabilities;
+use App\Services\Devices\DeviceVisibilityService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Builder;
@@ -13,7 +13,10 @@ use Illuminate\Support\Carbon;
 
 class CommandQueryController extends Controller
 {
-    public function __construct(private readonly RuntimeCapabilities $runtimeCapabilities)
+    public function __construct(
+        private readonly RuntimeCapabilities $runtimeCapabilities,
+        private readonly DeviceVisibilityService $visibility,
+    )
     {
     }
 
@@ -66,14 +69,8 @@ class CommandQueryController extends Controller
         }
 
         $deviceId = trim((string) $request->query('device_id', ''));
-        if ($deviceId !== '' && $user->role !== 'admin') {
-            $visibleDevice = Device::query()
-                ->where('device_id', $deviceId)
-                ->where('user_id', $user->id)
-                ->exists();
-            if (! $visibleDevice) {
-                return response()->json(['message' => 'not_found'], 404);
-            }
+        if ($deviceId !== '' && ! $this->visibility->canViewDevice($user, $deviceId)) {
+            return response()->json(['message' => 'not_found'], 404);
         }
 
         return response()->json([
@@ -106,13 +103,8 @@ class CommandQueryController extends Controller
         if (! $user) {
             return response()->json(['message' => 'not_found'], 404);
         }
-        if ($user->role !== 'admin') {
-            $visibleDevice = Device::where('device_id', $device_id)
-                ->where('user_id', $user->id)
-                ->exists();
-            if (! $visibleDevice) {
-                return response()->json(['message' => 'not_found'], 404);
-            }
+        if (! $this->visibility->canViewDevice($user, $device_id)) {
+            return response()->json(['message' => 'not_found'], 404);
         }
 
         $limit = min((int) $request->query('limit', 20), 100);
@@ -134,11 +126,8 @@ class CommandQueryController extends Controller
         $user = $request->user();
         $query = Command::query();
 
-        if (! $user || $user->role !== 'admin') {
-            $query->whereHas('device', function (Builder $deviceQuery) use ($user) {
-                $deviceQuery->where('user_id', $user?->id);
-            });
-        }
+        $visibleDeviceIds = $this->visibility->visibleDevicesQuery($user)->select('device_id');
+        $query->whereIn('device_id', $visibleDeviceIds);
 
         return $query;
     }
@@ -178,12 +167,7 @@ class CommandQueryController extends Controller
             return true;
         }
 
-        $device = Device::query()
-            ->where('device_id', $command->device_id)
-            ->where('user_id', $user->id)
-            ->exists();
-
-        return $device;
+        return $this->visibility->canViewDevice($user, (string) $command->device_id);
     }
 
     private function listRow(Command $cmd): array

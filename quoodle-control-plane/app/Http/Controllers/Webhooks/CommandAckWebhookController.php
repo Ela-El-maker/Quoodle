@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Webhooks;
 
 use App\Http\Controllers\Controller;
 use App\Models\Command;
+use App\Services\Integrations\Webhooks\OutboundWebhookPublisher;
 use App\Services\Webhooks\WebhookIdempotency;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -11,8 +12,10 @@ use Illuminate\Support\Facades\Validator;
 
 class CommandAckWebhookController extends Controller
 {
-    public function __construct(private readonly WebhookIdempotency $idempotency)
-    {
+    public function __construct(
+        private readonly WebhookIdempotency $idempotency,
+        private readonly OutboundWebhookPublisher $outboundWebhookPublisher,
+    ) {
     }
 
     public function store(Request $request): JsonResponse
@@ -59,12 +62,29 @@ class CommandAckWebhookController extends Controller
             if ($updated < 1) {
                 return response()->json(['status' => 'ok']);
             }
+            $command->refresh();
+            $this->outboundWebhookPublisher->publish('command.ack', [
+                'command_id' => $command->id,
+                'device_id' => $command->device_id,
+                'state' => $command->state,
+                'reason' => $command->reason,
+                'trace_id' => $command->trace_id,
+                'timestamp' => $data['timestamp'],
+            ]);
         } else {
             $command->update([
                 'state' => 'failed',
                 'execution_state' => 'failed',
                 'reason' => $data['reason'] ?? null,
                 'completed_at' => $data['timestamp'],
+            ]);
+            $this->outboundWebhookPublisher->publish('command.failed', [
+                'command_id' => $command->id,
+                'device_id' => $command->device_id,
+                'state' => 'failed',
+                'reason' => $data['reason'] ?? null,
+                'trace_id' => $command->trace_id,
+                'timestamp' => $data['timestamp'],
             ]);
         }
 

@@ -25,6 +25,11 @@ class WebLoginController extends Controller
         $user = \App\Models\User::where('email', $request->email)->first();
 
         if ($user && Hash::check($request->password, $user->password)) {
+            if (method_exists($user, 'isActive') && ! $user->isActive()) {
+                throw ValidationException::withMessages([
+                    'email' => ['Your account is inactive. Contact an administrator.'],
+                ]);
+            }
             Auth::login($user);
             return redirect()->intended('/admin/dashboard');
         }

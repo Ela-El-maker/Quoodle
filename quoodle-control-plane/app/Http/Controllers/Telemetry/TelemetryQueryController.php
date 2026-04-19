@@ -9,6 +9,7 @@ use App\Models\Device;
 use App\Models\DeviceTelemetryLatest;
 use App\Models\TelemetryEvent;
 use App\Models\TelemetryRollup;
+use App\Services\Devices\DeviceVisibilityService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,6 +18,10 @@ use Illuminate\Support\Facades\Cache;
 
 class TelemetryQueryController extends Controller
 {
+    public function __construct(private readonly DeviceVisibilityService $visibility)
+    {
+    }
+
     public function latest(Request $request, string $device_id): JsonResponse
     {
         if (! $this->canViewDevice($request, $device_id)) {
@@ -411,13 +416,7 @@ class TelemetryQueryController extends Controller
 
     private function visibleDevicesQuery(Request $request): Builder
     {
-        $query = Device::query();
-        $user = $request->user();
-        if (! $user || $user->role !== 'admin') {
-            $query->where('user_id', $user?->id);
-        }
-
-        return $query;
+        return $this->visibility->visibleDevicesQuery($request->user());
     }
 
     private function canViewDevice(Request $request, string $deviceId): bool
