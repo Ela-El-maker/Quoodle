@@ -21,6 +21,14 @@ use App\Http\Controllers\Telemetry\TelemetryQueryController;
 use App\Http\Controllers\Updates\UpdateController;
 use App\Http\Controllers\Schedules\ScheduleController;
 use App\Http\Controllers\Schedules\ScheduleRunsController;
+use App\Http\Controllers\Settings\AlertRuleController;
+use App\Http\Controllers\Settings\ComplianceThresholdController;
+use App\Http\Controllers\Settings\PolicyEntryController;
+use App\Http\Controllers\Settings\RolePermissionController;
+use App\Http\Controllers\Settings\TeamMemberController;
+use App\Http\Controllers\SystemHealth\SystemHealthController;
+use App\Http\Controllers\Integrations\WebhookDeliveryController;
+use App\Http\Controllers\Integrations\WebhookEndpointController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -170,8 +178,76 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
         // Policy evaluation (command preflight)
         Route::post('/policy/evaluate', [PolicyController::class, 'evaluate']);
 
+        // Outbound integrations (webhook endpoints and deliveries)
+        Route::prefix('integrations/webhooks')->group(function (): void {
+            Route::get('/endpoints', [WebhookEndpointController::class, 'index']);
+            Route::post('/endpoints', [WebhookEndpointController::class, 'store']);
+            Route::get('/endpoints/{id}', [WebhookEndpointController::class, 'show']);
+            Route::patch('/endpoints/{id}', [WebhookEndpointController::class, 'update']);
+            Route::delete('/endpoints/{id}', [WebhookEndpointController::class, 'destroy']);
+            Route::post('/endpoints/{id}/pause', [WebhookEndpointController::class, 'pause']);
+            Route::post('/endpoints/{id}/resume', [WebhookEndpointController::class, 'resume']);
+            Route::post('/endpoints/{id}/test', [WebhookEndpointController::class, 'test']);
+            Route::post('/endpoints/{id}/rotate-secret', [WebhookEndpointController::class, 'rotateSecret']);
+            Route::get('/endpoints/{id}/reveal-secret', [WebhookEndpointController::class, 'revealSecret']);
+
+            Route::get('/deliveries', [WebhookDeliveryController::class, 'index']);
+            Route::post('/deliveries/{id}/replay', [WebhookDeliveryController::class, 'replay']);
+            Route::get('/inbound', [WebhookDeliveryController::class, 'inbound']);
+        });
+
         // Audit Trail append
         Route::post('/audit/append', [AuditTrailController::class, 'append']);
+    });
+
+    /*
+    |----------------------------------------------------------------------
+    | System Health (Admin only)
+    |----------------------------------------------------------------------
+    */
+    Route::middleware('role:admin')->prefix('system-health')->group(function (): void {
+        Route::get('/overview', [SystemHealthController::class, 'overview']);
+        Route::get('/components', [SystemHealthController::class, 'components']);
+        Route::get('/timeseries', [SystemHealthController::class, 'timeseries']);
+        Route::get('/events', [SystemHealthController::class, 'events']);
+    });
+
+    /*
+    |----------------------------------------------------------------------
+    | Settings Domain APIs
+    |----------------------------------------------------------------------
+    */
+    Route::prefix('settings')->middleware('role:operator')->group(function (): void {
+        // Alert rules
+        Route::get('/alert-rules', [AlertRuleController::class, 'index'])->middleware('permission:manage_settings');
+        Route::post('/alert-rules', [AlertRuleController::class, 'store'])->middleware('permission:manage_settings');
+        Route::patch('/alert-rules/{id}', [AlertRuleController::class, 'update'])->middleware('permission:manage_settings');
+        Route::delete('/alert-rules/{id}', [AlertRuleController::class, 'destroy'])->middleware('permission:manage_settings');
+
+        // Policy editor
+        Route::get('/policy-entries', [PolicyEntryController::class, 'index'])->middleware('permission:manage_settings');
+        Route::patch('/policy-entries/{id}', [PolicyEntryController::class, 'update'])->middleware('permission:manage_settings');
+
+        // Compliance thresholds
+        Route::get('/compliance-thresholds', [ComplianceThresholdController::class, 'index'])->middleware('permission:view_compliance');
+        Route::post('/compliance-thresholds', [ComplianceThresholdController::class, 'store'])->middleware('permission:manage_compliance');
+        Route::patch('/compliance-thresholds/{id}', [ComplianceThresholdController::class, 'update'])->middleware('permission:manage_compliance');
+        Route::delete('/compliance-thresholds/{id}', [ComplianceThresholdController::class, 'destroy'])->middleware('permission:manage_compliance');
+
+        // Roles + permissions
+        Route::get('/roles/permissions', [RolePermissionController::class, 'index'])->middleware('permission:manage_users');
+        Route::get('/roles/{role}/permissions', [RolePermissionController::class, 'show'])->middleware('permission:manage_users');
+        Route::patch('/roles/{role}/permissions', [RolePermissionController::class, 'update'])->middleware('permission:manage_users');
+
+        // Team members + device access grants
+        Route::get('/team-members', [TeamMemberController::class, 'index'])->middleware('permission:manage_users');
+        Route::post('/team-members', [TeamMemberController::class, 'store'])->middleware('permission:manage_users');
+        Route::patch('/team-members/{id}', [TeamMemberController::class, 'update'])->middleware('permission:manage_users');
+        Route::post('/team-members/{id}/activate', [TeamMemberController::class, 'activate'])->middleware('permission:manage_users');
+        Route::post('/team-members/{id}/deactivate', [TeamMemberController::class, 'deactivate'])->middleware('permission:manage_users');
+        Route::get('/team-members/{id}/device-access', [TeamMemberController::class, 'listDeviceAccess'])->middleware('permission:manage_users');
+        Route::post('/team-members/{id}/device-access', [TeamMemberController::class, 'grantDeviceAccess'])->middleware('permission:manage_users');
+        Route::delete('/team-members/{id}/device-access/{deviceId}', [TeamMemberController::class, 'revokeDeviceAccess'])->middleware('permission:manage_users');
     });
 
     /*
