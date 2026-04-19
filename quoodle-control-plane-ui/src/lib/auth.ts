@@ -47,6 +47,7 @@ export const OPERATOR_ALLOWED_PREFIXES: readonly string[] = [
   '/telemetry-monitoring',
   '/compliance',
   '/audit',
+  '/webhooks',
   '/profile',
 ];
 

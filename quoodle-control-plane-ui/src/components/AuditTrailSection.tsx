@@ -16,18 +16,7 @@ export interface AuditEntry {
   outcome: 'success' | 'failure' | 'pending';
 }
 
-const defaultEntries: AuditEntry[] = [
-  { id: 'AUD-1001', timestamp: '2026-04-05 21:06:09', actor: 'ops.team@quoodle.io', actorRole: 'Operator', eventType: 'command_execution', action: 'DISPATCH_COMMAND', target: 'WKSTN-055', detail: 'Dispatched CMD-7742 (ping) — TTL 300s, Ed25519 signed', outcome: 'success' },
-  { id: 'AUD-1002', timestamp: '2026-04-05 21:05:47', actor: 'system', actorRole: 'System', eventType: 'system_event', action: 'ALERT_RAISED', target: 'SRV-PROD-04', detail: 'Critical attestation failure detected — kernel guard state mismatch', outcome: 'failure' },
-  { id: 'AUD-1003', timestamp: '2026-04-05 21:04:58', actor: 'ops.team@quoodle.io', actorRole: 'Operator', eventType: 'command_execution', action: 'DISPATCH_COMMAND', target: 'WKSTN-042', detail: 'Dispatched CMD-7740 (lock_screen) — 2FA verified', outcome: 'success' },
-  { id: 'AUD-1004', timestamp: '2026-04-05 21:04:22', actor: 'system', actorRole: 'System', eventType: 'policy_change', action: 'POLICY_DRIFT_DETECTED', target: 'WKSTN-011', detail: 'Policy hash mismatch: device reports policy-2025-11, expected policy-2026-04', outcome: 'failure' },
-  { id: 'AUD-1005', timestamp: '2026-04-05 21:02:11', actor: 'system', actorRole: 'System', eventType: 'command_execution', action: 'COMMAND_FAILED', target: 'WKSTN-042', detail: 'CMD-7741 failed — kernel opcode 0x4004 not supported on agent v0.0.1', outcome: 'failure' },
-  { id: 'AUD-1006', timestamp: '2026-04-05 21:01:30', actor: 'admin@quoodle.io', actorRole: 'Admin', eventType: 'policy_change', action: 'POLICY_UPDATED', target: 'fleet-global', detail: 'Policy hash updated to policy-2026-04 — signed by admin@quoodle.io', outcome: 'success' },
-  { id: 'AUD-1007', timestamp: '2026-04-05 21:00:05', actor: 'nina.osei@quoodle.io', actorRole: 'Operator', eventType: 'user_action', action: 'ALERT_ACKNOWLEDGED', target: 'ALT-0082', detail: 'Alert ALT-0082 acknowledged — kernel guard missing on WKSTN-031', outcome: 'success' },
-  { id: 'AUD-1008', timestamp: '2026-04-05 20:58:44', actor: 'devops@quoodle.io', actorRole: 'Operator', eventType: 'user_action', action: 'ALERT_ACKNOWLEDGED', target: 'ALT-0085', detail: 'Alert ALT-0085 acknowledged — CMD-7738 expired before agent ACK', outcome: 'success' },
-  { id: 'AUD-1009', timestamp: '2026-04-05 20:55:12', actor: 'admin@quoodle.io', actorRole: 'Admin', eventType: 'user_action', action: 'SETTINGS_UPDATED', target: 'system', detail: 'Alert rule "Attestation Failure" threshold updated by admin', outcome: 'success' },
-  { id: 'AUD-1010', timestamp: '2026-04-05 20:50:33', actor: 'viewer@quoodle.io', actorRole: 'Viewer', eventType: 'user_action', action: 'REPORT_VIEWED', target: 'compliance', detail: 'Compliance report accessed — read-only view', outcome: 'success' },
-];
+const defaultEntries: AuditEntry[] = [];
 
 const typeConfig: Record<AuditEventType, { icon: React.ElementType; color: string; bg: string; label: string }> = {
   user_action:       { icon: User,       color: 'text-blue-400',   bg: 'bg-blue-500/10',   label: 'User Action' },
@@ -347,3 +336,4 @@ export default function AuditTrailSection({
     </div>
   );
 }
+
