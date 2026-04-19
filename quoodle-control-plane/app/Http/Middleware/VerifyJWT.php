@@ -95,6 +95,13 @@ final class VerifyJWT
             return $this->unauthorized('User not found', 'USER_NOT_FOUND');
         }
 
+        if (method_exists($user, 'isActive') && ! $user->isActive()) {
+            if ($sessionId) {
+                AuthToken::where('session_id', $sessionId)->update(['revoked_at' => now()]);
+            }
+            return $this->unauthorized('Account is inactive', 'ACCOUNT_INACTIVE');
+        }
+
         // Set authenticated user for the request
         Auth::setUser($user);
 

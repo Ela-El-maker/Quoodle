@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Models\Alert;
 use App\Models\Device;
+use App\Observers\AlertObserver;
 use App\Observers\DeviceObserver;
 use Illuminate\Support\ServiceProvider;
 
@@ -22,5 +24,6 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Device::observe(DeviceObserver::class);
+        Alert::observe(AlertObserver::class);
     }
 }

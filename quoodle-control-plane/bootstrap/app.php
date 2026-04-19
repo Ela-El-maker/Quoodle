@@ -23,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'agent.jwt' => \App\Http\Middleware\VerifyAgentJWT::class,
             'fastapi.signature' => \App\Http\Middleware\VerifyFastApiSignature::class,
             'role' => \App\Http\Middleware\CheckRole::class,
+            'permission' => \App\Http\Middleware\EnsurePermission::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
