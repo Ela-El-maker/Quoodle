@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Wifi, WifiOff, Bell, Terminal, AlertTriangle, CheckCircle2, X, Zap, Activity } from 'lucide-react';
 
 export type WsEventType = 'alert' | 'command_status' | 'device_state' | 'system';
@@ -13,33 +13,6 @@ export interface WsEvent {
   device?: string;
   timestamp: string;
   read: boolean;
-}
-
-const EVENT_POOL: Omit<WsEvent, 'id' | 'timestamp' | 'read'>[] = [
-  { type: 'alert', severity: 'critical', title: 'Attestation Failure', detail: 'WKSTN-055 - kernel guard state mismatch detected', device: 'WKSTN-055' },
-  { type: 'command_status', severity: 'info', title: 'CMD-7745 Completed', detail: 'ping completed on WKSTN-001 - 12ms RTT', device: 'WKSTN-001' },
-  { type: 'alert', severity: 'warning', title: 'Policy Drift', detail: 'WKSTN-011 reports policy-2025-11, expected policy-2026-04', device: 'WKSTN-011' },
-  { type: 'command_status', severity: 'warning', title: 'CMD-7746 Failed', detail: 'lock_screen failed on WKSTN-007 - agent timeout', device: 'WKSTN-007' },
-  { type: 'device_state', severity: 'warning', title: 'Device Degraded', detail: 'WKSTN-019 risk score elevated to 0.72', device: 'WKSTN-019' },
-  { type: 'command_status', severity: 'info', title: 'CMD-7747 Dispatched', detail: 'get_system_info queued for SRV-PROD-04', device: 'SRV-PROD-04' },
-  { type: 'alert', severity: 'critical', title: 'Compliance Violation', detail: 'SRV-PROD-04 - compliance score dropped to 42%', device: 'SRV-PROD-04' },
-  { type: 'system', severity: 'info', title: 'Policy Sync Complete', detail: 'Fleet policy-2026-04 propagated to 47/50 devices' },
-  { type: 'command_status', severity: 'info', title: 'CMD-7748 ACK', detail: 'Agent acknowledged lock_screen on WKSTN-042', device: 'WKSTN-042' },
-  { type: 'device_state', severity: 'info', title: 'Device Online', detail: 'WKSTN-033 reconnected after 8 min offline', device: 'WKSTN-033' },
-];
-
-let eventCounter = 1000;
-
-function generateEvent(): WsEvent {
-  const pool = EVENT_POOL[Math.floor(Math.random() * EVENT_POOL.length)];
-  const now = new Date();
-  const ts = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-  return {
-    ...pool,
-    id: `WS-${++eventCounter}`,
-    timestamp: ts,
-    read: false,
-  };
 }
 
 const typeIcon: Record<WsEventType, React.ElementType> = {
@@ -71,7 +44,6 @@ interface LiveAlertFeedProps {
 }
 
 export default function LiveAlertFeed({
-  pushInterval = 8000,
   maxEvents = 12,
   className = '',
   events,
@@ -84,37 +56,18 @@ export default function LiveAlertFeed({
   const [unreadCount, setUnreadCount] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
   const [connecting, setConnecting] = useState(true);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const previousIdsRef = useRef<Set<string>>(new Set());
   const effectiveConnecting = usingExternalEvents ? false : connecting;
   const effectiveConnected = usingExternalEvents ? true : connected;
 
   useEffect(() => {
     if (usingExternalEvents) return;
-
-    const connectTimer = setTimeout(() => {
-      setConnecting(false);
-      setConnected(true);
-      const seed = [generateEvent(), generateEvent()];
-      setFeedEvents(seed);
-      setUnreadCount(2);
-    }, 1200);
-    return () => clearTimeout(connectTimer);
+    setConnecting(false);
+    setConnected(false);
+    setFeedEvents([]);
+    setUnreadCount(0);
+    return () => {};
   }, [usingExternalEvents]);
-
-  const pushEvent = useCallback(() => {
-    const evt = generateEvent();
-    setFeedEvents((prev) => [evt, ...prev].slice(0, maxEvents));
-    setUnreadCount((c) => c + 1);
-  }, [maxEvents]);
-
-  useEffect(() => {
-    if (usingExternalEvents || !connected) return;
-    intervalRef.current = setInterval(pushEvent, pushInterval);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [usingExternalEvents, connected, pushEvent, pushInterval]);
 
   useEffect(() => {
     if (!usingExternalEvents) return;
@@ -212,7 +165,7 @@ export default function LiveAlertFeed({
           )}
           {!loading && !effectiveConnecting && !error && feedEvents.length === 0 && (
             <div className="flex items-center justify-center py-8 text-xs text-muted-foreground">
-              No data available
+              {usingExternalEvents ? 'No data available' : 'No live feed source configured'}
             </div>
           )}
           {!loading && !effectiveConnecting && !error && feedEvents.map((evt) => {
