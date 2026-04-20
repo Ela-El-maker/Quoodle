@@ -159,6 +159,8 @@ static const CHAR* qep_opcode_to_string(_In_ QUOODLE_OPCODE opcode) {
       return "COLLECT_SYSTEM_INFO";
     case QOP_EXEC_GET_PROCESS_LIST:
       return "GET_PROCESS_LIST";
+    case QOP_EXEC_KILL_PROCESS:
+      return "KILL_PROCESS";
     case QOP_OBS_LIST_PROCESSES:
       return "LIST_PROCESSES";
     case QOP_OBS_LIST_SERVICES:
@@ -240,6 +242,8 @@ static const CHAR* qep_opcode_subtype(_In_ QUOODLE_OPCODE opcode) {
       return "applock_get_status";
     case QOP_SEC_APPLOCK_CLEAR_POLICY:
       return "applock_clear_policy";
+    case QOP_EXEC_KILL_PROCESS:
+      return "process_control";
     default:
       return "opcode";
   }

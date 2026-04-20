@@ -40,7 +40,7 @@ public:
         {
             return ioctl_.shutdown(request_id, state, command_message_id);
         }
-        if (method == "logout" || method == "EXEC_LOGOUT")
+        if (method == "logout_user" || method == "logout" || method == "EXEC_LOGOUT")
         {
             return ioctl_.logout(request_id, state, command_message_id);
         }
@@ -57,6 +57,10 @@ public:
         if (method == "list_processes" || method == "process-list" || method == "GET_PROCESS_LIST" || method == "get_process_list")
         {
             return ioctl_.get_process_list(request_id, state, command_message_id);
+        }
+        if (method == "kill_process" || method == "terminate_process" || method == "KILL_PROCESS" || method == "EXEC_KILL_PROCESS")
+        {
+            return ioctl_.kill_process(request_id, state, params_json, command_message_id);
         }
         if (method == "list_services" || method == "services-list" || method == "LIST_SERVICES")
         {

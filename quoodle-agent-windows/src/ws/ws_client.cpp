@@ -17,6 +17,7 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <winhttp.h>
+#include <tlhelp32.h>
 #endif
 
 #include <ixwebsocket/IXNetSystem.h>
@@ -673,6 +674,226 @@ static bool try_parse_unix_seconds(const nlohmann::json &value, std::uint64_t &o
   }
   return false;
 }
+
+#ifdef _WIN32
+static std::string wide_to_utf8(const std::wstring &value)
+{
+  if (value.empty())
+  {
+    return {};
+  }
+
+  const int size = WideCharToMultiByte(CP_UTF8, 0, value.c_str(), static_cast<int>(value.size()), nullptr, 0, nullptr, nullptr);
+  if (size <= 0)
+  {
+    return {};
+  }
+
+  std::string out(static_cast<std::size_t>(size), '\0');
+  const int written = WideCharToMultiByte(CP_UTF8, 0, value.c_str(), static_cast<int>(value.size()), out.data(), size, nullptr, nullptr);
+  if (written <= 0)
+  {
+    return {};
+  }
+  return out;
+}
+
+static std::string normalize_windows_path_for_match(std::string value)
+{
+  std::replace(value.begin(), value.end(), '/', '\\');
+  return to_lower_copy(std::move(value));
+}
+
+static std::string basename_from_path(const std::string &path)
+{
+  const std::size_t pos = path.find_last_of("\\/");
+  if (pos == std::string::npos)
+  {
+    return path;
+  }
+  if (pos + 1 >= path.size())
+  {
+    return {};
+  }
+  return path.substr(pos + 1);
+}
+
+struct AppLockRuntimeRule
+{
+  std::string match_type; // basename|full_path
+  std::string value;
+};
+
+static std::vector<AppLockRuntimeRule> extract_runtime_block_rules(const nlohmann::json &app_lock)
+{
+  std::vector<AppLockRuntimeRule> rules;
+  if (!app_lock.is_object() || !app_lock.value("enabled", false))
+  {
+    return rules;
+  }
+  if (!app_lock.contains("rules") || !app_lock["rules"].is_array())
+  {
+    return rules;
+  }
+
+  for (const auto &rule : app_lock["rules"])
+  {
+    if (!rule.is_object())
+    {
+      continue;
+    }
+
+    const std::string action = to_lower_copy(rule.value("action", std::string("block")));
+    if (action != "block")
+    {
+      continue;
+    }
+
+    const std::string match_type = to_lower_copy(rule.value("match_type", std::string()));
+    if (match_type != "basename" && match_type != "full_path")
+    {
+      continue;
+    }
+
+    const std::string value = sanitize_app_lock_scalar(rule.value("value", std::string()));
+    if (value.empty())
+    {
+      continue;
+    }
+
+    AppLockRuntimeRule normalized{};
+    normalized.match_type = match_type;
+    normalized.value = normalize_windows_path_for_match(value);
+    rules.push_back(std::move(normalized));
+    if (rules.size() >= 256)
+    {
+      break;
+    }
+  }
+
+  return rules;
+}
+
+static std::string query_process_image_path_utf8(DWORD pid)
+{
+  HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+  if (process == nullptr)
+  {
+    return {};
+  }
+
+  std::wstring buffer(MAX_PATH, L'\0');
+  DWORD size = static_cast<DWORD>(buffer.size());
+  if (!QueryFullProcessImageNameW(process, 0, buffer.data(), &size) || size == 0)
+  {
+    CloseHandle(process);
+    return {};
+  }
+  CloseHandle(process);
+  buffer.resize(size);
+  return wide_to_utf8(buffer);
+}
+
+static bool process_matches_runtime_rule(
+    const AppLockRuntimeRule &rule,
+    const std::string &exe_name_lower,
+    const std::string &path_normalized,
+    const std::string &path_basename_lower)
+{
+  if (rule.match_type == "basename")
+  {
+    return rule.value == exe_name_lower || (!path_basename_lower.empty() && rule.value == path_basename_lower);
+  }
+
+  if (rule.match_type == "full_path")
+  {
+    return !path_normalized.empty() && rule.value == path_normalized;
+  }
+
+  return false;
+}
+
+static std::size_t enforce_runtime_kill_sweep(
+    const nlohmann::json &app_lock,
+    IoctlClient &policy_client,
+    const AgentState &state,
+    const std::string &request_prefix,
+    std::size_t &failed_out)
+{
+  failed_out = 0;
+  const auto rules = extract_runtime_block_rules(app_lock);
+  if (rules.empty())
+  {
+    return 0;
+  }
+
+  HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  if (snapshot == INVALID_HANDLE_VALUE)
+  {
+    failed_out = 0;
+    return 0;
+  }
+
+  PROCESSENTRY32W entry{};
+  entry.dwSize = sizeof(entry);
+  std::unordered_set<DWORD> to_kill;
+  const DWORD self_pid = GetCurrentProcessId();
+
+  if (Process32FirstW(snapshot, &entry))
+  {
+    do
+    {
+      const DWORD pid = entry.th32ProcessID;
+      if (pid < 2 || pid == self_pid)
+      {
+        continue;
+      }
+
+      const std::string exe_name_lower = to_lower_copy(wide_to_utf8(entry.szExeFile));
+      const std::string process_path = query_process_image_path_utf8(pid);
+      const std::string process_path_normalized = normalize_windows_path_for_match(process_path);
+      const std::string path_basename_lower = to_lower_copy(basename_from_path(process_path_normalized));
+
+      for (const auto &rule : rules)
+      {
+        if (process_matches_runtime_rule(rule, exe_name_lower, process_path_normalized, path_basename_lower))
+        {
+          to_kill.insert(pid);
+          break;
+        }
+      }
+    } while (Process32NextW(snapshot, &entry));
+  }
+
+  CloseHandle(snapshot);
+
+  if (to_kill.empty())
+  {
+    return 0;
+  }
+
+  std::vector<DWORD> targets(to_kill.begin(), to_kill.end());
+  std::sort(targets.begin(), targets.end());
+
+  std::size_t killed = 0;
+  for (const DWORD pid : targets)
+  {
+    nlohmann::json params = {
+        {"pid", static_cast<std::uint32_t>(pid)},
+    };
+    const std::string request_id = request_prefix + "-kill-" + std::to_string(static_cast<unsigned long long>(pid));
+    const auto res = policy_client.kill_process(request_id, state, params.dump(), request_id);
+    if (res.status == "ok")
+    {
+      ++killed;
+      continue;
+    }
+    ++failed_out;
+  }
+
+  return killed;
+}
+#endif
 
 static bool build_app_lock_policy_blob(const nlohmann::json &app_lock,
                                        const std::string &default_policy_hash,
@@ -1880,6 +2101,21 @@ bool WsClient::try_connect()
                                     } else if (status_res.status != "ok") {
                                         Logger::log(LogLevel::Warn, "app_lock status readback after apply failed: " + status_res.error_message);
                                     }
+#ifdef _WIN32
+                                    std::size_t kill_failures = 0;
+                                    const std::size_t killed_now = enforce_runtime_kill_sweep(
+                                        body["app_lock"],
+                                        policy_client,
+                                        state_impl_,
+                                        request_id,
+                                        kill_failures);
+                                    if (killed_now > 0 || kill_failures > 0) {
+                                        Logger::log(
+                                            kill_failures == 0 ? LogLevel::Info : LogLevel::Warn,
+                                            "app_lock runtime kill sweep completed (killed=" +
+                                                std::to_string(killed_now) + ", failed=" + std::to_string(kill_failures) + ")");
+                                    }
+#endif
                                 } else {
                                     Logger::log(LogLevel::Error, "app_lock apply failed: " + apply_res.error_message);
                                     if (!last_good_app_lock_policy_blob_.empty()) {

@@ -12,11 +12,14 @@ class RuntimeCapabilities
     private const RUNTIME_SUPPORTED_METHODS = [
         'ping',
         'lock_screen',
+        'logout_user',
         'reboot_device',
         'shutdown_device',
         'collect_system_info',
         'screenshot',
         'list_processes',
+        'kill_process',
+        
         'list_services',
         'list_connections',
         'list_mounts',

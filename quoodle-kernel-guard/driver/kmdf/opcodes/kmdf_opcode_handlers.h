@@ -17,6 +17,9 @@ VOID QuoodleOpcodeHandleCaptureScreenshot(
 VOID QuoodleOpcodeHandleGetProcessList(
     _Out_ QUOODLE_IOCTL_RESPONSE* resp,
     _In_opt_ const QUOODLE_IOCTL_REQUEST* req);
+VOID QuoodleOpcodeHandleKillProcess(
+    _Out_ QUOODLE_IOCTL_RESPONSE* resp,
+    _In_opt_ const QUOODLE_IOCTL_REQUEST* req);
 VOID QuoodleOpcodeHandleListServices(
     _Out_ QUOODLE_IOCTL_RESPONSE* resp,
     _In_opt_ const QUOODLE_IOCTL_REQUEST* req);

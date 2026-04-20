@@ -183,6 +183,10 @@ static VOID QuoodleEvtIoDeviceControl(_In_ WDFQUEUE Queue,
         QuoodleOpcodeHandleGetProcessList(resp, &req_copy);
         should_emit_event = TRUE;
         break;
+      case QOP_EXEC_KILL_PROCESS:
+        QuoodleOpcodeHandleKillProcess(resp, &req_copy);
+        should_emit_event = TRUE;
+        break;
       case QOP_OBS_LIST_SERVICES:
         QuoodleOpcodeHandleListServices(resp, &req_copy);
         should_emit_event = TRUE;

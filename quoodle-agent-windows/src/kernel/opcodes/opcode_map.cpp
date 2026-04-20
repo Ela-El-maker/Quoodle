@@ -19,6 +19,8 @@ QuoodleOpcode MapOpcodeToCode(const std::string &opcode)
     return QOP_EXEC_COLLECT_SYSTEM_INFO;
   if (opcode == "list_processes" || opcode == "LIST_PROCESSES")
     return QOP_OBS_LIST_PROCESSES;
+  if (opcode == "kill_process" || opcode == "KILL_PROCESS" || opcode == "EXEC_KILL_PROCESS")
+    return QOP_EXEC_KILL_PROCESS;
   if (opcode == "EXEC_GET_PROCESS_LIST" || opcode == "GET_PROCESS_LIST")
     return QOP_EXEC_GET_PROCESS_LIST;
   if (opcode == "list_services" || opcode == "LIST_SERVICES")

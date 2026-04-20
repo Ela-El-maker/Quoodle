@@ -25,6 +25,7 @@ struct KernelResponse
  *
  * AgentInternal:
  *   - EXEC_PING_KERNEL, EXEC_COLLECT_SYSTEM_INFO, EXEC_GET_PROCESS_LIST, EXEC_VALIDATE_UPDATE_PACKAGE
+ *   - EXEC_KILL_PROCESS
  *
  * UpdateAndStaging:
  *   - STAGE_UPDATE, COMMIT_UPDATE, ROLLBACK_UPDATE
@@ -45,6 +46,7 @@ public:
   KernelResponse handle_ping(const std::string &request_id);
   KernelResponse handle_collect_system_info(const std::string &request_id, const std::vector<std::string> &fields);
   KernelResponse handle_get_process_list(const std::string &request_id, bool include_cmdline);
+  KernelResponse handle_kill_process(const std::string &request_id, int pid);
   KernelResponse handle_validate_update_package(const std::string &request_id, const std::string &path);
 
   // ============== UpdateAndStaging ==============

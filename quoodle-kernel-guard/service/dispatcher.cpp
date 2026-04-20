@@ -3,6 +3,9 @@
 #include <chrono>
 #include <random>
 #include <sstream>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 // ============== All Opcode Includes ==============
 // SystemControl
@@ -220,6 +223,36 @@ KernelResponse Dispatcher::handle_get_process_list(const std::string &request_id
   oss << "]";
 
   return wrap_response(request_id, "ok", oss.str());
+}
+
+KernelResponse Dispatcher::handle_kill_process(const std::string &request_id, int pid)
+{
+  utils::log_info("Dispatcher: Processing EXEC_KILL_PROCESS for " + request_id + " (pid=" + std::to_string(pid) + ")");
+
+#ifdef _WIN32
+  if (pid < 2)
+  {
+    return wrap_response(request_id, "failed", "invalid_pid", 5200, "INVALID_PID");
+  }
+
+  HANDLE process = OpenProcess(PROCESS_TERMINATE, FALSE, static_cast<DWORD>(pid));
+  if (!process)
+  {
+    return wrap_response(request_id, "failed", "process_open_failed", 5201, "PROCESS_OPEN_FAILED");
+  }
+
+  const BOOL terminated = TerminateProcess(process, 1);
+  CloseHandle(process);
+  if (!terminated)
+  {
+    return wrap_response(request_id, "failed", "process_terminate_failed", 5202, "PROCESS_TERMINATE_FAILED");
+  }
+
+  return wrap_response(request_id, "ok", "process_terminated");
+#else
+  UNREFERENCED_PARAMETER(pid);
+  return wrap_response(request_id, "failed", "not_supported_platform", 4004, "NOT_SUPPORTED_PLATFORM");
+#endif
 }
 
 KernelResponse Dispatcher::handle_validate_update_package(const std::string &request_id, const std::string &path)

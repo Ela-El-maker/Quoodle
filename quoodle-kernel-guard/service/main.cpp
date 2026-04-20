@@ -331,6 +331,7 @@ static std::string to_json(const KernelResponse &r)
  *   - EXEC_PING_KERNEL, ping
  *   - EXEC_COLLECT_SYSTEM_INFO, collect_system_info
  *   - EXEC_GET_PROCESS_LIST, get_process_list
+ *   - EXEC_KILL_PROCESS, kill_process
  *   - EXEC_VALIDATE_UPDATE_PACKAGE, validate_update_package
  *
  * UpdateAndStaging:
@@ -378,6 +379,11 @@ static KernelResponse dispatch_opcode(Dispatcher &disp, const std::string &req, 
   {
     bool include_cmdline = extract_json_bool(req, "include_cmdline", false);
     return disp.handle_get_process_list(request_id, include_cmdline);
+  }
+  else if (opcode == "EXEC_KILL_PROCESS" || opcode == "KILL_PROCESS" || opcode == "kill_process")
+  {
+    int pid = extract_json_int(req, "pid", 0);
+    return disp.handle_kill_process(request_id, pid);
   }
   else if (opcode == "EXEC_VALIDATE_UPDATE_PACKAGE" || opcode == "validate_update_package")
   {

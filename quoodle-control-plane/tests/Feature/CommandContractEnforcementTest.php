@@ -107,7 +107,7 @@ class CommandContractEnforcementTest extends TestCase
         $device = $this->createOwnedDevice($admin);
 
         $this->withHeaders($this->makeHeaders($admin))
-            ->postJson('/api/commands', $this->commandPayload($device, 'logout_user'))
+            ->postJson('/api/commands', $this->commandPayload($device, 'disable_input'))
             ->assertStatus(422)
             ->assertJsonPath('status', 'rejected')
             ->assertJsonPath('reason', 'not_supported_runtime');
@@ -130,11 +130,13 @@ class CommandContractEnforcementTest extends TestCase
         $runtimeSupported = $response->json('runtime_supported_methods');
         $this->assertContains('ping', $runtimeSupported);
         $this->assertContains('lock_screen', $runtimeSupported);
+        $this->assertContains('logout_user', $runtimeSupported);
         $this->assertContains('reboot_device', $runtimeSupported);
         $this->assertContains('shutdown_device', $runtimeSupported);
         $this->assertContains('collect_system_info', $runtimeSupported);
         $this->assertContains('screenshot', $runtimeSupported);
         $this->assertContains('list_processes', $runtimeSupported);
+        $this->assertContains('kill_process', $runtimeSupported);
         $this->assertContains('list_services', $runtimeSupported);
         $this->assertContains('list_connections', $runtimeSupported);
         $this->assertContains('list_mounts', $runtimeSupported);
@@ -149,6 +151,7 @@ class CommandContractEnforcementTest extends TestCase
         $this->assertContains('screenshot', $canonical);
         $this->assertContains('reboot_device', $canonical);
         $this->assertContains('shutdown_device', $canonical);
+        $this->assertContains('kill_process', $canonical);
         $this->assertNotContains('sysinfo', $canonical);
         $this->assertNotContains('logout', $canonical);
         $this->assertNotContains('reboot', $canonical);
@@ -156,6 +159,8 @@ class CommandContractEnforcementTest extends TestCase
 
         $rejectionReasons = $response->json('rejection_reasons');
         $this->assertArrayNotHasKey('lock_screen', $rejectionReasons);
+        $this->assertArrayNotHasKey('logout_user', $rejectionReasons);
+        $this->assertArrayNotHasKey('kill_process', $rejectionReasons);
     }
 
     /** @test */
@@ -212,6 +217,20 @@ class CommandContractEnforcementTest extends TestCase
     }
 
     /** @test */
+    public function logout_user_is_runtime_supported_and_accepted(): void
+    {
+        Queue::fake();
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $device = $this->createOwnedDevice($admin, 'dev-logout-user');
+
+        $this->withHeaders($this->makeHeaders($admin))
+            ->postJson('/api/commands', $this->commandPayload($device, 'logout_user'))
+            ->assertCreated()
+            ->assertJsonPath('status', 'accepted');
+    }
+
+    /** @test */
     public function list_processes_is_runtime_supported_and_accepted(): void
     {
         Queue::fake();
@@ -221,6 +240,26 @@ class CommandContractEnforcementTest extends TestCase
 
         $this->withHeaders($this->makeHeaders($admin))
             ->postJson('/api/commands', $this->commandPayload($device, 'list_processes'))
+            ->assertCreated()
+            ->assertJsonPath('status', 'accepted');
+    }
+
+    /** @test */
+    public function kill_process_is_runtime_supported_and_accepted(): void
+    {
+        Queue::fake();
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $device = $this->createOwnedDevice($admin, 'dev-kill-process');
+
+        $payload = $this->commandPayload($device, 'kill_process');
+        $payload['params'] = [
+            'pid' => 1234,
+            'signal' => 9,
+        ];
+
+        $this->withHeaders($this->makeHeaders($admin))
+            ->postJson('/api/commands', $payload)
             ->assertCreated()
             ->assertJsonPath('status', 'accepted');
     }

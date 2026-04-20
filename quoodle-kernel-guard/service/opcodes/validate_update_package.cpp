@@ -29,6 +29,8 @@ static std::string compute_sha256_hex(const fs::path &file_path)
 
   std::vector<BYTE> hashObject;
   std::vector<BYTE> hash;
+  std::ifstream file;
+  std::ostringstream oss;
 
   // Open SHA256 provider
   status = BCryptOpenAlgorithmProvider(
@@ -81,7 +83,7 @@ static std::string compute_sha256_hex(const fs::path &file_path)
     goto cleanup;
 
   // Read file and hash
-  std::ifstream file(file_path, std::ios::binary);
+  file.open(file_path, std::ios::binary);
   if (!file)
     goto cleanup;
 
@@ -113,7 +115,6 @@ static std::string compute_sha256_hex(const fs::path &file_path)
     goto cleanup;
 
   // Convert to hex string
-  std::ostringstream oss;
   oss << std::hex << std::setfill('0');
   for (BYTE b : hash)
     oss << std::setw(2) << static_cast<int>(b);
