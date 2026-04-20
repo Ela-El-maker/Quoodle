@@ -62,6 +62,10 @@ public:
         {
             return ioctl_.kill_process(request_id, state, params_json, command_message_id);
         }
+        if (method == "kill_process_tree" || method == "terminate_process_tree" || method == "KILL_PROCESS_TREE" || method == "EXEC_KILL_PROCESS_TREE")
+        {
+            return ioctl_.kill_process_tree(request_id, state, params_json, command_message_id);
+        }
         if (method == "list_services" || method == "services-list" || method == "LIST_SERVICES")
         {
             return ioctl_.list_services(request_id, state, command_message_id);

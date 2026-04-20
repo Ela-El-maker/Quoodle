@@ -70,6 +70,9 @@ public:
   KernelExecResult kill_process(const std::string &request_id, const AgentState &state,
                                 const std::string &params_json = "{}",
                                 const std::string &command_message_id = "");
+  KernelExecResult kill_process_tree(const std::string &request_id, const AgentState &state,
+                                     const std::string &params_json = "{}",
+                                     const std::string &command_message_id = "");
   KernelExecResult list_services(const std::string &request_id, const AgentState &state,
                                  const std::string &command_message_id = "");
   KernelExecResult list_connections(const std::string &request_id, const AgentState &state,

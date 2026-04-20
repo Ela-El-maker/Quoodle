@@ -25,6 +25,11 @@
 #include <vector>
 #include <algorithm>
 #include <cctype>
+#include <unordered_map>
+#include <unordered_set>
+#ifdef _WIN32
+#include <tlhelp32.h>
+#endif
 
 static std::uint64_t initial_sequence_seed()
 {
@@ -433,6 +438,117 @@ static int extract_json_int(const std::string &json, const std::string &key)
     return 0;
   return std::stoi(json.substr(start, end - start));
 }
+
+#ifdef _WIN32
+static bool extract_pid_from_params(const std::string &params_json, DWORD &pid_out)
+{
+  pid_out = 0;
+  const std::string effective = params_json.empty() ? "{}" : params_json;
+
+  nlohmann::json parsed;
+  try
+  {
+    parsed = nlohmann::json::parse(effective);
+  }
+  catch (const std::exception &)
+  {
+    return false;
+  }
+
+  if (!parsed.is_object() || !parsed.contains("pid") || !parsed["pid"].is_number_integer())
+  {
+    return false;
+  }
+
+  const auto pid_raw = parsed["pid"].get<long long>();
+  if (pid_raw < 2 || pid_raw > 0xFFFFFFFFLL)
+  {
+    return false;
+  }
+
+  pid_out = static_cast<DWORD>(pid_raw);
+  return true;
+}
+
+static std::vector<DWORD> build_process_tree_kill_order(DWORD root_pid)
+{
+  std::vector<DWORD> ordered;
+  ordered.reserve(32);
+
+  HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  if (snapshot == INVALID_HANDLE_VALUE)
+  {
+    ordered.push_back(root_pid);
+    return ordered;
+  }
+
+  PROCESSENTRY32 entry{};
+  entry.dwSize = sizeof(entry);
+
+  std::unordered_map<DWORD, std::vector<DWORD>> children_by_parent;
+  children_by_parent.reserve(512);
+
+  if (Process32First(snapshot, &entry))
+  {
+    do
+    {
+      const DWORD pid = entry.th32ProcessID;
+      const DWORD ppid = entry.th32ParentProcessID;
+      if (pid >= 2)
+      {
+        children_by_parent[ppid].push_back(pid);
+      }
+    } while (Process32Next(snapshot, &entry));
+  }
+  CloseHandle(snapshot);
+
+  std::vector<std::pair<DWORD, bool>> stack;
+  stack.reserve(64);
+  std::unordered_set<DWORD> seen;
+  seen.reserve(128);
+  stack.emplace_back(root_pid, false);
+
+  while (!stack.empty())
+  {
+    const auto [pid, expanded] = stack.back();
+    stack.pop_back();
+
+    if (expanded)
+    {
+      ordered.push_back(pid);
+      continue;
+    }
+
+    if (!seen.insert(pid).second)
+    {
+      continue;
+    }
+
+    stack.emplace_back(pid, true);
+    auto found = children_by_parent.find(pid);
+    if (found == children_by_parent.end())
+    {
+      continue;
+    }
+
+    auto &children = found->second;
+    std::sort(children.begin(), children.end());
+    for (auto it = children.rbegin(); it != children.rend(); ++it)
+    {
+      if (*it >= 2)
+      {
+        stack.emplace_back(*it, false);
+      }
+    }
+  }
+
+  if (ordered.empty())
+  {
+    ordered.push_back(root_pid);
+  }
+  return ordered;
+}
+#endif
 
 IoctlClient::~IoctlClient()
 {
@@ -983,6 +1099,69 @@ KernelExecResult IoctlClient::kill_process(const std::string &request_id, const 
   if (json.empty())
     return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
   return parse_and_verify_response(json, request_id);
+}
+
+KernelExecResult IoctlClient::kill_process_tree(const std::string &request_id, const AgentState &state,
+                                                const std::string &params_json,
+                                                const std::string &command_message_id)
+{
+#ifndef _WIN32
+  return make_error(request_id, QERR_NOT_SUPPORTED, "NOT_SUPPORTED_PLATFORM");
+#else
+  DWORD root_pid = 0;
+  if (!extract_pid_from_params(params_json, root_pid))
+  {
+    return make_error(request_id, QERR_BAD_PAYLOAD, "INVALID_PARAMS_PID_REQUIRED");
+  }
+
+  const auto targets = build_process_tree_kill_order(root_pid);
+  std::size_t killed = 0;
+  std::size_t failed = 0;
+  std::vector<DWORD> failed_pids;
+  failed_pids.reserve(targets.size());
+
+  for (const DWORD pid : targets)
+  {
+    nlohmann::json kill_payload = {
+        {"pid", pid},
+    };
+    const std::string pid_request_id = request_id + "-pid-" + std::to_string(static_cast<unsigned long long>(pid));
+    const auto kill_result = kill_process(pid_request_id, state, kill_payload.dump(), command_message_id);
+    if (kill_result.status == "ok")
+    {
+      ++killed;
+      continue;
+    }
+    ++failed;
+    failed_pids.push_back(pid);
+  }
+
+  nlohmann::json result_payload = {
+      {"status", failed == 0 ? "ok" : "partial"},
+      {"root_pid", root_pid},
+      {"attempted", targets.size()},
+      {"killed", killed},
+      {"failed", failed},
+      {"failed_pids", failed_pids},
+  };
+
+  if (failed == 0)
+  {
+    KernelExecResult ok;
+    ok.request_id = request_id;
+    ok.status = "ok";
+    ok.result = result_payload.dump();
+    return ok;
+  }
+
+  KernelExecResult partial;
+  partial.request_id = request_id;
+  partial.status = "failed";
+  partial.error_code = 5203;
+  partial.error_message = "PROCESS_TREE_TERMINATION_PARTIAL";
+  partial.result = result_payload.dump();
+  return partial;
+#endif
 }
 
 KernelExecResult IoctlClient::list_services(const std::string &request_id, const AgentState &state,
