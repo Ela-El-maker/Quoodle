@@ -357,6 +357,16 @@ class Registry
                     'signal' => ['nullable', 'integer', 'min:1', 'max:64'],
                 ]
             ),
+            'kill_process_tree' => new CommandDefinition(
+                name: 'kill_process_tree',
+                riskLevel: 'high',
+                minRole: 'admin',
+                requires2fa: true,
+                allowedInQuarantine: false,
+                paramsRules: [
+                    'pid' => ['required', 'integer', 'min:2'],
+                ]
+            ),
             'pause_process' => new CommandDefinition(
                 name: 'pause_process',
                 riskLevel: 'high',

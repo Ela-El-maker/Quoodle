@@ -19,6 +19,7 @@ class RuntimeCapabilities
         'screenshot',
         'list_processes',
         'kill_process',
+        'kill_process_tree',
         
         'list_services',
         'list_connections',

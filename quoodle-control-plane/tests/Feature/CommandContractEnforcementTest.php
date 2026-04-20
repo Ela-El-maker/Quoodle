@@ -137,6 +137,7 @@ class CommandContractEnforcementTest extends TestCase
         $this->assertContains('screenshot', $runtimeSupported);
         $this->assertContains('list_processes', $runtimeSupported);
         $this->assertContains('kill_process', $runtimeSupported);
+        $this->assertContains('kill_process_tree', $runtimeSupported);
         $this->assertContains('list_services', $runtimeSupported);
         $this->assertContains('list_connections', $runtimeSupported);
         $this->assertContains('list_mounts', $runtimeSupported);
@@ -152,6 +153,7 @@ class CommandContractEnforcementTest extends TestCase
         $this->assertContains('reboot_device', $canonical);
         $this->assertContains('shutdown_device', $canonical);
         $this->assertContains('kill_process', $canonical);
+        $this->assertContains('kill_process_tree', $canonical);
         $this->assertNotContains('sysinfo', $canonical);
         $this->assertNotContains('logout', $canonical);
         $this->assertNotContains('reboot', $canonical);
@@ -161,6 +163,7 @@ class CommandContractEnforcementTest extends TestCase
         $this->assertArrayNotHasKey('lock_screen', $rejectionReasons);
         $this->assertArrayNotHasKey('logout_user', $rejectionReasons);
         $this->assertArrayNotHasKey('kill_process', $rejectionReasons);
+        $this->assertArrayNotHasKey('kill_process_tree', $rejectionReasons);
     }
 
     /** @test */
@@ -257,6 +260,34 @@ class CommandContractEnforcementTest extends TestCase
             'pid' => 1234,
             'signal' => 9,
         ];
+
+        $this->withHeaders($this->makeHeaders($admin))
+            ->postJson('/api/commands', $payload)
+            ->assertCreated()
+            ->assertJsonPath('status', 'accepted');
+    }
+
+    /** @test */
+    public function kill_process_tree_is_runtime_supported_and_accepted(): void
+    {
+        Queue::fake();
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $device = $this->createOwnedDevice($admin, 'dev-kill-process-tree');
+
+        $payload = $this->commandPayload($device, 'kill_process_tree');
+        $payload['params'] = [
+            'pid' => 1234,
+        ];
+        $payload['sensitive'] = true;
+
+        $secret = app(TOTPService::class)->generateSecretBase32();
+        $code = app(TOTPService::class)->generate($secret, intdiv(time(), 30));
+        $admin->update([
+            'two_factor_enabled' => true,
+            'two_factor_secret' => $secret,
+        ]);
+        $payload['two_factor_code'] = $code;
 
         $this->withHeaders($this->makeHeaders($admin))
             ->postJson('/api/commands', $payload)
