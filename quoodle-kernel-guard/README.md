@@ -51,6 +51,14 @@ From `quoodle-kernel-guard`:
 sc.exe query QuoodleKernel
 ```
 
+Driver start mode defaults to **boot** (`Start=0`) in `install_kmdf_driver.ps1`.
+
+- Default (boot start): loads during boot sequence before login.
+- Override for local testing:
+```powershell
+.\scripts\install_kmdf_driver.ps1 -HmacKey "<shared-secret>" -StartType demand
+```
+
 Expected artifact:
 
 - `driver\kmdf\x64\Release\quoodle_kmdf.sys`

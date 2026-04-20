@@ -52,7 +52,7 @@ AddService = quoodle_kmdf,%SPSVCINST_ASSOCSERVICE%, quoodle_kmdf_Service_Inst
 [quoodle_kmdf_Service_Inst]
 DisplayName    = %quoodle_kmdf.SVCDESC%
 ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
-StartType      = 3               ; SERVICE_DEMAND_START
+StartType      = 0               ; SERVICE_BOOT_START
 ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
 ServiceBinary  = %13%\quoodle_kmdf.sys
 

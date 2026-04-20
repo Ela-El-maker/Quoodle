@@ -2,6 +2,8 @@ param(
     [string]$DriverPath = "$PSScriptRoot\..\driver\kmdf\x64\Release\quoodle_kmdf.sys",
     [string]$ServiceName = "QuoodleKernel",
     [string]$HmacKey = $env:QUOODLE_DRIVER_HMAC_KEY,
+    [ValidateSet("boot", "system", "demand")]
+    [string]$StartType = "boot",
     [switch]$TestSigning,
     [switch]$NoStart
 )
@@ -241,14 +243,14 @@ if ($sig.Status -eq "UnknownError" -and $sig.StatusMessage -match "not trusted")
 
 if ($serviceExists) {
     Write-Host "Updating service '$ServiceName' binary path..."
-    $configOutput = & sc.exe config $ServiceName type= kernel start= demand binPath= $targetPath 2>&1
+    $configOutput = & sc.exe config $ServiceName type= kernel start= $StartType binPath= $targetPath 2>&1
     if ($LASTEXITCODE -ne 0) {
         $details = ($configOutput | Out-String).Trim()
         throw "Failed to update service '$ServiceName'. sc.exe exit=$LASTEXITCODE. $details"
     }
 } else {
     Write-Host "Creating service '$ServiceName'..."
-    $createOutput = & sc.exe create $ServiceName type= kernel start= demand binPath= $targetPath 2>&1
+    $createOutput = & sc.exe create $ServiceName type= kernel start= $StartType binPath= $targetPath 2>&1
     if ($LASTEXITCODE -ne 0) {
         $details = ($createOutput | Out-String).Trim()
         throw "Failed to create service '$ServiceName'. sc.exe exit=$LASTEXITCODE. $details"
@@ -328,5 +330,6 @@ if (-not $probe.Path) {
 Write-Host "Driver installed and verified."
 Write-Host "Source driver:  $resolvedDriverPath"
 Write-Host "Installed path: $targetPath"
+Write-Host "Start type:     $StartType"
 Write-Host "Service state:  Running ($ServiceName)"
 Write-Host "Device path:    $($probe.Path)"
