@@ -105,6 +105,14 @@ Common operations:
 
 Status payload fields include connectivity/auth dimensions, effective identity, and service mode indicators.
 
+### 3.4 Filesystem Discovery Behavior (`list_files`)
+
+- If `path` is omitted/blank, agent defaults discovery scope to `C:\Users`.
+- If operators need full-drive traversal, they must set `path` explicitly to `C:\`.
+- For explicit `C:\` recursive scans, traversal prioritizes the `Users` branch first, then other top-level directories alphabetically.
+- Result bounding still applies (`limit` + `partial=true`) to protect runtime memory and response size.
+- Wire contract is unchanged: no new parameters were introduced.
+
 ## 4. Build Strategy
 
 Prerequisites:

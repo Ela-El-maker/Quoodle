@@ -181,12 +181,24 @@ From control UI, send:
 
 - `collect_system_info`
 - `list_processes`
+- `list_files`
 
 Expected:
 
 - command trace progresses through all stages
 - result status becomes `completed`
 - no lingering `queued` with reason `device not connected`
+
+`list_files` behavior:
+
+- Empty/omitted `path` defaults to `C:\Users` (users-first discovery).
+- To scan from full root, dispatch with explicit params like:
+
+```json
+{"path":"C:\\","recursive":true,"max_depth":4,"limit":250}
+```
+
+- If `partial=true`, rerun with a narrower path/depth or higher limit.
 
 ## 11. Troubleshooting
 
