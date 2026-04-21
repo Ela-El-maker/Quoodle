@@ -75,6 +75,50 @@ function Wait-ServiceDeleted {
     return $false
 }
 
+function Wait-ServiceStopped {
+    param(
+        [string]$Name,
+        [int]$TimeoutSeconds = 20
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
+        if (-not $svc -or $svc.Status -eq [System.ServiceProcess.ServiceControllerStatus]::Stopped) {
+            return $true
+        }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+
+    return $false
+}
+
+function Stop-ServiceIfPresent {
+    param(
+        [string]$Name,
+        [int]$TimeoutSeconds = 20
+    )
+
+    $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    if (-not $svc) {
+        return
+    }
+
+    if ($svc.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Stopped) {
+        Write-Host "Stopping service '$Name'..."
+        try {
+            Stop-Service -Name $Name -Force -ErrorAction SilentlyContinue
+        } catch {
+            # Best effort; fallback to sc stop below
+        }
+
+        & sc.exe stop $Name *> $null
+        if (-not (Wait-ServiceStopped -Name $Name -TimeoutSeconds $TimeoutSeconds)) {
+            Write-Warning "Service '$Name' did not fully stop within ${TimeoutSeconds}s."
+        }
+    }
+}
+
 function Ensure-NativeDeviceApi {
     if (([System.Management.Automation.PSTypeName]'Quoodle.NativeDeviceApi').Type) {
         return
@@ -215,13 +259,36 @@ if ($TestSigning) {
 $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 $serviceExists = $null -ne $existingService
 if ($serviceExists) {
-    Write-Host "Service '$ServiceName' already exists; attempting in-place update."
-    & sc.exe stop $ServiceName *> $null
-    Start-Sleep -Milliseconds 800
+    Write-Host "Service '$ServiceName' already exists; stopping and recreating with requested configuration."
+    # Stop user-mode agent first so it releases any open driver handles.
+    Stop-ServiceIfPresent -Name "QuoodleAgent" -TimeoutSeconds 20
+    Stop-ServiceIfPresent -Name $ServiceName -TimeoutSeconds 20
+
+    $deleteOutput = & sc.exe delete $ServiceName 2>&1
+    $deleteCode = $LASTEXITCODE
+    if ($deleteCode -eq 1072) {
+        Write-Warning "Service '$ServiceName' is already marked for deletion (1072); waiting for SCM to finalize removal..."
+    } elseif ($deleteCode -ne 0 -and $deleteCode -ne 1060) {
+        $details = ($deleteOutput | Out-String).Trim()
+        throw "Failed to delete existing service '$ServiceName'. sc.exe exit=$deleteCode. $details"
+    }
+
+    if (-not (Wait-ServiceDeleted -Name $ServiceName -TimeoutSeconds 20)) {
+        throw "Service '$ServiceName' is marked for deletion but still present. Close Services.msc / any open MMC windows, stop tools holding service handles, then retry (or reboot once)."
+    }
+
+    $serviceExists = $false
 }
 
-$targetDir = "C:\ProgramData\Quoodle"
-$targetPath = Join-Path $targetDir ("quoodle_kmdf_{0}.sys" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
+$driverFileName = "quoodle_kmdf_{0}.sys" -f (Get-Date -Format "yyyyMMdd_HHmmss")
+if ($StartType -in @("boot", "system")) {
+    # BOOT_START / SYSTEM_START drivers must be loadable very early; keep binary under Windows drivers dir.
+    $targetDir = Join-Path $env:WINDIR "System32\drivers"
+} else {
+    $targetDir = "C:\ProgramData\Quoodle"
+}
+
+$targetPath = Join-Path $targetDir $driverFileName
 New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
 try {
     Copy-Item -Force $resolvedDriverPath $targetPath
@@ -230,6 +297,12 @@ try {
     Copy-Item -Force $resolvedDriverPath $versionedPath
     $targetPath = $versionedPath
     Write-Warning "Primary driver path was locked. Using versioned install path: $targetPath"
+}
+
+$serviceBinPath = if ($StartType -in @("boot", "system")) {
+    "\SystemRoot\System32\drivers\{0}" -f ([System.IO.Path]::GetFileName($targetPath))
+} else {
+    "\??\{0}" -f $targetPath
 }
 
 $sig = Get-AuthenticodeSignature -FilePath $targetPath
@@ -241,20 +314,11 @@ if ($sig.Status -eq "UnknownError" -and $sig.StatusMessage -match "not trusted")
     throw "Driver signature is present but not trusted on this machine (thumbprint: $thumbprint). Import signer cert to LocalMachine\\Root and LocalMachine\\TrustedPublisher, then retry."
 }
 
-if ($serviceExists) {
-    Write-Host "Updating service '$ServiceName' binary path..."
-    $configOutput = & sc.exe config $ServiceName type= kernel start= $StartType binPath= $targetPath 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        $details = ($configOutput | Out-String).Trim()
-        throw "Failed to update service '$ServiceName'. sc.exe exit=$LASTEXITCODE. $details"
-    }
-} else {
-    Write-Host "Creating service '$ServiceName'..."
-    $createOutput = & sc.exe create $ServiceName type= kernel start= $StartType binPath= $targetPath 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        $details = ($createOutput | Out-String).Trim()
-        throw "Failed to create service '$ServiceName'. sc.exe exit=$LASTEXITCODE. $details"
-    }
+Write-Host "Creating service '$ServiceName'..."
+$createOutput = & sc.exe create $ServiceName type= kernel start= $StartType binPath= $serviceBinPath 2>&1
+if ($LASTEXITCODE -ne 0) {
+    $details = ($createOutput | Out-String).Trim()
+    throw "Failed to create service '$ServiceName'. sc.exe exit=$LASTEXITCODE. $details"
 }
 
 $serviceCheck = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
@@ -330,6 +394,7 @@ if (-not $probe.Path) {
 Write-Host "Driver installed and verified."
 Write-Host "Source driver:  $resolvedDriverPath"
 Write-Host "Installed path: $targetPath"
+Write-Host "Service image:  $serviceBinPath"
 Write-Host "Start type:     $StartType"
 Write-Host "Service state:  Running ($ServiceName)"
 Write-Host "Device path:    $($probe.Path)"
