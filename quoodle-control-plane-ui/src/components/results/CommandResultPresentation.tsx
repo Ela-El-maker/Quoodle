@@ -547,7 +547,8 @@ function FileExplorerSection({
     <div className="space-y-3 max-w-full overflow-x-hidden">
       {filesystem.partial ? (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-          Partial filesystem snapshot. Showing a bounded result set for this command.
+          Partial filesystem snapshot. Showing a bounded result set for this command. Default scope is <span className="font-mono">C:\Users</span>; use
+          {' '}<span className="font-mono">{`{"path":"C:\\\\"}`}</span>{' '}to request a full-drive root scan.
         </div>
       ) : null}
       {hydrationError ? (

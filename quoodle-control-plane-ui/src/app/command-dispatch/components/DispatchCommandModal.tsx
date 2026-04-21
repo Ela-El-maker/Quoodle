@@ -70,6 +70,8 @@ function methodDescription(method: string): string {
       return 'Collect host profile and operating system information.';
     case 'list_processes':
       return 'List active processes from the target endpoint.';
+    case 'list_files':
+      return 'Default scope is C:\\Users when path is omitted. Set path to C:\\ for a full-drive scan.';
     case 'network_info':
       return 'Collect active network interfaces and routes.';
     default:

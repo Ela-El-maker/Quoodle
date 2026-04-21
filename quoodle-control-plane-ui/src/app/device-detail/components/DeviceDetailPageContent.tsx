@@ -1398,6 +1398,11 @@ export default function DeviceDetailPageContent() {
                         rows={3}
                         className="w-full px-3 py-2 text-xs font-mono bg-muted/60 border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
                       />
+                      {activeCommand.id === 'list_files' && (
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          Default discovery is <span className="font-mono">C:\Users</span> when no path is set. Use <span className="font-mono">{`{"path":"C:\\\\"}`}</span> for full-drive scan.
+                        </p>
+                      )}
                     </div>
                     {['high', 'critical'].includes(activeCommand.risk) && (
                       <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-lg p-3">
