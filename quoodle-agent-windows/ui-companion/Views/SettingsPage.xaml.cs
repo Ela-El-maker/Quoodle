@@ -283,6 +283,34 @@ public sealed partial class SettingsPage : Page
         _vm.NotificationRateLimitWindow = RateLimitWindowBox.Text;
     }
 
+    private void OnJumpToSection(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.Tag is not string route)
+        {
+            return;
+        }
+
+        FrameworkElement? target = route switch
+        {
+            "identity" => IdentitySection,
+            "transport" => TransportSection,
+            "security" => SecuritySection,
+            "telemetry" => TelemetrySection,
+            "notifications" => NotificationsSection,
+            _ => null
+        };
+
+        if (target is null)
+        {
+            return;
+        }
+
+        var transform = target.TransformToVisual(SettingsRootGrid);
+        var point = transform.TransformPoint(new Windows.Foundation.Point(0, 0));
+        var targetOffset = Math.Max(0, point.Y - 12);
+        _ = SettingsScrollViewer.ChangeView(null, targetOffset, null, true);
+    }
+
     private void OnSaveTransportClick(object sender, RoutedEventArgs e)
     {
         if (_vm.SaveTransportCommand.CanExecute(null))

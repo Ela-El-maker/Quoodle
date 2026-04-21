@@ -253,6 +253,10 @@ internal sealed class TestProvider : IAgentStateProvider
     {
     }
 
+    public void HardResetPairing()
+    {
+    }
+
     public void ResetUiSession()
     {
     }

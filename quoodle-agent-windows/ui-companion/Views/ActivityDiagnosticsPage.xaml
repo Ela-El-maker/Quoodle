@@ -1,4 +1,4 @@
-<Page
+﻿<Page
     x:Class="Quoodle.Agent.UiCompanion.Views.ActivityDiagnosticsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -7,13 +7,14 @@
     xmlns:controls="using:Quoodle.Agent.UiCompanion.Controls"
     xmlns:viewmodels="using:Quoodle.Agent.UiCompanion.ViewModels"
     mc:Ignorable="d"
+    KeyDown="OnPageKeyDown"
     Background="{ThemeResource AppBackgroundBrush}">
 
     <Page.Resources>
-        <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#FF2A303C" />
-        <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#FF323947" />
-        <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="#FF232936" />
-        <SolidColorBrush x:Key="ListViewItemForegroundSelected" Color="#FFE9EDF5" />
+        <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="{ThemeResource Color.SurfaceAlt}" />
+        <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="{ThemeResource Color.NavHoverBackground}" />
+        <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="{ThemeResource Color.NavHoverBackground}" />
+        <SolidColorBrush x:Key="ListViewItemForegroundSelected" Color="{ThemeResource Color.TextPrimary}" />
 
         <Style x:Key="DiagnosticsTabButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent" />
@@ -28,9 +29,9 @@
             <Setter Property="Background" Value="{ThemeResource SurfaceBrush}" />
             <Setter Property="BorderBrush" Value="{ThemeResource InputBorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="14,8" />
-            <Setter Property="CornerRadius" Value="10" />
-            <Setter Property="FontSize" Value="15" />
+            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="FontSize" Value="14" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
 
@@ -41,25 +42,25 @@
             <Setter Property="Padding" Value="0" />
             <Setter Property="HorizontalAlignment" Value="Left" />
             <Setter Property="Foreground" Value="{ThemeResource TextMutedBrush}" />
-            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
 
         <Style x:Key="DiagnosticsTableCellStyle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{ThemeResource TextSecondaryBrush}" />
-            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontSize" Value="13" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
 
         <Style x:Key="PagerButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="#1B212D" />
+            <Setter Property="Background" Value="{ThemeResource SurfaceAltBrush}" />
             <Setter Property="BorderBrush" Value="{ThemeResource BorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="8" />
             <Setter Property="Foreground" Value="{ThemeResource TextSecondaryBrush}" />
-            <Setter Property="Padding" Value="14,6" />
-            <Setter Property="FontSize" Value="15" />
+            <Setter Property="Padding" Value="12,5" />
+            <Setter Property="FontSize" Value="14" />
         </Style>
 
         <Style x:Key="DiagnosticsRowItemStyle" TargetType="ListViewItem">
@@ -71,21 +72,41 @@
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Margin" Value="0" />
         </Style>
+
+        <Style x:Key="DiagnosticsListViewStyle" TargetType="ListView">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="SelectionMode" Value="Single" />
+            <Setter Property="ItemContainerStyle" Value="{StaticResource DiagnosticsRowItemStyle}" />
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Hidden" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="ScrollViewer.IsDeferredScrollingEnabled" Value="True" />
+            <Setter Property="CanDragItems" Value="False" />
+            <Setter Property="CanReorderItems" Value="False" />
+            <Setter Property="IsHoldingEnabled" Value="False" />
+            <Setter Property="ItemsPanel">
+                <Setter.Value>
+                    <ItemsPanelTemplate>
+                        <ItemsStackPanel />
+                    </ItemsPanelTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Page.Resources>
 
-    <Grid Padding="18,8,18,18" MaxWidth="1336" RowSpacing="14">
+    <Grid x:Name="ActivityRootGrid" Padding="14,6,14,14" MaxWidth="1336" RowSpacing="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <StackPanel Spacing="5">
+        <StackPanel Spacing="3">
             <TextBlock Text="Activity &amp; Diagnostics" Style="{StaticResource PageTitleTextStyle}" />
             <TextBlock Text="Full audit trail of WSS messages, command history, and kernel events." Style="{StaticResource PageSubtitleTextStyle}" />
         </StackPanel>
 
-        <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="10">
+        <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="8">
             <Grid ColumnSpacing="10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -98,9 +119,9 @@
                     Grid.Column="0"
                     Click="OnWssTabClick"
                     Style="{StaticResource DiagnosticsTabButtonStyle}">
-                    <Border x:Name="WssTabSurface" CornerRadius="10" Padding="18,11" BorderThickness="1">
+                    <Border x:Name="WssTabSurface" CornerRadius="10" Padding="14,8" BorderThickness="1">
                         <StackPanel Orientation="Horizontal" Spacing="10">
-                            <TextBlock x:Name="WssTabLabelText" Text="WSS Message Log" FontWeight="SemiBold" FontSize="15" />
+                            <TextBlock x:Name="WssTabLabelText" Text="WSS Message Log" FontWeight="SemiBold" FontSize="14" />
                             <Border x:Name="WssTabBadge" CornerRadius="7" Padding="8,2">
                                 <TextBlock x:Name="WssTabCountText" FontSize="12" FontWeight="SemiBold" />
                             </Border>
@@ -113,9 +134,9 @@
                     Grid.Column="1"
                     Click="OnCommandTabClick"
                     Style="{StaticResource DiagnosticsTabButtonStyle}">
-                    <Border x:Name="CommandTabSurface" CornerRadius="10" Padding="18,11" BorderThickness="1">
+                    <Border x:Name="CommandTabSurface" CornerRadius="10" Padding="14,8" BorderThickness="1">
                         <StackPanel Orientation="Horizontal" Spacing="10">
-                            <TextBlock x:Name="CommandTabLabelText" Text="Command History" FontWeight="SemiBold" FontSize="15" />
+                            <TextBlock x:Name="CommandTabLabelText" Text="Command History" FontWeight="SemiBold" FontSize="14" />
                             <Border x:Name="CommandTabBadge" CornerRadius="7" Padding="8,2">
                                 <TextBlock x:Name="CommandTabCountText" FontSize="12" FontWeight="SemiBold" />
                             </Border>
@@ -128,9 +149,9 @@
                     Grid.Column="2"
                     Click="OnKernelTabClick"
                     Style="{StaticResource DiagnosticsTabButtonStyle}">
-                    <Border x:Name="KernelTabSurface" CornerRadius="10" Padding="18,11" BorderThickness="1">
+                    <Border x:Name="KernelTabSurface" CornerRadius="10" Padding="14,8" BorderThickness="1">
                         <StackPanel Orientation="Horizontal" Spacing="10">
-                            <TextBlock x:Name="KernelTabLabelText" Text="Kernel Events" FontWeight="SemiBold" FontSize="15" />
+                            <TextBlock x:Name="KernelTabLabelText" Text="Kernel Events" FontWeight="SemiBold" FontSize="14" />
                             <Border x:Name="KernelTabBadge" CornerRadius="7" Padding="8,2">
                                 <TextBlock x:Name="KernelTabCountText" FontSize="12" FontWeight="SemiBold" />
                             </Border>
@@ -140,13 +161,8 @@
             </Grid>
         </Border>
 
-        <Grid Grid.Row="2" ColumnSpacing="14">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="2.45*" />
-                <ColumnDefinition Width="1.25*" />
-            </Grid.ColumnDefinitions>
-
-            <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}" Padding="0">
+        <Grid x:Name="DiagnosticsContentGrid" Grid.Row="2" ColumnSpacing="14">
+            <Border Style="{StaticResource CardBorderStyle}" Padding="0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -155,11 +171,7 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <Grid x:Name="ToolbarGrid" Padding="16,14" ColumnSpacing="10">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
+                    <Grid x:Name="ToolbarGrid" Padding="12,10" ColumnSpacing="8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition x:Name="ToolbarSearchColumn" Width="2.2*" />
                             <ColumnDefinition x:Name="ToolbarFilter1Column" Width="1.2*" />
@@ -172,32 +184,30 @@
                             x:Name="SearchBox"
                             Grid.Column="0"
                             PlaceholderText="Search"
-                            FontSize="15"
+                            FontSize="14"
                             TextChanged="OnSearchTextChanged" />
 
                         <ComboBox
                             x:Name="Filter1Box"
                             Grid.Column="1"
-                            FontSize="15"
+                            FontSize="14"
                             SelectionChanged="OnFilter1Changed" />
 
                         <ComboBox
                             x:Name="Filter2Box"
                             Grid.Column="2"
-                            FontSize="15"
+                            FontSize="14"
                             SelectionChanged="OnFilter2Changed" />
 
                         <ComboBox
                             x:Name="Filter3Box"
                             Grid.Column="3"
-                            FontSize="15"
+                            FontSize="14"
                             SelectionChanged="OnFilter3Changed" />
 
                         <Button
                             x:Name="ExportJsonButton"
-                            Grid.Row="1"
                             Grid.Column="4"
-                            Margin="0,10,0,0"
                             Click="OnExportJson"
                             Style="{StaticResource DiagnosticsToolButtonStyle}">
                             <StackPanel Orientation="Horizontal" Spacing="8">
@@ -230,9 +240,8 @@
                                 <Grid
                                     x:Name="WssHeaderRow"
                                     Grid.Row="0"
-                                    MinWidth="1200"
                                     Padding="16,11"
-                                    Background="#AA0E1119"
+                                    Background="{ThemeResource SurfaceAltBrush}"
                                     ColumnSpacing="10">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="90" />
@@ -297,9 +306,8 @@
                                 <Grid
                                     x:Name="CommandHeaderRow"
                                     Grid.Row="0"
-                                    MinWidth="1440"
                                     Padding="16,11"
-                                    Background="#AA0E1119"
+                                    Background="{ThemeResource SurfaceAltBrush}"
                                     ColumnSpacing="10"
                                     Visibility="Collapsed">
                                     <Grid.ColumnDefinitions>
@@ -381,9 +389,8 @@
                                 <Grid
                                     x:Name="KernelHeaderRow"
                                     Grid.Row="0"
-                                    MinWidth="1500"
                                     Padding="16,11"
-                                    Background="#AA0E1119"
+                                    Background="{ThemeResource SurfaceAltBrush}"
                                     ColumnSpacing="10"
                                     Visibility="Collapsed">
                                     <Grid.ColumnDefinitions>
@@ -465,18 +472,12 @@
                                 <ListView
                                     x:Name="WssListView"
                                     Grid.Row="1"
-                                    MinWidth="1200"
-                                    Background="Transparent"
-                                    BorderThickness="0"
-                                    SelectionMode="Single"
                                     SelectionChanged="OnWssRowSelectionChanged"
-                                    ScrollViewer.VerticalScrollBarVisibility="Hidden"
-                                    ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                    ItemContainerStyle="{StaticResource DiagnosticsRowItemStyle}">
+                                    Style="{StaticResource DiagnosticsListViewStyle}">
                                     <ListView.ItemTemplate>
                                         <DataTemplate x:DataType="viewmodels:WssMessageLogRowView">
-                                            <Border BorderBrush="#1D2432" BorderThickness="0,0,0,1">
-                                                <Grid Padding="16,11" ColumnSpacing="10">
+                                            <Border BorderBrush="{ThemeResource BorderBrush}" BorderThickness="0,0,0,1">
+                                                <Grid Padding="12,9" ColumnSpacing="10">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="90" />
                                                         <ColumnDefinition Width="170" />
@@ -503,19 +504,13 @@
                                 <ListView
                                     x:Name="CommandListView"
                                     Grid.Row="1"
-                                    MinWidth="1440"
-                                    Background="Transparent"
-                                    BorderThickness="0"
-                                    SelectionMode="Single"
                                     SelectionChanged="OnCommandRowSelectionChanged"
-                                    ScrollViewer.VerticalScrollBarVisibility="Hidden"
-                                    ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                    ItemContainerStyle="{StaticResource DiagnosticsRowItemStyle}"
+                                    Style="{StaticResource DiagnosticsListViewStyle}"
                                     Visibility="Collapsed">
                                     <ListView.ItemTemplate>
                                         <DataTemplate x:DataType="viewmodels:CommandHistoryRowView">
-                                            <Border BorderBrush="#1D2432" BorderThickness="0,0,0,1">
-                                                <Grid Padding="16,11" ColumnSpacing="10">
+                                            <Border BorderBrush="{ThemeResource BorderBrush}" BorderThickness="0,0,0,1">
+                                                <Grid Padding="12,9" ColumnSpacing="10">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="170" />
                                                         <ColumnDefinition Width="150" />
@@ -546,19 +541,13 @@
                                 <ListView
                                     x:Name="KernelListView"
                                     Grid.Row="1"
-                                    MinWidth="1500"
-                                    Background="Transparent"
-                                    BorderThickness="0"
-                                    SelectionMode="Single"
                                     SelectionChanged="OnKernelRowSelectionChanged"
-                                    ScrollViewer.VerticalScrollBarVisibility="Hidden"
-                                    ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                    ItemContainerStyle="{StaticResource DiagnosticsRowItemStyle}"
+                                    Style="{StaticResource DiagnosticsListViewStyle}"
                                     Visibility="Collapsed">
                                     <ListView.ItemTemplate>
                                         <DataTemplate x:DataType="viewmodels:KernelEventRowView">
-                                            <Border BorderBrush="#1D2432" BorderThickness="0,0,0,1">
-                                                <Grid Padding="16,11" ColumnSpacing="10">
+                                            <Border BorderBrush="{ThemeResource BorderBrush}" BorderThickness="0,0,0,1">
+                                                <Grid Padding="12,9" ColumnSpacing="10">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="110" />
                                                         <ColumnDefinition Width="120" />
@@ -591,7 +580,7 @@
 
                     <Border Grid.Row="3" Height="1" Background="{ThemeResource BorderBrush}" />
 
-                    <Grid Grid.Row="3" Margin="16,11,16,11">
+                    <Grid Grid.Row="3" Margin="12,9,12,9">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
@@ -625,60 +614,60 @@
                 </Grid>
             </Border>
 
-            <Border Grid.Column="1" Style="{StaticResource CardBorderStyle}" Padding="0">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
+            <Grid x:Name="RawOverlayLayer" Visibility="Collapsed">
+                <Border
+                    x:Name="RawOverlayHost"
+                    Style="{StaticResource CardBorderStyle}"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Stretch"
+                    Margin="12"
+                    Width="480"
+                    MaxWidth="520">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
 
-                    <Grid Padding="16,14">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
+                        <Grid Padding="16,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
 
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE943;" Foreground="{ThemeResource TextMutedBrush}" />
-                            <TextBlock Text="Raw Message" Style="{StaticResource SectionTitleTextStyle}" />
-                        </StackPanel>
-
-                        <Button
-                            x:Name="CopyRawButton"
-                            Grid.Column="1"
-                            Click="OnCopyRawClick"
-                            Style="{StaticResource DiagnosticsTabButtonStyle}">
-                            <StackPanel Orientation="Horizontal" Spacing="7">
-                                <FontIcon Glyph="&#xE8C8;" Foreground="{ThemeResource TextMutedBrush}" />
-                                <TextBlock Text="Copy" Style="{StaticResource PageSubtitleTextStyle}" />
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="&#xE943;" Foreground="{ThemeResource TextMutedBrush}" />
+                                <TextBlock Text="Raw Message" FontSize="15" FontWeight="SemiBold" />
                             </StackPanel>
-                        </Button>
-                    </Grid>
 
-                    <Border Grid.Row="0" VerticalAlignment="Bottom" Height="1" Background="{ThemeResource BorderBrush}" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                <Button
+                                    x:Name="CopyRawButton"
+                                    Click="OnCopyRawClick"
+                                    Style="{StaticResource DiagnosticsTabButtonStyle}">
+                                    <StackPanel Orientation="Horizontal" Spacing="7">
+                                        <FontIcon Glyph="&#xE8C8;" Foreground="{ThemeResource TextMutedBrush}" />
+                                        <TextBlock Text="Copy" Style="{StaticResource PageSubtitleTextStyle}" />
+                                    </StackPanel>
+                                </Button>
 
-                    <Grid Grid.Row="1">
-                        <StackPanel
-                            x:Name="RawEmptyStatePanel"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            Spacing="8"
-                            Margin="26">
-                            <TextBlock Text="&lt;/&gt;" FontSize="32" Foreground="{ThemeResource TextMutedBrush}" HorizontalAlignment="Center" />
-                            <TextBlock Text="No message selected" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" />
-                            <TextBlock
-                                Text="Click any row in the log tables to inspect its raw JSON envelope."
-                                TextWrapping="Wrap"
-                                TextAlignment="Center"
-                                Style="{StaticResource PageSubtitleTextStyle}" />
-                        </StackPanel>
+                                <Button
+                                    x:Name="CloseRawOverlayButton"
+                                    Click="OnCloseRawOverlayClick"
+                                    Style="{StaticResource DiagnosticsTabButtonStyle}">
+                                    <FontIcon Glyph="&#xE711;" Foreground="{ThemeResource TextMutedBrush}" />
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+
+                        <Border Grid.Row="0" VerticalAlignment="Bottom" Height="1" Background="{ThemeResource BorderBrush}" />
 
                         <ScrollViewer
                             x:Name="RawJsonScrollViewer"
+                            Grid.Row="1"
                             Margin="18,16,18,16"
-                            VerticalScrollBarVisibility="Auto"
-                            Visibility="Collapsed">
+                            VerticalScrollBarVisibility="Auto">
                             <TextBlock
                                 x:Name="RawJsonTextBlock"
                                 TextWrapping="Wrap"
@@ -687,17 +676,18 @@
                                 FontSize="15"
                                 LineHeight="22" />
                         </ScrollViewer>
+
+                        <Border Grid.Row="2" Height="1" Background="{ThemeResource BorderBrush}" />
+
+                        <TextBlock
+                            x:Name="RawSizeTextBlock"
+                            Grid.Row="2"
+                            Margin="16,10,16,10"
+                            Style="{StaticResource MutedTextStyle}" />
                     </Grid>
-
-                    <Border Grid.Row="2" Height="1" Background="{ThemeResource BorderBrush}" />
-
-                    <TextBlock
-                        x:Name="RawSizeTextBlock"
-                        Grid.Row="2"
-                        Margin="16,10,16,10"
-                        Style="{StaticResource MutedTextStyle}" />
-                </Grid>
-            </Border>
+                </Border>
+            </Grid>
         </Grid>
     </Grid>
 </Page>
+

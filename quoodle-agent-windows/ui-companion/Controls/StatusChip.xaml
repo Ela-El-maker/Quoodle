@@ -7,11 +7,10 @@
     mc:Ignorable="d">
     <Border
         x:Name="ChipBorder"
+        Style="{StaticResource StatusChipBorderStyle}"
         Padding="12,6"
         CornerRadius="16"
-        BorderThickness="1"
-        Background="{ThemeResource ChipNeutralBackgroundBrush}"
-        BorderBrush="{ThemeResource InputBorderBrush}">
+        BorderThickness="1">
         <StackPanel x:Name="ChipContent" Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
             <Ellipse
                 x:Name="ToneDot"

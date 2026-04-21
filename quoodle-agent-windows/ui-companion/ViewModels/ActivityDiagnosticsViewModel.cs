@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Text;
 using System.Text.Json;
-using Microsoft.UI.Dispatching;
 using Quoodle.Agent.UiCompanion.Infrastructure;
 using Quoodle.Agent.UiCompanion.Models;
 using Quoodle.Agent.UiCompanion.Services;
@@ -81,7 +80,6 @@ public sealed class ActivityDiagnosticsViewModel : ObservableObject, IDisposable
 
     private readonly AgentStateStore _store;
     private readonly Dictionary<ActivityDiagnosticsTab, TabQueryState> _tabState;
-    private readonly DispatcherQueue? _dispatcherQueue;
 
     private AgentStateSnapshot _snapshot = AgentStateSnapshot.CreateInitial();
     private ActivityDiagnosticsTab _activeTab = ActivityDiagnosticsTab.WssMessageLog;
@@ -115,7 +113,6 @@ public sealed class ActivityDiagnosticsViewModel : ObservableObject, IDisposable
     public ActivityDiagnosticsViewModel(AgentStateStore store)
     {
         _store = store;
-        _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         _store.SnapshotChanged += HandleSnapshotChanged;
 
         _tabState = new()
@@ -432,18 +429,6 @@ public sealed class ActivityDiagnosticsViewModel : ObservableObject, IDisposable
 
     private void HandleSnapshotChanged(object? sender, AgentStateSnapshot snapshot)
     {
-        if (_dispatcherQueue is null)
-        {
-            return;
-        }
-
-        var currentQueue = DispatcherQueue.GetForCurrentThread();
-        if (!ReferenceEquals(currentQueue, _dispatcherQueue))
-        {
-            _ = _dispatcherQueue.TryEnqueue(() => HandleSnapshotChanged(sender, snapshot));
-            return;
-        }
-
         _snapshot = snapshot;
         Rebuild();
     }
@@ -575,8 +560,8 @@ public sealed class ActivityDiagnosticsViewModel : ObservableObject, IDisposable
             WssRows.Add(MapWssRow(row));
         }
 
-        CommandRows.Clear();
-        KernelRows.Clear();
+        ClearCollectionIfNeeded(CommandRows);
+        ClearCollectionIfNeeded(KernelRows);
 
         UpdateFooter(totalRows, totalPages, state.PageIndex, "messages");
     }
@@ -601,8 +586,8 @@ public sealed class ActivityDiagnosticsViewModel : ObservableObject, IDisposable
             CommandRows.Add(MapCommandRow(row));
         }
 
-        WssRows.Clear();
-        KernelRows.Clear();
+        ClearCollectionIfNeeded(WssRows);
+        ClearCollectionIfNeeded(KernelRows);
 
         UpdateFooter(totalRows, totalPages, state.PageIndex, "commands");
     }
@@ -626,8 +611,8 @@ public sealed class ActivityDiagnosticsViewModel : ObservableObject, IDisposable
             KernelRows.Add(MapKernelRow(row));
         }
 
-        WssRows.Clear();
-        CommandRows.Clear();
+        ClearCollectionIfNeeded(WssRows);
+        ClearCollectionIfNeeded(CommandRows);
 
         UpdateFooter(totalRows, totalPages, state.PageIndex, "events");
     }
@@ -651,6 +636,14 @@ public sealed class ActivityDiagnosticsViewModel : ObservableObject, IDisposable
         PagePill = (pageIndex + 1).ToString();
         CanPrevPage = pageIndex > 0;
         CanNextPage = pageIndex + 1 < totalPages;
+    }
+
+    private static void ClearCollectionIfNeeded<T>(ObservableCollection<T> collection)
+    {
+        if (collection.Count > 0)
+        {
+            collection.Clear();
+        }
     }
 
     private static bool MatchesSearch(string query, params string?[] fields)

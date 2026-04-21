@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.Win32;
 using Quoodle.Agent.UiCompanion.Models;
 using Quoodle.Agent.UiCompanion.Services;
@@ -14,6 +15,7 @@ public sealed partial class MainWindow : Window
     private const string NavPreferenceFileName = "nav-route.txt";
     private static readonly HashSet<string> CoreRoutes = new(StringComparer.OrdinalIgnoreCase)
     {
+        "overview",
         "dashboard",
         "quick-status",
         "activity",
@@ -26,6 +28,7 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        ApplySystemBackdrop();
         ApplySystemTheme();
 
         _stateStore = App.StateStore;
@@ -37,6 +40,7 @@ public sealed partial class MainWindow : Window
 
         AppNav.Loaded += (_, _) =>
         {
+            UpdatePaneVisualState(AppNav.DisplayMode);
             var route = ResolveInitialRoute(_stateStore.Snapshot);
             Navigate(route);
             SelectNavItem(route);
@@ -52,6 +56,42 @@ public sealed partial class MainWindow : Window
         Closed += (_, _) => _stateStore.SnapshotChanged -= HandleSnapshotChanged;
     }
 
+    private void ApplySystemBackdrop()
+    {
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
+        {
+            return;
+        }
+
+        try
+        {
+            var backdropProperty = GetType().GetProperty("SystemBackdrop");
+            if (backdropProperty is null || !backdropProperty.CanWrite)
+            {
+                return;
+            }
+
+            var micaType = GetType().Assembly.GetType("Microsoft.UI.Xaml.Media.MicaBackdrop")
+                ?? Type.GetType("Microsoft.UI.Xaml.Media.MicaBackdrop, Microsoft.WinUI");
+            if (micaType is null)
+            {
+                return;
+            }
+
+            var micaInstance = Activator.CreateInstance(micaType);
+            if (micaInstance is null)
+            {
+                return;
+            }
+
+            backdropProperty.SetValue(this, micaInstance);
+        }
+        catch
+        {
+            // Backdrop APIs are best-effort; keep a solid shell if unavailable.
+        }
+    }
+
     private void ApplySystemTheme()
     {
         if (Content is not FrameworkElement root)
@@ -59,7 +99,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        root.RequestedTheme = ElementTheme.Dark;
+        root.RequestedTheme = ResolveSystemTheme();
     }
 
     private string ResolveInitialRoute(AgentStateSnapshot snapshot)
@@ -72,17 +112,10 @@ public sealed partial class MainWindow : Window
         var preferred = LoadPreferredRoute();
         if (string.IsNullOrWhiteSpace(preferred))
         {
-            return "dashboard";
+            return "overview";
         }
 
-        // Guardrail: activity route currently has unstable live-update behavior when restored
-        // from a previous session. Start on dashboard for a reliable app launch.
-        if (string.Equals(preferred, "activity", StringComparison.OrdinalIgnoreCase))
-        {
-            return "dashboard";
-        }
-
-        return CoreRoutes.Contains(preferred) ? preferred : "dashboard";
+        return CoreRoutes.Contains(preferred) ? NormalizeRoute(preferred) : "overview";
     }
 
     private void HandleSnapshotChanged(object? sender, AgentStateSnapshot snapshot)
@@ -107,7 +140,7 @@ public sealed partial class MainWindow : Window
     {
         HeaderConnectionText.Text = snapshot.Connection switch
         {
-            ConnectionState.Connected => $"Connected • {snapshot.Health}",
+            ConnectionState.Connected => "Connected",
             ConnectionState.Reconnecting => "Reconnecting",
             ConnectionState.Offline => "Offline",
             ConnectionState.AuthFailed => "Auth Failed",
@@ -115,34 +148,25 @@ public sealed partial class MainWindow : Window
         };
 
         HeaderSessionText.Text = $"SESSION {snapshot.DeviceId}";
-        HeaderDeviceText.Text = $"DEVICE {snapshot.DeviceName}";
+        HeaderDeviceText.Text = snapshot.DeviceName;
         HeaderHeartbeatText.Text = $"Last heartbeat {FormatAge(snapshot.LastHeartbeatUtc)} ago";
 
-        HeaderVersionText.Text = snapshot.AgentVersion;
+        HeaderVersionText.Text = $"v{snapshot.AgentVersion}";
         HeaderBuildText.Text = Environment.OSVersion.Version.ToString();
-        HeaderPolicyText.Text = snapshot.Settings.BackgroundSync ? "policy:active" : "policy:paused";
+        HeaderPolicyText.Text = snapshot.Settings.BackgroundSync ? "Policy active" : "Policy paused";
         HeaderLatencyText.Text = $"{snapshot.LatencyMs} ms";
 
-        PaneVersionText.Text = $"v{snapshot.AgentVersion} • {snapshot.DeviceName}";
+        FlyoutDeviceText.Text = snapshot.DeviceName;
+        FlyoutVersionText.Text = $"v{snapshot.AgentVersion}";
+        FlyoutPolicyText.Text = HeaderPolicyText.Text;
+        FlyoutSessionText.Text = snapshot.DeviceId;
 
-        StatusLine1.Text = snapshot.Connection switch
-        {
-            ConnectionState.Connected => "WSS Connected",
-            ConnectionState.Reconnecting => "WSS Reconnecting",
-            ConnectionState.Offline => "WSS Offline",
-            ConnectionState.AuthFailed => "WSS Auth Failed",
-            _ => "WSS Connecting"
-        };
-        StatusLine2.Text = snapshot.Settings.CollectDiagnostics ? "Kernel Guard Active" : "Kernel Guard Standby";
-        StatusLine3.Text = snapshot.Health switch
-        {
-            HealthState.Healthy => "Policy Matched",
-            HealthState.Warning => "Policy Warning",
-            _ => "Policy Attention Needed"
-        };
+        PaneVersionText.Text = $"v{snapshot.AgentVersion}";
 
-        var pendingCount = snapshot.CommandHistory.Count(c => c.Status is CommandExecutionStatus.Queued or CommandExecutionStatus.Dispatched or CommandExecutionStatus.Executing);
-        KernelHintText.Text = $"{pendingCount} kernel events pending review";
+        var toneBrush = BrushOf(ResolveConnectionBrushKey(snapshot.Connection));
+        ConnectionDot.Fill = toneBrush;
+        ConnectionBadge.BorderBrush = toneBrush;
+        HeaderConnectionText.Foreground = toneBrush;
     }
 
     private static ElementTheme ResolveSystemTheme()
@@ -163,7 +187,7 @@ public sealed partial class MainWindow : Window
             // Fall through to a readable default if probing fails.
         }
 
-        return ElementTheme.Dark;
+        return ElementTheme.Default;
     }
 
     private static string FormatAge(DateTimeOffset timestamp)
@@ -181,6 +205,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        route = NormalizeRoute(route);
         if (!_stateStore.Snapshot.IsPaired && route != "onboarding")
         {
             route = "onboarding";
@@ -189,18 +214,28 @@ public sealed partial class MainWindow : Window
 
         Navigate(route);
         SavePreferredRoute(route);
+
+        if (AppNav.DisplayMode != NavigationViewDisplayMode.Expanded && AppNav.IsPaneOpen)
+        {
+            AppNav.IsPaneOpen = false;
+        }
+    }
+
+    private void OnPaneDisplayModeChanged(NavigationView sender, NavigationViewDisplayModeChangedEventArgs args)
+    {
+        UpdatePaneVisualState(args.DisplayMode);
     }
 
     private void Navigate(string route)
     {
+        route = NormalizeRoute(route);
         var pageType = route switch
         {
             "onboarding" => typeof(OnboardingPage),
-            "dashboard" => typeof(DashboardPage),
+            "overview" => typeof(DashboardPage),
             "device-details" => typeof(DeviceDetailsPage),
             "command-history" => typeof(CommandHistoryPage),
             "pairing-recovery" => typeof(PairingRecoveryPage),
-            "quick-status" => typeof(QuickStatusPage),
             "activity" => typeof(ActivityDiagnosticsPage),
             "settings" => typeof(SettingsPage),
             _ => typeof(DashboardPage)
@@ -218,14 +253,15 @@ public sealed partial class MainWindow : Window
         if (ContentFrame.CurrentSourcePageType == typeof(DeviceDetailsPage)) return "device-details";
         if (ContentFrame.CurrentSourcePageType == typeof(CommandHistoryPage)) return "command-history";
         if (ContentFrame.CurrentSourcePageType == typeof(PairingRecoveryPage)) return "pairing-recovery";
-        if (ContentFrame.CurrentSourcePageType == typeof(QuickStatusPage)) return "quick-status";
+        if (ContentFrame.CurrentSourcePageType == typeof(QuickStatusPage)) return "overview";
         if (ContentFrame.CurrentSourcePageType == typeof(ActivityDiagnosticsPage)) return "activity";
         if (ContentFrame.CurrentSourcePageType == typeof(SettingsPage)) return "settings";
-        return "dashboard";
+        return "overview";
     }
 
     private void SelectNavItem(string route)
     {
+        route = NormalizeRoute(route);
         var item = AppNav.MenuItems
             .OfType<NavigationViewItem>()
             .FirstOrDefault(x => string.Equals(x.Tag as string, route, StringComparison.OrdinalIgnoreCase));
@@ -255,6 +291,7 @@ public sealed partial class MainWindow : Window
 
     private void SavePreferredRoute(string route)
     {
+        route = NormalizeRoute(route);
         try
         {
             var dir = Path.GetDirectoryName(_navPreferencePath);
@@ -269,5 +306,47 @@ public sealed partial class MainWindow : Window
         {
             // Preference persistence is best-effort only.
         }
+    }
+
+    private string NormalizeRoute(string route)
+    {
+        if (string.Equals(route, "dashboard", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(route, "quick-status", StringComparison.OrdinalIgnoreCase))
+        {
+            return "overview";
+        }
+
+        return route;
+    }
+
+    private Brush BrushOf(string key)
+    {
+        if (Application.Current.Resources.TryGetValue(key, out var appObj) && appObj is Brush appBrush)
+        {
+            return appBrush;
+        }
+
+        return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+    }
+
+    private static string ResolveConnectionBrushKey(ConnectionState state)
+    {
+        return state switch
+        {
+            ConnectionState.Connected => "SuccessBrush",
+            ConnectionState.Reconnecting => "WarningBrush",
+            ConnectionState.Offline => "DangerBrush",
+            ConnectionState.AuthFailed => "DangerBrush",
+            _ => "InfoBrush"
+        };
+    }
+
+    private void UpdatePaneVisualState(NavigationViewDisplayMode mode)
+    {
+        var expanded = mode == NavigationViewDisplayMode.Expanded;
+        PaneBrandDetails.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+        PaneVersionText.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+        MonitorHeader.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+        PaneBrandRoot.Padding = expanded ? new Thickness(8, 6, 8, 6) : new Thickness(7, 6, 7, 6);
     }
 }

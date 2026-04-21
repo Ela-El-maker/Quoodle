@@ -1,4 +1,4 @@
-<Page
+﻿<Page
     x:Class="Quoodle.Agent.UiCompanion.Views.QuickStatusPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -11,13 +11,13 @@
     <Page.Resources>
         <Style x:Key="QuickHeadingStyle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
-            <Setter Property="FontSize" Value="52" />
+            <Setter Property="FontSize" Value="32" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
 
         <Style x:Key="QuickSubtitleStyle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{ThemeResource TextSecondaryBrush}" />
-            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontSize" Value="14" />
         </Style>
 
         <Style x:Key="QuickSectionLabelStyle" TargetType="TextBlock">
@@ -28,54 +28,116 @@
 
         <Style x:Key="QuickIdentityValueStyle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
-            <Setter Property="FontSize" Value="17" />
+            <Setter Property="FontSize" Value="15" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
 
         <Style x:Key="QuickActionPrimaryButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="#133726" />
-            <Setter Property="BorderBrush" Value="#1A6D49" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="11" />
-            <Setter Property="Foreground" Value="{ThemeResource SuccessBrush}" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="FontSize" Value="16" />
-            <Setter Property="Padding" Value="22,12" />
-            <Setter Property="MinWidth" Value="240" />
-        </Style>
-
-        <Style x:Key="QuickActionInfoButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="#09243A" />
-            <Setter Property="BorderBrush" Value="#14547F" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="11" />
-            <Setter Property="Foreground" Value="{ThemeResource InfoBrush}" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="FontSize" Value="16" />
-            <Setter Property="Padding" Value="22,12" />
-            <Setter Property="MinWidth" Value="170" />
-        </Style>
-
-        <Style x:Key="QuickActionNeutralButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="#2B2F39" />
-            <Setter Property="BorderBrush" Value="#3A4253" />
+            <Setter Property="Background" Value="{ThemeResource ChipSuccessBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource SuccessBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="11" />
             <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="FontSize" Value="16" />
-            <Setter Property="Padding" Value="22,12" />
-            <Setter Property="MinWidth" Value="190" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Padding" Value="16,10" />
+            <Setter Property="MinWidth" Value="160" />
+        </Style>
+
+        <Style x:Key="QuickActionInfoButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="{ThemeResource ChipInfoBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource InfoBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="11" />
+            <Setter Property="Foreground" Value="{ThemeResource InfoBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Padding" Value="16,10" />
+            <Setter Property="MinWidth" Value="140" />
+        </Style>
+
+        <Style x:Key="QuickActionNeutralButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="{ThemeResource SurfaceAltBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="11" />
+            <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Padding" Value="16,10" />
+            <Setter Property="MinWidth" Value="140" />
         </Style>
     </Page.Resources>
 
     <ScrollViewer>
-        <Grid Padding="18,8,18,18" MaxWidth="1260">
+        <Grid x:Name="QuickRootGrid" Padding="16,8,16,16" MaxWidth="1220">
+            <VisualStateManager.VisualStateGroups>
+                <VisualStateGroup>
+                    <VisualState x:Name="QuickNarrowState">
+                        <VisualState.StateTriggers>
+                            <AdaptiveTrigger MinWindowWidth="0" />
+                        </VisualState.StateTriggers>
+                        <VisualState.Setters>
+                            <Setter Target="HeaderCol1.Width" Value="0" />
+                            <Setter Target="ConnectionPill.(Grid.Row)" Value="1" />
+                            <Setter Target="ConnectionPill.(Grid.Column)" Value="0" />
+                            <Setter Target="ConnectionPill.Margin" Value="0,8,0,0" />
+                            <Setter Target="MetricCol2.Width" Value="0" />
+                            <Setter Target="MetricCol3.Width" Value="0" />
+                            <Setter Target="MemoryCard.(Grid.Row)" Value="1" />
+                            <Setter Target="MemoryCard.(Grid.Column)" Value="0" />
+                            <Setter Target="EventsCard.(Grid.Row)" Value="1" />
+                            <Setter Target="EventsCard.(Grid.Column)" Value="1" />
+                            <Setter Target="ActionButtonsPanel.Orientation" Value="Vertical" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="QuickMediumState">
+                        <VisualState.StateTriggers>
+                            <AdaptiveTrigger MinWindowWidth="641" />
+                        </VisualState.StateTriggers>
+                        <VisualState.Setters>
+                            <Setter Target="HeaderCol1.Width" Value="Auto" />
+                            <Setter Target="ConnectionPill.(Grid.Row)" Value="0" />
+                            <Setter Target="ConnectionPill.(Grid.Column)" Value="1" />
+                            <Setter Target="ConnectionPill.Margin" Value="0" />
+                            <Setter Target="MetricCol2.Width" Value="0" />
+                            <Setter Target="MetricCol3.Width" Value="0" />
+                            <Setter Target="MemoryCard.(Grid.Row)" Value="1" />
+                            <Setter Target="MemoryCard.(Grid.Column)" Value="0" />
+                            <Setter Target="EventsCard.(Grid.Row)" Value="1" />
+                            <Setter Target="EventsCard.(Grid.Column)" Value="1" />
+                            <Setter Target="ActionButtonsPanel.Orientation" Value="Horizontal" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="QuickWideState">
+                        <VisualState.StateTriggers>
+                            <AdaptiveTrigger MinWindowWidth="1200" />
+                        </VisualState.StateTriggers>
+                        <VisualState.Setters>
+                            <Setter Target="HeaderCol1.Width" Value="Auto" />
+                            <Setter Target="ConnectionPill.(Grid.Row)" Value="0" />
+                            <Setter Target="ConnectionPill.(Grid.Column)" Value="1" />
+                            <Setter Target="ConnectionPill.Margin" Value="0" />
+                            <Setter Target="MetricCol2.Width" Value="*" />
+                            <Setter Target="MetricCol3.Width" Value="*" />
+                            <Setter Target="MemoryCard.(Grid.Row)" Value="0" />
+                            <Setter Target="MemoryCard.(Grid.Column)" Value="2" />
+                            <Setter Target="EventsCard.(Grid.Row)" Value="0" />
+                            <Setter Target="EventsCard.(Grid.Column)" Value="3" />
+                            <Setter Target="ActionButtonsPanel.Orientation" Value="Horizontal" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateManager.VisualStateGroups>
             <StackPanel Spacing="16">
-                <Grid>
+                <Grid x:Name="HeaderGrid" RowSpacing="4">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition x:Name="HeaderCol1" Width="Auto" />
                     </Grid.ColumnDefinitions>
 
                     <StackPanel Spacing="4">
@@ -90,7 +152,7 @@
                         Padding="16,8"
                         BorderBrush="{ThemeResource HeaderPanelBorderBrush}"
                         BorderThickness="1"
-                        Background="#110E2A1E"
+                        Background="{ThemeResource ChipSuccessBackgroundBrush}"
                         VerticalAlignment="Top">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <Ellipse x:Name="ConnectionPillDot" Width="10" Height="10" Fill="{ThemeResource SuccessBrush}" />
@@ -100,55 +162,61 @@
                     </Border>
                 </Grid>
 
-                <Border Style="{StaticResource CardBorderStyle}" Padding="24,18">
-                    <Grid ColumnSpacing="18">
+                <Border Style="{StaticResource CardBorderStyle}" Padding="20,14">
+                    <Grid ColumnSpacing="16" RowSpacing="10">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="1.25*" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
 
-                        <StackPanel Grid.Column="0" Spacing="4">
+                        <StackPanel Grid.Row="0" Grid.ColumnSpan="2" Spacing="4">
                             <TextBlock Text="DEVICE NAME" Style="{StaticResource QuickSectionLabelStyle}" />
-                            <TextBlock x:Name="DeviceNameText" Style="{StaticResource QuickIdentityValueStyle}" FontSize="33" TextWrapping="Wrap" />
+                            <TextBlock x:Name="DeviceNameText" Style="{StaticResource QuickIdentityValueStyle}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="2" />
                         </StackPanel>
 
-                        <StackPanel Grid.Column="1" Spacing="4">
+                        <StackPanel Grid.Row="1" Grid.Column="0" Spacing="4">
                             <TextBlock Text="DEVICE ID" Style="{StaticResource QuickSectionLabelStyle}" />
                             <TextBlock x:Name="DeviceIdText" Style="{StaticResource QuickIdentityValueStyle}" />
                         </StackPanel>
 
-                        <StackPanel Grid.Column="2" Spacing="4">
+                        <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4">
                             <TextBlock Text="AGENT VERSION" Style="{StaticResource QuickSectionLabelStyle}" />
                             <TextBlock x:Name="AgentVersionText" Style="{StaticResource QuickIdentityValueStyle}" />
                         </StackPanel>
 
-                        <StackPanel Grid.Column="3" Spacing="4">
+                        <StackPanel Grid.Row="2" Grid.Column="0" Spacing="4">
                             <TextBlock Text="UPTIME" Style="{StaticResource QuickSectionLabelStyle}" />
                             <TextBlock x:Name="UptimeText" Style="{StaticResource QuickIdentityValueStyle}" />
                         </StackPanel>
 
-                        <StackPanel Grid.Column="4" Spacing="4">
+                        <StackPanel Grid.Row="2" Grid.Column="1" Spacing="4">
                             <TextBlock Text="POLICY HASH" Style="{StaticResource QuickSectionLabelStyle}" />
-                            <TextBlock x:Name="PolicyHashText" Style="{StaticResource QuickIdentityValueStyle}" TextWrapping="Wrap" />
+                            <TextBlock x:Name="PolicyHashText" Style="{StaticResource QuickIdentityValueStyle}" TextTrimming="CharacterEllipsis" MaxLines="1" />
                         </StackPanel>
                     </Grid>
                 </Border>
 
-                <Grid ColumnSpacing="14">
+                <Grid ColumnSpacing="14" RowSpacing="14">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition x:Name="MetricCol0" Width="*" />
+                        <ColumnDefinition x:Name="MetricCol1" Width="*" />
+                        <ColumnDefinition x:Name="MetricCol2" Width="*" />
+                        <ColumnDefinition x:Name="MetricCol3" Width="*" />
                     </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
 
-                    <controls:MetricCard x:Name="LastSyncCard" Grid.Column="0" Tone="Info" Glyph="&#xE823;" />
-                    <controls:MetricCard x:Name="CpuCard" Grid.Column="1" Tone="Success" Glyph="&#xE7F4;" />
-                    <controls:MetricCard x:Name="MemoryCard" Grid.Column="2" Tone="Info" Glyph="&#xE950;" />
-                    <controls:MetricCard x:Name="EventsCard" Grid.Column="3" Tone="Warning" Glyph="&#xE7BA;" />
+                    <controls:MetricCard x:Name="LastSyncCard" Grid.Row="0" Grid.Column="0" Tone="Info" Glyph="&#xE823;" />
+                    <controls:MetricCard x:Name="CpuCard" Grid.Row="0" Grid.Column="1" Tone="Success" Glyph="&#xE7F4;" />
+                    <controls:MetricCard x:Name="MemoryCard" Grid.Row="0" Grid.Column="2" Tone="Info" Glyph="&#xE950;" />
+                    <controls:MetricCard x:Name="EventsCard" Grid.Row="0" Grid.Column="3" Tone="Warning" Glyph="&#xE7BA;" />
                 </Grid>
 
                 <Border Style="{StaticResource CardBorderStyle}" Padding="24,18">
@@ -163,35 +231,35 @@
                                 <FontIcon Glyph="&#xE945;" Foreground="{ThemeResource SuccessBrush}" />
                                 <TextBlock Text="CURRENT ACTIVITY" Style="{StaticResource QuickSectionLabelStyle}" VerticalAlignment="Center" />
                             </StackPanel>
-                            <TextBlock x:Name="ActivityText" FontSize="38" FontWeight="SemiBold" />
+                            <TextBlock x:Name="ActivityText" FontSize="24" FontWeight="SemiBold" />
                             <TextBlock x:Name="ActivityDetailsText" Style="{StaticResource QuickSubtitleStyle}" />
                         </StackPanel>
 
                         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7" VerticalAlignment="Top">
                             <Ellipse Width="9" Height="9" Fill="{ThemeResource SuccessBrush}" Margin="0,6,0,0" />
-                            <TextBlock Text="Live" Foreground="{ThemeResource SuccessBrush}" VerticalAlignment="Top" FontWeight="SemiBold" FontSize="17" />
+                            <TextBlock Text="Live" Foreground="{ThemeResource SuccessBrush}" VerticalAlignment="Top" FontWeight="SemiBold" FontSize="14" />
                         </StackPanel>
                     </Grid>
                 </Border>
 
-                <StackPanel Orientation="Horizontal" Spacing="12">
+                <StackPanel x:Name="ActionButtonsPanel" Orientation="Horizontal" Spacing="12">
                     <Button Click="OnOpenDashboard" Style="{StaticResource QuickActionPrimaryButtonStyle}">
                         <StackPanel Orientation="Horizontal" Spacing="10">
                             <FontIcon Glyph="&#xECA5;" FontSize="16" />
-                            <TextBlock Text="Open Dashboard" FontSize="16" FontWeight="SemiBold" />
+                            <TextBlock Text="Open Dashboard" FontSize="14" FontWeight="SemiBold" />
                             <FontIcon Glyph="&#xE72A;" FontSize="13" />
                         </StackPanel>
                     </Button>
                     <Button Click="OnSyncNow" Style="{StaticResource QuickActionInfoButtonStyle}">
                         <StackPanel Orientation="Horizontal" Spacing="10">
                             <FontIcon Glyph="&#xE117;" FontSize="16" />
-                            <TextBlock Text="Sync Now" FontSize="16" FontWeight="SemiBold" />
+                            <TextBlock Text="Sync Now" FontSize="14" FontWeight="SemiBold" />
                         </StackPanel>
                     </Button>
                     <Button Click="OnViewLogs" Style="{StaticResource QuickActionNeutralButtonStyle}">
                         <StackPanel Orientation="Horizontal" Spacing="10">
                             <FontIcon Glyph="&#xE9D2;" FontSize="16" />
-                            <TextBlock Text="View Logs" FontSize="16" FontWeight="SemiBold" />
+                            <TextBlock Text="View Logs" FontSize="14" FontWeight="SemiBold" />
                             <FontIcon Glyph="&#xE72A;" FontSize="13" />
                         </StackPanel>
                     </Button>
@@ -222,7 +290,7 @@
                             <TextBlock
                                 x:Name="WarningDetailsText"
                                 Foreground="{ThemeResource ChipWarningForegroundBrush}"
-                                FontSize="15"
+                                FontSize="14"
                                 TextWrapping="Wrap" />
                         </StackPanel>
 
@@ -231,7 +299,7 @@
                             Grid.Column="2"
                             Text="Review ->"
                             Foreground="{ThemeResource ChipWarningForegroundBrush}"
-                            FontSize="16"
+                            FontSize="14"
                             FontWeight="SemiBold"
                             VerticalAlignment="Center" />
                     </Grid>
@@ -240,3 +308,4 @@
         </Grid>
     </ScrollViewer>
 </Page>
+

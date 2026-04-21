@@ -9,10 +9,10 @@
     <Border
         x:Name="CardBorder"
         Style="{StaticResource CardBorderStyle}"
-        MinWidth="180"
-        MinHeight="168"
-        Padding="18,16">
-        <StackPanel Spacing="12">
+        MinWidth="136"
+        MinHeight="124"
+        Padding="14,10">
+        <StackPanel Spacing="10">
             <Grid ColumnSpacing="8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -22,9 +22,9 @@
 
                 <Border
                     x:Name="IconHost"
-                    Width="36"
-                    Height="36"
-                    CornerRadius="9"
+                    Width="32"
+                    Height="32"
+                    CornerRadius="8"
                     Background="{ThemeResource SurfaceAltBrush}">
                     <FontIcon
                         x:Name="GlyphIcon"
@@ -48,6 +48,7 @@
                     <Border
                         x:Name="StatusBadgeHost"
                         Visibility="Collapsed"
+                        Style="{StaticResource StatusChipBorderStyle}"
                         CornerRadius="10"
                         Padding="8,4">
                         <TextBlock x:Name="StatusBadgeText" FontSize="12" FontWeight="SemiBold" />
@@ -55,6 +56,7 @@
                     <Border
                         x:Name="CountBadgeHost"
                         Visibility="Collapsed"
+                        Style="{StaticResource StatusChipBorderStyle}"
                         CornerRadius="12"
                         Padding="8,4">
                         <TextBlock x:Name="CountBadgeText" FontSize="12" FontWeight="SemiBold" />
@@ -64,7 +66,7 @@
 
             <TextBlock
                 x:Name="ValueText"
-                FontSize="28"
+                FontSize="22"
                 FontWeight="SemiBold"
                 Foreground="{ThemeResource TextPrimaryBrush}"
                 TextWrapping="Wrap"

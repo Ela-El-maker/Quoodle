@@ -15,109 +15,163 @@
             IsSettingsVisible="False"
             IsBackButtonVisible="Collapsed"
             IsTitleBarAutoPaddingEnabled="False"
-            OpenPaneLength="320"
+            OpenPaneLength="236"
             CompactPaneLength="56"
-            PaneDisplayMode="Left"
+            PaneDisplayMode="Auto"
+            AlwaysShowHeader="False"
+            DisplayModeChanged="OnPaneDisplayModeChanged"
             SelectionChanged="OnSelectionChanged"
             Background="{ThemeResource ShellBackgroundBrush}">
 
             <controls:NavigationView.PaneCustomContent>
-                <Border BorderBrush="{ThemeResource BorderBrush}" BorderThickness="0,0,0,1">
-                    <Grid Padding="20,18,20,14">
-                        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                            <Border
-                                Width="38"
-                                Height="38"
-                                CornerRadius="11"
-                                Background="#FF2F3365">
-                                <FontIcon
-                                    Glyph="&#xE774;"
-                                    Foreground="#FFD9AA44"
-                                    FontSize="20"
-                                    HorizontalAlignment="Center"
-                                    VerticalAlignment="Center" />
-                            </Border>
+                <Border x:Name="PaneBrandRoot" BorderBrush="{ThemeResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,6,8,6">
+                    <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center" HorizontalAlignment="Left">
+                        <Border Width="28" Height="28" CornerRadius="7" Background="{ThemeResource SurfaceAltBrush}">
+                            <FontIcon
+                                Glyph="&#xE77B;"
+                                FontFamily="Segoe Fluent Icons"
+                                Foreground="{ThemeResource BrandBrush}"
+                                FontSize="14"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center" />
+                        </Border>
 
-                            <StackPanel>
-                                <TextBlock Text="QuoodleAgent" FontSize="34" FontWeight="SemiBold" />
-                                <TextBlock x:Name="PaneVersionText" Style="{StaticResource MutedTextStyle}" Text="v0.0.1 • PC001" />
-                            </StackPanel>
+                        <StackPanel x:Name="PaneBrandDetails" Spacing="1">
+                            <TextBlock Text="Quoodle Agent" FontSize="15" FontWeight="SemiBold" />
+                            <TextBlock x:Name="PaneVersionText" Style="{StaticResource MutedTextStyle}" Text="v0.0.1" />
                         </StackPanel>
-                    </Grid>
+                    </StackPanel>
                 </Border>
             </controls:NavigationView.PaneCustomContent>
 
             <controls:NavigationView.MenuItems>
-                <controls:NavigationViewItemHeader Content="MONITOR" />
-<controls:NavigationViewItem Content="Device Onboarding" Tag="onboarding">
+                <controls:NavigationViewItemHeader x:Name="MonitorHeader" Content="MONITOR" />
+                <controls:NavigationViewItem Content="Device Onboarding" Tag="onboarding">
                     <controls:NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE77B;" />
+                        <SymbolIcon Symbol="Contact" Width="16" Height="16" />
                     </controls:NavigationViewItem.Icon>
                 </controls:NavigationViewItem>
 
-                <controls:NavigationViewItem Content="Agent Dashboard" Tag="dashboard">
+                <controls:NavigationViewItem Content="Overview" Tag="overview">
                     <controls:NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xF246;" />
-                    </controls:NavigationViewItem.Icon>
-                </controls:NavigationViewItem>
-
-                <controls:NavigationViewItem Content="Quick Status" Tag="quick-status">
-                    <controls:NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE9CE;" />
+                        <SymbolIcon Symbol="View" Width="16" Height="16" />
                     </controls:NavigationViewItem.Icon>
                 </controls:NavigationViewItem>
 
                 <controls:NavigationViewItem Content="Activity &amp; Diagnostics" Tag="activity">
                     <controls:NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xEC4F;" />
+                        <SymbolIcon Symbol="AllApps" Width="16" Height="16" />
                     </controls:NavigationViewItem.Icon>
                 </controls:NavigationViewItem>
 
                 <controls:NavigationViewItem Content="Settings &amp; Config" Tag="settings">
                     <controls:NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE713;" />
+                        <SymbolIcon Symbol="Setting" Width="16" Height="16" />
                     </controls:NavigationViewItem.Icon>
                 </controls:NavigationViewItem>
+            </controls:NavigationView.MenuItems>
 
-                            </controls:NavigationView.MenuItems>
+            <Grid Margin="8,0,8,8" RowSpacing="4">
+                <VisualStateManager.VisualStateGroups>
+                    <VisualStateGroup>
+                        <VisualState x:Name="ShellCompactStatusState">
+                            <VisualState.StateTriggers>
+                                <AdaptiveTrigger MinWindowWidth="0" />
+                            </VisualState.StateTriggers>
+                            <VisualState.Setters>
+                                <Setter Target="HeaderHeartbeatText.Visibility" Value="Collapsed" />
+                                <Setter Target="HeaderDetailStack.Visibility" Value="Collapsed" />
+                            </VisualState.Setters>
+                        </VisualState>
+                        <VisualState x:Name="ShellExpandedStatusState">
+                            <VisualState.StateTriggers>
+                                <AdaptiveTrigger MinWindowWidth="1200" />
+                            </VisualState.StateTriggers>
+                            <VisualState.Setters>
+                                <Setter Target="HeaderHeartbeatText.Visibility" Value="Visible" />
+                                <Setter Target="HeaderDetailStack.Visibility" Value="Visible" />
+                            </VisualState.Setters>
+                        </VisualState>
+                    </VisualStateGroup>
+                </VisualStateManager.VisualStateGroups>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
 
-            <controls:NavigationView.PaneFooter>
-                <StackPanel Padding="14,10,14,14" Spacing="8">
-                    <TextBlock Text="AGENT STATUS" Style="{StaticResource NavSectionTextStyle}" Margin="0" />
-                    <TextBlock x:Name="StatusLine1" Style="{StaticResource PageSubtitleTextStyle}" Text="WSS Connected" />
-                    <TextBlock x:Name="StatusLine2" Style="{StaticResource PageSubtitleTextStyle}" Text="Kernel Guard Active" />
-                    <TextBlock x:Name="StatusLine3" Style="{StaticResource PageSubtitleTextStyle}" Text="Policy Matched" />
-                    <Border
-                        Background="{ThemeResource WarningPanelBackgroundBrush}"
-                        BorderBrush="{ThemeResource WarningPanelBorderBrush}"
-                        BorderThickness="1"
-                        CornerRadius="12"
-                        Padding="10,8">
-                        <TextBlock
-                            x:Name="KernelHintText"
-                            Foreground="{ThemeResource ChipWarningForegroundBrush}"
-                            FontSize="14"
-                            Text="0 kernel events pending review" />
-                    </Border>
-                </StackPanel>
-            </controls:NavigationView.PaneFooter>
+                <Border Style="{StaticResource ShellHeaderBorderStyle}">
+                    <Grid ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
 
-            <controls:NavigationView.Header>
-                <Border Visibility="Collapsed">
-                    <Grid>
-                        <TextBlock x:Name="HeaderConnectionText" />
-                        <TextBlock x:Name="HeaderSessionText" />
-                        <TextBlock x:Name="HeaderDeviceText" />
-                        <TextBlock x:Name="HeaderHeartbeatText" />
-                        <TextBlock x:Name="HeaderVersionText" />
-                        <TextBlock x:Name="HeaderBuildText" />
-                        <TextBlock x:Name="HeaderPolicyText" />
-                        <TextBlock x:Name="HeaderLatencyText" />
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Border x:Name="ConnectionBadge" Style="{StaticResource StatusBadgeBorderStyle}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Ellipse x:Name="ConnectionDot" Width="7" Height="7" Fill="{ThemeResource InfoBrush}" />
+                                    <TextBlock x:Name="HeaderConnectionText" FontWeight="SemiBold" />
+                                </StackPanel>
+                            </Border>
+                            <TextBlock x:Name="HeaderHeartbeatText" Style="{StaticResource PageSubtitleTextStyle}" />
+                        </StackPanel>
+
+                        <StackPanel x:Name="HeaderDetailStack" Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" HorizontalAlignment="Right">
+                            <TextBlock x:Name="HeaderLatencyText" Style="{StaticResource PageSubtitleTextStyle}" />
+                            <Button
+                                x:Name="HeaderDetailsButton"
+                                Padding="6,2"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                BorderThickness="0"
+                                CornerRadius="6">
+                                <FontIcon Glyph="&#xE712;" FontFamily="Segoe Fluent Icons" FontSize="13" Foreground="{ThemeResource TextMutedBrush}" />
+                                <Button.Flyout>
+                                    <Flyout Placement="BottomEdgeAlignedRight">
+                                        <Flyout.FlyoutPresenterStyle>
+                                            <Style TargetType="FlyoutPresenter">
+                                                <Setter Property="Background" Value="{ThemeResource AcrylicInAppFillColorDefaultBrush}" />
+                                                <Setter Property="BorderBrush" Value="{ThemeResource HeaderPanelBorderBrush}" />
+                                                <Setter Property="BorderThickness" Value="1" />
+                                                <Setter Property="CornerRadius" Value="10" />
+                                            </Style>
+                                        </Flyout.FlyoutPresenterStyle>
+                                        <StackPanel MinWidth="250" Spacing="8" Padding="4">
+                                            <TextBlock Text="Agent details" FontSize="13" FontWeight="SemiBold" />
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="Device" Style="{StaticResource MutedTextStyle}" />
+                                                <TextBlock x:Name="FlyoutDeviceText" Style="{StaticResource PageSubtitleTextStyle}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="Version" Style="{StaticResource MutedTextStyle}" />
+                                                <TextBlock x:Name="FlyoutVersionText" Style="{StaticResource PageSubtitleTextStyle}" />
+                                            </StackPanel>
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="Policy" Style="{StaticResource MutedTextStyle}" />
+                                                <TextBlock x:Name="FlyoutPolicyText" Style="{StaticResource PageSubtitleTextStyle}" />
+                                            </StackPanel>
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="Session" Style="{StaticResource MutedTextStyle}" />
+                                                <TextBlock x:Name="FlyoutSessionText" Style="{StaticResource PageSubtitleTextStyle}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Flyout>
+                                </Button.Flyout>
+                            </Button>
+                        </StackPanel>
                     </Grid>
                 </Border>
-            </controls:NavigationView.Header>
 
-            <Frame x:Name="ContentFrame" Margin="14,8,14,14" />
+                <Grid Visibility="Collapsed">
+                    <TextBlock x:Name="HeaderSessionText" />
+                    <TextBlock x:Name="HeaderBuildText" />
+                    <TextBlock x:Name="HeaderDeviceText" />
+                    <TextBlock x:Name="HeaderVersionText" />
+                    <TextBlock x:Name="HeaderPolicyText" />
+                </Grid>
+
+                <Frame x:Name="ContentFrame" Grid.Row="1" />
+            </Grid>
         </controls:NavigationView>
     </Grid>
 </Window>

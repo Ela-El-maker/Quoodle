@@ -1,6 +1,8 @@
-using Microsoft.UI.Xaml;
+﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Dispatching;
 using Quoodle.Agent.UiCompanion.ViewModels;
 using System.ComponentModel;
 using Windows.ApplicationModel.DataTransfer;
@@ -14,7 +16,12 @@ public sealed partial class ActivityDiagnosticsPage : Page
 {
     private readonly ActivityDiagnosticsViewModel _vm;
     private readonly Dictionary<ActivityDiagnosticsTab, Dictionary<string, TextBlock>> _sortGlyphMap;
+    private readonly DispatcherQueueTimer _searchDebounceTimer;
     private bool _isRendering;
+    private string _pendingSearchQuery = string.Empty;
+    private string _appliedSearchQuery = string.Empty;
+    private string _lastRenderedRawJson = string.Empty;
+    private string _lastRenderedRawSize = string.Empty;
 
     public ActivityDiagnosticsPage()
     {
@@ -23,9 +30,10 @@ public sealed partial class ActivityDiagnosticsPage : Page
         _vm = new ActivityDiagnosticsViewModel(App.StateStore);
         _vm.PropertyChanged += HandleViewModelPropertyChanged;
 
-        WssListView.ItemsSource = _vm.WssRows;
-        CommandListView.ItemsSource = _vm.CommandRows;
-        KernelListView.ItemsSource = _vm.KernelRows;
+        _searchDebounceTimer = DispatcherQueue.CreateTimer();
+        _searchDebounceTimer.Interval = TimeSpan.FromMilliseconds(180);
+        _searchDebounceTimer.IsRepeating = false;
+        _searchDebounceTimer.Tick += OnSearchDebounceTimerTick;
 
         _sortGlyphMap = new Dictionary<ActivityDiagnosticsTab, Dictionary<string, TextBlock>>
         {
@@ -66,6 +74,7 @@ public sealed partial class ActivityDiagnosticsPage : Page
         };
 
         Unloaded += OnPageUnloaded;
+        SizeChanged += (_, _) => UpdateRawOverlayLayout();
         Render();
     }
 
@@ -103,6 +112,7 @@ public sealed partial class ActivityDiagnosticsPage : Page
 
     private void RenderTabState()
     {
+        BindActiveTableSource();
         SetTabVisual(WssTabSurface, WssTabLabelText, WssTabBadge, WssTabCountText, _vm.IsWssTab);
         SetTabVisual(CommandTabSurface, CommandTabLabelText, CommandTabBadge, CommandTabCountText, _vm.IsCommandTab);
         SetTabVisual(KernelTabSurface, KernelTabLabelText, KernelTabBadge, KernelTabCountText, _vm.IsKernelTab);
@@ -122,6 +132,8 @@ public sealed partial class ActivityDiagnosticsPage : Page
         {
             SearchBox.Text = _vm.SearchQuery;
         }
+        _appliedSearchQuery = _vm.SearchQuery;
+        _pendingSearchQuery = _vm.SearchQuery;
 
         Filter1Box.ItemsSource = _vm.Filter1Options;
         Filter1Box.SelectedItem = _vm.SelectedFilter1;
@@ -146,11 +158,46 @@ public sealed partial class ActivityDiagnosticsPage : Page
 
     private void RenderRawPanel()
     {
-        CopyRawButton.IsEnabled = _vm.HasRawSelection;
-        RawEmptyStatePanel.Visibility = _vm.HasRawSelection ? Visibility.Collapsed : Visibility.Visible;
-        RawJsonScrollViewer.Visibility = _vm.HasRawSelection ? Visibility.Visible : Visibility.Collapsed;
-        RawJsonTextBlock.Text = _vm.RawMessageJson;
-        RawSizeTextBlock.Text = _vm.RawSizeText;
+        var showInspector = _vm.HasRawSelection;
+        RawOverlayLayer.Visibility = showInspector ? Visibility.Visible : Visibility.Collapsed;
+        CopyRawButton.IsEnabled = showInspector;
+
+        if (!showInspector)
+        {
+            return;
+        }
+
+        UpdateRawOverlayLayout();
+
+        if (!string.Equals(_lastRenderedRawJson, _vm.RawMessageJson, StringComparison.Ordinal))
+        {
+            RawJsonTextBlock.Text = _vm.RawMessageJson;
+            _lastRenderedRawJson = _vm.RawMessageJson;
+        }
+
+        if (!string.Equals(_lastRenderedRawSize, _vm.RawSizeText, StringComparison.Ordinal))
+        {
+            RawSizeTextBlock.Text = _vm.RawSizeText;
+            _lastRenderedRawSize = _vm.RawSizeText;
+        }
+    }
+
+    private void UpdateRawOverlayLayout()
+    {
+        var width = ActualWidth;
+        if (width < 640)
+        {
+            RawOverlayHost.HorizontalAlignment = HorizontalAlignment.Stretch;
+            RawOverlayHost.Width = double.NaN;
+            RawOverlayHost.MaxWidth = double.PositiveInfinity;
+            RawOverlayHost.Margin = new Thickness(8);
+            return;
+        }
+
+        RawOverlayHost.HorizontalAlignment = HorizontalAlignment.Right;
+        RawOverlayHost.Margin = width < 1008 ? new Thickness(10) : new Thickness(12);
+        RawOverlayHost.Width = width < 1008 ? 428 : 480;
+        RawOverlayHost.MaxWidth = width < 1008 ? 448 : 520;
     }
 
     private void RenderSortGlyphs()
@@ -174,9 +221,28 @@ public sealed partial class ActivityDiagnosticsPage : Page
                 continue;
             }
 
-            entry.Value.Text = _vm.IsSortDescending() ? "▼" : "▲";
+            entry.Value.Text = _vm.IsSortDescending() ? "v" : "^";
             entry.Value.Foreground = BrushOf("SuccessBrush");
         }
+    }
+
+    private void BindActiveTableSource()
+    {
+        WssListView.ItemsSource = _vm.IsWssTab ? _vm.WssRows : null;
+        CommandListView.ItemsSource = _vm.IsCommandTab ? _vm.CommandRows : null;
+        KernelListView.ItemsSource = _vm.IsKernelTab ? _vm.KernelRows : null;
+    }
+
+    private void OnSearchDebounceTimerTick(DispatcherQueueTimer sender, object args)
+    {
+        sender.Stop();
+        if (string.Equals(_pendingSearchQuery, _appliedSearchQuery, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _appliedSearchQuery = _pendingSearchQuery;
+        _vm.SetSearch(_pendingSearchQuery);
     }
 
     private void SetTabVisual(Border surface, TextBlock label, Border badge, TextBlock badgeText, bool active)
@@ -225,7 +291,9 @@ public sealed partial class ActivityDiagnosticsPage : Page
             return;
         }
 
-        _vm.SetSearch(SearchBox.Text);
+        _pendingSearchQuery = SearchBox.Text ?? string.Empty;
+        _searchDebounceTimer.Stop();
+        _searchDebounceTimer.Start();
     }
 
     private void OnFilter1Changed(object sender, SelectionChangedEventArgs e)
@@ -327,6 +395,30 @@ public sealed partial class ActivityDiagnosticsPage : Page
         Clipboard.SetContent(package);
     }
 
+    private void OnCloseRawOverlayClick(object sender, RoutedEventArgs e)
+    {
+        ClearRawSelection();
+    }
+
+    private void OnPageKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key != Windows.System.VirtualKey.Escape || !_vm.HasRawSelection)
+        {
+            return;
+        }
+
+        ClearRawSelection();
+        e.Handled = true;
+    }
+
+    private void ClearRawSelection()
+    {
+        _vm.ClearRawMessage();
+        WssListView.SelectedItem = null;
+        CommandListView.SelectedItem = null;
+        KernelListView.SelectedItem = null;
+    }
+
     private async void OnExportJson(object sender, RoutedEventArgs e)
     {
         try
@@ -374,7 +466,10 @@ public sealed partial class ActivityDiagnosticsPage : Page
     private void OnPageUnloaded(object sender, RoutedEventArgs e)
     {
         Unloaded -= OnPageUnloaded;
+        _searchDebounceTimer.Stop();
+        _searchDebounceTimer.Tick -= OnSearchDebounceTimerTick;
         _vm.PropertyChanged -= HandleViewModelPropertyChanged;
         _vm.Dispose();
     }
 }
+

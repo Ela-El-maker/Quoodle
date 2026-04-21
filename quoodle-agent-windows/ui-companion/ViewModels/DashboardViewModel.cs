@@ -1,7 +1,6 @@
 using Quoodle.Agent.UiCompanion.Infrastructure;
 using Quoodle.Agent.UiCompanion.Models;
 using Quoodle.Agent.UiCompanion.Services;
-using Microsoft.UI.Dispatching;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -87,7 +86,6 @@ public sealed class DashboardViewModel : ObservableObject, IDisposable
     private const string GatewayEndpoint = "wss://gateway.quoodle.io/agent";
 
     private readonly AgentStateStore _store;
-    private readonly DispatcherQueue? _dispatcherQueue;
     private readonly List<RollingTelemetrySample> _samples = new();
 
     private AgentStateSnapshot _lastSnapshot = AgentStateSnapshot.CreateInitial();
@@ -136,7 +134,6 @@ public sealed class DashboardViewModel : ObservableObject, IDisposable
     public DashboardViewModel(AgentStateStore store)
     {
         _store = store;
-        _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         _store.SnapshotChanged += HandleSnapshotChanged;
 
         ShowCpuRamCommand = new RelayCommand(() => SetTelemetryMode(TelemetryChartMode.CpuRam));
@@ -332,12 +329,6 @@ public sealed class DashboardViewModel : ObservableObject, IDisposable
 
     private void HandleSnapshotChanged(object? sender, AgentStateSnapshot snapshot)
     {
-        if (_dispatcherQueue is not null && !_dispatcherQueue.HasThreadAccess)
-        {
-            _ = _dispatcherQueue.TryEnqueue(() => HandleSnapshotChanged(sender, snapshot));
-            return;
-        }
-
         Apply(snapshot);
     }
 
@@ -547,7 +538,7 @@ public sealed class DashboardViewModel : ObservableObject, IDisposable
         const int maxPoints = 64;
         if (source.Count > maxPoints)
         {
-            var step = Math.Max(1, source.Count / maxPoints);
+            var step = Math.Max(1, (int)Math.Ceiling(source.Count / (double)maxPoints));
             source = source.Where((_, index) => index % step == 0).ToList();
         }
 

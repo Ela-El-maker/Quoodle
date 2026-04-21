@@ -85,8 +85,8 @@ public sealed partial class DashboardPage : Page
     private void RenderTelemetryPanel()
     {
         TelemetrySubtitleText.Text = _vm.TelemetryMode == TelemetryChartMode.CpuRam
-            ? "telemetry_basic · last 90 minutes"
-            : "telemetry_network · last 90 minutes";
+            ? "telemetry_basic - last 90 minutes"
+            : "telemetry_network - last 90 minutes";
 
         ApplySegmentButtonVisual(CpuRamTabButton, _vm.IsCpuRamMode);
         ApplySegmentButtonVisual(NetworkTabButton, _vm.IsNetworkMode);
@@ -182,7 +182,7 @@ public sealed partial class DashboardPage : Page
                 Height = completedHeight,
                 RadiusX = 2,
                 RadiusY = 2,
-                Fill = ColorBrush("#2BA656"),
+                Fill = BrushOf("SuccessBrush"),
                 Opacity = 0.88
             };
             Canvas.SetLeft(completedBar, x + groupWidth * 0.10);
@@ -195,7 +195,7 @@ public sealed partial class DashboardPage : Page
                 Height = failedHeight,
                 RadiusX = 2,
                 RadiusY = 2,
-                Fill = ColorBrush("#B84143"),
+                Fill = BrushOf("DangerBrush"),
                 Opacity = 0.92
             };
             Canvas.SetLeft(failedBar, x + groupWidth * 0.52);
@@ -242,7 +242,7 @@ public sealed partial class DashboardPage : Page
         {
             var minSeq = items.Min(x => x.Sequence);
             var maxSeq = items.Max(x => x.Sequence);
-            WssFeedSubtitleText.Text = $"Last {items.Count} messages · seq {minSeq}-{maxSeq}";
+            WssFeedSubtitleText.Text = $"Last {items.Count} messages - seq {minSeq}-{maxSeq}";
         }
 
         WssFeedItemsPanel.Children.Clear();
@@ -258,7 +258,7 @@ public sealed partial class DashboardPage : Page
         {
             Padding = new Thickness(20, 13, 20, 13),
             ColumnSpacing = 12,
-            Background = item.Highlight ? ColorBrush("#161C2634") : new SolidColorBrush(Microsoft.UI.Colors.Transparent)
+            Background = item.Highlight ? BrushOf("SurfaceAltBrush") : new SolidColorBrush(Microsoft.UI.Colors.Transparent)
         };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -535,26 +535,6 @@ public sealed partial class DashboardPage : Page
         }
 
         return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-    }
-
-    private static SolidColorBrush ColorBrush(string hex)
-    {
-        return new SolidColorBrush(ParseHexColor(hex));
-    }
-
-    private static Windows.UI.Color ParseHexColor(string hex)
-    {
-        var clean = hex.Trim().TrimStart('#');
-        if (clean.Length == 6)
-        {
-            clean = "FF" + clean;
-        }
-
-        var a = Convert.ToByte(clean[0..2], 16);
-        var r = Convert.ToByte(clean[2..4], 16);
-        var g = Convert.ToByte(clean[4..6], 16);
-        var b = Convert.ToByte(clean[6..8], 16);
-        return Windows.UI.Color.FromArgb(a, r, g, b);
     }
 
     private Style Resource(string key)

@@ -1,4 +1,4 @@
-using Microsoft.UI.Xaml.Controls;
+﻿using Microsoft.UI.Xaml.Controls;
 using Quoodle.Agent.UiCompanion.ViewModels;
 
 namespace Quoodle.Agent.UiCompanion.Views;
@@ -35,9 +35,9 @@ public sealed partial class DeviceDetailsPage : Page
             _ => "Neutral"
         };
 
-        SummaryText.Text = $"{_vm.DeviceName} ({_vm.DeviceId}) • Last sync {_vm.LastSync}";
+        SummaryText.Text = $"{_vm.DeviceName} ({_vm.DeviceId}) - Last sync {_vm.LastSync}";
         HeroDeviceText.Text = $"{_vm.DeviceName} / {_vm.DeviceId}";
-        HeroStatusText.Text = $"Connection {_vm.Connection} • Health {_vm.Health}";
+        HeroStatusText.Text = $"Connection {_vm.Connection} - Health {_vm.Health}";
 
         ConnectionCard.Title = "Transport";
         ConnectionCard.Value = _vm.Connection;

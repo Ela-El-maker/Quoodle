@@ -11,13 +11,13 @@
     <Page.Resources>
         <Style x:Key="DashboardHeadingStyle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
-            <Setter Property="FontSize" Value="38" />
+            <Setter Property="FontSize" Value="28" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
 
         <Style x:Key="DashboardSubheadingStyle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{ThemeResource TextSecondaryBrush}" />
-            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontSize" Value="13" />
         </Style>
 
         <Style x:Key="HeroLabelStyle" TargetType="TextBlock">
@@ -28,14 +28,13 @@
 
         <Style x:Key="HeroValueStyle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
-            <Setter Property="FontSize" Value="33" />
-            <Setter Property="FontFamily" Value="Consolas" />
+            <Setter Property="FontSize" Value="18" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
 
         <Style x:Key="PanelTitleStyle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
-            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontSize" Value="18" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
 
@@ -51,18 +50,140 @@
         </Style>
     </Page.Resources>
 
-    <ScrollViewer>
-        <Grid Padding="20,8,20,18" MaxWidth="1320">
-            <StackPanel Spacing="16">
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <Grid x:Name="DashboardRoot" Padding="14,6,14,14" MaxWidth="1320">
+            <VisualStateManager.VisualStateGroups>
+                <VisualStateGroup>
+                    <VisualState x:Name="NarrowState">
+                        <VisualState.StateTriggers>
+                            <AdaptiveTrigger MinWindowWidth="0" />
+                        </VisualState.StateTriggers>
+                        <VisualState.Setters>
+                            <Setter Target="HeroDetailGrid.Visibility" Value="Collapsed" />
+                            <Setter Target="HeroCompactDetails.Visibility" Value="Visible" />
+                            <Setter Target="HeroSessionPanel.Visibility" Value="Collapsed" />
+                            <Setter Target="HeroDevicePanel.Visibility" Value="Collapsed" />
+                            <Setter Target="HeroHeartbeatPanel.Visibility" Value="Collapsed" />
+                            <Setter Target="MetricsCol0.Width" Value="*" />
+                            <Setter Target="MetricsCol1.Width" Value="*" />
+                            <Setter Target="MetricsCol2.Width" Value="0" />
+                            <Setter Target="MetricsCol3.Width" Value="0" />
+                            <Setter Target="WssUptimeCard.(Grid.ColumnSpan)" Value="2" />
+                            <Setter Target="LastHeartbeatCard.(Grid.Row)" Value="1" />
+                            <Setter Target="LastHeartbeatCard.(Grid.Column)" Value="0" />
+                            <Setter Target="FailedCommandsCard.(Grid.Row)" Value="1" />
+                            <Setter Target="FailedCommandsCard.(Grid.Column)" Value="1" />
+                            <Setter Target="CommandsCompletedCard.(Grid.Row)" Value="2" />
+                            <Setter Target="CommandsCompletedCard.(Grid.Column)" Value="0" />
+                            <Setter Target="KernelEventsCard.(Grid.Row)" Value="2" />
+                            <Setter Target="KernelEventsCard.(Grid.Column)" Value="1" />
+                            <Setter Target="CpuUsageCard.(Grid.Row)" Value="3" />
+                            <Setter Target="CpuUsageCard.(Grid.Column)" Value="0" />
+                            <Setter Target="RamUsageCard.(Grid.Row)" Value="3" />
+                            <Setter Target="RamUsageCard.(Grid.Column)" Value="1" />
+                            <Setter Target="DiskUsageCard.(Grid.Row)" Value="4" />
+                            <Setter Target="DiskUsageCard.(Grid.Column)" Value="0" />
+                            <Setter Target="NetTxCard.(Grid.Row)" Value="4" />
+                            <Setter Target="NetTxCard.(Grid.Column)" Value="1" />
+                            <Setter Target="NetRxCard.(Grid.Row)" Value="5" />
+                            <Setter Target="NetRxCard.(Grid.Column)" Value="0" />
+                            <Setter Target="TelemetrySnapshotsCard.(Grid.Row)" Value="5" />
+                            <Setter Target="TelemetrySnapshotsCard.(Grid.Column)" Value="1" />
+                        </VisualState.Setters>
+                    </VisualState>
+
+                    <VisualState x:Name="MediumState">
+                        <VisualState.StateTriggers>
+                            <AdaptiveTrigger MinWindowWidth="641" />
+                        </VisualState.StateTriggers>
+                        <VisualState.Setters>
+                            <Setter Target="HeroDetailGrid.Visibility" Value="Collapsed" />
+                            <Setter Target="HeroCompactDetails.Visibility" Value="Visible" />
+                            <Setter Target="HeroSessionPanel.Visibility" Value="Collapsed" />
+                            <Setter Target="HeroDevicePanel.Visibility" Value="Visible" />
+                            <Setter Target="HeroHeartbeatPanel.Visibility" Value="Collapsed" />
+                            <Setter Target="MetricsCol0.Width" Value="*" />
+                            <Setter Target="MetricsCol1.Width" Value="*" />
+                            <Setter Target="MetricsCol2.Width" Value="0" />
+                            <Setter Target="MetricsCol3.Width" Value="0" />
+                            <Setter Target="WssUptimeCard.(Grid.ColumnSpan)" Value="2" />
+                            <Setter Target="LastHeartbeatCard.(Grid.Row)" Value="1" />
+                            <Setter Target="LastHeartbeatCard.(Grid.Column)" Value="0" />
+                            <Setter Target="FailedCommandsCard.(Grid.Row)" Value="1" />
+                            <Setter Target="FailedCommandsCard.(Grid.Column)" Value="1" />
+                            <Setter Target="CommandsCompletedCard.(Grid.Row)" Value="2" />
+                            <Setter Target="CommandsCompletedCard.(Grid.Column)" Value="0" />
+                            <Setter Target="KernelEventsCard.(Grid.Row)" Value="2" />
+                            <Setter Target="KernelEventsCard.(Grid.Column)" Value="1" />
+                            <Setter Target="CpuUsageCard.(Grid.Row)" Value="3" />
+                            <Setter Target="CpuUsageCard.(Grid.Column)" Value="0" />
+                            <Setter Target="RamUsageCard.(Grid.Row)" Value="3" />
+                            <Setter Target="RamUsageCard.(Grid.Column)" Value="1" />
+                            <Setter Target="DiskUsageCard.(Grid.Row)" Value="4" />
+                            <Setter Target="DiskUsageCard.(Grid.Column)" Value="0" />
+                            <Setter Target="NetTxCard.(Grid.Row)" Value="4" />
+                            <Setter Target="NetTxCard.(Grid.Column)" Value="1" />
+                            <Setter Target="NetRxCard.(Grid.Row)" Value="5" />
+                            <Setter Target="NetRxCard.(Grid.Column)" Value="0" />
+                            <Setter Target="TelemetrySnapshotsCard.(Grid.Row)" Value="5" />
+                            <Setter Target="TelemetrySnapshotsCard.(Grid.Column)" Value="1" />
+                        </VisualState.Setters>
+                    </VisualState>
+
+                    <VisualState x:Name="WideState">
+                        <VisualState.StateTriggers>
+                            <AdaptiveTrigger MinWindowWidth="1200" />
+                        </VisualState.StateTriggers>
+                        <VisualState.Setters>
+                            <Setter Target="HeroDetailGrid.Visibility" Value="Visible" />
+                            <Setter Target="HeroCompactDetails.Visibility" Value="Collapsed" />
+                            <Setter Target="HeroSessionPanel.Visibility" Value="Collapsed" />
+                            <Setter Target="HeroDevicePanel.Visibility" Value="Visible" />
+                            <Setter Target="HeroHeartbeatPanel.Visibility" Value="Visible" />
+                            <Setter Target="MetricsCol0.Width" Value="*" />
+                            <Setter Target="MetricsCol1.Width" Value="*" />
+                            <Setter Target="MetricsCol2.Width" Value="*" />
+                            <Setter Target="MetricsCol3.Width" Value="*" />
+                            <Setter Target="WssUptimeCard.(Grid.ColumnSpan)" Value="2" />
+                            <Setter Target="LastHeartbeatCard.(Grid.Row)" Value="0" />
+                            <Setter Target="LastHeartbeatCard.(Grid.Column)" Value="2" />
+                            <Setter Target="FailedCommandsCard.(Grid.Row)" Value="0" />
+                            <Setter Target="FailedCommandsCard.(Grid.Column)" Value="3" />
+                            <Setter Target="CommandsCompletedCard.(Grid.Row)" Value="1" />
+                            <Setter Target="CommandsCompletedCard.(Grid.Column)" Value="0" />
+                            <Setter Target="KernelEventsCard.(Grid.Row)" Value="1" />
+                            <Setter Target="KernelEventsCard.(Grid.Column)" Value="1" />
+                            <Setter Target="CpuUsageCard.(Grid.Row)" Value="1" />
+                            <Setter Target="CpuUsageCard.(Grid.Column)" Value="2" />
+                            <Setter Target="RamUsageCard.(Grid.Row)" Value="1" />
+                            <Setter Target="RamUsageCard.(Grid.Column)" Value="3" />
+                            <Setter Target="DiskUsageCard.(Grid.Row)" Value="2" />
+                            <Setter Target="DiskUsageCard.(Grid.Column)" Value="0" />
+                            <Setter Target="NetTxCard.(Grid.Row)" Value="2" />
+                            <Setter Target="NetTxCard.(Grid.Column)" Value="1" />
+                            <Setter Target="NetRxCard.(Grid.Row)" Value="2" />
+                            <Setter Target="NetRxCard.(Grid.Column)" Value="2" />
+                            <Setter Target="TelemetrySnapshotsCard.(Grid.Row)" Value="2" />
+                            <Setter Target="TelemetrySnapshotsCard.(Grid.Column)" Value="3" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateManager.VisualStateGroups>
+            <StackPanel Spacing="12">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Overview" Style="{StaticResource DashboardHeadingStyle}" />
+                    <TextBlock Text="Live agent health, telemetry, command execution, and current activity." Style="{StaticResource DashboardSubheadingStyle}" />
+                </StackPanel>
+
                 <Border
                     x:Name="HeroPanel"
-                    CornerRadius="13"
+                    CornerRadius="12"
                     Padding="0"
                     BorderBrush="{ThemeResource HeaderPanelBorderBrush}"
                     BorderThickness="1"
-                    Background="#0A0E2A1E">
+                    Background="{ThemeResource HeaderPanelBackgroundBrush}">
                     <StackPanel>
-                        <Grid Padding="20,14" ColumnSpacing="14">
+                        <Grid x:Name="HeroMetaStrip" Padding="14,10" ColumnSpacing="10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
@@ -72,84 +193,85 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
 
-                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <StackPanel x:Name="HeroConnectionPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                 <Ellipse x:Name="ConnectionDot" Width="11" Height="11" Fill="{ThemeResource SuccessBrush}" />
                                 <TextBlock x:Name="ConnectionText" Foreground="{ThemeResource SuccessBrush}" FontSize="15" FontWeight="SemiBold" />
                             </StackPanel>
 
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <StackPanel x:Name="HeroSessionPanel" Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                 <Rectangle Width="1" Height="24" Fill="{ThemeResource BorderBrush}" />
                                 <TextBlock Text="SESSION" Style="{StaticResource DashboardSubheadingStyle}" />
                                 <TextBlock x:Name="SessionText" Foreground="{ThemeResource TextPrimaryBrush}" FontFamily="Consolas" FontSize="15" />
                             </StackPanel>
 
-                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <StackPanel x:Name="HeroDevicePanel" Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                 <Rectangle Width="1" Height="24" Fill="{ThemeResource BorderBrush}" />
                                 <TextBlock Text="DEVICE" Style="{StaticResource DashboardSubheadingStyle}" />
                                 <TextBlock x:Name="DeviceText" Foreground="{ThemeResource TextPrimaryBrush}" FontFamily="Consolas" FontSize="15" />
                             </StackPanel>
 
-                            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <StackPanel x:Name="HeroHeartbeatPanel" Grid.Column="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                 <Rectangle Width="1" Height="24" Fill="{ThemeResource BorderBrush}" />
                                 <FontIcon Glyph="&#xE121;" Foreground="{ThemeResource TextMutedBrush}" />
                                 <TextBlock Text="Last heartbeat" Style="{StaticResource DashboardSubheadingStyle}" />
                                 <TextBlock x:Name="HeartbeatText" Foreground="{ThemeResource TextPrimaryBrush}" FontWeight="SemiBold" />
                             </StackPanel>
 
-                            <TextBlock Grid.Column="5" Text="Details ^" Style="{StaticResource DashboardSubheadingStyle}" VerticalAlignment="Center" />
+                            <TextBlock x:Name="HeroDetailsHintText" Grid.Column="5" Text="Runtime summary" Style="{StaticResource DashboardSubheadingStyle}" VerticalAlignment="Center" />
                         </Grid>
+
+                        <TextBlock
+                            x:Name="HeroCompactDetails"
+                            Visibility="Collapsed"
+                            Margin="14,0,14,8"
+                            Style="{StaticResource DashboardSubheadingStyle}"
+                            Text="Open Settings for full identity and transport details." />
 
                         <Border Height="1" Background="{ThemeResource BorderBrush}" />
 
-                        <Grid Padding="20,16" ColumnSpacing="26" RowSpacing="14">
+                        <Grid x:Name="HeroDetailGrid" Padding="14,10" ColumnSpacing="16" RowSpacing="8">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
                             <StackPanel Grid.Row="0" Grid.Column="0" Spacing="2">
                                 <TextBlock Text="AGENT VERSION" Style="{StaticResource HeroLabelStyle}" />
-                                <TextBlock x:Name="AgentVersionText" Style="{StaticResource HeroValueStyle}" />
+                                <TextBlock x:Name="AgentVersionText" Style="{StaticResource HeroValueStyle}" TextTrimming="CharacterEllipsis" />
                             </StackPanel>
                             <StackPanel Grid.Row="0" Grid.Column="1" Spacing="2">
                                 <TextBlock Text="OS BUILD" Style="{StaticResource HeroLabelStyle}" />
-                                <TextBlock x:Name="OsBuildText" Style="{StaticResource HeroValueStyle}" />
+                                <TextBlock x:Name="OsBuildText" Style="{StaticResource HeroValueStyle}" TextTrimming="CharacterEllipsis" />
                             </StackPanel>
                             <StackPanel Grid.Row="0" Grid.Column="2" Spacing="2">
-                                <TextBlock Text="HWID HASH" Style="{StaticResource HeroLabelStyle}" />
-                                <TextBlock x:Name="HwidHashText" Style="{StaticResource HeroValueStyle}" />
-                            </StackPanel>
-                            <StackPanel Grid.Row="0" Grid.Column="3" Spacing="2">
-                                <TextBlock Text="POLICY HASH" Style="{StaticResource HeroLabelStyle}" />
-                                <TextBlock x:Name="PolicyHashText" Style="{StaticResource HeroValueStyle}" />
-                            </StackPanel>
-
-                            <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Spacing="2">
-                                <TextBlock Text="WSS ENDPOINT" Style="{StaticResource HeroLabelStyle}" />
-                                <TextBlock x:Name="EndpointText" Style="{StaticResource HeroValueStyle}" TextWrapping="Wrap" />
-                            </StackPanel>
-                            <StackPanel Grid.Row="1" Grid.Column="2" Spacing="2">
                                 <TextBlock Text="RECONNECT ATTEMPTS" Style="{StaticResource HeroLabelStyle}" />
                                 <TextBlock x:Name="ReconnectText" Style="{StaticResource HeroValueStyle}" />
                             </StackPanel>
                         </Grid>
+
+                        <Grid Visibility="Collapsed">
+                            <TextBlock x:Name="HwidHashText" />
+                            <TextBlock x:Name="PolicyHashText" />
+                            <TextBlock x:Name="EndpointText" />
+                        </Grid>
                     </StackPanel>
                 </Border>
 
-                <Grid ColumnSpacing="14" RowSpacing="14">
+                <Grid x:Name="MetricsGrid" ColumnSpacing="14" RowSpacing="14">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition x:Name="MetricsCol0" Width="*" />
+                        <ColumnDefinition x:Name="MetricsCol1" Width="*" />
+                        <ColumnDefinition x:Name="MetricsCol2" Width="*" />
+                        <ColumnDefinition x:Name="MetricsCol3" Width="*" />
                     </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -209,16 +331,16 @@
 
                             <StackPanel Spacing="3">
                                 <TextBlock Text="Command Execution" Style="{StaticResource PanelTitleStyle}" />
-                                <TextBlock Text="Hourly breakdown · completed vs failed" Style="{StaticResource DashboardSubheadingStyle}" />
+                                <TextBlock Text="Hourly breakdown - completed vs failed" Style="{StaticResource DashboardSubheadingStyle}" />
                             </StackPanel>
 
                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <Ellipse Width="10" Height="10" Fill="#2BA656" />
+                                    <Ellipse Width="10" Height="10" Fill="{ThemeResource SuccessBrush}" />
                                     <TextBlock Text="Completed" Style="{StaticResource DashboardSubheadingStyle}" />
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <Ellipse Width="10" Height="10" Fill="#B84143" />
+                                    <Ellipse Width="10" Height="10" Fill="{ThemeResource DangerBrush}" />
                                     <TextBlock Text="Failed" Style="{StaticResource DashboardSubheadingStyle}" />
                                 </StackPanel>
                             </StackPanel>
@@ -262,7 +384,7 @@
 
                             <StackPanel Spacing="2">
                                 <StackPanel Orientation="Horizontal" Spacing="10">
-                                    <TextBlock x:Name="LastCommandNameText" FontSize="36" FontWeight="SemiBold" FontFamily="Consolas" />
+                                    <TextBlock x:Name="LastCommandNameText" FontSize="24" FontWeight="SemiBold" FontFamily="Consolas" />
                                     <Border x:Name="LastCommandPriorityBadge" Background="{ThemeResource ChipNeutralBackgroundBrush}" CornerRadius="7" Padding="8,2" VerticalAlignment="Center">
                                         <TextBlock x:Name="LastCommandPriorityText" Foreground="{ThemeResource ChipNeutralForegroundBrush}" FontFamily="Consolas" FontSize="12" />
                                     </Border>
@@ -274,7 +396,7 @@
                             </StackPanel>
 
                             <StackPanel Grid.Column="1" Spacing="4" HorizontalAlignment="Right">
-                                <TextBlock x:Name="LastCommandTransportText" Foreground="{ThemeResource InfoBrush}" FontFamily="Consolas" FontSize="16" />
+                                <TextBlock x:Name="LastCommandTransportText" Foreground="{ThemeResource InfoBrush}" FontFamily="Consolas" FontSize="14" />
                                 <TextBlock x:Name="LastCommandWorkerText" Style="{StaticResource DashboardSubheadingStyle}" HorizontalAlignment="Right" />
                             </StackPanel>
                         </Grid>
@@ -299,7 +421,7 @@
                             </StackPanel>
                         </Grid>
 
-                        <Border Margin="20,0,20,18" Padding="13,10" BorderBrush="{ThemeResource HeaderPanelBorderBrush}" BorderThickness="1" CornerRadius="9" Background="#110E2A1E">
+                        <Border Margin="20,0,20,18" Padding="13,10" BorderBrush="{ThemeResource HeaderPanelBorderBrush}" BorderThickness="1" CornerRadius="9" Background="{ThemeResource HeaderPanelBackgroundBrush}">
                             <StackPanel Orientation="Horizontal" Spacing="10">
                                 <FontIcon x:Name="LastCommandResultIcon" Glyph="&#xE73E;" Foreground="{ThemeResource SuccessBrush}" />
                                 <TextBlock x:Name="LastCommandResultText" Foreground="{ThemeResource SuccessBrush}" FontSize="15" FontFamily="Consolas" />
