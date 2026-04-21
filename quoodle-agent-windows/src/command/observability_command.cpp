@@ -251,7 +251,7 @@ namespace command
       return std::min(casted, max_value);
     }
 
-    std::filesystem::path default_filesystem_root()
+    std::filesystem::path default_absolute_anchor_root()
     {
       std::error_code ec;
       const std::filesystem::path c_drive("C:\\");
@@ -272,12 +272,51 @@ namespace command
       return cwd;
     }
 
+    std::filesystem::path default_filesystem_root()
+    {
+      std::error_code ec;
+      const std::filesystem::path users_root("C:\\Users");
+      if (std::filesystem::exists(users_root, ec) && std::filesystem::is_directory(users_root, ec))
+      {
+        return users_root;
+      }
+      return default_absolute_anchor_root();
+    }
+
+    bool is_windows_c_drive_root(const std::filesystem::path &path)
+    {
+#ifdef _WIN32
+      const auto normalized = path.lexically_normal();
+      const auto root_name = lowercase_copy(normalized.root_name().string());
+      const auto root_dir = normalized.root_directory().string();
+      const auto relative = normalized.relative_path().lexically_normal().generic_string();
+      if (root_name != "c:" || root_dir.empty())
+      {
+        return false;
+      }
+      return relative.empty() || relative == ".";
+#else
+      (void)path;
+      return false;
+#endif
+    }
+
+    bool is_users_directory(const std::filesystem::path &path)
+    {
+#ifdef _WIN32
+      return lowercase_copy(path.filename().string()) == "users";
+#else
+      (void)path;
+      return false;
+#endif
+    }
+
     std::filesystem::path normalize_path(const std::string &raw_path)
     {
       std::filesystem::path path = raw_path.empty() ? default_filesystem_root() : std::filesystem::path(raw_path);
       if (path.is_relative())
       {
-        path = default_filesystem_root() / path;
+        path = default_absolute_anchor_root() / path;
       }
       path = path.lexically_normal();
       std::error_code ec;
@@ -1300,6 +1339,7 @@ namespace command
       std::vector<std::filesystem::path> child_directories;
       std::size_t total_seen = 0;
       bool partial = false;
+      const bool prioritize_users_branch = is_windows_c_drive_root(options.root_path);
 
       const auto add_entry = [&](const std::filesystem::directory_entry &entry)
       {
@@ -1345,6 +1385,20 @@ namespace command
 
         if (options.recursive && !partial && options.max_depth > 1)
         {
+          if (prioritize_users_branch && child_directories.size() > 1)
+          {
+            std::sort(child_directories.begin(), child_directories.end(), [](const std::filesystem::path &a, const std::filesystem::path &b)
+                      {
+                        const bool a_users = is_users_directory(a);
+                        const bool b_users = is_users_directory(b);
+                        if (a_users != b_users)
+                        {
+                          return a_users;
+                        }
+                        return lowercase_copy(a.filename().string()) < lowercase_copy(b.filename().string());
+                      });
+          }
+
           for (const auto &child_dir : child_directories)
           {
             std::filesystem::recursive_directory_iterator iter(child_dir, dir_options, ec);
