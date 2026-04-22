@@ -196,6 +196,10 @@ def test_dispatch_allows_list_services_and_connections_methods(client):
             "get_active_window",
             "list_files",
             "download_file",
+            "create_directory",
+            "create_file",
+            "delete_file",
+            "delete_directory",
         ):
             payload = _sample_dispatch_payload()
             payload["method"] = method
@@ -203,6 +207,18 @@ def test_dispatch_allows_list_services_and_connections_methods(client):
             if method == "download_file":
                 payload["params"] = {"path": "Users/Public/test.txt"}
                 payload["envelope"]["body"]["params"] = {"path": "Users/Public/test.txt"}
+            elif method == "create_directory":
+                payload["params"] = {"path": "C:\\Users\\Public\\Quoodle\\tmp", "recursive": True}
+                payload["envelope"]["body"]["params"] = {"path": "C:\\Users\\Public\\Quoodle\\tmp", "recursive": True}
+            elif method == "create_file":
+                payload["params"] = {"path": "C:\\Users\\Public\\Quoodle\\tmp\\note.txt", "overwrite": False}
+                payload["envelope"]["body"]["params"] = {"path": "C:\\Users\\Public\\Quoodle\\tmp\\note.txt", "overwrite": False}
+            elif method == "delete_file":
+                payload["params"] = {"path": "C:\\Users\\Public\\Quoodle\\tmp\\note.txt", "confirm": True}
+                payload["envelope"]["body"]["params"] = {"path": "C:\\Users\\Public\\Quoodle\\tmp\\note.txt", "confirm": True}
+            elif method == "delete_directory":
+                payload["params"] = {"path": "C:\\Users\\Public\\Quoodle\\tmp\\old-dir", "confirm": True}
+                payload["envelope"]["body"]["params"] = {"path": "C:\\Users\\Public\\Quoodle\\tmp\\old-dir", "confirm": True}
 
             resp = client.post("/api/v1/command/dispatch", json=payload)
             assert resp.status_code == 200
