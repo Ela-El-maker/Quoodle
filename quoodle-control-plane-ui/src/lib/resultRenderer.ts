@@ -136,6 +136,10 @@ const methodTitleMap: Record<string, string> = {
   get_active_window: 'Active Window',
   list_files: 'Filesystem Browser',
   download_file: 'File Download',
+  create_directory: 'Create Directory',
+  create_file: 'Create File',
+  delete_file: 'Delete File',
+  delete_directory: 'Delete Directory',
   screenshot: 'Screenshot Capture',
 };
 

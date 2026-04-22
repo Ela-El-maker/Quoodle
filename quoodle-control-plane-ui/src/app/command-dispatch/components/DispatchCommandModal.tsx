@@ -45,8 +45,8 @@ interface MethodOption {
 }
 
 const MEDIUM_RISK_METHODS = new Set(['lock_screen', 'reboot_device', 'shutdown_device', 'logout_user']);
-const HIGH_RISK_METHODS = new Set(['wipe_device', 'factory_reset', 'unenroll_device']);
-const TWO_FACTOR_METHODS = new Set(['wipe_device', 'factory_reset', 'shutdown_device']);
+const HIGH_RISK_METHODS = new Set(['wipe_device', 'factory_reset', 'unenroll_device', 'create_directory', 'create_file', 'delete_file', 'delete_directory']);
+const TWO_FACTOR_METHODS = new Set(['wipe_device', 'factory_reset', 'shutdown_device', 'create_directory', 'create_file', 'delete_file', 'delete_directory']);
 
 const riskColors = {
   low: { badge: 'bg-green-500/10 border-green-500/20 text-green-400', icon: CheckCircle2 },
@@ -72,6 +72,14 @@ function methodDescription(method: string): string {
       return 'List active processes from the target endpoint.';
     case 'list_files':
       return 'Default scope is C:\\Users when path is omitted. Set path to C:\\ for a full-drive scan.';
+    case 'create_directory':
+      return 'Create a directory at an explicit path. Supports recursive parent creation.';
+    case 'create_file':
+      return 'Create an empty file at an explicit path. Use overwrite=true to truncate existing files.';
+    case 'delete_file':
+      return 'Hard-delete a regular file. confirm=true is required.';
+    case 'delete_directory':
+      return 'Hard-delete a directory recursively. confirm=true is required.';
     case 'network_info':
       return 'Collect active network interfaces and routes.';
     default:
