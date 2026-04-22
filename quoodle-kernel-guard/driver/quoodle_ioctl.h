@@ -108,6 +108,10 @@ typedef enum QUOODLE_OPCODE {
   // Category-masked filesystem opcodes (read-oriented).
   QOP_FS_LIST_FILES = ((2u << 16) | 1u),
   QOP_FS_DOWNLOAD_FILE = ((2u << 16) | 2u),
+  QOP_FS_CREATE_DIRECTORY = ((2u << 16) | 3u),
+  QOP_FS_CREATE_FILE = ((2u << 16) | 4u),
+  QOP_FS_DELETE_FILE = ((2u << 16) | 5u),
+  QOP_FS_DELETE_DIRECTORY = ((2u << 16) | 6u),
   // Category-masked security opcodes (policy-driven enforcement).
   QOP_SEC_APPLOCK_REPLACE_POLICY = ((5u << 16) | 1u),
   QOP_SEC_APPLOCK_GET_STATUS = ((5u << 16) | 2u),

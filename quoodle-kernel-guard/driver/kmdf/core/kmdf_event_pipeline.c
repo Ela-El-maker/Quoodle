@@ -173,6 +173,18 @@ static const CHAR* qep_opcode_to_string(_In_ QUOODLE_OPCODE opcode) {
       return "NETWORK_INFO";
     case QOP_OBS_GET_ACTIVE_WINDOW:
       return "GET_ACTIVE_WINDOW";
+    case QOP_FS_LIST_FILES:
+      return "LIST_FILES";
+    case QOP_FS_DOWNLOAD_FILE:
+      return "DOWNLOAD_FILE";
+    case QOP_FS_CREATE_DIRECTORY:
+      return "CREATE_DIRECTORY";
+    case QOP_FS_CREATE_FILE:
+      return "CREATE_FILE";
+    case QOP_FS_DELETE_FILE:
+      return "DELETE_FILE";
+    case QOP_FS_DELETE_DIRECTORY:
+      return "DELETE_DIRECTORY";
     case QOP_SEC_APPLOCK_REPLACE_POLICY:
       return "SEC_APPLOCK_REPLACE_POLICY";
     case QOP_SEC_APPLOCK_GET_STATUS:
@@ -216,6 +228,13 @@ static const CHAR* qep_opcode_category(_In_ QUOODLE_OPCODE opcode) {
     case QOP_SEC_APPLOCK_GET_STATUS:
     case QOP_SEC_APPLOCK_CLEAR_POLICY:
       return "security";
+    case QOP_FS_LIST_FILES:
+    case QOP_FS_DOWNLOAD_FILE:
+    case QOP_FS_CREATE_DIRECTORY:
+    case QOP_FS_CREATE_FILE:
+    case QOP_FS_DELETE_FILE:
+    case QOP_FS_DELETE_DIRECTORY:
+      return "filesystem";
     default:
       return "exec";
   }
@@ -244,6 +263,18 @@ static const CHAR* qep_opcode_subtype(_In_ QUOODLE_OPCODE opcode) {
       return "applock_clear_policy";
     case QOP_EXEC_KILL_PROCESS:
       return "process_control";
+    case QOP_FS_LIST_FILES:
+      return "fs_list";
+    case QOP_FS_DOWNLOAD_FILE:
+      return "fs_download";
+    case QOP_FS_CREATE_DIRECTORY:
+      return "fs_create_directory";
+    case QOP_FS_CREATE_FILE:
+      return "fs_create_file";
+    case QOP_FS_DELETE_FILE:
+      return "fs_delete_file";
+    case QOP_FS_DELETE_DIRECTORY:
+      return "fs_delete_directory";
     default:
       return "opcode";
   }

@@ -41,4 +41,16 @@ VOID QuoodleOpcodeHandleListFiles(
 VOID QuoodleOpcodeHandleDownloadFile(
     _Out_ QUOODLE_IOCTL_RESPONSE* resp,
     _In_opt_ const QUOODLE_IOCTL_REQUEST* req);
+VOID QuoodleOpcodeHandleCreateDirectory(
+    _Out_ QUOODLE_IOCTL_RESPONSE* resp,
+    _In_opt_ const QUOODLE_IOCTL_REQUEST* req);
+VOID QuoodleOpcodeHandleCreateFile(
+    _Out_ QUOODLE_IOCTL_RESPONSE* resp,
+    _In_opt_ const QUOODLE_IOCTL_REQUEST* req);
+VOID QuoodleOpcodeHandleDeleteFile(
+    _Out_ QUOODLE_IOCTL_RESPONSE* resp,
+    _In_opt_ const QUOODLE_IOCTL_REQUEST* req);
+VOID QuoodleOpcodeHandleDeleteDirectory(
+    _Out_ QUOODLE_IOCTL_RESPONSE* resp,
+    _In_opt_ const QUOODLE_IOCTL_REQUEST* req);
 VOID QuoodleOpcodeHandleNotSupported(_Out_ QUOODLE_IOCTL_RESPONSE* resp);

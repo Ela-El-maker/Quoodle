@@ -215,6 +215,22 @@ static VOID QuoodleEvtIoDeviceControl(_In_ WDFQUEUE Queue,
         QuoodleOpcodeHandleDownloadFile(resp, &req_copy);
         should_emit_event = TRUE;
         break;
+      case QOP_FS_CREATE_DIRECTORY:
+        QuoodleOpcodeHandleCreateDirectory(resp, &req_copy);
+        should_emit_event = TRUE;
+        break;
+      case QOP_FS_CREATE_FILE:
+        QuoodleOpcodeHandleCreateFile(resp, &req_copy);
+        should_emit_event = TRUE;
+        break;
+      case QOP_FS_DELETE_FILE:
+        QuoodleOpcodeHandleDeleteFile(resp, &req_copy);
+        should_emit_event = TRUE;
+        break;
+      case QOP_FS_DELETE_DIRECTORY:
+        QuoodleOpcodeHandleDeleteDirectory(resp, &req_copy);
+        should_emit_event = TRUE;
+        break;
       case QOP_SEC_APPLOCK_REPLACE_POLICY: {
         CHAR error_reason[sizeof(resp->error_message)];
         NTSTATUS app_status = QuoodleAppLockdownReplacePolicy(
