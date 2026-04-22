@@ -37,6 +37,14 @@ QuoodleOpcode MapOpcodeToCode(const std::string &opcode)
     return QOP_FS_LIST_FILES;
   if (opcode == "download_file" || opcode == "DOWNLOAD_FILE")
     return QOP_FS_DOWNLOAD_FILE;
+  if (opcode == "create_directory" || opcode == "CREATE_DIRECTORY" || opcode == "create_folder" || opcode == "CREATE_FOLDER")
+    return QOP_FS_CREATE_DIRECTORY;
+  if (opcode == "create_file" || opcode == "CREATE_FILE")
+    return QOP_FS_CREATE_FILE;
+  if (opcode == "delete_file" || opcode == "DELETE_FILE")
+    return QOP_FS_DELETE_FILE;
+  if (opcode == "delete_directory" || opcode == "DELETE_DIRECTORY" || opcode == "delete_folder" || opcode == "DELETE_FOLDER")
+    return QOP_FS_DELETE_DIRECTORY;
   if (opcode == "SEC_APPLOCK_REPLACE_POLICY")
     return QOP_SEC_APPLOCK_REPLACE_POLICY;
   if (opcode == "SEC_APPLOCK_GET_STATUS")
