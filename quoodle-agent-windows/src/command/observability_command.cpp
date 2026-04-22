@@ -14,6 +14,7 @@
 #include <cstring>
 #include <ctime>
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <sstream>
 #include <string>
@@ -50,6 +51,10 @@ namespace command
     constexpr int QERR_FS_TOO_LARGE = 5205;
     constexpr int QERR_FS_UPLOAD_REQUEST_FAILED = 5206;
     constexpr int QERR_FS_UPLOAD_FAILED = 5207;
+    constexpr int QERR_FS_ALREADY_EXISTS = 5208;
+    constexpr int QERR_FS_SCOPE_VIOLATION = 5209;
+    constexpr int QERR_FS_PROTECTED_ROOT = 5210;
+    constexpr int QERR_FS_DELETE_FAILED = 5211;
     constexpr std::size_t kDefaultLimit = 250;
     constexpr std::size_t kDefaultProcessLimit = 1000;
     constexpr std::size_t kMaxLimit = 1000;
@@ -75,6 +80,23 @@ namespace command
     {
       std::filesystem::path file_path;
       std::uint64_t max_bytes{kDefaultDownloadMaxBytes};
+    };
+
+    struct CreateDirectoryOptions
+    {
+      std::filesystem::path directory_path;
+      bool recursive{true};
+    };
+
+    struct CreateFileOptions
+    {
+      std::filesystem::path file_path;
+      bool overwrite{false};
+    };
+
+    struct DeleteOptions
+    {
+      std::filesystem::path target_path;
     };
 
     struct ListConnectionsOptions
@@ -134,6 +156,22 @@ namespace command
       if (lowered == "download-file")
       {
         return "download_file";
+      }
+      if (lowered == "create-folder" || lowered == "create_directory")
+      {
+        return "create_directory";
+      }
+      if (lowered == "create-file")
+      {
+        return "create_file";
+      }
+      if (lowered == "delete-folder" || lowered == "delete_directory")
+      {
+        return "delete_directory";
+      }
+      if (lowered == "delete-file")
+      {
+        return "delete_file";
       }
       return lowered;
     }
@@ -219,6 +257,30 @@ namespace command
         return lowered == "1" || lowered == "true" || lowered == "yes" || lowered == "on";
       }
       return default_value;
+    }
+
+    bool json_accepted(const nlohmann::json &obj, const char *key)
+    {
+      if (!obj.contains(key))
+      {
+        return false;
+      }
+
+      const auto &value = obj.at(key);
+      if (value.is_boolean())
+      {
+        return value.get<bool>();
+      }
+      if (value.is_number_integer())
+      {
+        return value.get<long long>() != 0;
+      }
+      if (value.is_string())
+      {
+        const auto lowered = lowercase_copy(value.get<std::string>());
+        return lowered == "1" || lowered == "true" || lowered == "yes" || lowered == "on";
+      }
+      return false;
     }
 
     std::size_t json_size_t(const nlohmann::json &obj, const char *key, std::size_t default_value, std::size_t max_value)
@@ -311,21 +373,96 @@ namespace command
 #endif
     }
 
-    std::filesystem::path normalize_path(const std::string &raw_path)
+    std::filesystem::path normalize_path_with_anchor(const std::filesystem::path &input_path, const std::filesystem::path &anchor)
     {
-      std::filesystem::path path = raw_path.empty() ? default_filesystem_root() : std::filesystem::path(raw_path);
+      std::filesystem::path path = input_path.empty() ? anchor : input_path;
       if (path.is_relative())
       {
-        path = default_absolute_anchor_root() / path;
+        path = anchor / path;
       }
       path = path.lexically_normal();
       std::error_code ec;
+      const auto weakly_canonical = std::filesystem::weakly_canonical(path, ec);
+      if (!ec)
+      {
+        return weakly_canonical.lexically_normal();
+      }
+      ec.clear();
       const auto absolute = std::filesystem::absolute(path, ec);
       if (!ec)
       {
         return absolute.lexically_normal();
       }
       return path;
+    }
+
+    std::filesystem::path normalize_path(const std::string &raw_path)
+    {
+      return normalize_path_with_anchor(std::filesystem::path(raw_path), default_absolute_anchor_root());
+    }
+
+    std::filesystem::path normalize_users_scoped_path(const std::string &raw_path)
+    {
+      return normalize_path_with_anchor(std::filesystem::path(raw_path), default_filesystem_root());
+    }
+
+    std::string normalize_windows_path_string(const std::filesystem::path &path)
+    {
+      auto normalized = path.lexically_normal().string();
+      std::replace(normalized.begin(), normalized.end(), '/', '\\');
+      while (normalized.size() > 3 && !normalized.empty() && normalized.back() == '\\')
+      {
+        normalized.pop_back();
+      }
+      return lowercase_copy(normalized);
+    }
+
+    bool is_path_under_root(const std::filesystem::path &target, const std::filesystem::path &root)
+    {
+      const auto target_norm = normalize_windows_path_string(target);
+      const auto root_norm = normalize_windows_path_string(root);
+      if (target_norm == root_norm)
+      {
+        return true;
+      }
+      if (target_norm.size() <= root_norm.size())
+      {
+        return false;
+      }
+      return target_norm.rfind(root_norm + "\\", 0) == 0;
+    }
+
+    bool is_direct_profile_root(const std::filesystem::path &target)
+    {
+      const auto users_root_norm = normalize_windows_path_string(std::filesystem::path("C:\\Users"));
+      const auto target_norm = normalize_windows_path_string(target);
+      if (target_norm.rfind(users_root_norm + "\\", 0) != 0)
+      {
+        return false;
+      }
+      const auto remainder = target_norm.substr(users_root_norm.size() + 1);
+      return !remainder.empty() && remainder.find('\\') == std::string::npos;
+    }
+
+    std::string delete_path_policy_reason(const std::filesystem::path &target)
+    {
+      const std::filesystem::path users_root("C:\\Users");
+      const auto target_norm = normalize_windows_path_string(target);
+      const auto users_root_norm = normalize_windows_path_string(users_root);
+
+      if (!is_path_under_root(target, users_root))
+      {
+        return "fs_scope_violation";
+      }
+      if (target_norm == users_root_norm)
+      {
+        return "fs_protected_root_users";
+      }
+      if (is_direct_profile_root(target))
+      {
+        return "fs_protected_root_profile";
+      }
+      return {};
     }
 
     bool parse_file_list_options(const std::string &params_json, FileListOptions &out, std::string &reason, std::string &notes)
@@ -371,6 +508,103 @@ namespace command
 
       out.file_path = normalize_path(path_value);
       out.max_bytes = json_u64(parsed, "max_bytes", kDefaultDownloadMaxBytes, kMaxDownloadMaxBytes);
+      reason.clear();
+      notes.clear();
+      return true;
+    }
+
+    bool parse_create_directory_options(const std::string &params_json, CreateDirectoryOptions &out, std::string &reason, std::string &notes)
+    {
+      nlohmann::json parsed = nlohmann::json::object();
+      if (!parse_params_object(params_json, parsed))
+      {
+        reason = "create_directory_invalid_params";
+        notes = "params must be a JSON object";
+        return false;
+      }
+
+      const std::string path_value = parsed.value("path", std::string());
+      if (path_value.empty())
+      {
+        reason = "create_directory_invalid_params";
+        notes = "path is required";
+        return false;
+      }
+      if (std::filesystem::path(path_value).is_relative())
+      {
+        reason = "create_directory_invalid_params";
+        notes = "path must be absolute";
+        return false;
+      }
+
+      out.directory_path = normalize_path(path_value);
+      out.recursive = json_bool(parsed, "recursive", true);
+      reason.clear();
+      notes.clear();
+      return true;
+    }
+
+    bool parse_create_file_options(const std::string &params_json, CreateFileOptions &out, std::string &reason, std::string &notes)
+    {
+      nlohmann::json parsed = nlohmann::json::object();
+      if (!parse_params_object(params_json, parsed))
+      {
+        reason = "create_file_invalid_params";
+        notes = "params must be a JSON object";
+        return false;
+      }
+
+      const std::string path_value = parsed.value("path", std::string());
+      if (path_value.empty())
+      {
+        reason = "create_file_invalid_params";
+        notes = "path is required";
+        return false;
+      }
+      if (std::filesystem::path(path_value).is_relative())
+      {
+        reason = "create_file_invalid_params";
+        notes = "path must be absolute";
+        return false;
+      }
+
+      out.file_path = normalize_path(path_value);
+      out.overwrite = json_bool(parsed, "overwrite", false);
+      reason.clear();
+      notes.clear();
+      return true;
+    }
+
+    bool parse_delete_options(
+        const std::string &params_json,
+        const std::string &method_name,
+        DeleteOptions &out,
+        std::string &reason,
+        std::string &notes)
+    {
+      nlohmann::json parsed = nlohmann::json::object();
+      if (!parse_params_object(params_json, parsed))
+      {
+        reason = method_name + "_invalid_params";
+        notes = "params must be a JSON object";
+        return false;
+      }
+
+      const std::string path_value = parsed.value("path", std::string());
+      if (path_value.empty())
+      {
+        reason = method_name + "_invalid_params";
+        notes = "path is required";
+        return false;
+      }
+      if (!json_accepted(parsed, "confirm"))
+      {
+        reason = method_name + "_invalid_params";
+        notes = "confirm must be accepted";
+        return false;
+      }
+
+      out.target_path = normalize_users_scoped_path(path_value);
       reason.clear();
       notes.clear();
       return true;
@@ -428,6 +662,18 @@ namespace command
         return true;
       }
       return false;
+    }
+
+    bool allow_compat_authorization_fallback(const std::string &canonical_method_name)
+    {
+      return canonical_method_name == "list_processes" ||
+             canonical_method_name == "list_services" ||
+             canonical_method_name == "list_connections" ||
+             canonical_method_name == "list_mounts" ||
+             canonical_method_name == "network_info" ||
+             canonical_method_name == "get_active_window" ||
+             canonical_method_name == "list_files" ||
+             canonical_method_name == "download_file";
     }
 
     void merge_kernel_meta(const KernelExecResult &result, nlohmann::json &kernel_meta)
@@ -1480,6 +1726,302 @@ namespace command
       return true;
     }
 
+    bool collect_create_directory(const CreateDirectoryOptions &options, nlohmann::json &data, std::string &reason, std::string &notes)
+    {
+      std::error_code ec;
+      bool existed = std::filesystem::exists(options.directory_path, ec);
+      if (ec)
+      {
+        reason = "create_directory_access_denied";
+        notes = "unable to stat target path";
+        return false;
+      }
+
+      bool created = false;
+      if (existed)
+      {
+        ec.clear();
+        if (!std::filesystem::is_directory(options.directory_path, ec))
+        {
+          reason = "create_directory_path_not_directory";
+          notes = path_to_utf8(options.directory_path);
+          return false;
+        }
+      }
+      else
+      {
+        ec.clear();
+        created = options.recursive
+                      ? std::filesystem::create_directories(options.directory_path, ec)
+                      : std::filesystem::create_directory(options.directory_path, ec);
+        if (ec)
+        {
+          if (ec == std::errc::no_such_file_or_directory)
+          {
+            reason = "create_directory_parent_not_found";
+            notes = path_to_utf8(options.directory_path.parent_path());
+          }
+          else if (ec == std::errc::permission_denied)
+          {
+            reason = "create_directory_access_denied";
+            notes = path_to_utf8(options.directory_path);
+          }
+          else
+          {
+            reason = "create_directory_failed";
+            notes = ec.message();
+          }
+          return false;
+        }
+      }
+
+      data = {
+          {"schema_version", "v1"},
+          {"snapshot_type", "create_directory"},
+          {"kernel_mode", true},
+          {"collection_ts_unix", now_unix_string()},
+          {"action", "create_directory"},
+          {"path", path_to_utf8(options.directory_path)},
+          {"created", created},
+          {"already_exists", existed},
+          {"recursive", options.recursive},
+      };
+      notes = created ? "create_directory_created" : "create_directory_exists";
+      reason.clear();
+      return true;
+    }
+
+    bool collect_create_file(const CreateFileOptions &options, nlohmann::json &data, std::string &reason, std::string &notes)
+    {
+      std::error_code ec;
+      bool existed = std::filesystem::exists(options.file_path, ec);
+      if (ec)
+      {
+        reason = "create_file_access_denied";
+        notes = "unable to stat target path";
+        return false;
+      }
+
+      if (existed)
+      {
+        ec.clear();
+        if (!std::filesystem::is_regular_file(options.file_path, ec))
+        {
+          reason = "create_file_not_file";
+          notes = path_to_utf8(options.file_path);
+          return false;
+        }
+        if (!options.overwrite)
+        {
+          reason = "create_file_already_exists";
+          notes = path_to_utf8(options.file_path);
+          return false;
+        }
+      }
+      else
+      {
+        const auto parent = options.file_path.parent_path();
+        if (!parent.empty())
+        {
+          ec.clear();
+          if (!std::filesystem::exists(parent, ec))
+          {
+            reason = "create_file_parent_not_found";
+            notes = path_to_utf8(parent);
+            return false;
+          }
+          ec.clear();
+          if (!std::filesystem::is_directory(parent, ec))
+          {
+            reason = "create_file_parent_not_directory";
+            notes = path_to_utf8(parent);
+            return false;
+          }
+        }
+      }
+
+      {
+        const std::ios::openmode open_mode =
+            std::ios::binary | std::ios::out |
+            ((existed && options.overwrite) ? std::ios::trunc : static_cast<std::ios::openmode>(0));
+        std::ofstream stream(options.file_path, open_mode);
+        if (!stream.is_open())
+        {
+          reason = "create_file_open_failed";
+          notes = path_to_utf8(options.file_path);
+          return false;
+        }
+      }
+
+      data = {
+          {"schema_version", "v1"},
+          {"snapshot_type", "create_file"},
+          {"kernel_mode", true},
+          {"collection_ts_unix", now_unix_string()},
+          {"action", "create_file"},
+          {"path", path_to_utf8(options.file_path)},
+          {"created", !existed},
+          {"overwritten", existed && options.overwrite},
+          {"size_bytes", 0},
+      };
+      notes = existed ? "create_file_overwritten" : "create_file_created";
+      reason.clear();
+      return true;
+    }
+
+    bool collect_delete_file(const DeleteOptions &options, nlohmann::json &data, std::string &reason, std::string &notes)
+    {
+      std::error_code ec;
+      const auto policy_reason = delete_path_policy_reason(options.target_path);
+      if (!policy_reason.empty())
+      {
+        reason = policy_reason;
+        notes = path_to_utf8(options.target_path);
+        return false;
+      }
+
+      const bool exists = std::filesystem::exists(options.target_path, ec);
+      if (ec)
+      {
+        reason = "delete_file_access_denied";
+        notes = path_to_utf8(options.target_path);
+        return false;
+      }
+      if (!exists)
+      {
+        reason = "delete_file_not_found";
+        notes = path_to_utf8(options.target_path);
+        return false;
+      }
+      ec.clear();
+      if (!std::filesystem::is_regular_file(options.target_path, ec))
+      {
+        reason = "delete_file_wrong_type";
+        notes = path_to_utf8(options.target_path);
+        return false;
+      }
+      if (ec)
+      {
+        reason = "delete_file_access_denied";
+        notes = path_to_utf8(options.target_path);
+        return false;
+      }
+
+      ec.clear();
+      const bool removed = std::filesystem::remove(options.target_path, ec);
+      if (ec)
+      {
+        if (ec == std::errc::permission_denied)
+        {
+          reason = "delete_file_access_denied";
+        }
+        else
+        {
+          reason = "delete_file_failed";
+        }
+        notes = ec.message();
+        return false;
+      }
+      if (!removed)
+      {
+        reason = "delete_file_failed";
+        notes = "remove returned false";
+        return false;
+      }
+
+      data = {
+          {"schema_version", "v1"},
+          {"snapshot_type", "fs_action_report"},
+          {"kernel_mode", true},
+          {"collection_ts_unix", now_unix_string()},
+          {"action", "delete_file"},
+          {"path", path_to_utf8(options.target_path)},
+          {"deleted", true},
+          {"deleted_count", 1},
+          {"hard_delete", true},
+      };
+      notes = "delete_file_deleted";
+      reason.clear();
+      return true;
+    }
+
+    bool collect_delete_directory(const DeleteOptions &options, nlohmann::json &data, std::string &reason, std::string &notes)
+    {
+      std::error_code ec;
+      const auto policy_reason = delete_path_policy_reason(options.target_path);
+      if (!policy_reason.empty())
+      {
+        reason = policy_reason;
+        notes = path_to_utf8(options.target_path);
+        return false;
+      }
+
+      const bool exists = std::filesystem::exists(options.target_path, ec);
+      if (ec)
+      {
+        reason = "delete_directory_access_denied";
+        notes = path_to_utf8(options.target_path);
+        return false;
+      }
+      if (!exists)
+      {
+        reason = "delete_directory_not_found";
+        notes = path_to_utf8(options.target_path);
+        return false;
+      }
+      ec.clear();
+      if (!std::filesystem::is_directory(options.target_path, ec))
+      {
+        reason = "delete_directory_wrong_type";
+        notes = path_to_utf8(options.target_path);
+        return false;
+      }
+      if (ec)
+      {
+        reason = "delete_directory_access_denied";
+        notes = path_to_utf8(options.target_path);
+        return false;
+      }
+
+      ec.clear();
+      const auto removed_count = std::filesystem::remove_all(options.target_path, ec);
+      if (ec)
+      {
+        if (ec == std::errc::permission_denied)
+        {
+          reason = "delete_directory_access_denied";
+        }
+        else
+        {
+          reason = "delete_directory_failed";
+        }
+        notes = ec.message();
+        return false;
+      }
+      if (removed_count == 0)
+      {
+        reason = "delete_directory_failed";
+        notes = "remove_all returned 0";
+        return false;
+      }
+
+      data = {
+          {"schema_version", "v1"},
+          {"snapshot_type", "fs_action_report"},
+          {"kernel_mode", true},
+          {"collection_ts_unix", now_unix_string()},
+          {"action", "delete_directory"},
+          {"path", path_to_utf8(options.target_path)},
+          {"deleted", true},
+          {"deleted_count", removed_count},
+          {"hard_delete", true},
+          {"recursive", true},
+      };
+      notes = "delete_directory_deleted";
+      reason.clear();
+      return true;
+    }
+
     bool collect_processes(std::size_t limit, nlohmann::json &data, std::string &reason, std::string &notes)
     {
       HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -2326,7 +2868,9 @@ namespace command
     const std::string lowered = canonical_method(method);
     return lowered == "list_processes" || lowered == "list_services" || lowered == "list_connections" ||
            lowered == "list_mounts" || lowered == "network_info" || lowered == "get_active_window" ||
-           lowered == "list_files" || lowered == "download_file";
+           lowered == "list_files" || lowered == "download_file" ||
+           lowered == "create_directory" || lowered == "create_file" ||
+           lowered == "delete_file" || lowered == "delete_directory";
   }
 
   ObservabilityExecutionResult ExecuteObservabilityCommand(
@@ -2379,6 +2923,22 @@ namespace command
     {
       auth = ioctl.download_file(command_message_id, state, params_json, command_message_id);
     }
+    else if (canonical == "create_directory")
+    {
+      auth = ioctl.create_directory(command_message_id, state, params_json, command_message_id);
+    }
+    else if (canonical == "create_file")
+    {
+      auth = ioctl.create_file(command_message_id, state, params_json, command_message_id);
+    }
+    else if (canonical == "delete_file")
+    {
+      auth = ioctl.delete_file(command_message_id, state, params_json, command_message_id);
+    }
+    else if (canonical == "delete_directory")
+    {
+      auth = ioctl.delete_directory(command_message_id, state, params_json, command_message_id);
+    }
     else
     {
       return fail_result(QERR_OBS_COLLECT_FAILED, "unsupported_method", "Unsupported method");
@@ -2390,51 +2950,85 @@ namespace command
 
     if (auth.status != "ok")
     {
-      // Compatibility fallback: for phased rollouts where LIST_* auth opcodes may lag on some
-      // deployed driver builds, attempt a signed PING authorization before failing.
-      // This keeps the command path kernel-mediated while avoiding brittle dependency on a
-      // specific opcode error shape.
-      KernelExecResult compat_auth = ioctl.ping(command_message_id, state, command_message_id);
-      merge_kernel_meta(compat_auth, kernel_meta);
-      if (compat_auth.status == "ok")
+      if (allow_compat_authorization_fallback(canonical))
       {
-        kernel_meta["authorization_mode"] = "compat_ping";
-        if (is_invalid_opcode_response(auth))
+        // Compatibility fallback: for phased rollouts where LIST_* auth opcodes may lag on some
+        // deployed driver builds, attempt a signed PING authorization before failing.
+        // This keeps the command path kernel-mediated while avoiding brittle dependency on a
+        // specific opcode error shape.
+        KernelExecResult compat_auth = ioctl.ping(command_message_id, state, command_message_id);
+        merge_kernel_meta(compat_auth, kernel_meta);
+        if (compat_auth.status == "ok")
         {
-          kernel_meta["authorization_fallback_reason"] = "invalid_opcode";
-        }
-        else if (auth.error_code == kErrNotSupported)
-        {
-          kernel_meta["authorization_fallback_reason"] = "not_supported";
+          kernel_meta["authorization_mode"] = "compat_ping";
+          if (is_invalid_opcode_response(auth))
+          {
+            kernel_meta["authorization_fallback_reason"] = "invalid_opcode";
+          }
+          else if (auth.error_code == kErrNotSupported)
+          {
+            kernel_meta["authorization_fallback_reason"] = "not_supported";
+          }
+          else
+          {
+            kernel_meta["authorization_fallback_reason"] = "auth_failed";
+          }
+          kernel_meta["authorization_primary_status"] = auth.status;
+          kernel_meta["authorization_primary_error_code"] = auth.error_code;
+          if (!auth.error_message.empty())
+          {
+            kernel_meta["authorization_primary_error_message"] = auth.error_message;
+          }
         }
         else
         {
-          kernel_meta["authorization_fallback_reason"] = "auth_failed";
-        }
-        kernel_meta["authorization_primary_status"] = auth.status;
-        kernel_meta["authorization_primary_error_code"] = auth.error_code;
-        if (!auth.error_message.empty())
-        {
-          kernel_meta["authorization_primary_error_message"] = auth.error_message;
+          const int code = auth.error_code != 0
+                               ? auth.error_code
+                               : (compat_auth.error_code != 0 ? compat_auth.error_code : QERR_OBS_AUTH_FAILED);
+          std::string message = auth.error_message;
+          if (message.empty())
+          {
+            message = compat_auth.error_message;
+          }
+          if (message.empty())
+          {
+            message = "kernel authorization failed";
+          }
+          return fail_result(
+              code,
+              canonical + "_kernel_authorization_failed",
+              message,
+              kernel_meta.dump());
         }
       }
       else
       {
-        const int code = auth.error_code != 0
-                             ? auth.error_code
-                             : (compat_auth.error_code != 0 ? compat_auth.error_code : QERR_OBS_AUTH_FAILED);
         std::string message = auth.error_message;
-        if (message.empty())
-        {
-          message = compat_auth.error_message;
-        }
         if (message.empty())
         {
           message = "kernel authorization failed";
         }
+        int code = auth.error_code != 0 ? auth.error_code : QERR_OBS_AUTH_FAILED;
+        if (canonical == "delete_file" || canonical == "delete_directory")
+        {
+          if (message == "fs_scope_violation")
+          {
+            code = QERR_FS_SCOPE_VIOLATION;
+          }
+          else if (message == "fs_protected_root_users" || message == "fs_protected_root_profile")
+          {
+            code = QERR_FS_PROTECTED_ROOT;
+          }
+          else
+          {
+            code = QERR_FS_ACCESS_DENIED;
+          }
+        }
         return fail_result(
             code,
-            canonical + "_kernel_authorization_failed",
+            (canonical == "delete_file" || canonical == "delete_directory")
+                ? message
+                : canonical + "_kernel_authorization_failed",
             message,
             kernel_meta.dump());
       }
@@ -2594,6 +3188,138 @@ namespace command
       artifact_checksum = upload.artifact_checksum;
       notes = "download_file_uploaded";
       collected = true;
+    }
+    else if (canonical == "create_directory")
+    {
+      CreateDirectoryOptions options{};
+      if (!parse_create_directory_options(params_json, options, reason, notes))
+      {
+        return fail_result(QERR_FS_INVALID_PARAMS, reason, notes, kernel_meta.dump());
+      }
+
+      collected = collect_create_directory(options, data, reason, notes);
+      if (!collected)
+      {
+        int code = QERR_OBS_COLLECT_FAILED;
+        if (reason == "create_directory_parent_not_found")
+        {
+          code = QERR_FS_PATH_NOT_FOUND;
+        }
+        else if (reason == "create_directory_path_not_directory")
+        {
+          code = QERR_FS_NOT_DIRECTORY;
+        }
+        else if (reason == "create_directory_access_denied")
+        {
+          code = QERR_FS_ACCESS_DENIED;
+        }
+        return fail_result(code, reason, notes, kernel_meta.dump());
+      }
+    }
+    else if (canonical == "create_file")
+    {
+      CreateFileOptions options{};
+      if (!parse_create_file_options(params_json, options, reason, notes))
+      {
+        return fail_result(QERR_FS_INVALID_PARAMS, reason, notes, kernel_meta.dump());
+      }
+
+      collected = collect_create_file(options, data, reason, notes);
+      if (!collected)
+      {
+        int code = QERR_OBS_COLLECT_FAILED;
+        if (reason == "create_file_parent_not_found")
+        {
+          code = QERR_FS_PATH_NOT_FOUND;
+        }
+        else if (reason == "create_file_parent_not_directory")
+        {
+          code = QERR_FS_NOT_DIRECTORY;
+        }
+        else if (reason == "create_file_not_file")
+        {
+          code = QERR_FS_NOT_FILE;
+        }
+        else if (reason == "create_file_access_denied" || reason == "create_file_open_failed")
+        {
+          code = QERR_FS_ACCESS_DENIED;
+        }
+        else if (reason == "create_file_already_exists")
+        {
+          code = QERR_FS_ALREADY_EXISTS;
+        }
+        return fail_result(code, reason, notes, kernel_meta.dump());
+      }
+    }
+    else if (canonical == "delete_file")
+    {
+      DeleteOptions options{};
+      if (!parse_delete_options(params_json, canonical, options, reason, notes))
+      {
+        return fail_result(QERR_FS_INVALID_PARAMS, reason, notes, kernel_meta.dump());
+      }
+
+      collected = collect_delete_file(options, data, reason, notes);
+      if (!collected)
+      {
+        int code = QERR_FS_DELETE_FAILED;
+        if (reason == "delete_file_not_found")
+        {
+          code = QERR_FS_PATH_NOT_FOUND;
+        }
+        else if (reason == "delete_file_wrong_type")
+        {
+          code = QERR_FS_NOT_FILE;
+        }
+        else if (reason == "delete_file_access_denied")
+        {
+          code = QERR_FS_ACCESS_DENIED;
+        }
+        else if (reason == "fs_scope_violation")
+        {
+          code = QERR_FS_SCOPE_VIOLATION;
+        }
+        else if (reason == "fs_protected_root_users" || reason == "fs_protected_root_profile")
+        {
+          code = QERR_FS_PROTECTED_ROOT;
+        }
+        return fail_result(code, reason, notes, kernel_meta.dump());
+      }
+    }
+    else if (canonical == "delete_directory")
+    {
+      DeleteOptions options{};
+      if (!parse_delete_options(params_json, canonical, options, reason, notes))
+      {
+        return fail_result(QERR_FS_INVALID_PARAMS, reason, notes, kernel_meta.dump());
+      }
+
+      collected = collect_delete_directory(options, data, reason, notes);
+      if (!collected)
+      {
+        int code = QERR_FS_DELETE_FAILED;
+        if (reason == "delete_directory_not_found")
+        {
+          code = QERR_FS_PATH_NOT_FOUND;
+        }
+        else if (reason == "delete_directory_wrong_type")
+        {
+          code = QERR_FS_NOT_DIRECTORY;
+        }
+        else if (reason == "delete_directory_access_denied")
+        {
+          code = QERR_FS_ACCESS_DENIED;
+        }
+        else if (reason == "fs_scope_violation")
+        {
+          code = QERR_FS_SCOPE_VIOLATION;
+        }
+        else if (reason == "fs_protected_root_users" || reason == "fs_protected_root_profile")
+        {
+          code = QERR_FS_PROTECTED_ROOT;
+        }
+        return fail_result(code, reason, notes, kernel_meta.dump());
+      }
     }
 
     if (!collected)
