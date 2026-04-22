@@ -8,6 +8,7 @@ class Registry
     {
         $relativePath = ['required', 'string', 'max:512', 'regex:/^(?!\/)(?!.*\.{2})[\w\-\.\/ ]+$/'];
         $optionalPath = ['nullable', 'string', 'max:512', 'regex:/^(?!\/)(?!.*\.{2})[\w\-\.\/ ]+$/'];
+        $filesystemPath = ['required', 'string', 'max:1024'];
         $confirmRequired = ['required', 'accepted'];
 
         return [
@@ -265,8 +266,30 @@ class Registry
                 requires2fa: false,
                 allowedInQuarantine: false,
                 paramsRules: [
-                    'path' => ['required', 'string', 'max:1024'],
+                    'path' => $filesystemPath,
                     'max_bytes' => ['nullable', 'integer', 'min:1', 'max:5242880'],
+                ]
+            ),
+            'create_directory' => new CommandDefinition(
+                name: 'create_directory',
+                riskLevel: 'high',
+                minRole: 'admin',
+                requires2fa: true,
+                allowedInQuarantine: false,
+                paramsRules: [
+                    'path' => $filesystemPath,
+                    'recursive' => ['nullable', 'boolean'],
+                ]
+            ),
+            'create_file' => new CommandDefinition(
+                name: 'create_file',
+                riskLevel: 'high',
+                minRole: 'admin',
+                requires2fa: true,
+                allowedInQuarantine: false,
+                paramsRules: [
+                    'path' => $filesystemPath,
+                    'overwrite' => ['nullable', 'boolean'],
                 ]
             ),
             'upload_file' => new CommandDefinition(
@@ -288,7 +311,18 @@ class Registry
                 requires2fa: true,
                 allowedInQuarantine: false,
                 paramsRules: [
-                    'path' => $relativePath,
+                    'path' => $filesystemPath,
+                    'confirm' => $confirmRequired,
+                ]
+            ),
+            'delete_directory' => new CommandDefinition(
+                name: 'delete_directory',
+                riskLevel: 'high',
+                minRole: 'admin',
+                requires2fa: true,
+                allowedInQuarantine: false,
+                paramsRules: [
+                    'path' => $filesystemPath,
                     'confirm' => $confirmRequired,
                 ]
             ),

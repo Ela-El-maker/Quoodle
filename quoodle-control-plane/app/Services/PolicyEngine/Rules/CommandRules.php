@@ -20,6 +20,10 @@ class CommandRules
             'get_active_window',
             'list_files',
             'download_file',
+            'create_directory',
+            'create_file',
+            'delete_file',
+            'delete_directory',
         ], true);
     }
 }
