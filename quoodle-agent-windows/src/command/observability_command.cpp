@@ -55,6 +55,7 @@ namespace command
     constexpr int QERR_FS_SCOPE_VIOLATION = 5209;
     constexpr int QERR_FS_PROTECTED_ROOT = 5210;
     constexpr int QERR_FS_DELETE_FAILED = 5211;
+    constexpr int QERR_FS_ARTIFACT_DOWNLOAD_FAILED = 5212;
     constexpr std::size_t kDefaultLimit = 250;
     constexpr std::size_t kDefaultProcessLimit = 1000;
     constexpr std::size_t kMaxLimit = 1000;
@@ -97,6 +98,13 @@ namespace command
     struct DeleteOptions
     {
       std::filesystem::path target_path;
+    };
+
+    struct UploadOptions
+    {
+      std::string artifact_id;
+      std::filesystem::path destination_path;
+      bool overwrite{false};
     };
 
     struct ListConnectionsOptions
@@ -156,6 +164,10 @@ namespace command
       if (lowered == "download-file")
       {
         return "download_file";
+      }
+      if (lowered == "upload-file")
+      {
+        return "upload_file";
       }
       if (lowered == "create-folder" || lowered == "create_directory")
       {
@@ -403,7 +415,16 @@ namespace command
 
     std::filesystem::path normalize_users_scoped_path(const std::string &raw_path)
     {
-      return normalize_path_with_anchor(std::filesystem::path(raw_path), default_filesystem_root());
+      const std::filesystem::path input(raw_path);
+      if (input.is_relative())
+      {
+        const auto lowered = lowercase_copy(input.generic_string());
+        if (lowered.rfind("users/", 0) == 0 || lowered.rfind("users\\", 0) == 0)
+        {
+          return normalize_path_with_anchor(input, default_absolute_anchor_root());
+        }
+      }
+      return normalize_path_with_anchor(input, default_filesystem_root());
     }
 
     std::string normalize_windows_path_string(const std::filesystem::path &path)
@@ -508,6 +529,43 @@ namespace command
 
       out.file_path = normalize_path(path_value);
       out.max_bytes = json_u64(parsed, "max_bytes", kDefaultDownloadMaxBytes, kMaxDownloadMaxBytes);
+      reason.clear();
+      notes.clear();
+      return true;
+    }
+
+    bool parse_upload_options(const std::string &params_json, UploadOptions &out, std::string &reason, std::string &notes)
+    {
+      nlohmann::json parsed = nlohmann::json::object();
+      if (!parse_params_object(params_json, parsed))
+      {
+        reason = "upload_file_invalid_params";
+        notes = "params must be a JSON object";
+        return false;
+      }
+
+      out.artifact_id = parsed.value("artifact_id", std::string());
+      if (out.artifact_id.empty())
+      {
+        reason = "upload_file_invalid_params";
+        notes = "artifact_id is required";
+        return false;
+      }
+
+      std::string destination_value = parsed.value("destination", std::string());
+      if (destination_value.empty())
+      {
+        destination_value = parsed.value("path", std::string());
+      }
+      if (destination_value.empty())
+      {
+        reason = "upload_file_invalid_params";
+        notes = "destination is required";
+        return false;
+      }
+
+      out.destination_path = normalize_users_scoped_path(destination_value);
+      out.overwrite = json_bool(parsed, "overwrite", false);
       reason.clear();
       notes.clear();
       return true;
@@ -2022,6 +2080,155 @@ namespace command
       return true;
     }
 
+    bool collect_upload_file(
+        const AgentConfig &config,
+        const UploadOptions &options,
+        nlohmann::json &data,
+        std::string &reason,
+        std::string &notes)
+    {
+      std::error_code ec;
+      const auto policy_reason = delete_path_policy_reason(options.destination_path);
+      if (!policy_reason.empty())
+      {
+        reason = policy_reason;
+        notes = path_to_utf8(options.destination_path);
+        return false;
+      }
+
+      const auto parent = options.destination_path.parent_path();
+      if (parent.empty())
+      {
+        reason = "upload_file_parent_not_found";
+        notes = path_to_utf8(options.destination_path);
+        return false;
+      }
+
+      if (!std::filesystem::exists(parent, ec))
+      {
+        reason = "upload_file_parent_not_found";
+        notes = path_to_utf8(parent);
+        return false;
+      }
+      ec.clear();
+      if (!std::filesystem::is_directory(parent, ec))
+      {
+        reason = "upload_file_parent_not_directory";
+        notes = path_to_utf8(parent);
+        return false;
+      }
+      if (ec)
+      {
+        reason = "upload_file_access_denied";
+        notes = path_to_utf8(parent);
+        return false;
+      }
+
+      const bool destination_exists = std::filesystem::exists(options.destination_path, ec);
+      if (ec)
+      {
+        reason = "upload_file_access_denied";
+        notes = path_to_utf8(options.destination_path);
+        return false;
+      }
+      if (destination_exists)
+      {
+        ec.clear();
+        if (!std::filesystem::is_regular_file(options.destination_path, ec))
+        {
+          reason = "upload_file_wrong_type";
+          notes = path_to_utf8(options.destination_path);
+          return false;
+        }
+        if (ec)
+        {
+          reason = "upload_file_access_denied";
+          notes = path_to_utf8(options.destination_path);
+          return false;
+        }
+        if (!options.overwrite)
+        {
+          reason = "upload_file_already_exists";
+          notes = path_to_utf8(options.destination_path);
+          return false;
+        }
+      }
+
+      const std::filesystem::path temp_path =
+          parent / (".quoodle_upload_" + now_unix_string() + "_" + options.artifact_id + ".tmp");
+
+      ArtifactClient artifact_client;
+      const auto download = artifact_client.download_artifact_to_file(
+          config.artifact_api_base_url,
+          config.jwt,
+          options.artifact_id,
+          temp_path.string());
+      if (!download.ok)
+      {
+        reason = "upload_file_artifact_download_failed";
+        notes = download.reason.empty() ? "artifact_download_failed" : download.reason;
+        return false;
+      }
+
+      if (destination_exists && options.overwrite)
+      {
+        ec.clear();
+        std::filesystem::remove(options.destination_path, ec);
+        if (ec)
+        {
+          std::error_code cleanup_ec;
+          std::filesystem::remove(temp_path, cleanup_ec);
+          reason = "upload_file_access_denied";
+          notes = ec.message();
+          return false;
+        }
+      }
+
+      ec.clear();
+      std::filesystem::rename(temp_path, options.destination_path, ec);
+      if (ec)
+      {
+        std::error_code cleanup_ec;
+        std::filesystem::remove(temp_path, cleanup_ec);
+        if (ec == std::errc::permission_denied)
+        {
+          reason = "upload_file_access_denied";
+        }
+        else
+        {
+          reason = "upload_file_move_failed";
+        }
+        notes = ec.message();
+        return false;
+      }
+
+      ec.clear();
+      const auto file_size = std::filesystem::file_size(options.destination_path, ec);
+      if (ec)
+      {
+        reason = "upload_file_access_denied";
+        notes = "uploaded but failed to stat destination file";
+        return false;
+      }
+
+      data = {
+          {"schema_version", "v1"},
+          {"snapshot_type", "upload_file"},
+          {"kernel_mode", true},
+          {"collection_ts_unix", now_unix_string()},
+          {"action", "upload_file"},
+          {"artifact_id", options.artifact_id},
+          {"path", path_to_utf8(options.destination_path)},
+          {"size_bytes", file_size},
+          {"created", !destination_exists},
+          {"overwritten", destination_exists && options.overwrite},
+          {"hard_write", true},
+      };
+      notes = "upload_file_stored";
+      reason.clear();
+      return true;
+    }
+
     bool collect_processes(std::size_t limit, nlohmann::json &data, std::string &reason, std::string &notes)
     {
       HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -2869,6 +3076,7 @@ namespace command
     return lowered == "list_processes" || lowered == "list_services" || lowered == "list_connections" ||
            lowered == "list_mounts" || lowered == "network_info" || lowered == "get_active_window" ||
            lowered == "list_files" || lowered == "download_file" ||
+           lowered == "upload_file" ||
            lowered == "create_directory" || lowered == "create_file" ||
            lowered == "delete_file" || lowered == "delete_directory";
   }
@@ -2886,8 +3094,41 @@ namespace command
         canonical == "list_processes" ? kDefaultProcessLimit : kDefaultLimit);
     ListConnectionsOptions list_connections_options{};
     NetworkInfoOptions network_info_options{};
+    std::string auth_params_json = params_json;
     parse_list_connections_options(params_json, list_connections_options);
     parse_network_info_options(params_json, network_info_options);
+
+    if (canonical == "delete_file" || canonical == "delete_directory")
+    {
+      DeleteOptions auth_options{};
+      std::string auth_reason;
+      std::string auth_notes;
+      if (!parse_delete_options(params_json, canonical, auth_options, auth_reason, auth_notes))
+      {
+        return fail_result(QERR_FS_INVALID_PARAMS, auth_reason, auth_notes);
+      }
+      nlohmann::json auth_payload = {
+          {"path", path_to_utf8(auth_options.target_path)},
+          {"confirm", true},
+      };
+      auth_params_json = auth_payload.dump();
+    }
+    else if (canonical == "upload_file")
+    {
+      UploadOptions auth_options{};
+      std::string auth_reason;
+      std::string auth_notes;
+      if (!parse_upload_options(params_json, auth_options, auth_reason, auth_notes))
+      {
+        return fail_result(QERR_FS_INVALID_PARAMS, auth_reason, auth_notes);
+      }
+      nlohmann::json auth_payload = {
+          {"artifact_id", auth_options.artifact_id},
+          {"path", path_to_utf8(auth_options.destination_path)},
+          {"overwrite", auth_options.overwrite},
+      };
+      auth_params_json = auth_payload.dump();
+    }
 
     IoctlClient ioctl;
     KernelExecResult auth{};
@@ -2933,11 +3174,15 @@ namespace command
     }
     else if (canonical == "delete_file")
     {
-      auth = ioctl.delete_file(command_message_id, state, params_json, command_message_id);
+      auth = ioctl.delete_file(command_message_id, state, auth_params_json, command_message_id);
     }
     else if (canonical == "delete_directory")
     {
-      auth = ioctl.delete_directory(command_message_id, state, params_json, command_message_id);
+      auth = ioctl.delete_directory(command_message_id, state, auth_params_json, command_message_id);
+    }
+    else if (canonical == "upload_file")
+    {
+      auth = ioctl.upload_file(command_message_id, state, auth_params_json, command_message_id);
     }
     else
     {
@@ -3009,7 +3254,7 @@ namespace command
           message = "kernel authorization failed";
         }
         int code = auth.error_code != 0 ? auth.error_code : QERR_OBS_AUTH_FAILED;
-        if (canonical == "delete_file" || canonical == "delete_directory")
+        if (canonical == "delete_file" || canonical == "delete_directory" || canonical == "upload_file")
         {
           if (message == "fs_scope_violation")
           {
@@ -3026,7 +3271,7 @@ namespace command
         }
         return fail_result(
             code,
-            (canonical == "delete_file" || canonical == "delete_directory")
+            (canonical == "delete_file" || canonical == "delete_directory" || canonical == "upload_file")
                 ? message
                 : canonical + "_kernel_authorization_failed",
             message,
@@ -3188,6 +3433,53 @@ namespace command
       artifact_checksum = upload.artifact_checksum;
       notes = "download_file_uploaded";
       collected = true;
+    }
+    else if (canonical == "upload_file")
+    {
+      UploadOptions options{};
+      if (!parse_upload_options(params_json, options, reason, notes))
+      {
+        return fail_result(QERR_FS_INVALID_PARAMS, reason, notes, kernel_meta.dump());
+      }
+
+      collected = collect_upload_file(config, options, data, reason, notes);
+      if (!collected)
+      {
+        int code = QERR_OBS_COLLECT_FAILED;
+        if (reason == "upload_file_parent_not_found")
+        {
+          code = QERR_FS_PATH_NOT_FOUND;
+        }
+        else if (reason == "upload_file_parent_not_directory")
+        {
+          code = QERR_FS_NOT_DIRECTORY;
+        }
+        else if (reason == "upload_file_wrong_type")
+        {
+          code = QERR_FS_NOT_FILE;
+        }
+        else if (reason == "upload_file_access_denied")
+        {
+          code = QERR_FS_ACCESS_DENIED;
+        }
+        else if (reason == "upload_file_already_exists")
+        {
+          code = QERR_FS_ALREADY_EXISTS;
+        }
+        else if (reason == "upload_file_artifact_download_failed")
+        {
+          code = QERR_FS_ARTIFACT_DOWNLOAD_FAILED;
+        }
+        else if (reason == "fs_scope_violation")
+        {
+          code = QERR_FS_SCOPE_VIOLATION;
+        }
+        else if (reason == "fs_protected_root_users" || reason == "fs_protected_root_profile")
+        {
+          code = QERR_FS_PROTECTED_ROOT;
+        }
+        return fail_result(code, reason, notes, kernel_meta.dump());
+      }
     }
     else if (canonical == "create_directory")
     {

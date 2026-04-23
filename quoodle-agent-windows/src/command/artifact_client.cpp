@@ -63,6 +63,23 @@ bool read_file_binary(const std::string &path, std::vector<char> &out_bytes)
   return static_cast<bool>(file);
 }
 
+bool ensure_parent_directory(const std::string &path)
+{
+  const std::filesystem::path file_path(path);
+  const auto parent = file_path.parent_path();
+  if (parent.empty())
+  {
+    return true;
+  }
+
+  std::error_code ec;
+  if (std::filesystem::exists(parent, ec))
+  {
+    return std::filesystem::is_directory(parent, ec);
+  }
+  return std::filesystem::create_directories(parent, ec);
+}
+
 #ifdef _WIN32
 std::wstring utf8_to_wide(const std::string &input)
 {
@@ -270,6 +287,185 @@ ArtifactUploadResult upload_multipart_winhttp(
   out.ok = true;
   return out;
 }
+
+ArtifactDownloadResult download_to_file_winhttp(
+    const std::string &url,
+    const std::string &bearer_jwt,
+    const std::string &output_path,
+    std::uint32_t timeout_ms)
+{
+  ArtifactDownloadResult out{};
+  const std::wstring wurl = utf8_to_wide(url);
+  if (wurl.empty())
+  {
+    out.reason = "artifact_download_invalid_url";
+    return out;
+  }
+
+  if (!ensure_parent_directory(output_path))
+  {
+    out.reason = "artifact_download_create_parent_failed";
+    return out;
+  }
+
+  URL_COMPONENTS parts{};
+  parts.dwStructSize = sizeof(parts);
+  parts.dwSchemeLength = static_cast<DWORD>(-1);
+  parts.dwHostNameLength = static_cast<DWORD>(-1);
+  parts.dwUrlPathLength = static_cast<DWORD>(-1);
+  parts.dwExtraInfoLength = static_cast<DWORD>(-1);
+  if (!WinHttpCrackUrl(wurl.c_str(), 0, 0, &parts))
+  {
+    out.reason = "artifact_download_invalid_url";
+    return out;
+  }
+
+  const bool secure = parts.nScheme == INTERNET_SCHEME_HTTPS;
+  const std::wstring host(parts.lpszHostName, parts.dwHostNameLength);
+  std::wstring path(
+      parts.lpszUrlPath && parts.dwUrlPathLength ? parts.lpszUrlPath : L"/",
+      parts.dwUrlPathLength ? parts.dwUrlPathLength : 1);
+  if (parts.dwExtraInfoLength > 0 && parts.lpszExtraInfo)
+  {
+    path.append(parts.lpszExtraInfo, parts.dwExtraInfoLength);
+  }
+
+  HINTERNET session = WinHttpOpen(
+      L"QuoodleAgent/1.0",
+      WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+      WINHTTP_NO_PROXY_NAME,
+      WINHTTP_NO_PROXY_BYPASS,
+      0);
+  if (!session)
+  {
+    out.reason = "artifact_download_session_open_failed";
+    return out;
+  }
+  WinHttpSetTimeouts(session, static_cast<int>(timeout_ms), static_cast<int>(timeout_ms),
+                     static_cast<int>(timeout_ms), static_cast<int>(timeout_ms));
+
+  HINTERNET connect = WinHttpConnect(session, host.c_str(), parts.nPort, 0);
+  if (!connect)
+  {
+    WinHttpCloseHandle(session);
+    out.reason = "artifact_download_connect_failed";
+    return out;
+  }
+
+  HINTERNET request = WinHttpOpenRequest(
+      connect,
+      L"GET",
+      path.c_str(),
+      nullptr,
+      WINHTTP_NO_REFERER,
+      WINHTTP_DEFAULT_ACCEPT_TYPES,
+      secure ? WINHTTP_FLAG_SECURE : 0);
+  if (!request)
+  {
+    WinHttpCloseHandle(connect);
+    WinHttpCloseHandle(session);
+    out.reason = "artifact_download_request_open_failed";
+    return out;
+  }
+
+  std::wstring headers;
+  if (!bearer_jwt.empty())
+  {
+    headers += L"Authorization: Bearer " + utf8_to_wide(bearer_jwt) + L"\r\n";
+  }
+
+  BOOL sent = WinHttpSendRequest(
+      request,
+      headers.empty() ? WINHTTP_NO_ADDITIONAL_HEADERS : headers.c_str(),
+      headers.empty() ? 0 : static_cast<DWORD>(-1),
+      WINHTTP_NO_REQUEST_DATA,
+      0,
+      0,
+      0);
+  if (!sent || !WinHttpReceiveResponse(request, nullptr))
+  {
+    WinHttpCloseHandle(request);
+    WinHttpCloseHandle(connect);
+    WinHttpCloseHandle(session);
+    out.reason = "artifact_download_send_failed";
+    return out;
+  }
+
+  DWORD status_code = 0;
+  DWORD status_size = sizeof(status_code);
+  WinHttpQueryHeaders(
+      request,
+      WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+      WINHTTP_HEADER_NAME_BY_INDEX,
+      &status_code,
+      &status_size,
+      WINHTTP_NO_HEADER_INDEX);
+
+  if (status_code < 200 || status_code >= 300)
+  {
+    WinHttpCloseHandle(request);
+    WinHttpCloseHandle(connect);
+    WinHttpCloseHandle(session);
+    out.reason = "artifact_download_http_" + std::to_string(status_code);
+    return out;
+  }
+
+  std::ofstream output(output_path, std::ios::binary | std::ios::trunc);
+  if (!output.is_open())
+  {
+    WinHttpCloseHandle(request);
+    WinHttpCloseHandle(connect);
+    WinHttpCloseHandle(session);
+    out.reason = "artifact_download_output_open_failed";
+    return out;
+  }
+
+  DWORD bytes_available = 0;
+  std::uint64_t total_written = 0;
+  do
+  {
+    bytes_available = 0;
+    if (!WinHttpQueryDataAvailable(request, &bytes_available) || bytes_available == 0)
+    {
+      break;
+    }
+    std::vector<char> buffer(bytes_available, 0);
+    DWORD bytes_read = 0;
+    if (!WinHttpReadData(request, buffer.data(), bytes_available, &bytes_read))
+    {
+      output.close();
+      std::error_code ec;
+      std::filesystem::remove(output_path, ec);
+      WinHttpCloseHandle(request);
+      WinHttpCloseHandle(connect);
+      WinHttpCloseHandle(session);
+      out.reason = "artifact_download_read_failed";
+      return out;
+    }
+    output.write(buffer.data(), static_cast<std::streamsize>(bytes_read));
+    if (!output.good())
+    {
+      output.close();
+      std::error_code ec;
+      std::filesystem::remove(output_path, ec);
+      WinHttpCloseHandle(request);
+      WinHttpCloseHandle(connect);
+      WinHttpCloseHandle(session);
+      out.reason = "artifact_download_write_failed";
+      return out;
+    }
+    total_written += static_cast<std::uint64_t>(bytes_read);
+  } while (bytes_available > 0);
+
+  output.close();
+  WinHttpCloseHandle(request);
+  WinHttpCloseHandle(connect);
+  WinHttpCloseHandle(session);
+
+  out.ok = true;
+  out.size_bytes = total_written;
+  return out;
+}
 #endif
 
 } // namespace
@@ -370,6 +566,41 @@ ArtifactUploadResult ArtifactClient::upload_file(
   (void)file_path;
   (void)timeout_ms;
   out.reason = "upload_unsupported_platform";
+  return out;
+#endif
+}
+
+ArtifactDownloadResult ArtifactClient::download_artifact_to_file(
+    const std::string &base_url,
+    const std::string &bearer_jwt,
+    const std::string &artifact_id,
+    const std::string &output_path,
+    std::uint32_t timeout_ms) const
+{
+  ArtifactDownloadResult out{};
+#ifdef _WIN32
+  if (artifact_id.empty() || output_path.empty())
+  {
+    out.reason = "artifact_download_missing_parameters";
+    return out;
+  }
+  const std::string root = trim_trailing_slash(base_url);
+  if (root.empty())
+  {
+    out.reason = "artifact_download_missing_base_url";
+    return out;
+  }
+
+  const std::string url = root + "/api/v1/agent/artifact/" + artifact_id;
+  out = download_to_file_winhttp(url, bearer_jwt, output_path, timeout_ms);
+  return out;
+#else
+  (void)base_url;
+  (void)bearer_jwt;
+  (void)artifact_id;
+  (void)output_path;
+  (void)timeout_ms;
+  out.reason = "artifact_download_unsupported_platform";
   return out;
 #endif
 }
