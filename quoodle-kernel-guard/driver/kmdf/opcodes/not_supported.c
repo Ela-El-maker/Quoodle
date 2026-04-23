@@ -341,6 +341,23 @@ static BOOLEAN q_extract_required_path_param(
   return q_extract_string_param(req, "path", out, out_len);
 }
 
+static BOOLEAN q_extract_required_upload_destination_param(
+    _In_opt_ const QUOODLE_IOCTL_REQUEST* req,
+    _Out_writes_(out_len) CHAR* out,
+    _In_ size_t out_len) {
+  if (q_extract_string_param(req, "path", out, out_len)) {
+    return TRUE;
+  }
+  return q_extract_string_param(req, "destination", out, out_len);
+}
+
+static BOOLEAN q_extract_required_artifact_id_param(
+    _In_opt_ const QUOODLE_IOCTL_REQUEST* req,
+    _Out_writes_(out_len) CHAR* out,
+    _In_ size_t out_len) {
+  return q_extract_string_param(req, "artifact_id", out, out_len);
+}
+
 static VOID q_opcode_fail_invalid_params(_Out_ QUOODLE_IOCTL_RESPONSE* resp) {
   resp->status = 1;
   resp->error_code = QERR_BAD_PAYLOAD;
@@ -414,6 +431,31 @@ static VOID q_opcode_handle_delete_authorized_collect(
   }
 
   policy = q_validate_delete_policy(path_value, normalized_path, sizeof(normalized_path));
+  switch (policy) {
+    case Q_DELETE_POLICY_ALLOW:
+      q_opcode_handle_authorized_collect(resp, snapshot_type);
+      return;
+    case Q_DELETE_POLICY_PROTECTED_USERS_ROOT:
+      q_opcode_deny_with_reason(resp, "fs_protected_root_users");
+      return;
+    case Q_DELETE_POLICY_PROTECTED_PROFILE_ROOT:
+      q_opcode_deny_with_reason(resp, "fs_protected_root_profile");
+      return;
+    case Q_DELETE_POLICY_SCOPE_VIOLATION:
+    default:
+      q_opcode_deny_with_reason(resp, "fs_scope_violation");
+      return;
+  }
+}
+
+static VOID q_opcode_handle_write_authorized_collect(
+    _Out_ QUOODLE_IOCTL_RESPONSE* resp,
+    _In_z_ const CHAR* raw_path,
+    _In_z_ const CHAR* snapshot_type) {
+  CHAR normalized_path[QUOODLE_MAX_PARAMS];
+  Q_DELETE_POLICY_RESULT policy = Q_DELETE_POLICY_SCOPE_VIOLATION;
+
+  policy = q_validate_delete_policy(raw_path, normalized_path, sizeof(normalized_path));
   switch (policy) {
     case Q_DELETE_POLICY_ALLOW:
       q_opcode_handle_authorized_collect(resp, snapshot_type);
@@ -582,6 +624,27 @@ VOID QuoodleOpcodeHandleDeleteDirectory(
     _Out_ QUOODLE_IOCTL_RESPONSE* resp,
     _In_opt_ const QUOODLE_IOCTL_REQUEST* req) {
   q_opcode_handle_delete_authorized_collect(resp, req, "delete_directory");
+}
+
+VOID QuoodleOpcodeHandleUploadFile(
+    _Out_ QUOODLE_IOCTL_RESPONSE* resp,
+    _In_opt_ const QUOODLE_IOCTL_REQUEST* req) {
+  CHAR destination_path[QUOODLE_MAX_PARAMS];
+  CHAR artifact_id[QUOODLE_MAX_PARAMS];
+  if (!q_extract_required_upload_destination_param(req, destination_path, sizeof(destination_path))) {
+    q_opcode_fail_invalid_params(resp);
+    return;
+  }
+  if (!q_extract_required_artifact_id_param(req, artifact_id, sizeof(artifact_id))) {
+    resp->status = 1;
+    resp->error_code = QERR_BAD_PAYLOAD;
+    RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), "invalid_params_artifact_id_required");
+    RtlStringCchCopyA(resp->result_json, sizeof(resp->result_json), "{\"status\":\"failed\",\"reason\":\"invalid_params\"}");
+    resp->result_length = (uint32_t)q_opcode_strnlen_a(resp->result_json, sizeof(resp->result_json));
+    return;
+  }
+
+  q_opcode_handle_write_authorized_collect(resp, destination_path, "upload_file");
 }
 
 

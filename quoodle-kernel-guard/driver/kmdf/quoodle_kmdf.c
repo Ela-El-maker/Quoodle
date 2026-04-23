@@ -231,6 +231,10 @@ static VOID QuoodleEvtIoDeviceControl(_In_ WDFQUEUE Queue,
         QuoodleOpcodeHandleDeleteDirectory(resp, &req_copy);
         should_emit_event = TRUE;
         break;
+      case QOP_FS_UPLOAD_FILE:
+        QuoodleOpcodeHandleUploadFile(resp, &req_copy);
+        should_emit_event = TRUE;
+        break;
       case QOP_SEC_APPLOCK_REPLACE_POLICY: {
         CHAR error_reason[sizeof(resp->error_message)];
         NTSTATUS app_status = QuoodleAppLockdownReplacePolicy(

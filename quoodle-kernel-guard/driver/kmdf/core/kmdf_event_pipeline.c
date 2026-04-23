@@ -185,6 +185,8 @@ static const CHAR* qep_opcode_to_string(_In_ QUOODLE_OPCODE opcode) {
       return "DELETE_FILE";
     case QOP_FS_DELETE_DIRECTORY:
       return "DELETE_DIRECTORY";
+    case QOP_FS_UPLOAD_FILE:
+      return "UPLOAD_FILE";
     case QOP_SEC_APPLOCK_REPLACE_POLICY:
       return "SEC_APPLOCK_REPLACE_POLICY";
     case QOP_SEC_APPLOCK_GET_STATUS:
@@ -234,6 +236,7 @@ static const CHAR* qep_opcode_category(_In_ QUOODLE_OPCODE opcode) {
     case QOP_FS_CREATE_FILE:
     case QOP_FS_DELETE_FILE:
     case QOP_FS_DELETE_DIRECTORY:
+    case QOP_FS_UPLOAD_FILE:
       return "filesystem";
     default:
       return "exec";
@@ -275,6 +278,8 @@ static const CHAR* qep_opcode_subtype(_In_ QUOODLE_OPCODE opcode) {
       return "fs_delete_file";
     case QOP_FS_DELETE_DIRECTORY:
       return "fs_delete_directory";
+    case QOP_FS_UPLOAD_FILE:
+      return "fs_upload_file";
     default:
       return "opcode";
   }
