@@ -101,6 +101,9 @@ public:
   KernelExecResult delete_directory(const std::string &request_id, const AgentState &state,
                                     const std::string &params_json = "{}",
                                     const std::string &command_message_id = "");
+  KernelExecResult upload_file(const std::string &request_id, const AgentState &state,
+                               const std::string &params_json = "{}",
+                               const std::string &command_message_id = "");
   KernelExecResult applock_replace_policy(const std::string &request_id, const AgentState &state,
                                           const std::string &policy_blob,
                                           const std::string &command_message_id = "");

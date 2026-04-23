@@ -45,6 +45,8 @@ QuoodleOpcode MapOpcodeToCode(const std::string &opcode)
     return QOP_FS_DELETE_FILE;
   if (opcode == "delete_directory" || opcode == "DELETE_DIRECTORY" || opcode == "delete_folder" || opcode == "DELETE_FOLDER")
     return QOP_FS_DELETE_DIRECTORY;
+  if (opcode == "upload_file" || opcode == "UPLOAD_FILE")
+    return QOP_FS_UPLOAD_FILE;
   if (opcode == "SEC_APPLOCK_REPLACE_POLICY")
     return QOP_SEC_APPLOCK_REPLACE_POLICY;
   if (opcode == "SEC_APPLOCK_GET_STATUS")

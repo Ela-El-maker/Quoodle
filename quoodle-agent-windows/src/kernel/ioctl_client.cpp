@@ -1275,6 +1275,17 @@ KernelExecResult IoctlClient::delete_directory(const std::string &request_id, co
   return parse_and_verify_response(json, request_id);
 }
 
+KernelExecResult IoctlClient::upload_file(const std::string &request_id, const AgentState &state,
+                                          const std::string &params_json,
+                                          const std::string &command_message_id)
+{
+  const std::string effective_params = params_json.empty() ? "{}" : params_json;
+  std::string json = execute_request("UPLOAD_FILE", request_id, effective_params, state, command_message_id);
+  if (json.empty())
+    return make_error(request_id, last_transport_error_code_, last_transport_error_message_);
+  return parse_and_verify_response(json, request_id);
+}
+
 KernelExecResult IoctlClient::applock_replace_policy(const std::string &request_id, const AgentState &state,
                                                      const std::string &policy_blob,
                                                      const std::string &command_message_id)
