@@ -113,12 +113,25 @@ void main() {
       );
     });
 
-    test('throws on missing pair_token', () {
+    test('allows missing pair_token when pair_session_id is present', () {
       final data = {
         'type': 'quoodle_pair',
         'version': 1,
         'device_id': 'TEST-001',
         'pair_session_id': 'sess',
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+      };
+      final parsed = QrPairingData.fromRawString(jsonEncode(data));
+      expect(parsed.pairToken, isNull);
+      expect(parsed.pairSessionId, 'sess');
+    });
+
+    test('throws on missing pair_session_id', () {
+      final data = {
+        'type': 'quoodle_pair',
+        'version': 1,
+        'device_id': 'TEST-001',
+        'pair_token': 'token-only',
         'timestamp': DateTime.now().toUtc().toIso8601String(),
       };
       expect(
@@ -127,7 +140,7 @@ void main() {
           isA<QrParseException>().having(
             (e) => e.message,
             'message',
-            contains('pair_token'),
+            contains('pair_session_id'),
           ),
         ),
       );

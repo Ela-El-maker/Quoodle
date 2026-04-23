@@ -10,10 +10,12 @@ class DioApiClient implements ApiClient {
   Future<Map<String, dynamic>> get(
     String path, {
     Map<String, dynamic>? queryParameters,
+    Map<String, String>? headers,
   }) async {
     final response = await _dio.get<Map<String, dynamic>>(
       path,
       queryParameters: queryParameters,
+      options: headers == null ? null : Options(headers: headers),
     );
     return response.data ?? <String, dynamic>{};
   }
@@ -22,8 +24,13 @@ class DioApiClient implements ApiClient {
   Future<Map<String, dynamic>> post(
     String path, {
     Map<String, dynamic>? data,
+    Map<String, String>? headers,
   }) async {
-    final response = await _dio.post<Map<String, dynamic>>(path, data: data);
+    final response = await _dio.post<Map<String, dynamic>>(
+      path,
+      data: data,
+      options: headers == null ? null : Options(headers: headers),
+    );
     return response.data ?? <String, dynamic>{};
   }
 }

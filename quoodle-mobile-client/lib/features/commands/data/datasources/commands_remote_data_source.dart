@@ -24,7 +24,13 @@ class CommandsRemoteDataSource {
       if (twoFactorCode != null && twoFactorCode.isNotEmpty)
         'two_factor_code': twoFactorCode,
     };
-    return _apiClient.post(Endpoints.commands, data: payload);
+    return _apiClient.post(
+      Endpoints.commands,
+      data: payload,
+      headers: const <String, String>{
+        'X-Quoodle-Client-Channel': 'mobile_app',
+      },
+    );
   }
 
   Future<Map<String, dynamic>> fetchCommand(String commandId) {

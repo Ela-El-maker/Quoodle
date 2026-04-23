@@ -17,11 +17,13 @@ class _FakeApiClient implements ApiClient {
   final Map<String, dynamic> _postResponse;
   String? lastPostPath;
   Map<String, dynamic>? lastPostData;
+  Map<String, String>? lastPostHeaders;
 
   @override
   Future<Map<String, dynamic>> get(
     String path, {
     Map<String, dynamic>? queryParameters,
+    Map<String, String>? headers,
   }) async {
     return const <String, dynamic>{};
   }
@@ -30,9 +32,11 @@ class _FakeApiClient implements ApiClient {
   Future<Map<String, dynamic>> post(
     String path, {
     Map<String, dynamic>? data,
+    Map<String, String>? headers,
   }) async {
     lastPostPath = path;
     lastPostData = data;
+    lastPostHeaders = headers;
     return _postResponse;
   }
 }
@@ -98,6 +102,10 @@ void main() {
     expect(fakeApi.lastPostData?['params'], const <String, dynamic>{
       'delay_seconds': 45,
     });
+    expect(
+      fakeApi.lastPostHeaders?['X-Quoodle-Client-Channel'],
+      'mobile_app',
+    );
   });
 
   test('dispatch normalizes filesystem path for control-plane validation',

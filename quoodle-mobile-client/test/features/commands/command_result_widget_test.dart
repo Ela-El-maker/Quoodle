@@ -25,7 +25,7 @@ class _FakeArtifactDownloader implements CommandArtifactDownloader {
 }
 
 void main() {
-  Widget _build(Widget child, {List<Override> overrides = const []}) {
+  Widget buildTestApp(Widget child, {List<Override> overrides = const []}) {
     return ProviderScope(
       overrides: overrides,
       child: MaterialApp(home: Scaffold(body: child)),
@@ -36,7 +36,7 @@ void main() {
       (tester) async {
     final fakeDownloader = _FakeArtifactDownloader();
     await tester.pumpWidget(
-      _build(
+      buildTestApp(
         CommandResultWidget(
           status: CommandStatus.completed,
           command: const <String, dynamic>{
@@ -65,16 +65,15 @@ void main() {
   testWidgets(
       'renders process list table and remains overflow-safe on narrow width',
       (tester) async {
-    final binding = TestWidgetsFlutterBinding.ensureInitialized();
-    binding.window.physicalSizeTestValue = const Size(320, 700);
-    binding.window.devicePixelRatioTestValue = 1.0;
+    tester.view.physicalSize = const Size(320, 700);
+    tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
-      binding.window.clearPhysicalSizeTestValue();
-      binding.window.clearDevicePixelRatioTestValue();
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
     });
 
     await tester.pumpWidget(
-      _build(
+      buildTestApp(
         CommandResultWidget(
           status: CommandStatus.completed,
           command: const <String, dynamic>{
@@ -103,7 +102,7 @@ void main() {
   testWidgets('renders filesystem explorer for snapshot entries',
       (tester) async {
     await tester.pumpWidget(
-      _build(
+      buildTestApp(
         CommandResultWidget(
           status: CommandStatus.completed,
           command: const <String, dynamic>{
