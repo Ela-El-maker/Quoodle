@@ -48,6 +48,7 @@ RUNTIME_SUPPORTED_METHODS = {
     "get_active_window",
     "list_files",
     "download_file",
+    "upload_file",
     "create_directory",
     "create_file",
     "delete_file",
@@ -541,6 +542,33 @@ def create_router(manager: ConnectionManager) -> APIRouter:
                 status_code=upstream.status_code,
                 media_type=upstream.headers.get("content-type"),
             )
+
+    @router.get("/agent/artifact/{artifact_id}")
+    async def agent_artifact_download(artifact_id: str, request: Request):
+        token, _claims = await _require_agent_bearer(request)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        try:
+            async with httpx.AsyncClient() as client:
+                upstream = await client.get(
+                    _control_plane_artifact_url(f"/api/artifact/download/{artifact_id}"),
+                    headers=headers,
+                    timeout=60.0,
+                )
+        except httpx.HTTPError:
+            raise HTTPException(status_code=502, detail={"reason": "artifact_download_upstream_unreachable"})
+
+        response_headers: Dict[str, str] = {}
+        disposition = upstream.headers.get("content-disposition")
+        if disposition:
+            response_headers["content-disposition"] = disposition
+
+        return Response(
+            content=upstream.content,
+            status_code=upstream.status_code,
+            media_type=upstream.headers.get("content-type"),
+            headers=response_headers or None,
+        )
 
     @router.post("/command/dispatch")
     async def dispatch_command(payload: CommandDispatchRequest):

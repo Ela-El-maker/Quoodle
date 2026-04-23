@@ -196,6 +196,7 @@ def test_dispatch_allows_list_services_and_connections_methods(client):
             "get_active_window",
             "list_files",
             "download_file",
+            "upload_file",
             "create_directory",
             "create_file",
             "delete_file",
@@ -213,6 +214,9 @@ def test_dispatch_allows_list_services_and_connections_methods(client):
             elif method == "create_file":
                 payload["params"] = {"path": "C:\\Users\\Public\\Quoodle\\tmp\\note.txt", "overwrite": False}
                 payload["envelope"]["body"]["params"] = {"path": "C:\\Users\\Public\\Quoodle\\tmp\\note.txt", "overwrite": False}
+            elif method == "upload_file":
+                payload["params"] = {"artifact_id": "2a063ac2-d585-4f72-a8aa-a5ebcf3f57e8", "destination": "C:\\Users\\Public\\Quoodle\\tmp\\note.txt", "overwrite": False}
+                payload["envelope"]["body"]["params"] = {"artifact_id": "2a063ac2-d585-4f72-a8aa-a5ebcf3f57e8", "destination": "C:\\Users\\Public\\Quoodle\\tmp\\note.txt", "overwrite": False}
             elif method == "delete_file":
                 payload["params"] = {"path": "C:\\Users\\Public\\Quoodle\\tmp\\note.txt", "confirm": True}
                 payload["envelope"]["body"]["params"] = {"path": "C:\\Users\\Public\\Quoodle\\tmp\\note.txt", "confirm": True}
