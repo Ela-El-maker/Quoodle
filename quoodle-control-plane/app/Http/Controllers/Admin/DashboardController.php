@@ -201,6 +201,7 @@ class DashboardController extends Controller
             'user_id' => auth()->id(),
             'user_role' => auth()->user()->role ?? 'admin',
             'policy_hash' => $device->policy_hash,
+            'origin_channel' => 'control_ui',
         ];
 
         $result = $service->enqueue($payload);

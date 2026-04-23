@@ -18,6 +18,9 @@ class Command extends Model
         'client_message_id',
         'device_id',
         'user_id',
+        'origin_channel',
+        'origin_session_id',
+        'origin_mobile_device_id',
         'method',
         'params',
         'sensitive',
@@ -72,5 +75,13 @@ class Command extends Model
     public function device()
     {
         return $this->belongsTo(Device::class, 'device_id', 'device_id');
+    }
+
+    /**
+     * Mobile device session that originated this command (when applicable).
+     */
+    public function originMobileDevice()
+    {
+        return $this->belongsTo(MobileDevice::class, 'origin_mobile_device_id', 'id');
     }
 }

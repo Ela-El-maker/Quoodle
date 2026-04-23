@@ -50,6 +50,7 @@ Route::middleware('api')->group(function (): void {
     Route::middleware('agent.jwt')->group(function (): void {
         Route::post('/artifact/request', [ArtifactController::class, 'requestUpload']);
         Route::post('/artifact/upload', [ArtifactController::class, 'upload']);
+        Route::get('/artifact/download/{artifact_id}', [ArtifactController::class, 'download']);
     });
 
     // 2FA verification (user has partial auth)

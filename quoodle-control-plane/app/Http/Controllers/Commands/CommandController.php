@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Commands;
 
 use App\Http\Controllers\Controller;
+use App\Models\AuthToken;
+use App\Models\MobileDevice;
 use App\Services\Commands\CommandService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -10,6 +12,10 @@ use Illuminate\Support\Facades\Validator;
 
 class CommandController extends Controller
 {
+    private const ORIGIN_CONTROL_UI = 'control_ui';
+    private const ORIGIN_MOBILE_APP = 'mobile_app';
+    private const ORIGIN_API = 'api';
+
     public function __construct(private readonly CommandService $commandService)
     {
     }
@@ -50,6 +56,15 @@ class CommandController extends Controller
             $validated['user_role'] = (string) ($validated['user_role'] ?? 'viewer');
         }
 
+        $sessionId = $request->attributes->get('jwt_session_id');
+        $sessionId = is_string($sessionId) && trim($sessionId) !== '' ? trim($sessionId) : null;
+
+        $originMobileDeviceId = $this->resolveOriginMobileDeviceId($validated['user_id'] ?? null, $sessionId);
+
+        $validated['origin_session_id'] = $sessionId;
+        $validated['origin_mobile_device_id'] = $originMobileDeviceId;
+        $validated['origin_channel'] = $this->resolveOriginChannel($request, $sessionId, $originMobileDeviceId);
+
         $result = $this->commandService->enqueue($validated);
 
         if ($result['status'] !== 'accepted') {
@@ -77,5 +92,46 @@ class CommandController extends Controller
             'policy' => $result['policy'],
             'compliance' => $result['compliance'],
         ], 201);
+    }
+
+    private function resolveOriginChannel(Request $request, ?string $sessionId, ?string $originMobileDeviceId): string
+    {
+        $headerValue = strtolower(trim((string) $request->header('X-Quoodle-Client-Channel', '')));
+        if ($headerValue === self::ORIGIN_CONTROL_UI || $headerValue === self::ORIGIN_MOBILE_APP || $headerValue === self::ORIGIN_API) {
+            return $headerValue;
+        }
+
+        if ($originMobileDeviceId !== null) {
+            return self::ORIGIN_MOBILE_APP;
+        }
+
+        if ($sessionId !== null) {
+            return self::ORIGIN_CONTROL_UI;
+        }
+
+        return self::ORIGIN_API;
+    }
+
+    private function resolveOriginMobileDeviceId(?string $userId, ?string $sessionId): ?string
+    {
+        if ($userId === null || trim($userId) === '' || $sessionId === null || trim($sessionId) === '') {
+            return null;
+        }
+
+        $authToken = AuthToken::query()
+            ->where('session_id', $sessionId)
+            ->where('user_id', $userId)
+            ->whereNull('revoked_at')
+            ->first(['device_fingerprint']);
+
+        $fingerprint = is_string($authToken?->device_fingerprint) ? trim($authToken->device_fingerprint) : '';
+        if ($fingerprint === '') {
+            return null;
+        }
+
+        return MobileDevice::query()
+            ->where('user_id', $userId)
+            ->where('device_fingerprint', $fingerprint)
+            ->value('id');
     }
 }

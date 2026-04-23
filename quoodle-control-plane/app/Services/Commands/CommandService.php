@@ -113,10 +113,17 @@ class CommandService
             ];
         }
 
+        $attestationStatus = $payload['attestation_status'] ?? null;
+        if (! is_string($attestationStatus) || trim($attestationStatus) === '') {
+            $attestationStatus = strtolower((string) ($device->compliance_status ?? '')) === 'compliant'
+                ? 'pass'
+                : 'unknown';
+        }
+
         $compliance = $this->complianceChecker->evaluateDevice($device, [
             'policy_hash' => $payload['policy_hash'] ?? null,
             'expected_policy_hash' => $device->policy_hash,
-            'attestation_status' => $payload['attestation_status'] ?? 'unknown',
+            'attestation_status' => $attestationStatus,
             'last_update_state' => $payload['last_update_state'] ?? null,
             'clock_skew_seconds' => $payload['clock_skew_seconds'] ?? 0,
         ]);
@@ -161,10 +168,23 @@ class CommandService
         }
 
         $queuedAt = now();
+        $originChannel = isset($payload['origin_channel']) && is_string($payload['origin_channel']) && trim($payload['origin_channel']) !== ''
+            ? trim($payload['origin_channel'])
+            : 'api';
+        $originSessionId = isset($payload['origin_session_id']) && is_string($payload['origin_session_id']) && trim($payload['origin_session_id']) !== ''
+            ? trim($payload['origin_session_id'])
+            : null;
+        $originMobileDeviceId = isset($payload['origin_mobile_device_id']) && is_string($payload['origin_mobile_device_id']) && trim($payload['origin_mobile_device_id']) !== ''
+            ? trim($payload['origin_mobile_device_id'])
+            : null;
+
         $command = Command::create([
             'client_message_id' => $payload['client_message_id'],
             'device_id' => $payload['device_id'],
             'user_id' => $payload['user_id'] ?? null,
+            'origin_channel' => $originChannel,
+            'origin_session_id' => $originSessionId,
+            'origin_mobile_device_id' => $originMobileDeviceId,
             'method' => $payload['method'],
             'params' => $payload['params'] ?? [],
             'sensitive' => $payload['sensitive'] ?? false,

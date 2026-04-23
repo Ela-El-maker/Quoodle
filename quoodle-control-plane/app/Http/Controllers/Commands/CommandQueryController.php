@@ -25,6 +25,7 @@ class CommandQueryController extends Controller
         $limit = min(max((int) $request->query('limit', 50), 1), 200);
         $stateFilter = $request->query('state');
         $deviceFilter = $request->query('device_id');
+        $originFilter = $request->query('origin_channel', $request->query('origin'));
         $before = $request->query('before');
 
         $query = $this->visibleCommandsQuery($request)
@@ -42,6 +43,13 @@ class CommandQueryController extends Controller
 
         if (is_string($deviceFilter) && trim($deviceFilter) !== '') {
             $query->where('device_id', $deviceFilter);
+        }
+
+        if (is_string($originFilter) && trim($originFilter) !== '') {
+            $origins = array_values(array_filter(array_map('trim', explode(',', $originFilter))));
+            if (! empty($origins)) {
+                $query->whereIn('origin_channel', $origins);
+            }
         }
 
         if (is_string($before) && trim($before) !== '') {
@@ -147,6 +155,9 @@ class CommandQueryController extends Controller
             'params',
             'state',
             'execution_state',
+            'origin_channel',
+            'origin_session_id',
+            'origin_mobile_device_id',
             'queued_at',
             'dispatched_at',
             'completed_at',
@@ -183,6 +194,9 @@ class CommandQueryController extends Controller
             'params' => $cmd->params ?? [],
             'state' => $cmd->state,
             'execution_state' => $cmd->execution_state,
+            'origin_channel' => $cmd->origin_channel,
+            'origin_session_id' => $cmd->origin_session_id,
+            'origin_mobile_device_id' => $cmd->origin_mobile_device_id,
             'queued_at' => optional($cmd->queued_at)?->toIso8601String(),
             'dispatched_at' => optional($cmd->dispatched_at)?->toIso8601String(),
             'completed_at' => optional($cmd->completed_at)?->toIso8601String(),
@@ -212,6 +226,9 @@ class CommandQueryController extends Controller
             'params' => $cmd->params ?? [],
             'state' => $cmd->state,
             'execution_state' => $cmd->execution_state,
+            'origin_channel' => $cmd->origin_channel,
+            'origin_session_id' => $cmd->origin_session_id,
+            'origin_mobile_device_id' => $cmd->origin_mobile_device_id,
             'queued_at' => optional($cmd->queued_at)?->toIso8601String(),
             'dispatched_at' => optional($cmd->dispatched_at)?->toIso8601String(),
             'completed_at' => optional($cmd->completed_at)?->toIso8601String(),
