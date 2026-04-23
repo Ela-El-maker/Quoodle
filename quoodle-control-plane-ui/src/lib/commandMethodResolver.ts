@@ -15,6 +15,8 @@ const LEGACY_METHOD_ALIASES: Record<string, string> = {
   'delete-file': 'delete_file',
   'delete-folder': 'delete_directory',
   'delete-directory': 'delete_directory',
+  'kill-process': 'kill_process',
+  'kill-process-tree': 'kill_process_tree',
   'process-list': 'list_processes',
   'network-info': 'network_info',
   'netstat': 'list_connections',

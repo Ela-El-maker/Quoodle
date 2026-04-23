@@ -8,6 +8,14 @@ export type CommandState =
   | 'expired'
   | 'rejected';
 
+export type CommandOriginChannel =
+  | 'control_ui'
+  | 'mobile_app'
+  | 'api'
+  | 'schedule'
+  | 'system'
+  | 'unknown';
+
 export interface CommandResultObject {
   status?: string | null;
   notes?: string | null;
@@ -40,6 +48,9 @@ export interface CommandListRowApi {
   error_message?: string | null;
   reason?: string | null;
   actor_email?: string | null;
+  origin_channel?: string | null;
+  origin_session_id?: string | null;
+  origin_mobile_device_id?: string | null;
 }
 
 export interface CommandDetailApi extends CommandListRowApi {
@@ -60,6 +71,9 @@ export interface NormalizedCommandResult {
   completedAt: string | null;
   traceId: string | null;
   actorEmail: string;
+  originChannel: CommandOriginChannel;
+  originSessionId: string | null;
+  originMobileDeviceId: string | null;
   result: CommandResultObject | null;
   resultStatus: string | null;
   resultNotes: string | null;
@@ -123,6 +137,38 @@ function normalizeArtifactUrl(value: unknown): string | null {
   return raw;
 }
 
+export function normalizeOriginChannel(value: string | null | undefined): CommandOriginChannel {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (
+    normalized === 'control_ui' ||
+    normalized === 'mobile_app' ||
+    normalized === 'api' ||
+    normalized === 'schedule' ||
+    normalized === 'system'
+  ) {
+    return normalized;
+  }
+
+  return 'unknown';
+}
+
+export function originChannelLabel(value: CommandOriginChannel): string {
+  switch (value) {
+    case 'control_ui':
+      return 'Control UI';
+    case 'mobile_app':
+      return 'Mobile App';
+    case 'api':
+      return 'API';
+    case 'schedule':
+      return 'Scheduler';
+    case 'system':
+      return 'System';
+    default:
+      return 'Unknown';
+  }
+}
+
 export function mapCommandListRow(row: CommandListRowApi): NormalizedCommandResult {
   const result = normalizeResultObject(row.result);
   const commandId = row.command_id?.trim() || 'unknown';
@@ -142,6 +188,9 @@ export function mapCommandListRow(row: CommandListRowApi): NormalizedCommandResu
     completedAt: row.completed_at ?? null,
     traceId: row.trace_id?.trim() || null,
     actorEmail: row.actor_email?.trim() || 'Unknown',
+    originChannel: normalizeOriginChannel(row.origin_channel),
+    originSessionId: row.origin_session_id?.trim() || null,
+    originMobileDeviceId: row.origin_mobile_device_id?.trim() || null,
     result,
     resultStatus: row.result_status?.trim() || (typeof result?.status === 'string' ? result.status : null),
     resultNotes: row.result_notes?.trim() || (typeof result?.notes === 'string' ? result.notes : null),
@@ -176,6 +225,9 @@ export function mergeCommandDetail(
       completed_at: detail.completed_at ?? base.completedAt,
       trace_id: detail.trace_id ?? base.traceId,
       actor_email: detail.actor_email ?? base.actorEmail,
+      origin_channel: detail.origin_channel ?? base.originChannel,
+      origin_session_id: detail.origin_session_id ?? base.originSessionId,
+      origin_mobile_device_id: detail.origin_mobile_device_id ?? base.originMobileDeviceId,
       result: detail.result ?? base.result,
       result_status: detail.result_status ?? base.resultStatus,
       result_notes: detail.result_notes ?? base.resultNotes,
@@ -218,6 +270,9 @@ export function toRawResultJson(row: NormalizedCommandResult): string {
     completed_at: row.completedAt,
     trace_id: row.traceId,
     actor_email: row.actorEmail,
+    origin_channel: row.originChannel,
+    origin_session_id: row.originSessionId,
+    origin_mobile_device_id: row.originMobileDeviceId,
     result: row.result,
     error_code: row.errorCode,
     error_message: row.errorMessage,

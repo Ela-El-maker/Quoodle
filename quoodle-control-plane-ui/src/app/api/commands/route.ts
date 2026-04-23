@@ -55,6 +55,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   return proxyAuthedRequest(request, '/commands', {
     method: 'POST',
     body,
-    headers: { 'Content-Type': contentType },
+    headers: {
+      'Content-Type': contentType,
+      'X-Quoodle-Client-Channel': 'control_ui',
+    },
   });
 }
