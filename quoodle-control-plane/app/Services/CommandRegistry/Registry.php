@@ -300,7 +300,7 @@ class Registry
                 allowedInQuarantine: false,
                 paramsRules: [
                     'artifact_id' => ['required', 'string', 'max:128'],
-                    'destination' => $relativePath,
+                    'destination' => $filesystemPath,
                     'overwrite' => ['nullable', 'boolean'],
                 ]
             ),

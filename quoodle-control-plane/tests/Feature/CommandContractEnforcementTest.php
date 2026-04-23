@@ -145,6 +145,7 @@ class CommandContractEnforcementTest extends TestCase
         $this->assertContains('get_active_window', $runtimeSupported);
         $this->assertContains('list_files', $runtimeSupported);
         $this->assertContains('download_file', $runtimeSupported);
+        $this->assertContains('upload_file', $runtimeSupported);
 
         $canonical = $response->json('canonical_methods');
         $this->assertContains('logout_user', $canonical);
@@ -422,6 +423,27 @@ class CommandContractEnforcementTest extends TestCase
         $payload['params'] = [
             'path' => 'Users/Public/report.txt',
             'max_bytes' => 1048576,
+        ];
+
+        $this->withHeaders($this->makeHeaders($admin))
+            ->postJson('/api/commands', $payload)
+            ->assertCreated()
+            ->assertJsonPath('status', 'accepted');
+    }
+
+    /** @test */
+    public function upload_file_is_runtime_supported_and_accepts_destination_contract(): void
+    {
+        Queue::fake();
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $device = $this->createOwnedDevice($admin, 'dev-upload-file');
+
+        $payload = $this->commandPayload($device, 'upload_file');
+        $payload['params'] = [
+            'artifact_id' => '9f5a784e-35c3-4d1f-b4ce-7f1e7ac21995',
+            'destination' => 'C:\\Users\\Public\\report.txt',
+            'overwrite' => false,
         ];
 
         $this->withHeaders($this->makeHeaders($admin))

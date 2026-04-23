@@ -28,6 +28,7 @@ class RuntimeCapabilities
         'get_active_window',
         'list_files',
         'download_file',
+        'upload_file',
         'create_directory',
         'create_file',
         'delete_file',

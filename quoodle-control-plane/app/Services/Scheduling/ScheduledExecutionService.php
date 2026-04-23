@@ -316,6 +316,7 @@ class ScheduledExecutionService
                 'sensitive' => false,
                 'user_id' => $job->created_by_user_id,
                 'user_role' => $job->created_by_role,
+                'origin_channel' => 'schedule',
             ];
 
             $result = $this->commandService->enqueue($payload);
