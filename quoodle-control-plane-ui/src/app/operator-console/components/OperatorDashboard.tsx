@@ -25,6 +25,11 @@ import {
 import { mapCommandListRow, type CommandListRowApi } from '@/lib/commandResults';
 import { formatLocalTime } from '@/lib/dateTime';
 import { resolveCommandMethod } from '@/lib/commandMethodResolver';
+import {
+  defaultParamsForCommand,
+  requiredParamsHintForCommand,
+  validateCommandParams,
+} from '@/lib/commandParams';
 
 type DeviceStatus = ManagedDevice['status'];
 type ComplianceStatus = ManagedDevice['compliance'];
@@ -94,6 +99,8 @@ interface DispatchResponse {
   command_id?: string;
   reason?: string;
   message?: string;
+  errors?: Record<string, string[] | string | null> | null;
+  compliance?: { failed_rules?: string[] } | null;
 }
 
 const cmdStatusColors: Record<RecentCommand['status'], string> = {
@@ -110,7 +117,30 @@ const severityColors: Record<AlertRow['severity'], string> = {
 };
 
 const MEDIUM_RISK_METHODS = new Set(['lock_screen', 'reboot_device', 'shutdown_device', 'logout_user']);
-const HIGH_RISK_METHODS = new Set(['wipe_device', 'factory_reset', 'unenroll_device']);
+const HIGH_RISK_METHODS = new Set([
+  'wipe_device',
+  'factory_reset',
+  'unenroll_device',
+  'upload_file',
+  'create_directory',
+  'create_file',
+  'delete_file',
+  'delete_directory',
+  'kill_process',
+  'kill_process_tree',
+]);
+const TWO_FACTOR_METHODS = new Set([
+  'wipe_device',
+  'factory_reset',
+  'shutdown_device',
+  'upload_file',
+  'create_directory',
+  'create_file',
+  'delete_file',
+  'delete_directory',
+  'kill_process',
+  'kill_process_tree',
+]);
 
 function parseTimeMs(value: string | null | undefined): number {
   if (!value) return 0;
@@ -150,9 +180,50 @@ function methodDescription(method: string): string {
       return 'List currently running processes.';
     case 'network_info':
       return 'Collect active network interface and route details.';
+    case 'download_file':
+      return 'Download one file from the endpoint (path required).';
+    case 'upload_file':
+      return 'Upload an artifact to the endpoint (artifact_id and destination required).';
+    case 'create_directory':
+      return 'Create a directory on the endpoint (path required).';
+    case 'create_file':
+      return 'Create a file on the endpoint (path required).';
+    case 'delete_file':
+      return 'Hard-delete a file (path and confirm=true required).';
+    case 'delete_directory':
+      return 'Hard-delete a directory recursively (path and confirm=true required).';
+    case 'kill_process':
+      return 'Terminate a process by PID.';
+    case 'kill_process_tree':
+      return 'Terminate a process tree by PID.';
     default:
       return 'Run this command on the selected device.';
   }
+}
+
+function firstValidationError(errors: DispatchResponse['errors']): string | null {
+  if (!errors || typeof errors !== 'object') return null;
+  for (const value of Object.values(errors)) {
+    if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'string') {
+      return value[0];
+    }
+    if (typeof value === 'string' && value.trim() !== '') {
+      return value;
+    }
+  }
+  return null;
+}
+
+function formatDispatchError(payload: DispatchResponse, statusCode: number): string {
+  const validationMessage = firstValidationError(payload.errors);
+  if (validationMessage) return validationMessage;
+
+  const reason = payload.reason ?? payload.message ?? `http_${statusCode}`;
+  if (reason === 'compliance_failed') {
+    const rules = payload.compliance?.failed_rules ?? [];
+    return rules.length > 0 ? `compliance_failed: ${rules.join(', ')}` : reason;
+  }
+  return reason;
 }
 
 function buildOperatorMethods(payload: CapabilitiesResponse | null): OperatorMethod[] {
@@ -276,8 +347,11 @@ function OperatorDispatchModal({
 }: DispatchModalProps) {
   const [selectedDevice, setSelectedDevice] = useState('');
   const [selectedMethod, setSelectedMethod] = useState('');
+  const [paramsJson, setParamsJson] = useState('{}');
+  const [paramsError, setParamsError] = useState('');
   const [deviceNameConfirm, setDeviceNameConfirm] = useState('');
   const [deviceIdSuffix, setDeviceIdSuffix] = useState('');
+  const [twoFactorCode, setTwoFactorCode] = useState('');
   const [confirmError, setConfirmError] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -292,12 +366,48 @@ function OperatorDispatchModal({
   const device = devices.find((d) => d.id === selectedDevice);
   const method = methods.find((m) => m.id === selectedMethod);
   const needsConfirm = method?.risk === 'medium' || method?.risk === 'high';
+  const resolvedMethod = selectedMethod ? resolveCommandMethod(selectedMethod) : '';
+  const requires2fa = resolvedMethod ? TWO_FACTOR_METHODS.has(resolvedMethod) : false;
+  const requiredParamsHint = selectedMethod ? requiredParamsHintForCommand(selectedMethod) : null;
+
+  useEffect(() => {
+    if (!selectedMethod) {
+      setParamsJson('{}');
+      setParamsError('');
+      setTwoFactorCode('');
+      return;
+    }
+    setParamsJson(JSON.stringify(defaultParamsForCommand(selectedMethod), null, 2));
+    setParamsError('');
+    setTwoFactorCode('');
+  }, [selectedMethod]);
 
   const handleProceed = () => {
     if (!selectedDevice || !selectedMethod) {
       toast.error('Select a device and command method');
       return;
     }
+
+    let parsedParams: Record<string, unknown>;
+    try {
+      const parsed = JSON.parse(paramsJson || '{}') as unknown;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        setParamsError('Parameters must be a JSON object');
+        return;
+      }
+      parsedParams = parsed as Record<string, unknown>;
+      setParamsError('');
+    } catch {
+      setParamsError('Invalid JSON parameters');
+      return;
+    }
+
+    const validationError = validateCommandParams(selectedMethod, parsedParams);
+    if (validationError) {
+      setParamsError(validationError);
+      return;
+    }
+
     if (needsConfirm) {
       setStep('confirm');
       return;
@@ -311,6 +421,26 @@ function OperatorDispatchModal({
       return;
     }
 
+    let parsedParams: Record<string, unknown>;
+    try {
+      const parsed = JSON.parse(paramsJson || '{}') as unknown;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        setParamsError('Parameters must be a JSON object');
+        return;
+      }
+      parsedParams = parsed as Record<string, unknown>;
+      setParamsError('');
+    } catch {
+      setParamsError('Invalid JSON parameters');
+      return;
+    }
+
+    const validationError = validateCommandParams(selectedMethod, parsedParams);
+    if (validationError) {
+      setParamsError(validationError);
+      return;
+    }
+
     if (needsConfirm) {
       if (deviceNameConfirm.trim() !== device.hostname) {
         setConfirmError('Device name does not match.');
@@ -319,6 +449,13 @@ function OperatorDispatchModal({
       if (deviceIdSuffix.trim().toUpperCase() !== device.id.slice(-6).toUpperCase()) {
         setConfirmError('Device ID suffix does not match.');
         return;
+      }
+      if (requires2fa) {
+        const trimmed = twoFactorCode.trim();
+        if (!/^\d{6}$/.test(trimmed)) {
+          setConfirmError('Enter a valid 6-digit 2FA code.');
+          return;
+        }
       }
     }
 
@@ -333,15 +470,15 @@ function OperatorDispatchModal({
           client_message_id: `operator-console-${device.id}-${resolvedMethod}-${crypto.randomUUID()}`,
           device_id: device.id,
           method: resolvedMethod,
-          params: {},
+          params: parsedParams,
           sensitive: needsConfirm,
+          two_factor_code: requires2fa ? twoFactorCode.trim() : undefined,
         }),
       });
 
       const payload = (await response.json().catch(() => ({}))) as DispatchResponse;
       if (!response.ok || !payload.command_id) {
-        const reason = payload.reason ?? payload.message ?? `http_${response.status}`;
-        throw new Error(reason);
+        throw new Error(formatDispatchError(payload, response.status));
       }
 
       setSubmitted(true);
@@ -434,7 +571,11 @@ function OperatorDispatchModal({
                       type="radio"
                       value={m.id}
                       checked={selectedMethod === m.id}
-                      onChange={() => setSelectedMethod(m.id)}
+                      onChange={() => {
+                        setSelectedMethod(m.id);
+                        setConfirmError('');
+                        setParamsError('');
+                      }}
                       className="mt-0.5 accent-blue-500"
                     />
                     <div className="flex-1 min-w-0">
@@ -454,6 +595,29 @@ function OperatorDispatchModal({
                 ))}
               </div>
             </div>
+
+            {selectedMethod && (
+              <div>
+                <label className="block text-xs font-medium mb-1.5">
+                  Parameters (JSON, {requiredParamsHint ? 'required' : 'optional'})
+                </label>
+                <textarea
+                  value={paramsJson}
+                  onChange={(event) => {
+                    setParamsJson(event.target.value);
+                    setParamsError('');
+                  }}
+                  rows={7}
+                  className="w-full text-xs bg-muted/60 border border-border rounded-md px-3 py-2 text-foreground font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                />
+                {requiredParamsHint && (
+                  <p className="text-[11px] text-amber-400 mt-1">{requiredParamsHint}</p>
+                )}
+                {paramsError && (
+                  <p className="text-[11px] text-red-400 mt-1">{paramsError}</p>
+                )}
+              </div>
+            )}
 
             {needsConfirm && (
               <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 flex items-start gap-2">
@@ -527,6 +691,23 @@ function OperatorDispatchModal({
                   autoComplete="off"
                 />
               </div>
+              {requires2fa && (
+                <div>
+                  <label className="block text-xs font-medium mb-1.5">Two-Factor Code <span className="text-red-400">*</span></label>
+                  <input
+                    type="text"
+                    value={twoFactorCode}
+                    onChange={(event) => {
+                      setTwoFactorCode(event.target.value.replace(/\D/g, '').slice(0, 6));
+                      setConfirmError('');
+                    }}
+                    placeholder="000000"
+                    maxLength={6}
+                    className="w-full text-xs bg-muted/60 border border-border rounded-md px-3 py-2.5 text-foreground font-mono tracking-widest placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors"
+                    autoComplete="one-time-code"
+                  />
+                </div>
+              )}
               {confirmError && (
                 <div className="flex items-start gap-2 text-[11px] text-red-400 bg-red-500/5 border border-red-500/20 rounded-md px-3 py-2">
                   <AlertTriangle size={11} className="flex-shrink-0 mt-0.5" />
@@ -541,7 +722,7 @@ function OperatorDispatchModal({
               </button>
               <button
                 onClick={() => { void handleDispatch(); }}
-                disabled={loading || !deviceNameConfirm || deviceIdSuffix.length < 6}
+                disabled={loading || !deviceNameConfirm || deviceIdSuffix.length < 6 || (requires2fa && twoFactorCode.length !== 6)}
                 className="flex-1 flex items-center justify-center gap-2 py-2 text-xs font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 active:scale-95 transition-all"
               >
                 {loading ? <><Loader2 size={12} className="animate-spin" />Dispatching...</> : <><Terminal size={12} />Execute Command</>}

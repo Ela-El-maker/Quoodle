@@ -19,7 +19,12 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import CommandDetailPanel from './CommandDetailPanel';
 import DispatchCommandModal from './DispatchCommandModal';
 import { toast } from 'sonner';
-import { mapCommandListRow, type CommandListRowApi } from '@/lib/commandResults';
+import {
+  mapCommandListRow,
+  originChannelLabel,
+  type CommandListRowApi,
+  type CommandOriginChannel,
+} from '@/lib/commandResults';
 import { formatLocalTime } from '@/lib/dateTime';
 import { resolveCommandMethod } from '@/lib/commandMethodResolver';
 
@@ -33,6 +38,7 @@ interface Command {
   method: string;
   state: CommandState;
   actor: string;
+  originChannel: CommandOriginChannel;
   queuedAt: string;
   queuedAtIso: string | null;
   dispatchedAt: string | null;
@@ -72,6 +78,7 @@ type SortKey =
   | 'method'
   | 'state'
   | 'actor'
+  | 'originChannel'
   | 'queuedAt'
   | 'ackAt'
   | 'completedAt';
@@ -98,6 +105,7 @@ function toCommand(rowApi: CommandListRowApi): Command {
     method: row.method,
     state: row.state,
     actor: row.actorEmail,
+    originChannel: row.originChannel,
     queuedAt: formatLocalTime(row.queuedAt, '-'),
     queuedAtIso: row.queuedAt,
     dispatchedAt: row.dispatchedAt ? formatLocalTime(row.dispatchedAt, '-') : null,
@@ -134,6 +142,7 @@ function sortCommands(items: Command[], sortKey: SortKey, sortDir: 'asc' | 'desc
 export default function CommandDispatchContent() {
   const [activeTab, setActiveTab] = useState('all');
   const [search, setSearch] = useState('');
+  const [sourceFilter, setSourceFilter] = useState<'all' | CommandOriginChannel>('all');
   const [sortKey, setSortKey] = useState<SortKey>('queuedAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -224,8 +233,16 @@ export default function CommandDispatchContent() {
       || command.method.toLowerCase().includes(lowered)
       || command.actor.toLowerCase().includes(lowered)
     ));
-    return sortCommands(searchFiltered, sortKey, sortDir);
-  }, [activeTab, allowedStates, commands, search, sortKey, sortDir]);
+    const sourceFiltered = sourceFilter === 'all'
+      ? searchFiltered
+      : searchFiltered.filter((command) => command.originChannel === sourceFilter);
+    return sortCommands(sourceFiltered, sortKey, sortDir);
+  }, [activeTab, allowedStates, commands, search, sourceFilter, sortKey, sortDir]);
+
+  const sources = useMemo(
+    () => Array.from(new Set(commands.map((command) => command.originChannel))).sort(),
+    [commands],
+  );
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const paginatedData = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -365,6 +382,19 @@ export default function CommandDispatchContent() {
             className="w-full pl-8 pr-3 py-1.5 text-xs bg-muted/60 border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
           />
         </div>
+        <select
+          value={sourceFilter}
+          onChange={(event) => {
+            setSourceFilter(event.target.value as 'all' | CommandOriginChannel);
+            setCurrentPage(1);
+          }}
+          className="text-xs bg-muted/60 border border-border rounded-md px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+        >
+          <option value="all">All Sources</option>
+          {sources.map((source) => (
+            <option key={source} value={source}>{originChannelLabel(source)}</option>
+          ))}
+        </select>
         <button
           onClick={() => {
             void fetchCommands('refresh');
@@ -415,6 +445,7 @@ export default function CommandDispatchContent() {
                   { key: 'method' as SortKey, label: 'Method' },
                   { key: 'state' as SortKey, label: 'State' },
                   { key: 'actor' as SortKey, label: 'Actor' },
+                  { key: 'originChannel' as SortKey, label: 'Source' },
                   { key: 'queuedAt' as SortKey, label: 'Queued' },
                   { key: 'ackAt' as SortKey, label: 'ACK' },
                   { key: 'completedAt' as SortKey, label: 'Completed' },
@@ -439,14 +470,14 @@ export default function CommandDispatchContent() {
             <tbody className="divide-y divide-border">
               {isLoading ? (
                 <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center">
+                  <td colSpan={12} className="px-4 py-12 text-center">
                     <Loader2 size={32} className="mx-auto text-muted-foreground/30 mb-3 animate-spin" />
                     <p className="text-sm font-medium text-muted-foreground">Loading data...</p>
                   </td>
                 </tr>
               ) : paginatedData.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center">
+                  <td colSpan={12} className="px-4 py-12 text-center">
                     <Terminal size={32} className="mx-auto text-muted-foreground/30 mb-3" />
                     <p className="text-sm font-medium text-muted-foreground">No data available</p>
                     <p className="text-xs text-muted-foreground/60 mt-1">Commands will appear here as they are dispatched</p>
@@ -471,6 +502,11 @@ export default function CommandDispatchContent() {
                       <StatusBadge variant={command.state} pulse={command.state === 'executing' || command.state === 'dispatched'} />
                     </td>
                     <td className="px-3 py-3 text-muted-foreground max-w-[140px] truncate">{command.actor}</td>
+                    <td className="px-3 py-3 text-[11px] whitespace-nowrap">
+                      <span className="px-2 py-0.5 rounded bg-muted/60 text-muted-foreground">
+                        {originChannelLabel(command.originChannel)}
+                      </span>
+                    </td>
                     <td className="px-3 py-3 tabular-nums text-muted-foreground whitespace-nowrap">{command.queuedAt}</td>
                     <td className="px-3 py-3 tabular-nums text-muted-foreground whitespace-nowrap">{command.ackAt ?? '-'}</td>
                     <td className="px-3 py-3 tabular-nums text-muted-foreground whitespace-nowrap">{command.completedAt ?? '-'}</td>

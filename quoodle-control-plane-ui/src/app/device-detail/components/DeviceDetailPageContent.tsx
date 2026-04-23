@@ -320,7 +320,7 @@ const COMMAND_CATEGORIES = [
     commands: [
       { id: 'process-list', label: 'Process List', desc: 'All running processes with CPU/RAM', icon: List, risk: 'low' },
       { id: 'kill-process', label: 'Kill Process', desc: 'Terminate a process by PID or name', icon: X, risk: 'high' },
-      { id: 'start-process', label: 'Start Process', desc: 'Launch an executable on the device', icon: Play, risk: 'high' },
+      { id: 'kill-process-tree', label: 'Kill Process Tree', desc: 'Terminate a process and descendants by PID', icon: X, risk: 'high' },
     ],
   },
   {
@@ -418,6 +418,93 @@ const COMMAND_CATEGORIES = [
     ],
   },
 ];
+
+const COMMAND_PARAM_TEMPLATES: Record<string, Record<string, unknown>> = {
+  download_file: { path: 'C:\\ProgramData\\Quoodle\\device_id', max_bytes: 4096 },
+  upload_file: { artifact_id: '<artifact-id>', destination: 'C:\\Users\\Public\\uploaded.bin', overwrite: true },
+  create_directory: { path: 'C:\\Users\\Public\\quoodle_test', recursive: true },
+  create_file: { path: 'C:\\Users\\Public\\quoodle_test\\note.txt', overwrite: true },
+  delete_file: { path: 'C:\\Users\\Public\\quoodle_test\\note.txt', confirm: true },
+  delete_directory: { path: 'C:\\Users\\Public\\quoodle_test', confirm: true },
+  kill_process: { pid: 1234 },
+  kill_process_tree: { pid: 1234 },
+};
+
+const COMMAND_REQUIRED_PARAM_HINTS: Record<string, string> = {
+  download_file: 'Required: path',
+  upload_file: 'Required: artifact_id, destination',
+  create_directory: 'Required: path',
+  create_file: 'Required: path',
+  delete_file: 'Required: path, confirm=true',
+  delete_directory: 'Required: path, confirm=true',
+  kill_process: 'Required: pid',
+  kill_process_tree: 'Required: pid',
+};
+
+function defaultParamsForCommand(method: string): Record<string, unknown> | null {
+  const resolved = resolveCommandMethod(method);
+  return COMMAND_PARAM_TEMPLATES[resolved] ?? null;
+}
+
+function requiredParamsHintForCommand(method: string): string | null {
+  const resolved = resolveCommandMethod(method);
+  return COMMAND_REQUIRED_PARAM_HINTS[resolved] ?? null;
+}
+
+function isAcceptedValue(value: unknown): boolean {
+  if (value === true || value === 1) return true;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+  }
+  return false;
+}
+
+function parsePositiveInteger(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isInteger(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+function validateCommandParams(method: string, params: Record<string, unknown>): string | null {
+  const resolved = resolveCommandMethod(method);
+  const path = typeof params.path === 'string' ? params.path.trim() : '';
+
+  switch (resolved) {
+    case 'download_file':
+    case 'create_directory':
+    case 'create_file':
+      if (!path) return 'Missing required field: path';
+      return null;
+    case 'upload_file': {
+      const artifactId = typeof params.artifact_id === 'string' ? params.artifact_id.trim() : '';
+      const destination = typeof params.destination === 'string' ? params.destination.trim() : '';
+      if (!artifactId) return 'Missing required field: artifact_id';
+      if (!destination) return 'Missing required field: destination';
+      return null;
+    }
+    case 'delete_file':
+    case 'delete_directory':
+      if (!path) return 'Missing required field: path';
+      if (!isAcceptedValue(params.confirm)) return 'Missing required field: confirm=true';
+      return null;
+    case 'kill_process':
+    case 'kill_process_tree': {
+      const pid = parsePositiveInteger(params.pid);
+      if (pid == null || pid < 2) return 'Missing/invalid required field: pid (integer >= 2)';
+      return null;
+    }
+    default:
+      return null;
+  }
+}
 
 function normalizeStatus(value: string | null | undefined): DeviceStatus {
   const normalized = String(value ?? '').toLowerCase();
@@ -607,6 +694,19 @@ export default function DeviceDetailPageContent() {
     rejection_reasons: {},
   });
   const liveRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!activeCommand) {
+      setCommandParams('');
+      return;
+    }
+    const template = defaultParamsForCommand(activeCommand.id);
+    if (template) {
+      setCommandParams(JSON.stringify(template, null, 2));
+      return;
+    }
+    setCommandParams('{}');
+  }, [activeCommand]);
 
   useEffect(() => {
     if (!canViewAlerts && activeTab === 'Alerts') {
@@ -993,9 +1093,32 @@ export default function DeviceDetailPageContent() {
   const readApiError = async (response: Response): Promise<string> => {
     const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null;
     const nestedError = payload?.error as Record<string, unknown> | undefined;
+    const errors = payload?.errors as Record<string, unknown> | undefined;
+    const reason = typeof payload?.reason === 'string' ? payload.reason : null;
+    const compliance = payload?.compliance as Record<string, unknown> | undefined;
+    if (errors && typeof errors === 'object') {
+      const firstEntry = Object.entries(errors)[0];
+      if (firstEntry) {
+        const [field, details] = firstEntry;
+        if (Array.isArray(details) && details.length > 0) {
+          return `${field}: ${String(details[0])}`;
+        }
+      }
+    }
+    if (reason === 'compliance_failed') {
+      const failedRules = Array.isArray(compliance?.failed_rules)
+        ? compliance?.failed_rules.map((rule) => String(rule))
+        : [];
+      if (failedRules.length > 0) {
+        return `compliance_failed: ${failedRules.join(', ')}`;
+      }
+    }
+    if (reason === '2fa_required') {
+      return '2FA is required for this command. Use a dispatch flow that includes a two-factor code.';
+    }
     const message = String(
       payload?.message ??
-      payload?.reason ??
+      reason ??
       nestedError?.message ??
       `Request failed (${response.status})`,
     );
@@ -1140,6 +1263,7 @@ export default function DeviceDetailPageContent() {
   );
 
   const activeCommandBlockReason = activeCommand ? getCommandBlockReason(activeCommand.id) : null;
+  const activeCommandRequiredHint = activeCommand ? requiredParamsHintForCommand(activeCommand.id) : null;
   const scanAppsNow = useCallback(async () => {
     await dispatchCommand('list_processes', {}, 'Process List');
     setActiveTab('Overview');
@@ -1390,7 +1514,9 @@ export default function DeviceDetailPageContent() {
                       <p className="text-[11px] font-mono text-muted-foreground">{activeCommand.id}</p>
                     </div>
                     <div>
-                      <label className="text-[11px] text-muted-foreground mb-1 block">Parameters (JSON, optional)</label>
+                      <label className="text-[11px] text-muted-foreground mb-1 block">
+                        Parameters (JSON{activeCommandRequiredHint ? ', required' : ', optional'})
+                      </label>
                       <textarea
                         value={commandParams}
                         onChange={e => setCommandParams(e.target.value)}
@@ -1398,6 +1524,9 @@ export default function DeviceDetailPageContent() {
                         rows={3}
                         className="w-full px-3 py-2 text-xs font-mono bg-muted/60 border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
                       />
+                      {activeCommandRequiredHint && (
+                        <p className="mt-1 text-[11px] text-amber-400">{activeCommandRequiredHint}</p>
+                      )}
                       {activeCommand.id === 'list_files' && (
                         <p className="mt-1 text-[11px] text-muted-foreground">
                           Default discovery is <span className="font-mono">C:\Users</span> when no path is set. Use <span className="font-mono">{`{"path":"C:\\\\"}`}</span> for full-drive scan.
@@ -1420,6 +1549,11 @@ export default function DeviceDetailPageContent() {
                         const parsed = parseJsonParams(commandParams);
                         if (!parsed.ok) {
                           toast.error(parsed.error);
+                          return;
+                        }
+                        const validationError = validateCommandParams(activeCommand.id, parsed.value);
+                        if (validationError) {
+                          toast.error(validationError);
                           return;
                         }
                         const sensitive = ['high', 'critical'].includes(activeCommand.risk);

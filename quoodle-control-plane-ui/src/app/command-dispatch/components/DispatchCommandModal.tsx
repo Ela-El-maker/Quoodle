@@ -6,6 +6,11 @@ import { X, Terminal, Shield, AlertTriangle, Loader2, CheckCircle2 } from 'lucid
 import { toast } from 'sonner';
 import { resolveCommandMethod } from '@/lib/commandMethodResolver';
 import {
+  defaultParamsForCommand,
+  requiredParamsHintForCommand,
+  validateCommandParams,
+} from '@/lib/commandParams';
+import {
   mapListDevice,
   type Device as ManagedDevice,
   type ListDeviceApi,
@@ -19,6 +24,7 @@ interface FormValues {
   deviceId: string;
   method: string;
   twoFactorCode: string;
+  paramsJson: string;
 }
 
 interface DevicesApiResponse {
@@ -34,6 +40,8 @@ interface DispatchResponse {
   command_id?: string;
   reason?: string;
   message?: string;
+  errors?: Record<string, string[] | string | null> | null;
+  compliance?: { failed_rules?: string[] } | null;
 }
 
 interface MethodOption {
@@ -45,8 +53,30 @@ interface MethodOption {
 }
 
 const MEDIUM_RISK_METHODS = new Set(['lock_screen', 'reboot_device', 'shutdown_device', 'logout_user']);
-const HIGH_RISK_METHODS = new Set(['wipe_device', 'factory_reset', 'unenroll_device', 'create_directory', 'create_file', 'delete_file', 'delete_directory']);
-const TWO_FACTOR_METHODS = new Set(['wipe_device', 'factory_reset', 'shutdown_device', 'create_directory', 'create_file', 'delete_file', 'delete_directory']);
+const HIGH_RISK_METHODS = new Set([
+  'wipe_device',
+  'factory_reset',
+  'unenroll_device',
+  'upload_file',
+  'create_directory',
+  'create_file',
+  'delete_file',
+  'delete_directory',
+  'kill_process',
+  'kill_process_tree',
+]);
+const TWO_FACTOR_METHODS = new Set([
+  'wipe_device',
+  'factory_reset',
+  'shutdown_device',
+  'upload_file',
+  'create_directory',
+  'create_file',
+  'delete_file',
+  'delete_directory',
+  'kill_process',
+  'kill_process_tree',
+]);
 
 const riskColors = {
   low: { badge: 'bg-green-500/10 border-green-500/20 text-green-400', icon: CheckCircle2 },
@@ -72,6 +102,8 @@ function methodDescription(method: string): string {
       return 'List active processes from the target endpoint.';
     case 'list_files':
       return 'Default scope is C:\\Users when path is omitted. Set path to C:\\ for a full-drive scan.';
+    case 'upload_file':
+      return 'Fetch an artifact by artifact_id and write it to destination path.';
     case 'create_directory':
       return 'Create a directory at an explicit path. Supports recursive parent creation.';
     case 'create_file':
@@ -102,6 +134,31 @@ function buildMethodOptions(payload: CapabilitiesResponse | null): MethodOption[
   }));
 }
 
+function firstValidationError(errors: DispatchResponse['errors']): string | null {
+  if (!errors || typeof errors !== 'object') return null;
+  for (const value of Object.values(errors)) {
+    if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'string') {
+      return value[0];
+    }
+    if (typeof value === 'string' && value.trim() !== '') {
+      return value;
+    }
+  }
+  return null;
+}
+
+function formatDispatchError(payload: DispatchResponse, statusCode: number): string {
+  const validationMessage = firstValidationError(payload.errors);
+  if (validationMessage) return validationMessage;
+
+  const reason = payload.reason ?? payload.message ?? `http_${statusCode}`;
+  if (reason === 'compliance_failed') {
+    const rules = payload.compliance?.failed_rules ?? [];
+    return rules.length > 0 ? `compliance_failed: ${rules.join(', ')}` : reason;
+  }
+  return reason;
+}
+
 export default function DispatchCommandModal({ onClose }: DispatchCommandModalProps) {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -116,9 +173,10 @@ export default function DispatchCommandModal({ onClose }: DispatchCommandModalPr
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<FormValues>({
-    defaultValues: { deviceId: '', method: '', twoFactorCode: '' },
+    defaultValues: { deviceId: '', method: '', twoFactorCode: '', paramsJson: '{}' },
   });
 
   useEffect(() => {
@@ -170,6 +228,16 @@ export default function DispatchCommandModal({ onClose }: DispatchCommandModalPr
     [methods, selectedMethod],
   );
   const requires2fa = methodMeta?.requires2fa ?? false;
+  const requiredParamsHint = selectedMethod ? requiredParamsHintForCommand(selectedMethod) : null;
+
+  useEffect(() => {
+    if (!selectedMethod) {
+      setValue('paramsJson', '{}');
+      return;
+    }
+    const template = defaultParamsForCommand(selectedMethod);
+    setValue('paramsJson', JSON.stringify(template, null, 2));
+  }, [selectedMethod, setValue]);
 
   const availableDevices = useMemo(
     () => devices.filter((device) => device.status !== 'offline'),
@@ -177,6 +245,24 @@ export default function DispatchCommandModal({ onClose }: DispatchCommandModalPr
   );
 
   const onSubmit = async (data: FormValues) => {
+    let parsedParams: Record<string, unknown>;
+    try {
+      const parsed = JSON.parse(data.paramsJson || '{}') as unknown;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('Parameters JSON must be an object');
+      }
+      parsedParams = parsed as Record<string, unknown>;
+    } catch {
+      toast.error('Dispatch failed: invalid JSON parameters');
+      return;
+    }
+
+    const clientValidation = validateCommandParams(data.method, parsedParams);
+    if (clientValidation) {
+      toast.error(`Dispatch failed: ${clientValidation}`);
+      return;
+    }
+
     setLoading(true);
     try {
       const resolvedMethod = resolveCommandMethod(data.method);
@@ -188,7 +274,7 @@ export default function DispatchCommandModal({ onClose }: DispatchCommandModalPr
           client_message_id: `dispatch-modal-${data.deviceId}-${resolvedMethod}-${crypto.randomUUID()}`,
           device_id: data.deviceId,
           method: resolvedMethod,
-          params: {},
+          params: parsedParams,
           sensitive: methodMeta?.risk === 'high' || methodMeta?.risk === 'medium',
           two_factor_code: data.twoFactorCode || undefined,
         }),
@@ -196,8 +282,7 @@ export default function DispatchCommandModal({ onClose }: DispatchCommandModalPr
 
       const payload = (await response.json().catch(() => ({}))) as DispatchResponse;
       if (!response.ok || !payload.command_id) {
-        const reason = payload.reason ?? payload.message ?? `http_${response.status}`;
-        throw new Error(reason);
+        throw new Error(formatDispatchError(payload, response.status));
       }
 
       setCommandId(payload.command_id);
@@ -350,6 +435,39 @@ export default function DispatchCommandModal({ onClose }: DispatchCommandModalPr
                 )}
               </div>
             )}
+
+            <div>
+              <label className="block text-xs font-medium mb-1.5">
+                Parameters (JSON, {requiredParamsHint ? 'required' : 'optional'})
+              </label>
+              <textarea
+                {...register('paramsJson', {
+                  required: requiredParamsHint ? 'Parameters are required' : false,
+                  validate: (value) => {
+                    if (!value || value.trim() === '') {
+                      return requiredParamsHint ? 'Parameters are required' : true;
+                    }
+                    try {
+                      const parsed = JSON.parse(value);
+                      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                        return 'Parameters must be a JSON object';
+                      }
+                    } catch {
+                      return 'Invalid JSON';
+                    }
+                    return true;
+                  },
+                })}
+                rows={8}
+                className="w-full text-xs bg-muted/60 border border-border rounded-md px-3 py-2 text-foreground font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+              />
+              {requiredParamsHint && (
+                <p className="text-[11px] text-amber-400 mt-1">{requiredParamsHint}</p>
+              )}
+              {errors.paramsJson && (
+                <p className="text-[11px] text-red-400 mt-1">{errors.paramsJson.message}</p>
+              )}
+            </div>
 
             <div className="flex items-center gap-2 pt-1">
               <button

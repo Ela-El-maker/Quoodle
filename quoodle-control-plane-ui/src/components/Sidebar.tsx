@@ -2,7 +2,7 @@
 import React from 'react';
 import Link from 'next/link';
 import AppLogo from '@/components/ui/AppLogo';
-import { LayoutDashboard, Monitor, Terminal, Bell, Activity, ShieldCheck, ScrollText, HeartPulse, ChevronLeft, ChevronRight, X, Settings, Eye, BarChart2, Webhook, Calendar, History, LogOut } from 'lucide-react';
+import { LayoutDashboard, Monitor, Terminal, Bell, Activity, ShieldCheck, ScrollText, HeartPulse, ChevronLeft, ChevronRight, X, Settings, Eye, BarChart2, Webhook, Calendar, History, LogOut, Smartphone } from 'lucide-react';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -23,6 +23,7 @@ const adminNavGroups = [
     items: [
       { label: 'Dashboard',    icon: LayoutDashboard, path: '/dashboard',          badge: null },
       { label: 'Devices',      icon: Monitor,         path: '/device-management',  badge: '3' },
+      { label: 'Mobile Devices', icon: Smartphone,    path: '/mobile-devices',     badge: null },
       { label: 'Commands',     icon: Terminal,        path: '/command-dispatch',   badge: '5' },
       { label: 'Results',      icon: BarChart2,       path: '/command-results',    badge: null },
       { label: 'History',      icon: History,         path: '/command-history',    badge: null },
@@ -60,6 +61,7 @@ const operatorNavGroups = [
     items: [
       { label: 'Operator Console', icon: LayoutDashboard, path: '/operator-console',    badge: null },
       { label: 'My Devices',       icon: Monitor,         path: '/device-management',   badge: null },
+      { label: 'Mobile Devices',   icon: Smartphone,      path: '/mobile-devices',      badge: null },
       { label: 'Commands',         icon: Terminal,        path: '/command-dispatch',     badge: null },
       { label: 'Results',          icon: BarChart2,       path: '/command-results',      badge: null },
       { label: 'History',          icon: History,         path: '/command-history',      badge: null },
@@ -90,6 +92,7 @@ const viewerNavGroups = [
     items: [
       { label: 'Viewer Console',   icon: Eye,             path: '/viewer-console',       badge: null },
       { label: 'Devices',          icon: Monitor,         path: '/device-management',    badge: null },
+      { label: 'Mobile Devices',   icon: Smartphone,      path: '/mobile-devices',       badge: null },
       { label: 'Notifications',    icon: Bell,            path: '/notifications',        badge: null },
     ],
   },

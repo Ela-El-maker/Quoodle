@@ -19,7 +19,13 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import StatusBadge from '@/components/ui/StatusBadge';
-import { mapCommandListRow, resultPreview, type CommandListRowApi } from '@/lib/commandResults';
+import {
+  mapCommandListRow,
+  originChannelLabel,
+  resultPreview,
+  type CommandListRowApi,
+  type CommandOriginChannel,
+} from '@/lib/commandResults';
 import { resolveCommandMethod } from '@/lib/commandMethodResolver';
 import { formatLocalDateTime } from '@/lib/dateTime';
 
@@ -33,6 +39,7 @@ interface HistoryCommand {
   method: string;
   state: CommandState;
   actor: string;
+  originChannel: CommandOriginChannel;
   queuedAt: string;
   queuedAtIso: string | null;
   completedAt: string | null;
@@ -84,6 +91,7 @@ function toHistoryCommand(rowApi: CommandListRowApi): HistoryCommand {
     method: normalized.method,
     state: normalized.state,
     actor: normalized.actorEmail,
+    originChannel: normalized.originChannel,
     queuedAt: formatLocalDateTime(normalized.queuedAt, '-'),
     queuedAtIso: normalized.queuedAt,
     completedAt: normalized.completedAt ? formatLocalDateTime(normalized.completedAt, '-') : null,
@@ -103,6 +111,7 @@ export default function CommandHistoryContent() {
   const [deviceFilter, setDeviceFilter] = useState('all');
   const [methodFilter, setMethodFilter] = useState('all');
   const [actorFilter, setActorFilter] = useState('all');
+  const [sourceFilter, setSourceFilter] = useState<'all' | CommandOriginChannel>('all');
   const [stateFilter, setStateFilter] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -178,6 +187,7 @@ export default function CommandHistoryContent() {
   const actors = useMemo(() => Array.from(new Set(history.map((command) => command.actor))).sort(), [history]);
   const devices = useMemo(() => Array.from(new Set(history.map((command) => command.hostname))).sort(), [history]);
   const methods = useMemo(() => Array.from(new Set(history.map((command) => command.method))).sort(), [history]);
+  const sources = useMemo(() => Array.from(new Set(history.map((command) => command.originChannel))).sort(), [history]);
 
   const filtered = useMemo(() => {
     const lowered = search.trim().toLowerCase();
@@ -195,10 +205,11 @@ export default function CommandHistoryContent() {
       const matchDevice = deviceFilter === 'all' || command.hostname === deviceFilter;
       const matchMethod = methodFilter === 'all' || command.method === methodFilter;
       const matchActor = actorFilter === 'all' || command.actor === actorFilter;
+      const matchSource = sourceFilter === 'all' || command.originChannel === sourceFilter;
       const matchState = stateFilter === 'all' || command.state === stateFilter;
       const matchFrom = fromMs === 0 || queuedMs >= fromMs;
       const matchTo = toMs === 0 || queuedMs <= toMs;
-      return matchSearch && matchDevice && matchMethod && matchActor && matchState && matchFrom && matchTo;
+      return matchSearch && matchDevice && matchMethod && matchActor && matchSource && matchState && matchFrom && matchTo;
     });
 
     data.sort((a, b) => {
@@ -214,7 +225,7 @@ export default function CommandHistoryContent() {
     });
 
     return data;
-  }, [history, search, deviceFilter, methodFilter, actorFilter, stateFilter, sortKey, sortDir, dateFrom, dateTo]);
+  }, [history, search, deviceFilter, methodFilter, actorFilter, sourceFilter, stateFilter, sortKey, sortDir, dateFrom, dateTo]);
 
   const toggleSort = (key: keyof HistoryCommand) => {
     if (sortKey === key) setSortDir((value) => (value === 'asc' ? 'desc' : 'asc'));
@@ -277,12 +288,13 @@ export default function CommandHistoryContent() {
     setDeviceFilter('all');
     setMethodFilter('all');
     setActorFilter('all');
+    setSourceFilter('all');
     setStateFilter('all');
     setDateFrom('');
     setDateTo('');
   };
 
-  const hasFilters = search || deviceFilter !== 'all' || methodFilter !== 'all' || actorFilter !== 'all' || stateFilter !== 'all' || dateFrom || dateTo;
+  const hasFilters = search || deviceFilter !== 'all' || methodFilter !== 'all' || actorFilter !== 'all' || sourceFilter !== 'all' || stateFilter !== 'all' || dateFrom || dateTo;
 
   return (
     <div className="space-y-4 fade-in">
@@ -348,6 +360,10 @@ export default function CommandHistoryContent() {
             <option value="all">All Actors</option>
             {actors.map((actor) => <option key={actor} value={actor}>{actor.split('@')[0]}</option>)}
           </select>
+          <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as 'all' | CommandOriginChannel)} className="text-xs bg-muted/60 border border-border rounded-md px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
+            <option value="all">All Sources</option>
+            {sources.map((source) => <option key={source} value={source}>{originChannelLabel(source)}</option>)}
+          </select>
           <select value={stateFilter} onChange={(event) => setStateFilter(event.target.value)} className="text-xs bg-muted/60 border border-border rounded-md px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
             <option value="all">All States</option>
             <option value="completed">Completed</option>
@@ -369,6 +385,7 @@ export default function CommandHistoryContent() {
                   { key: 'method' as keyof HistoryCommand, label: 'Command' },
                   { key: 'state' as keyof HistoryCommand, label: 'State' },
                   { key: 'actor' as keyof HistoryCommand, label: 'Actor' },
+                  { key: 'originChannel' as keyof HistoryCommand, label: 'Source' },
                   { key: 'queuedAt' as keyof HistoryCommand, label: 'Queued At' },
                   { key: 'duration' as keyof HistoryCommand, label: 'Duration' },
                 ].map((column) => (
@@ -387,14 +404,14 @@ export default function CommandHistoryContent() {
             <tbody className="divide-y divide-border">
               {isLoading ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center">
+                  <td colSpan={10} className="px-4 py-12 text-center">
                     <Loader2 size={32} className="mx-auto text-muted-foreground/30 mb-3 animate-spin" />
                     <p className="text-sm font-medium text-muted-foreground">Loading data...</p>
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center">
+                  <td colSpan={10} className="px-4 py-12 text-center">
                     <Terminal size={32} className="mx-auto text-muted-foreground/30 mb-3" />
                     <p className="text-sm font-medium text-muted-foreground">No data available</p>
                   </td>
@@ -417,6 +434,11 @@ export default function CommandHistoryContent() {
                       </div>
                     </td>
                     <td className="px-3 py-3 text-[11px] text-muted-foreground max-w-[120px] truncate">{command.actor.split('@')[0]}</td>
+                    <td className="px-3 py-3 text-[11px]">
+                      <span className="px-2 py-0.5 rounded bg-muted/60 text-muted-foreground">
+                        {originChannelLabel(command.originChannel)}
+                      </span>
+                    </td>
                     <td className="px-3 py-3 text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">{command.queuedAt}</td>
                     <td className="px-3 py-3 text-[11px] text-muted-foreground">{command.duration ?? '-'}</td>
                     <td className="px-3 py-3 text-[11px] text-muted-foreground max-w-[180px] truncate italic">
@@ -439,7 +461,7 @@ export default function CommandHistoryContent() {
                   </tr>
                   {expandedId === command.id && (
                     <tr className="bg-muted/10">
-                      <td colSpan={9} className="px-4 py-4">
+                      <td colSpan={10} className="px-4 py-4">
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                           <div className="bg-muted/30 rounded-lg p-3">
                             <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Trace ID</p>
@@ -452,6 +474,10 @@ export default function CommandHistoryContent() {
                           <div className="bg-muted/30 rounded-lg p-3">
                             <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Priority</p>
                             <p className="text-xs font-semibold capitalize">{command.priority}</p>
+                          </div>
+                          <div className="bg-muted/30 rounded-lg p-3">
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Source</p>
+                            <p className="text-xs font-semibold">{originChannelLabel(command.originChannel)}</p>
                           </div>
                           <div className="bg-muted/30 rounded-lg p-3">
                             <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Batch ID</p>

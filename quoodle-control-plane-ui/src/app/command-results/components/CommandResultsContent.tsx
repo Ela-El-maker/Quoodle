@@ -21,9 +21,11 @@ import CommandResultPresentation from '@/components/results/CommandResultPresent
 import {
   mapCommandListRow,
   mergeCommandDetail,
+  originChannelLabel,
   toRawResultJson,
   type CommandDetailApi,
   type CommandListRowApi,
+  type CommandOriginChannel,
   type CommandState,
   type NormalizedCommandResult,
 } from '@/lib/commandResults';
@@ -61,6 +63,7 @@ const knownMethodLabels: Record<string, string> = {
   get_active_window: 'Active Window',
   list_files: 'List Files',
   download_file: 'Download File',
+  upload_file: 'Upload File',
   create_directory: 'Create Directory',
   create_file: 'Create File',
   delete_file: 'Delete File',
@@ -97,6 +100,7 @@ export default function CommandResultsContent() {
   const [deviceFilter, setDeviceFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<ResultStatusFilter>('all');
   const [methodFilter, setMethodFilter] = useState('all');
+  const [sourceFilter, setSourceFilter] = useState<'all' | CommandOriginChannel>('all');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -209,6 +213,7 @@ export default function CommandResultsContent() {
 
   const devices = useMemo(() => Array.from(new Set(rows.map((r) => r.deviceName))).sort(), [rows]);
   const methods = useMemo(() => Array.from(new Set(rows.map((r) => r.method))).sort(), [rows]);
+  const sources = useMemo(() => Array.from(new Set(rows.map((r) => r.originChannel))).sort(), [rows]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -216,6 +221,7 @@ export default function CommandResultsContent() {
       if (deviceFilter !== 'all' && row.deviceName !== deviceFilter) return false;
       if (statusFilter !== 'all' && row.state !== statusFilter) return false;
       if (methodFilter !== 'all' && row.method !== methodFilter) return false;
+      if (sourceFilter !== 'all' && row.originChannel !== sourceFilter) return false;
       if (!term) return true;
       return (
         row.commandId.toLowerCase().includes(term) ||
@@ -224,7 +230,7 @@ export default function CommandResultsContent() {
         row.method.toLowerCase().includes(term)
       );
     });
-  }, [deviceFilter, methodFilter, rows, search, statusFilter]);
+  }, [deviceFilter, methodFilter, rows, search, sourceFilter, statusFilter]);
 
   const toggleExpand = async (commandId: string) => {
     setExpandedIds((prev) => {
@@ -307,6 +313,17 @@ export default function CommandResultsContent() {
             <option key={method} value={method}>{methodLabel(method)}</option>
           ))}
         </select>
+
+        <select
+          value={sourceFilter}
+          onChange={(event) => setSourceFilter(event.target.value as 'all' | CommandOriginChannel)}
+          className="text-xs bg-muted/60 border border-border rounded-md px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+        >
+          <option value="all">All Sources</option>
+          {sources.map((source) => (
+            <option key={source} value={source}>{originChannelLabel(source)}</option>
+          ))}
+        </select>
       </div>
 
       {error && (
@@ -363,6 +380,7 @@ export default function CommandResultsContent() {
                     <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
                       <span className="flex items-center gap-1"><Monitor size={10} /> {row.deviceName}</span>
                       <span>{row.actorEmail}</span>
+                      <span className="px-1.5 py-0.5 rounded bg-muted/60">{originChannelLabel(row.originChannel)}</span>
                       <span className="flex items-center gap-1"><Clock size={10} /> {formatTime(row.queuedAt)}</span>
                     </div>
                   </div>
