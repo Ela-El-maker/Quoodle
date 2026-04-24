@@ -108,11 +108,22 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Quoodle}
+
+      # AI sidecar (Phase 1 Device Health Copilot)
+      AI_GLOBAL_ENABLED: ${AI_GLOBAL_ENABLED:-true}
+      AI_DEVICE_COPILOT_ENABLED: ${AI_DEVICE_COPILOT_ENABLED:-true}
+      AI_PROVIDER_QWEN_ENABLED: ${AI_PROVIDER_QWEN_ENABLED:-true}
+      AI_DEFAULT_TENANT_ID: ${AI_DEFAULT_TENANT_ID:-default}
+      AI_SIDECAR_BASE_URL: ${AI_SIDECAR_BASE_URL:-http://ai-sidecar:8000}
+      AI_SIDECAR_SERVICE_TOKEN: ${AI_SIDECAR_SERVICE_TOKEN:-}
+      AI_SIDECAR_TIMEOUT_SECONDS: ${AI_SIDECAR_TIMEOUT_SECONDS:-15}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+      ai-sidecar:
+        condition: service_started
     volumes:
       - control_plane_storage:/var/www/storage
     networks:
@@ -157,6 +168,8 @@ services:
         condition: service_healthy
       control-plane:
         condition: service_started
+      ai-sidecar:
+        condition: service_started
     volumes:
       - control_plane_storage:/var/www/storage
     networks:
@@ -188,6 +201,37 @@ services:
     depends_on:
       control-plane:
         condition: service_started
+    networks:
+      - quoodle-net
+
+  # -----------------------------------------------------------------------------
+  # AI SIDECAR (FastAPI)
+  # -----------------------------------------------------------------------------
+  ai-sidecar:
+    build:
+      context: ./quoodle-ai-sidecar
+      dockerfile: Dockerfile
+    container_name: quoodle-ai-sidecar
+    ports:
+      - "${AI_SIDECAR_PORT:-8010}:8000"
+    environment:
+      AI_GLOBAL_ENABLED: ${AI_GLOBAL_ENABLED:-true}
+      AI_DEVICE_COPILOT_ENABLED: ${AI_DEVICE_COPILOT_ENABLED:-true}
+      AI_PROVIDER_QWEN_ENABLED: ${AI_PROVIDER_QWEN_ENABLED:-true}
+      AI_SIDECAR_SERVICE_TOKEN: ${AI_SIDECAR_SERVICE_TOKEN:-}
+      AI_REQUEST_TIMEOUT_SECONDS: ${AI_REQUEST_TIMEOUT_SECONDS:-15}
+      AI_QWEN_BASE_URL: ${AI_QWEN_BASE_URL:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}
+      AI_QWEN_API_KEY: ${AI_QWEN_API_KEY:-}
+      AI_QWEN_API_MODE: ${AI_QWEN_API_MODE:-responses}
+      AI_QWEN_MODEL: ${AI_QWEN_MODEL:-qwen3.6-plus}
+      AI_QWEN_TIMEOUT_SECONDS: ${AI_QWEN_TIMEOUT_SECONDS:-45}
+      AI_QWEN_MAX_OUTPUT_TOKENS: ${AI_QWEN_MAX_OUTPUT_TOKENS:-1024}
+      AI_PROMPT_TEMPLATES_DIR: ${AI_PROMPT_TEMPLATES_DIR:-prompts}
+      AI_PROMPT_PROFILE: ${AI_PROMPT_PROFILE:-device_health}
+      AI_PROMPT_VERSION: ${AI_PROMPT_VERSION:-v1}
+    depends_on:
+      redis:
+        condition: service_healthy
     networks:
       - quoodle-net
 
