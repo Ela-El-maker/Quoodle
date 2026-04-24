@@ -1,11 +1,12 @@
 'use client';
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Monitor, Terminal, Activity, Shield, Clock, Cpu, HardDrive, Wifi, ChevronRight, ArrowLeft, Play, CheckCircle, XCircle, AlertTriangle, RefreshCw, ScrollText, Search, ChevronDown, ChevronUp, Download, RotateCcw, Layers, Globe, Lock, Users, Power, Camera, Folder, File, List, Network, Database, Server, Wrench, BarChart2, Calendar, Clipboard, Volume2, Monitor as DisplayIcon, Package, Rocket, Hash, Info, X, Send, Radio, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Monitor, Terminal, Activity, Shield, Clock, Cpu, HardDrive, Wifi, ChevronRight, ArrowLeft, Play, CheckCircle, XCircle, AlertTriangle, RefreshCw, ScrollText, Search, ChevronDown, ChevronUp, Download, RotateCcw, Layers, Globe, Lock, Users, Power, Camera, Folder, File, List, Network, Database, Server, Wrench, BarChart2, Calendar, Clipboard, Volume2, Monitor as DisplayIcon, Package, Rocket, Info, X, Send, Radio, Loader2, Bot } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import StatusBadge from '@/components/ui/StatusBadge';
 import CommandResultPresentation from '@/components/results/CommandResultPresentation';
 import DeviceAppLockQuickPanel from './DeviceAppLockQuickPanel';
+import DeviceHealthCopilotPanel from './DeviceHealthCopilotPanel';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatLocalDateTime, formatLocalTime } from '@/lib/dateTime';
 import { resolveCommandMethod } from '@/lib/commandMethodResolver';
@@ -636,7 +637,7 @@ const buildTraceSteps = (method: string, state: CommandState): TraceStep[] => {
   return steps;
 };
 
-const MAIN_TABS = ['Overview', 'Commands', 'Trace', 'Results', 'History', 'Telemetry', 'Alerts', 'Audit'];
+const MAIN_TABS = ['Overview', 'Copilot', 'Commands', 'Trace', 'Results', 'History', 'Telemetry', 'Alerts', 'Audit'];
 
 export default function DeviceDetailPageContent() {
   const { user } = useAuth();
@@ -693,8 +694,6 @@ export default function DeviceDetailPageContent() {
     runtime_supported_methods: [],
     rejection_reasons: {},
   });
-  const liveRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     if (!activeCommand) {
       setCommandParams('');
@@ -1411,6 +1410,7 @@ export default function DeviceDetailPageContent() {
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Quick Actions</p>
               <div className="grid grid-cols-2 gap-2">
                 {[
+                  { label: 'Copilot Chat', icon: Bot, tab: 'Copilot', color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' },
                   { label: 'System Info', icon: Info, tab: 'Commands', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
                   { label: 'Screenshot', icon: Camera, tab: 'Commands', color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
                   { label: 'Process List', icon: List, tab: 'Commands', color: 'text-green-400 bg-green-500/10 border-green-500/20' },
@@ -1438,6 +1438,21 @@ export default function DeviceDetailPageContent() {
       )}
 
       {/* ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ Commands ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ */}
+      {activeTab === 'Copilot' && (
+        <div className="space-y-3">
+          <div className="bg-card border border-border rounded-lg p-4">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Device Health Copilot</p>
+            <p className="text-sm text-muted-foreground">
+              Read-only conversation for this device. Copilot explains health signals with evidence, confidence, and freshness.
+            </p>
+          </div>
+          <DeviceHealthCopilotPanel
+            deviceId={device.id}
+            hostname={device.hostname}
+          />
+        </div>
+      )}
+
       {activeTab === 'Commands' && (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
           {/* Command library */}
