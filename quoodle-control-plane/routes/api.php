@@ -13,6 +13,7 @@ use App\Http\Controllers\Commands\ArtifactController;
 use App\Http\Controllers\Devices\DeviceController;
 use App\Http\Controllers\Devices\MobileDeviceController;
 use App\Http\Controllers\Devices\PairingController;
+use App\Http\Controllers\AI\CopilotController;
 use App\Http\Controllers\Policy\PolicyController;
 use App\Http\Controllers\Compliance\ComplianceController;
 use App\Http\Controllers\Audit\AuditTrailController;
@@ -120,6 +121,10 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
         Route::get('/commands/capabilities', [CommandQueryController::class, 'capabilities']);
         Route::get('/commands/{command_id}', [CommandQueryController::class, 'show']);
         Route::get('/devices/{device_id}/commands', [CommandQueryController::class, 'deviceCommands']);
+
+        // AI copilot (read-only)
+        Route::post('/ai/copilot/ask', [CopilotController::class, 'ask']);
+        Route::get('/ai/copilot/conversations/{conversation_id}', [CopilotController::class, 'conversation']);
 
         // Compliance profiles (read-only)
         Route::get('/compliance/profiles', [ComplianceController::class, 'profiles']);

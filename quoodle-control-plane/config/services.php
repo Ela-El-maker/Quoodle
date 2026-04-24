@@ -56,4 +56,10 @@ return [
         'userinfo_url' => env('GOOGLE_USERINFO_URL', 'https://openidconnect.googleapis.com/v1/userinfo'),
     ],
 
+    'ai_sidecar' => [
+        'base_url' => env('AI_SIDECAR_BASE_URL', 'http://ai-sidecar:8000'),
+        'service_token' => env('AI_SIDECAR_SERVICE_TOKEN', ''),
+        'timeout_seconds' => (float) env('AI_SIDECAR_TIMEOUT_SECONDS', 15),
+    ],
+
 ];
