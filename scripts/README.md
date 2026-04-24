@@ -53,6 +53,14 @@ Telemetry-path focused checks.
 ./scripts/test_telemetry_worker.sh
 ```
 
+### `preflight_production.ps1`
+
+Validates production env completeness and guardrails before deployment.
+
+```powershell
+pwsh .\scripts\preflight_production.ps1 -EnvFile .env.production -ComposeFile docker-compose.prod.yml
+```
+
 ## 4. Common Environment Variables
 
 - `LARAVEL_BASE_URL`

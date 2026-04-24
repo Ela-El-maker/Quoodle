@@ -200,6 +200,12 @@ cd .\quoodle-agent-windows
 
 Use component READMEs below for exact commands and expected outputs.
 
+## 9.3 Production Deployment
+
+For production-ready, decoupled deployment (separate web/scheduler/worker roles, external DB/Redis, and preflight checks), use:
+
+- [Production Deployment Runbook](docs/deployment.md)
+
 ## 10. Verification Strategy
 
 ### 10.1 Fast Smoke

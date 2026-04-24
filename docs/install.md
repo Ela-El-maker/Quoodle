@@ -11,6 +11,8 @@ This guide is the canonical local setup flow for running Quoodle end-to-end on a
 
 Use this when you want a clean, repeatable "zero-to-hero" manual run without wrapper scripts.
 
+For production deployment, use the dedicated runbook: [`docs/deployment.md`](./deployment.md).
+
 ## 1. Prerequisites
 
 Install these first:
