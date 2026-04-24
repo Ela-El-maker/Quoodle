@@ -1,0 +1,222 @@
+x-control-plane-env: &control_plane_env
+  APP_NAME: ${APP_NAME:-Quoodle Control Plane}
+  APP_ENV: ${APP_ENV:-production}
+  APP_KEY: ${APP_KEY:?Set APP_KEY}
+  APP_DEBUG: ${APP_DEBUG:-false}
+  APP_URL: ${CONTROL_PLANE_APP_URL:?Set CONTROL_PLANE_APP_URL}
+  DEFAULT_USER_ROLE: ${DEFAULT_USER_ROLE:-operator}
+
+  DB_CONNECTION: ${DB_CONNECTION:-mysql}
+  DB_HOST: ${DB_HOST:?Set DB_HOST}
+  DB_PORT: ${DB_PORT:-3306}
+  DB_DATABASE: ${DB_DATABASE:?Set DB_DATABASE}
+  DB_USERNAME: ${DB_USERNAME:?Set DB_USERNAME}
+  DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+
+  REDIS_HOST: ${REDIS_HOST:?Set REDIS_HOST}
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-null}
+  REDIS_PORT: ${REDIS_PORT:-6379}
+  REDIS_CLIENT: ${REDIS_CLIENT:-predis}
+
+  FASTAPI_BASE_URL: ${FASTAPI_BASE_URL:?Set FASTAPI_BASE_URL}
+  LARAVEL_SERVICE_PRIVATE_KEY_B64: ${LARAVEL_SERVICE_PRIVATE_KEY_B64:?Set LARAVEL_SERVICE_PRIVATE_KEY_B64}
+  FASTAPI_SERVICE_PUBLIC_KEY_B64: ${FASTAPI_SERVICE_PUBLIC_KEY_B64:?Set FASTAPI_SERVICE_PUBLIC_KEY_B64}
+  REQUIRE_FASTAPI_SIGNATURE: ${REQUIRE_FASTAPI_SIGNATURE:-true}
+  POLICY_HASH: ${POLICY_HASH:?Set POLICY_HASH}
+  POLICY_VERSION: ${POLICY_VERSION:?Set POLICY_VERSION}
+  ALLOW_DEVICE_REPAIR_WITH_HWID: ${ALLOW_DEVICE_REPAIR_WITH_HWID:-false}
+
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  GOOGLE_TOKEN_URL: ${GOOGLE_TOKEN_URL:-https://oauth2.googleapis.com/token}
+  GOOGLE_USERINFO_URL: ${GOOGLE_USERINFO_URL:-https://openidconnect.googleapis.com/v1/userinfo}
+  AUTH_OTP_DIGITS: ${AUTH_OTP_DIGITS:-6}
+  AUTH_OTP_TTL_SECONDS: ${AUTH_OTP_TTL_SECONDS:-600}
+  AUTH_OTP_RESEND_COOLDOWN_SECONDS: ${AUTH_OTP_RESEND_COOLDOWN_SECONDS:-60}
+  AUTH_OTP_MAX_ATTEMPTS: ${AUTH_OTP_MAX_ATTEMPTS:-5}
+  AUTH_OTP_REQUEST_IP_MAX_PER_MINUTE: ${AUTH_OTP_REQUEST_IP_MAX_PER_MINUTE:-20}
+  AUTH_OTP_REQUEST_EMAIL_MAX_PER_MINUTE: ${AUTH_OTP_REQUEST_EMAIL_MAX_PER_MINUTE:-6}
+
+  MAIL_MAILER: ${MAIL_MAILER:-smtp}
+  MAIL_SCHEME: ${MAIL_SCHEME:-tls}
+  MAIL_HOST: ${MAIL_HOST:?Set MAIL_HOST}
+  MAIL_PORT: ${MAIL_PORT:-587}
+  MAIL_USERNAME: ${MAIL_USERNAME:?Set MAIL_USERNAME}
+  MAIL_PASSWORD: ${MAIL_PASSWORD:?Set MAIL_PASSWORD}
+  MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:?Set MAIL_FROM_ADDRESS}
+  MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Quoodle}
+
+  AI_GLOBAL_ENABLED: ${AI_GLOBAL_ENABLED:-false}
+  AI_DEVICE_COPILOT_ENABLED: ${AI_DEVICE_COPILOT_ENABLED:-false}
+  AI_PROVIDER_QWEN_ENABLED: ${AI_PROVIDER_QWEN_ENABLED:-false}
+  AI_DEFAULT_TENANT_ID: ${AI_DEFAULT_TENANT_ID:-default}
+  AI_SIDECAR_BASE_URL: ${AI_SIDECAR_BASE_URL:-http://ai-sidecar:8000}
+  AI_SIDECAR_SERVICE_TOKEN: ${AI_SIDECAR_SERVICE_TOKEN:-}
+  AI_SIDECAR_TIMEOUT_SECONDS: ${AI_SIDECAR_TIMEOUT_SECONDS:-15}
+
+  RUN_MIGRATIONS_ON_BOOT: ${RUN_MIGRATIONS_ON_BOOT:-false}
+  SEED_LOCAL_ADMIN_ON_BOOT: ${SEED_LOCAL_ADMIN_ON_BOOT:-false}
+  CACHE_CONFIG_ON_BOOT: ${CACHE_CONFIG_ON_BOOT:-true}
+  RUN_QUEUE_WORKER_IN_WEB: ${RUN_QUEUE_WORKER_IN_WEB:-false}
+  WAIT_FOR_DB_SECONDS: ${WAIT_FOR_DB_SECONDS:-3}
+
+services:
+  control-plane:
+    image: ${CONTROL_PLANE_IMAGE:?Set CONTROL_PLANE_IMAGE}:${CONTROL_PLANE_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "${CONTROL_PLANE_BIND_IP:-127.0.0.1}:${QUOODLE_CONTROL_PLANE_PORT:-8088}:80"
+    environment:
+      <<: *control_plane_env
+    volumes:
+      - control_plane_storage:/var/www/storage
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    networks:
+      - quoodle-prod-net
+
+  control-plane-scheduler:
+    image: ${CONTROL_PLANE_IMAGE:?Set CONTROL_PLANE_IMAGE}:${CONTROL_PLANE_TAG:-latest}
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c", "sleep 8 && php artisan schedule:work --no-interaction"]
+    environment:
+      <<: *control_plane_env
+      RUN_MIGRATIONS_ON_BOOT: "false"
+      RUN_QUEUE_WORKER_IN_WEB: "false"
+    volumes:
+      - control_plane_storage:/var/www/storage
+    depends_on:
+      control-plane:
+        condition: service_healthy
+    networks:
+      - quoodle-prod-net
+
+  control-plane-worker:
+    image: ${CONTROL_PLANE_IMAGE:?Set CONTROL_PLANE_IMAGE}:${CONTROL_PLANE_TAG:-latest}
+    restart: unless-stopped
+    entrypoint:
+      [
+        "/bin/sh",
+        "-c",
+        "sleep 8 && php artisan queue:work --sleep=${QUEUE_WORKER_SLEEP_SECONDS:-1} --tries=${QUEUE_WORKER_TRIES:-3} --timeout=${QUEUE_WORKER_TIMEOUT_SECONDS:-60} --queue=${QUEUE_WORKER_QUEUES:-fastapi,default}",
+      ]
+    environment:
+      <<: *control_plane_env
+      RUN_MIGRATIONS_ON_BOOT: "false"
+      RUN_QUEUE_WORKER_IN_WEB: "false"
+    volumes:
+      - control_plane_storage:/var/www/storage
+    depends_on:
+      control-plane:
+        condition: service_healthy
+    networks:
+      - quoodle-prod-net
+
+  control-plane-ui:
+    image: ${CONTROL_PLANE_UI_IMAGE:?Set CONTROL_PLANE_UI_IMAGE}:${CONTROL_PLANE_UI_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "${CONTROL_PLANE_UI_BIND_IP:-0.0.0.0}:${QUOODLE_CONTROL_PLANE_UI_PORT:-3000}:3000"
+    environment:
+      CONTROL_PLANE_API_URL: ${CONTROL_PLANE_API_URL:-http://control-plane:80/api}
+      NEXT_PUBLIC_CONTROL_PLANE_BASE_URL: ${NEXT_PUBLIC_CONTROL_PLANE_BASE_URL:?Set NEXT_PUBLIC_CONTROL_PLANE_BASE_URL}
+      NEXT_PUBLIC_CONTROL_PLANE_API_URL: ${NEXT_PUBLIC_CONTROL_PLANE_API_URL:?Set NEXT_PUBLIC_CONTROL_PLANE_API_URL}
+      CONTROL_PLANE_UI_URL: ${CONTROL_PLANE_UI_URL:?Set CONTROL_PLANE_UI_URL}
+      NEXT_PUBLIC_CONTROL_PLANE_UI_URL: ${NEXT_PUBLIC_CONTROL_PLANE_UI_URL:?Set NEXT_PUBLIC_CONTROL_PLANE_UI_URL}
+      GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI:-}
+      GOOGLE_OAUTH_REDIRECT_BASE_URL: ${GOOGLE_OAUTH_REDIRECT_BASE_URL:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
+      PORT: ${CONTROL_PLANE_UI_INTERNAL_PORT:-3000}
+      HOSTNAME: ${CONTROL_PLANE_UI_HOSTNAME:-0.0.0.0}
+      NODE_ENV: production
+    depends_on:
+      control-plane:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    networks:
+      - quoodle-prod-net
+
+  gateway:
+    image: ${GATEWAY_IMAGE:?Set GATEWAY_IMAGE}:${GATEWAY_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "${GATEWAY_BIND_IP:-0.0.0.0}:${QUOODLE_GATEWAY_PORT:-8000}:8000"
+    environment:
+      HEARTBEAT_INTERVAL_SECONDS: ${HEARTBEAT_INTERVAL_SECONDS:-30}
+      TELEMETRY_INTERVAL_SECONDS: ${TELEMETRY_INTERVAL_SECONDS:-60}
+      POLICY_HASH: ${POLICY_HASH:?Set POLICY_HASH}
+      POLICY_VERSION: ${POLICY_VERSION:?Set POLICY_VERSION}
+      CONTROLLER_ID: ${CONTROLLER_ID:?Set CONTROLLER_ID}
+
+      REDIS_URL: ${REDIS_URL:?Set REDIS_URL}
+      REDIS_KEY_PREFIX: ${REDIS_KEY_PREFIX:-quoodle:}
+
+      LARAVEL_WEBHOOK_BASE: ${LARAVEL_WEBHOOK_BASE:?Set LARAVEL_WEBHOOK_BASE}
+      JWKS_URL: ${JWKS_URL:?Set JWKS_URL}
+      CONTROL_PLANE_API_BASE: ${CONTROL_PLANE_API_BASE:?Set CONTROL_PLANE_API_BASE}
+
+      REQUIRE_ED25519: ${REQUIRE_ED25519:-true}
+      ALLOW_DEV_SIG_FALLBACK: ${ALLOW_DEV_SIG_FALLBACK:-false}
+      REQUIRE_AGENT_SEQ: ${REQUIRE_AGENT_SEQ:-true}
+      REQUIRE_LARAVEL_SIGNATURE: ${REQUIRE_LARAVEL_SIGNATURE:-true}
+      ENABLE_TEST_ENDPOINTS: ${ENABLE_TEST_ENDPOINTS:-false}
+      LARAVEL_SERVICE_PUBKEY_B64: ${LARAVEL_SERVICE_PUBKEY_B64:?Set LARAVEL_SERVICE_PUBKEY_B64}
+      SIGN_LARAVEL_WEBHOOKS: ${SIGN_LARAVEL_WEBHOOKS:-true}
+      FASTAPI_SERVICE_PRIVATE_KEY_B64: ${FASTAPI_SERVICE_PRIVATE_KEY_B64:?Set FASTAPI_SERVICE_PRIVATE_KEY_B64}
+      ED25519_PRIVATE_KEY_B64: ${ED25519_PRIVATE_KEY_B64:?Set ED25519_PRIVATE_KEY_B64}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    networks:
+      - quoodle-prod-net
+
+  ai-sidecar:
+    image: ${AI_SIDECAR_IMAGE:?Set AI_SIDECAR_IMAGE}:${AI_SIDECAR_TAG:-latest}
+    restart: unless-stopped
+    profiles: ["ai"]
+    ports:
+      - "${AI_SIDECAR_BIND_IP:-127.0.0.1}:${AI_SIDECAR_PORT:-8010}:8000"
+    environment:
+      AI_GLOBAL_ENABLED: ${AI_GLOBAL_ENABLED:-false}
+      AI_DEVICE_COPILOT_ENABLED: ${AI_DEVICE_COPILOT_ENABLED:-false}
+      AI_PROVIDER_QWEN_ENABLED: ${AI_PROVIDER_QWEN_ENABLED:-false}
+      AI_SIDECAR_SERVICE_TOKEN: ${AI_SIDECAR_SERVICE_TOKEN:-}
+      AI_REQUEST_TIMEOUT_SECONDS: ${AI_REQUEST_TIMEOUT_SECONDS:-15}
+      AI_QWEN_BASE_URL: ${AI_QWEN_BASE_URL:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}
+      AI_QWEN_API_KEY: ${AI_QWEN_API_KEY:-}
+      AI_QWEN_API_MODE: ${AI_QWEN_API_MODE:-responses}
+      AI_QWEN_MODEL: ${AI_QWEN_MODEL:-qwen3.6-plus}
+      AI_QWEN_TIMEOUT_SECONDS: ${AI_QWEN_TIMEOUT_SECONDS:-45}
+      AI_QWEN_MAX_OUTPUT_TOKENS: ${AI_QWEN_MAX_OUTPUT_TOKENS:-1024}
+      AI_PROMPT_TEMPLATES_DIR: ${AI_PROMPT_TEMPLATES_DIR:-prompts}
+      AI_PROMPT_PROFILE: ${AI_PROMPT_PROFILE:-device_health}
+      AI_PROMPT_VERSION: ${AI_PROMPT_VERSION:-v1}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8000/docs || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 6
+      start_period: 25s
+    networks:
+      - quoodle-prod-net
+
+networks:
+  quoodle-prod-net:
+    driver: bridge
+
+volumes:
+  control_plane_storage:
