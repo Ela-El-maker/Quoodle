@@ -99,7 +99,7 @@ class _CommandResultWidgetState extends ConsumerState<CommandResultWidget> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _ResultHeader(command: widget.command, status: widget.status),
-          const Divider(height: 1, color: AppTheme.borderLight),
+          Divider(height: 1, color: AppTheme.borderLight),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -109,13 +109,13 @@ class _CommandResultWidgetState extends ConsumerState<CommandResultWidget> {
                   parsed: parsed,
                   status: widget.status,
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
                 _TypedResultBody(
                   parsed: parsed,
                   onDownloadArtifact: _downloadArtifact,
                   downloadingArtifact: _downloadingArtifact,
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
                 _DebugSection(
                   result: parsed.result,
                   params: parsed.params,
@@ -153,7 +153,7 @@ class _ResultHeader extends StatelessWidget {
             color: _statusColor,
             size: 18,
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           Expanded(
             child: Text(
               _isSuccess ? 'Command Completed' : 'Command Failed',
@@ -198,14 +198,14 @@ class _ResultTopMeta extends StatelessWidget {
       children: [
         Row(
           children: [
-            const _SectionLabel('BACKEND RESULT'),
-            const Spacer(),
+            _SectionLabel('BACKEND RESULT'),
+            Spacer(),
             Flexible(
               child: _MetaChip(label: parsed.canonicalMethod, monospace: true),
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        SizedBox(height: 10),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -221,7 +221,7 @@ class _ResultTopMeta extends StatelessWidget {
           ],
         ),
         if (notesText.isNotEmpty) ...[
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(12),
@@ -311,8 +311,8 @@ class _ScreenshotResultView extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionLabel('SCREENSHOT'),
-        const SizedBox(height: 8),
+        _SectionLabel('SCREENSHOT'),
+        SizedBox(height: 8),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -333,7 +333,7 @@ class _ScreenshotResultView extends ConsumerWidget {
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        SizedBox(height: 10),
         if (artifactUrl.isEmpty)
           _InfoCard(
             icon: Icons.image_not_supported_outlined,
@@ -379,7 +379,7 @@ class _ScreenshotResultView extends ConsumerWidget {
                       if (progress == null) {
                         return child;
                       }
-                      return const SizedBox(
+                      return SizedBox(
                         height: 140,
                         child: Center(
                           child: CircularProgressIndicator(
@@ -394,7 +394,7 @@ class _ScreenshotResultView extends ConsumerWidget {
               },
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           Row(
             children: [
               Expanded(
@@ -409,7 +409,7 @@ class _ScreenshotResultView extends ConsumerWidget {
                           ),
                 ),
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Expanded(
                 child: _ActionButton(
                   icon: Icons.copy_rounded,
@@ -422,16 +422,16 @@ class _ScreenshotResultView extends ConsumerWidget {
             ],
           ),
           if (checksum.isNotEmpty) ...[
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             _CopyableField(label: 'CHECKSUM', value: checksum),
           ],
         ],
         if (capture.isNotEmpty) ...[
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           _KeyValueGrid(title: 'Capture Metadata', values: capture),
         ],
         if (authMeta.isNotEmpty) ...[
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           _KeyValueGrid(title: 'Authorization', values: authMeta),
         ],
       ],
@@ -493,8 +493,8 @@ class _ProcessListResultViewState extends State<_ProcessListResultView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionLabel('PROCESS LIST'),
-        const SizedBox(height: 8),
+        _SectionLabel('PROCESS LIST'),
+        SizedBox(height: 8),
         Row(
           children: [
             Expanded(
@@ -504,7 +504,7 @@ class _ProcessListResultViewState extends State<_ProcessListResultView> {
                 onChanged: (_) => setState(() {}),
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             _MetaChip(
               label: '${rows.length} rows',
               monospace: true,
@@ -512,9 +512,9 @@ class _ProcessListResultViewState extends State<_ProcessListResultView> {
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         if (rows.isEmpty)
-          const _InfoCard(
+          _InfoCard(
             icon: Icons.list_alt_rounded,
             message: 'No process rows were returned by the backend.',
           )
@@ -685,8 +685,8 @@ class _FileSystemResultViewState extends State<_FileSystemResultView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionLabel('FILESYSTEM'),
-        const SizedBox(height: 8),
+        _SectionLabel('FILESYSTEM'),
+        SizedBox(height: 8),
         _ExplorerToolbar(
           currentPath: _currentPath,
           windowsStyle: windowsStyle,
@@ -698,15 +698,15 @@ class _FileSystemResultViewState extends State<_FileSystemResultView> {
             _currentPath = '';
           }),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         _SearchField(
           controller: _searchController,
           hint: 'Search files and folders in current view...',
           onChanged: (_) => setState(() {}),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         if (entries.isEmpty)
-          const _InfoCard(
+          _InfoCard(
             icon: Icons.folder_off_rounded,
             message: 'No filesystem entries were returned in this snapshot.',
           )
@@ -716,7 +716,7 @@ class _FileSystemResultViewState extends State<_FileSystemResultView> {
             windowsStyle: windowsStyle,
             onTapPath: (path) => setState(() => _currentPath = path),
           ),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         if (entries.isNotEmpty)
           Container(
             decoration: BoxDecoration(
@@ -751,7 +751,7 @@ class _FileSystemResultViewState extends State<_FileSystemResultView> {
                     ),
                   ),
                 if (widget.parsed.artifactUrl.isEmpty)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.fromLTRB(12, 8, 12, 10),
                     child: _InfoCard(
                       icon: Icons.info_outline_rounded,
@@ -837,8 +837,8 @@ class _SystemInfoResultView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionLabel('SYSTEM INFO'),
-        const SizedBox(height: 8),
+        _SectionLabel('SYSTEM INFO'),
+        SizedBox(height: 8),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -858,7 +858,7 @@ class _SystemInfoResultView extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        SizedBox(height: 10),
         ...sections.where((s) => s.values.isNotEmpty).map(
               (section) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
@@ -867,15 +867,15 @@ class _SystemInfoResultView extends StatelessWidget {
               ),
             ),
         if (sections.every((s) => s.values.isEmpty))
-          const _InfoCard(
+          _InfoCard(
             icon: Icons.info_outline_rounded,
             message: 'No structured system info fields were returned.',
           ),
-        const SizedBox(height: 2),
-        const _SectionLabel('DIAGNOSTICS'),
-        const SizedBox(height: 8),
+        SizedBox(height: 2),
+        _SectionLabel('DIAGNOSTICS'),
+        SizedBox(height: 8),
         if (diagnostics.isEmpty)
-          const _InfoCard(
+          _InfoCard(
             icon: Icons.verified_rounded,
             message: 'No diagnostics reported.',
             tone: AppTheme.secondary,
@@ -996,7 +996,7 @@ class _GenericResultView extends StatelessWidget {
         ),
       );
     }
-    return const _InfoCard(
+    return _InfoCard(
       icon: Icons.notes_rounded,
       message: 'No structured result data available for this command.',
     );
@@ -1030,13 +1030,13 @@ class _DebugSection extends StatelessWidget {
           ),
         ),
         children: [
-          const _SectionLabel('RESULT JSON'),
-          const SizedBox(height: 6),
+          _SectionLabel('RESULT JSON'),
+          SizedBox(height: 6),
           _JsonBlock(content: _prettyJson(result)),
           if (params != null) ...[
-            const SizedBox(height: 10),
-            const _SectionLabel('PARAMS JSON'),
-            const SizedBox(height: 6),
+            SizedBox(height: 10),
+            _SectionLabel('PARAMS JSON'),
+            SizedBox(height: 6),
             _JsonBlock(content: _prettyJson(params)),
           ],
         ],
@@ -1083,14 +1083,14 @@ class _ExplorerToolbar extends StatelessWidget {
           onPressed: canGoBack ? onBack : null,
           compact: true,
         ),
-        const SizedBox(width: 8),
+        SizedBox(width: 8),
         _ActionButton(
           icon: Icons.home_rounded,
           label: rootLabel,
           onPressed: onRoot,
           compact: true,
         ),
-        const SizedBox(width: 8),
+        SizedBox(width: 8),
         Expanded(
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -1145,7 +1145,7 @@ class _Breadcrumbs extends StatelessWidget {
     for (final chunk in chunks) {
       cursor = cursor.isEmpty ? chunk : '$cursor/$chunk';
       chips
-        ..add(const Icon(Icons.chevron_right_rounded,
+        ..add(Icon(Icons.chevron_right_rounded,
             size: 14, color: AppTheme.textMuted))
         ..add(
           GestureDetector(
@@ -1211,7 +1211,7 @@ class _FileRow extends StatelessWidget {
       onTap: onOpen,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: AppTheme.borderLight)),
         ),
         child: Row(
@@ -1224,7 +1224,7 @@ class _FileRow extends StatelessWidget {
               color:
                   entry.isDirectory ? AppTheme.warning : AppTheme.textSecondary,
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1239,7 +1239,7 @@ class _FileRow extends StatelessWidget {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  SizedBox(height: 2),
                   Text(
                     entry.path,
                     maxLines: 1,
@@ -1252,7 +1252,7 @@ class _FileRow extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             if (!entry.isDirectory)
               IconButton(
                 onPressed: artifactUrl.isEmpty || downloadingArtifact
@@ -1271,7 +1271,7 @@ class _FileRow extends StatelessWidget {
                     artifactUrl.isEmpty ? 'Artifact unavailable' : 'Download',
               ),
             if (entry.isDirectory)
-              const Icon(
+              Icon(
                 Icons.chevron_right_rounded,
                 size: 16,
                 color: AppTheme.textMuted,
@@ -1342,7 +1342,7 @@ class _BodyCell extends StatelessWidget {
     return Container(
       width: 130,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: AppTheme.borderLight)),
       ),
       child: Text(
@@ -1397,7 +1397,7 @@ class _MetaChip extends StatelessWidget {
         color: textColor.withAlpha(20),
         borderRadius: BorderRadius.circular(5),
       ),
-      constraints: const BoxConstraints(maxWidth: 260),
+      constraints: BoxConstraints(maxWidth: 260),
       child: Text(
         label,
         maxLines: 1,
@@ -1458,10 +1458,10 @@ class _CopyableField extends StatelessWidget {
               maxLines: 1,
             ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           GestureDetector(
             onTap: () => Clipboard.setData(ClipboardData(text: value)),
-            child: const Icon(
+            child: Icon(
               Icons.copy_rounded,
               size: 14,
               color: AppTheme.textMuted,
@@ -1499,7 +1499,7 @@ class _ActionButton extends StatelessWidget {
           disabledForegroundColor: AppTheme.textDisabled,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
-            side: const BorderSide(color: AppTheme.borderLight),
+            side: BorderSide(color: AppTheme.borderLight),
           ),
         ),
         onPressed: onPressed,
@@ -1521,34 +1521,35 @@ class _InfoCard extends StatelessWidget {
   const _InfoCard({
     required this.icon,
     required this.message,
-    this.tone = AppTheme.textMuted,
+    this.tone,
   });
 
   final IconData icon;
   final String message;
-  final Color tone;
+  final Color? tone;
 
   @override
   Widget build(BuildContext context) {
+    final effectiveTone = tone ?? AppTheme.textMuted;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: tone.withAlpha(20),
+        color: effectiveTone.withAlpha(20),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: tone.withAlpha(80)),
+        border: Border.all(color: effectiveTone.withAlpha(80)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 14, color: tone),
-          const SizedBox(width: 8),
+          Icon(icon, size: 14, color: effectiveTone),
+          SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
               style: GoogleFonts.ibmPlexSans(
                 fontSize: 12,
-                color: tone,
+                color: effectiveTone,
               ),
             ),
           ),
@@ -1584,7 +1585,7 @@ class _SearchField extends StatelessWidget {
             fontSize: 12,
             color: AppTheme.textMuted,
           ),
-          prefixIcon: const Icon(Icons.search_rounded, size: 16),
+          prefixIcon: Icon(Icons.search_rounded, size: 16),
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         ),
@@ -1624,7 +1625,7 @@ class _KeyValueGrid extends StatelessWidget {
               color: AppTheme.textSecondary,
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           ...entries.map(
             (entry) => Padding(
               padding: const EdgeInsets.only(bottom: 6),
@@ -1642,7 +1643,7 @@ class _KeyValueGrid extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   Expanded(
                     flex: 5,
                     child: Text(
@@ -1718,14 +1719,14 @@ final _artifactAuthHeaderProvider = FutureProvider<String?>((ref) async {
 });
 
 class _InfoSectionData {
-  const _InfoSectionData(this.title, this.values);
+  _InfoSectionData(this.title, this.values);
 
   final String title;
   final Map<String, dynamic> values;
 }
 
 class _DiagnosticEntry {
-  const _DiagnosticEntry({
+  _DiagnosticEntry({
     required this.message,
     required this.tone,
   });

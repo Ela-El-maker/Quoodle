@@ -50,7 +50,7 @@ class _DeviceAlertsTabWidgetState extends State<DeviceAlertsTabWidget> {
     final unacked =
         _alertMaps.where((a) => !(a['acknowledged'] as bool)).length;
     if (_alertMaps.isEmpty) {
-      return const EmptyStateWidget(
+      return EmptyStateWidget(
         icon: Icons.notifications_off_rounded,
         title: 'No alerts for this device',
         subtitle: 'This device is operating within normal parameters.',
@@ -70,12 +70,12 @@ class _DeviceAlertsTabWidgetState extends State<DeviceAlertsTabWidget> {
             ),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.error_outline_rounded,
                   color: AppTheme.error,
                   size: 15,
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Text(
                   '$unacked unacknowledged alert${unacked > 1 ? 's' : ''}',
                   style: GoogleFonts.ibmPlexSans(
@@ -134,7 +134,7 @@ class _DeviceAlertCard extends StatelessWidget {
           Row(
             children: [
               StatusBadgeWidget.alert(_severity),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Text(
                 alert['timestamp'] as String,
                 style: GoogleFonts.ibmPlexMono(
@@ -142,16 +142,16 @@ class _DeviceAlertCard extends StatelessWidget {
                   color: AppTheme.textMuted,
                 ),
               ),
-              const Spacer(),
+              Spacer(),
               if (isAcked)
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.check_circle_rounded,
                       size: 12,
                       color: AppTheme.statusOnline,
                     ),
-                    const SizedBox(width: 4),
+                    SizedBox(width: 4),
                     Text(
                       'Acked',
                       style: GoogleFonts.ibmPlexSans(
@@ -163,7 +163,7 @@ class _DeviceAlertCard extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           Text(
             alert['message'] as String,
             style: GoogleFonts.ibmPlexSans(
@@ -172,7 +172,7 @@ class _DeviceAlertCard extends StatelessWidget {
             ),
           ),
           if (!isAcked && onAcknowledge != null) ...[
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(

@@ -24,7 +24,7 @@ class _DashboardFleetChartWidgetState
     final summary = ref.watch(
       dashboardControllerProvider.select((state) => state.summary),
     );
-    final healthData = _buildHealthData(summary?.fleetHealthSeries ?? const []);
+    final healthData = _buildHealthData(summary?.fleetHealthSeries ?? []);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -54,7 +54,7 @@ class _DashboardFleetChartWidgetState
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Flexible(
                 child: Align(
                   alignment: Alignment.centerRight,
@@ -103,7 +103,7 @@ class _DashboardFleetChartWidgetState
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: 20),
           SizedBox(
             height: 160,
             child: LineChart(
@@ -154,10 +154,10 @@ class _DashboardFleetChartWidgetState
                       },
                     ),
                   ),
-                  rightTitles: const AxisTitles(
+                  rightTitles: AxisTitles(
                     sideTitles: SideTitles(showTitles: false),
                   ),
-                  topTitles: const AxisTitles(
+                  topTitles: AxisTitles(
                     sideTitles: SideTitles(showTitles: false),
                   ),
                 ),
@@ -165,7 +165,7 @@ class _DashboardFleetChartWidgetState
                   touchTooltipData: LineTouchTooltipData(
                     getTooltipColor: (_) => AppTheme.surfaceElevated,
                     tooltipRoundedRadius: 8,
-                    tooltipBorder: const BorderSide(
+                    tooltipBorder: BorderSide(
                       color: AppTheme.border,
                       width: 1,
                     ),
@@ -221,11 +221,11 @@ class _DashboardFleetChartWidgetState
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           Row(
             children: [
               _LegendDot(color: AppTheme.primary, label: 'Fleet health %'),
-              const SizedBox(width: 16),
+              SizedBox(width: 16),
               _LegendDot(color: AppTheme.error, label: 'Below threshold'),
             ],
           ),
@@ -267,7 +267,7 @@ class _LegendDot extends StatelessWidget {
           height: 8,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
-        const SizedBox(width: 6),
+        SizedBox(width: 6),
         Text(
           label,
           style: GoogleFonts.ibmPlexSans(

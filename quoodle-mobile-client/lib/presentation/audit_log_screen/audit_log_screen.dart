@@ -36,9 +36,9 @@ class AuditLogScreen extends ConsumerWidget {
       case 'Auth':
         return AppTheme.warning;
       case 'Policy':
-        return const Color(0xFFAB7FF8);
+        return Color(0xFFAB7FF8);
       case 'Config':
-        return const Color(0xFF38BDF8);
+        return Color(0xFF38BDF8);
       default:
         return AppTheme.textMuted;
     }
@@ -70,7 +70,7 @@ class AuditLogScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        title: const Text('Audit Log'),
+        title: Text('Audit Log'),
         actions: [
           IconButton(
             icon: Icon(
@@ -84,7 +84,7 @@ class AuditLogScreen extends ConsumerWidget {
             tooltip: 'Filters',
           ),
           IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.download_rounded,
               color: AppTheme.textSecondary,
             ),
@@ -219,7 +219,7 @@ class AuditLogScreen extends ConsumerWidget {
                   fontSize: 13,
                   color: AppTheme.textMuted,
                 ),
-                prefixIcon: const Icon(
+                prefixIcon: Icon(
                   Icons.search_rounded,
                   color: AppTheme.textMuted,
                   size: 18,
@@ -260,14 +260,14 @@ class AuditLogScreen extends ConsumerWidget {
             state.selectedAction,
             onActionChanged,
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           _buildFilterRow(
             'Role',
             AuditLogState.roleFilters,
             state.selectedRole,
             onRoleChanged,
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           _buildFilterRow(
             'Status',
             AuditLogState.statusFilters,
@@ -357,11 +357,11 @@ class AuditLogScreen extends ConsumerWidget {
             label: '${logs.length} Events',
             color: AppTheme.textSecondary,
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           _StatChip(label: '$success OK', color: AppTheme.secondary),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           _StatChip(label: '$failed Fail', color: AppTheme.error),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           _StatChip(label: '$denied Denied', color: AppTheme.critical),
         ],
       ),
@@ -373,9 +373,8 @@ class AuditLogScreen extends ConsumerWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.history_rounded,
-              size: 48, color: AppTheme.textMuted),
-          const SizedBox(height: 12),
+          Icon(Icons.history_rounded, size: 48, color: AppTheme.textMuted),
+          SizedBox(height: 12),
           Text(
             'No audit events match filters',
             style: GoogleFonts.ibmPlexSans(
@@ -489,7 +488,7 @@ class _AuditLogEntryState extends State<_AuditLogEntry> {
                       color: widget.actionColor,
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -507,14 +506,14 @@ class _AuditLogEntryState extends State<_AuditLogEntry> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            SizedBox(width: 8),
                             _StatusPill(
                               status: log['status'],
                               color: widget.statusColor,
                             ),
                           ],
                         ),
-                        const SizedBox(height: 4),
+                        SizedBox(height: 4),
                         Row(
                           children: [
                             Icon(
@@ -522,7 +521,7 @@ class _AuditLogEntryState extends State<_AuditLogEntry> {
                               size: 11,
                               color: AppTheme.textMuted,
                             ),
-                            const SizedBox(width: 3),
+                            SizedBox(width: 3),
                             Expanded(
                               child: Text(
                                 '${log['actor']} · ${log['role']}',
@@ -535,7 +534,7 @@ class _AuditLogEntryState extends State<_AuditLogEntry> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 2),
+                        SizedBox(height: 2),
                         Row(
                           children: [
                             Icon(
@@ -543,7 +542,7 @@ class _AuditLogEntryState extends State<_AuditLogEntry> {
                               size: 11,
                               color: AppTheme.textMuted,
                             ),
-                            const SizedBox(width: 3),
+                            SizedBox(width: 3),
                             Text(
                               log['target'],
                               style: GoogleFonts.ibmPlexSans(
@@ -551,7 +550,7 @@ class _AuditLogEntryState extends State<_AuditLogEntry> {
                                 color: AppTheme.textMuted,
                               ),
                             ),
-                            const Spacer(),
+                            Spacer(),
                             Text(
                               log['timestamp'],
                               style: GoogleFonts.ibmPlexMono(
@@ -564,7 +563,7 @@ class _AuditLogEntryState extends State<_AuditLogEntry> {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 4),
+                  SizedBox(width: 4),
                   Icon(
                     _expanded
                         ? Icons.expand_less_rounded
@@ -583,15 +582,15 @@ class _AuditLogEntryState extends State<_AuditLogEntry> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _DetailRow(label: 'Event ID', value: log['id'], mono: true),
-                    const SizedBox(height: 6),
+                    SizedBox(height: 6),
                     _DetailRow(label: 'Detail', value: log['detail']),
-                    const SizedBox(height: 6),
+                    SizedBox(height: 6),
                     _DetailRow(
                       label: 'Source IP',
                       value: log['ip'],
                       mono: true,
                     ),
-                    const SizedBox(height: 6),
+                    SizedBox(height: 6),
                     _DetailRow(
                       label: 'Timestamp',
                       value: log['timestamp'],

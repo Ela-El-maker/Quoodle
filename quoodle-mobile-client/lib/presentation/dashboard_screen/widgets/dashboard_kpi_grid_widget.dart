@@ -85,11 +85,11 @@ class DashboardKpiGridWidget extends ConsumerWidget {
             letterSpacing: 0.5,
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
         GridView.builder(
           shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          physics: NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
             mainAxisSpacing: 8,
             crossAxisSpacing: 8,
@@ -109,7 +109,7 @@ class _KpiData {
   final String? trend;
   final bool trendUp;
 
-  const _KpiData({
+  _KpiData({
     required this.label,
     required this.value,
     required this.subtext,
@@ -181,7 +181,7 @@ class _KpiCard extends StatelessWidget {
                   color: data.color,
                 ),
               ),
-              const SizedBox(height: 2),
+              SizedBox(height: 2),
               Text(
                 data.subtext,
                 style: GoogleFonts.ibmPlexSans(

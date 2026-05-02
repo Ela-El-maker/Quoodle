@@ -40,7 +40,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
     );
     _scanLineController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 2),
+      duration: Duration(seconds: 2),
     )..repeat(reverse: true);
     _scanLineAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _scanLineController, curve: Curves.easeInOut),
@@ -102,7 +102,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
     final trimmed = rawToken.trim();
     if (trimmed.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Scanned value is empty.')),
+        SnackBar(content: Text('Scanned value is empty.')),
       );
       return null;
     }
@@ -158,10 +158,13 @@ class _QrScannerScreenState extends State<QrScannerScreen>
     }
 
     try {
-      final response = await apiClient.post(Endpoints.pairConfirm, data: payload);
+      final response =
+          await apiClient.post(Endpoints.pairConfirm, data: payload);
       final status = (response['status'] ?? '').toString().toLowerCase();
       if (status.isNotEmpty && status != 'ok') {
-        throw Exception(response['reason']?.toString() ?? response['message']?.toString() ?? status);
+        throw Exception(response['reason']?.toString() ??
+            response['message']?.toString() ??
+            status);
       }
     } on DioException catch (error) {
       final data = error.response?.data;
@@ -302,7 +305,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              const SizedBox(height: 6),
+              SizedBox(height: 6),
               Text(
                 'Scanning automatically...',
                 textAlign: TextAlign.center,
@@ -317,7 +320,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
         if (_processingCode)
           Container(
             color: Colors.black54,
-            child: const Center(
+            child: Center(
               child: CircularProgressIndicator(color: AppTheme.primary),
             ),
           ),
@@ -356,13 +359,13 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                           border: Border.all(
                               color: AppTheme.primary.withAlpha(102)),
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.keyboard_rounded,
                           color: AppTheme.primary,
                           size: 26,
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      SizedBox(height: 20),
                       Text(
                         'Manual Token Entry',
                         style: GoogleFonts.ibmPlexSans(
@@ -371,7 +374,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                           color: AppTheme.textPrimary,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8),
                       Text(
                         'Enter the pairing token from the device\'s agent dashboard or enrollment email.',
                         style: GoogleFonts.ibmPlexSans(
@@ -380,7 +383,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                           height: 1.5,
                         ),
                       ),
-                      const SizedBox(height: 28),
+                      SizedBox(height: 28),
                       Text(
                         'PAIRING TOKEN',
                         style: GoogleFonts.ibmPlexSans(
@@ -390,7 +393,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                           letterSpacing: 0.8,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8),
                       TextFormField(
                         controller: _tokenController,
                         style: GoogleFonts.ibmPlexMono(
@@ -403,13 +406,13 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                             fontSize: 13,
                             color: AppTheme.textMuted,
                           ),
-                          prefixIcon: const Icon(
+                          prefixIcon: Icon(
                             Icons.vpn_key_rounded,
                             size: 18,
                             color: AppTheme.textMuted,
                           ),
                           suffixIcon: IconButton(
-                            icon: const Icon(
+                            icon: Icon(
                               Icons.paste_rounded,
                               size: 18,
                               color: AppTheme.textMuted,
@@ -435,7 +438,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                         textInputAction: TextInputAction.done,
                         onFieldSubmitted: (_) => _submitManualToken(),
                       ),
-                      const SizedBox(height: 20),
+                      SizedBox(height: 20),
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
@@ -457,12 +460,12 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      SizedBox(height: 16),
                       Center(
                         child: TextButton.icon(
                           onPressed: () =>
                               setState(() => _isManualEntry = false),
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.qr_code_scanner_rounded,
                             size: 16,
                             color: AppTheme.primary,
@@ -553,7 +556,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
               icon: Icons.arrow_back_ios_new_rounded,
               onTap: () => Navigator.maybePop(context),
             ),
-            const Spacer(),
+            Spacer(),
             Text(
               'Pair Device',
               style: GoogleFonts.ibmPlexSans(
@@ -562,7 +565,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                 color: Colors.white,
               ),
             ),
-            const Spacer(),
+            Spacer(),
             _GlassButton(
               icon: _isManualEntry
                   ? Icons.qr_code_scanner_rounded
@@ -776,7 +779,7 @@ class _ControlButton extends StatelessWidget {
               color: active ? AppTheme.primary : Colors.white,
             ),
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           Text(
             label,
             style: GoogleFonts.ibmPlexSans(fontSize: 11, color: Colors.white70),
@@ -788,7 +791,7 @@ class _ControlButton extends StatelessWidget {
 }
 
 class _PairingCandidate {
-  const _PairingCandidate({
+  _PairingCandidate({
     required this.rawToken,
     required this.displayToken,
     required this.pairToken,
@@ -823,7 +826,8 @@ class _PairingConfirmationDialog extends StatefulWidget {
       _PairingConfirmationDialogState();
 }
 
-class _PairingConfirmationDialogState extends State<_PairingConfirmationDialog> {
+class _PairingConfirmationDialogState
+    extends State<_PairingConfirmationDialog> {
   bool _isPairing = false;
   bool _paired = false;
   String _error = '';
@@ -841,7 +845,7 @@ class _PairingConfirmationDialogState extends State<_PairingConfirmationDialog> 
         _isPairing = false;
         _paired = true;
       });
-      await Future.delayed(const Duration(milliseconds: 800));
+      await Future.delayed(Duration(milliseconds: 800));
       if (!mounted) return;
       widget.onSuccess();
     } catch (error) {
@@ -885,7 +889,7 @@ class _PairingConfirmationDialogState extends State<_PairingConfirmationDialog> 
                     size: 22,
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -912,7 +916,7 @@ class _PairingConfirmationDialogState extends State<_PairingConfirmationDialog> 
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -922,12 +926,12 @@ class _PairingConfirmationDialogState extends State<_PairingConfirmationDialog> 
               ),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.vpn_key_rounded,
                     size: 14,
                     color: AppTheme.textMuted,
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       widget.candidate.displayToken.length > 32
@@ -943,7 +947,7 @@ class _PairingConfirmationDialogState extends State<_PairingConfirmationDialog> 
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             ...<MapEntry<String, String>>[
               MapEntry('Source', widget.candidate.sourceLabel),
               if (widget.candidate.deviceId != null &&
@@ -967,7 +971,7 @@ class _PairingConfirmationDialogState extends State<_PairingConfirmationDialog> 
                         color: AppTheme.textMuted,
                       ),
                     ),
-                    const Spacer(),
+                    Spacer(),
                     Flexible(
                       child: Text(
                         e.value,
@@ -984,7 +988,7 @@ class _PairingConfirmationDialogState extends State<_PairingConfirmationDialog> 
               ),
             ),
             if (_error.isNotEmpty) ...[
-              const SizedBox(height: 6),
+              SizedBox(height: 6),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(10),
@@ -1002,16 +1006,16 @@ class _PairingConfirmationDialogState extends State<_PairingConfirmationDialog> 
                 ),
               ),
             ],
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             if (_isPairing)
               Center(
                 child: Column(
                   children: [
-                    const CircularProgressIndicator(
+                    CircularProgressIndicator(
                       color: AppTheme.primary,
                       strokeWidth: 2,
                     ),
-                    const SizedBox(height: 10),
+                    SizedBox(height: 10),
                     Text(
                       'Confirming pairing...',
                       style: GoogleFonts.ibmPlexSans(
@@ -1044,7 +1048,7 @@ class _PairingConfirmationDialogState extends State<_PairingConfirmationDialog> 
                   ),
                 ),
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: 10),
               SizedBox(
                 width: double.infinity,
                 child: TextButton(

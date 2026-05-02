@@ -20,7 +20,7 @@ class DeviceOverviewTabWidget extends StatelessWidget {
           _InfoRow('Assigned User', device['assignedUser'] as String),
           _InfoRow('Location', device['location'] as String),
         ]),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         _buildInfoSection(context, 'Security Posture', [
           _InfoRow(
             'Compliance',
@@ -56,9 +56,9 @@ class DeviceOverviewTabWidget extends StatelessWidget {
           ),
           _InfoRow('Attestation', 'Last verified 4h ago'),
         ]),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         _buildPolicyAlert(context),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         _buildInfoSection(context, 'Pairing', [
           _InfoRow('Paired At', '2026-01-14  09:22 UTC', mono: true),
           _InfoRow('Session ID', 'sess-9f2a...7c14', mono: true),
@@ -94,7 +94,7 @@ class DeviceOverviewTabWidget extends StatelessWidget {
               ),
             ),
           ),
-          const Divider(height: 1, color: AppTheme.borderLight),
+          Divider(height: 1, color: AppTheme.borderLight),
           ...rows.map((row) => _buildInfoRowWidget(context, row)),
         ],
       ),
@@ -104,7 +104,7 @@ class DeviceOverviewTabWidget extends StatelessWidget {
   Widget _buildInfoRowWidget(BuildContext context, _InfoRow row) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(color: AppTheme.borderLight, width: 1),
         ),
@@ -155,12 +155,12 @@ class DeviceOverviewTabWidget extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.warning_amber_rounded,
             color: AppTheme.warning,
             size: 20,
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -173,7 +173,7 @@ class DeviceOverviewTabWidget extends StatelessWidget {
                     color: AppTheme.warning,
                   ),
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: 2),
                 Text(
                   'Reported policy hash does not match expected. Run policy_sync to remediate.',
                   style: GoogleFonts.ibmPlexSans(
@@ -194,5 +194,5 @@ class _InfoRow {
   final String label, value;
   final bool mono;
   final Color? valueColor;
-  const _InfoRow(this.label, this.value, {this.mono = false, this.valueColor});
+  _InfoRow(this.label, this.value, {this.mono = false, this.valueColor});
 }

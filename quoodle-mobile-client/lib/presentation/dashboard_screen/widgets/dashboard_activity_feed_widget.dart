@@ -14,7 +14,7 @@ class DashboardActivityFeedWidget extends ConsumerWidget {
     final summary = ref.watch(
       dashboardControllerProvider.select((state) => state.summary),
     );
-    final activities = (summary?.recentActivities ?? const [])
+    final activities = (summary?.recentActivities ?? [])
         .map(
           (event) => _ActivityItem(
             commandMethod: event.commandMethod,
@@ -46,7 +46,7 @@ class DashboardActivityFeedWidget extends ConsumerWidget {
                   AppNavigator.push(context, AppRoute.commandTimeline),
               style: TextButton.styleFrom(
                 padding: EdgeInsets.zero,
-                minimumSize: const Size(0, 0),
+                minimumSize: Size(0, 0),
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               child: Text(
@@ -59,7 +59,7 @@ class DashboardActivityFeedWidget extends ConsumerWidget {
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
             color: AppTheme.surface,
@@ -77,7 +77,7 @@ class DashboardActivityFeedWidget extends ConsumerWidget {
                         AppNavigator.push(context, AppRoute.commandTimeline),
                   ),
                   if (i < activities.length - 1)
-                    const Divider(
+                    Divider(
                       height: 1,
                       color: AppTheme.borderLight,
                       indent: 16,
@@ -96,7 +96,7 @@ class DashboardActivityFeedWidget extends ConsumerWidget {
 class _ActivityItem {
   final String commandMethod, commandLabel, deviceName, timestamp, initiator;
   final CommandStatus status;
-  const _ActivityItem({
+  _ActivityItem({
     required this.commandMethod,
     required this.commandLabel,
     required this.deviceName,
@@ -147,7 +147,7 @@ class _ActivityRow extends StatelessWidget {
               ),
               child: Icon(_methodIcon, size: 15, color: AppTheme.textSecondary),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -161,7 +161,7 @@ class _ActivityRow extends StatelessWidget {
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 2),
+                  SizedBox(height: 2),
                   Text(
                     '${item.deviceName} · ${item.initiator}',
                     style: GoogleFonts.ibmPlexSans(
@@ -173,12 +173,12 @@ class _ActivityRow extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 StatusBadgeWidget.command(item.status),
-                const SizedBox(height: 4),
+                SizedBox(height: 4),
                 Text(
                   item.timestamp,
                   style: GoogleFonts.ibmPlexSans(

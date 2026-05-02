@@ -22,12 +22,12 @@ class CommandAuditWidget extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.verified_user_rounded,
                   size: 15,
                   color: AppTheme.textMuted,
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Text(
                   'AUDIT & SIGNATURES',
                   style: GoogleFonts.ibmPlexSans(
@@ -40,7 +40,7 @@ class CommandAuditWidget extends StatelessWidget {
               ],
             ),
           ),
-          const Divider(height: 1, color: AppTheme.borderLight),
+          Divider(height: 1, color: AppTheme.borderLight),
           _AuditRow(label: 'Command ID', value: command['id'] as String),
           _AuditRow(
             label: 'Initiator',
@@ -100,7 +100,7 @@ class _AuditRow extends StatelessWidget {
       decoration: BoxDecoration(
         border: isLast
             ? null
-            : const Border(
+            : Border(
                 bottom: BorderSide(color: AppTheme.borderLight, width: 1),
               ),
       ),

@@ -109,7 +109,7 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen>
       title: 'Scheduler',
       actions: [
         IconButton(
-          icon: const Icon(Icons.refresh_rounded, size: 20),
+          icon: Icon(Icons.refresh_rounded, size: 20),
           onPressed: () => setState(() {}),
           tooltip: 'Refresh',
         ),
@@ -142,7 +142,7 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen>
                 AppTheme.secondary,
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             SizedBox(
               width: 92,
               child: _statChip(
@@ -152,7 +152,7 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen>
                 AppTheme.warning,
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             SizedBox(
               width: 92,
               child: _statChip(
@@ -162,7 +162,7 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen>
                 AppTheme.primary,
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             SizedBox(
               width: 92,
               child: _statChip(
@@ -194,7 +194,7 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, size: 16, color: color),
-              const SizedBox(height: 4),
+              SizedBox(height: 4),
               Text(
                 value,
                 style: GoogleFonts.ibmPlexMono(
@@ -242,7 +242,7 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen>
                 fontWeight: FontWeight.w600,
               ),
               unselectedLabelStyle: GoogleFonts.ibmPlexSans(fontSize: 12),
-              tabs: const [
+              tabs: [
                 Tab(text: 'Active'),
                 Tab(text: 'Paused'),
                 Tab(text: 'History'),
@@ -260,7 +260,7 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen>
     required bool isInitializing,
   }) {
     if (isInitializing) {
-      return const Center(
+      return Center(
         child: CircularProgressIndicator(color: AppTheme.primary),
       );
     }
@@ -295,12 +295,12 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen>
     required bool isInitializing,
   }) {
     if (isInitializing) {
-      return const Center(
+      return Center(
         child: CircularProgressIndicator(color: AppTheme.primary),
       );
     }
     if (jobs.isEmpty) {
-      return const EmptyStateWidget(
+      return EmptyStateWidget(
         icon: Icons.history_rounded,
         title: 'No Job History',
         subtitle: 'Completed and cancelled jobs appear here',
@@ -320,7 +320,7 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen>
   Widget _buildFab() {
     return FloatingActionButton.extended(
       onPressed: _showCreateJobSheet,
-      icon: const Icon(Icons.add_rounded, size: 18),
+      icon: Icon(Icons.add_rounded, size: 18),
       label: Text(
         'Schedule',
         style: GoogleFonts.ibmPlexSans(
@@ -379,7 +379,7 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen>
     showModalBottomSheet(
       context: context,
       backgroundColor: AppTheme.surfaceVariant,
-      shape: const RoundedRectangleBorder(
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       isScrollControlled: true,
@@ -390,7 +390,7 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen>
         expand: false,
         builder: (_, scrollCtrl) => Column(
           children: [
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Container(
               width: 40,
               height: 4,
@@ -420,10 +420,10 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen>
                 ],
               ),
             ),
-            const Divider(color: AppTheme.border, height: 1),
+            Divider(color: AppTheme.border, height: 1),
             Expanded(
               child: job.history.isEmpty
-                  ? const EmptyStateWidget(
+                  ? EmptyStateWidget(
                       icon: Icons.history_rounded,
                       title: 'No Runs Yet',
                       subtitle: 'Run history will appear here',
@@ -446,7 +446,7 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen>
     showModalBottomSheet(
       context: context,
       backgroundColor: AppTheme.surfaceVariant,
-      shape: const RoundedRectangleBorder(
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       isScrollControlled: true,
@@ -559,7 +559,7 @@ class _JobCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     job.name,
@@ -574,7 +574,7 @@ class _JobCard extends StatelessWidget {
                 if (onViewHistory != null)
                   GestureDetector(
                     onTap: onViewHistory,
-                    child: const Icon(
+                    child: Icon(
                       Icons.history_rounded,
                       size: 18,
                       color: AppTheme.textMuted,
@@ -621,12 +621,12 @@ class _JobCard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.schedule_rounded,
                     size: 12,
                     color: AppTheme.textMuted,
                   ),
-                  const SizedBox(width: 4),
+                  SizedBox(width: 4),
                   Text(
                     'Next: ${_formatDateTime(job.nextRunAt!)}',
                     style: GoogleFonts.ibmPlexMono(
@@ -634,7 +634,7 @@ class _JobCard extends StatelessWidget {
                       color: AppTheme.textMuted,
                     ),
                   ),
-                  const Spacer(),
+                  Spacer(),
                   _RunBadge(
                     success: job.successCount,
                     failure: job.failureCount,
@@ -644,7 +644,7 @@ class _JobCard extends StatelessWidget {
             ),
           if (!isHistory)
             Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 border: Border(
                   top: BorderSide(color: AppTheme.borderLight, width: 1),
                 ),
@@ -719,7 +719,7 @@ class _MetaChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 10, color: AppTheme.textMuted),
-          const SizedBox(width: 4),
+          SizedBox(width: 4),
           Text(
             label,
             style: GoogleFonts.ibmPlexSans(
@@ -757,7 +757,7 @@ class _ActionBtn extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, size: 16, color: color),
-              const SizedBox(height: 2),
+              SizedBox(height: 2),
               Text(
                 label,
                 style: GoogleFonts.ibmPlexSans(
@@ -785,7 +785,7 @@ class _RunBadge extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(Icons.check_circle_rounded, size: 12, color: AppTheme.secondary),
-        const SizedBox(width: 2),
+        SizedBox(width: 2),
         Text(
           '$success',
           style: GoogleFonts.ibmPlexMono(
@@ -793,9 +793,9 @@ class _RunBadge extends StatelessWidget {
             color: AppTheme.secondary,
           ),
         ),
-        const SizedBox(width: 6),
+        SizedBox(width: 6),
         Icon(Icons.cancel_rounded, size: 12, color: AppTheme.error),
-        const SizedBox(width: 2),
+        SizedBox(width: 2),
         Text(
           '$failure',
           style: GoogleFonts.ibmPlexMono(fontSize: 10, color: AppTheme.error),
@@ -831,7 +831,7 @@ class _RunHistoryTile extends StatelessWidget {
             size: 16,
             color: run.success ? AppTheme.secondary : AppTheme.error,
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -908,7 +908,7 @@ class _CreateJobSheetState extends State<_CreateJobSheet> {
   TimeOfDay _scheduledTime = TimeOfDay.now();
   final List<int> _selectedDays = [1, 3, 5];
 
-  static const List<String> _methods = [
+  static final List<String> _methods = [
     'collect_telemetry',
     'process_list',
     'system_info',
@@ -921,7 +921,7 @@ class _CreateJobSheetState extends State<_CreateJobSheet> {
     'create_file',
   ];
 
-  static const List<Map<String, String>> _devices = [
+  static final List<Map<String, String>> _devices = [
     {'id': 'dev-001', 'name': 'PROD-SRV-001'},
     {'id': 'dev-007', 'name': 'WKS-FINANCE-07'},
     {'id': 'dev-014', 'name': 'PROD-SRV-014'},
@@ -969,7 +969,7 @@ class _CreateJobSheetState extends State<_CreateJobSheet> {
         expand: false,
         builder: (_, scrollCtrl) => Column(
           children: [
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Container(
               width: 40,
               height: 4,
@@ -990,9 +990,9 @@ class _CreateJobSheetState extends State<_CreateJobSheet> {
                       color: AppTheme.textPrimary,
                     ),
                   ),
-                  const Spacer(),
+                  Spacer(),
                   IconButton(
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.close_rounded,
                       color: AppTheme.textMuted,
                     ),
@@ -1001,40 +1001,40 @@ class _CreateJobSheetState extends State<_CreateJobSheet> {
                 ],
               ),
             ),
-            const Divider(color: AppTheme.border, height: 1),
+            Divider(color: AppTheme.border, height: 1),
             Expanded(
               child: ListView(
                 controller: scrollCtrl,
                 padding: const EdgeInsets.all(16),
                 children: [
                   _sectionLabel('Job Details'),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   TextField(
                     controller: _nameCtrl,
                     style: GoogleFonts.ibmPlexSans(
                       color: AppTheme.textPrimary,
                       fontSize: 14,
                     ),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Job Name',
                       hintText: 'e.g. Daily Telemetry Sweep',
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  SizedBox(height: 10),
                   TextField(
                     controller: _descCtrl,
                     style: GoogleFonts.ibmPlexSans(
                       color: AppTheme.textPrimary,
                       fontSize: 14,
                     ),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Description (optional)',
                     ),
                     maxLines: 2,
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
                   _sectionLabel('Command Template'),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   _DropdownField<String>(
                     label: 'Command Method',
                     value: _selectedMethod,
@@ -1055,7 +1055,7 @@ class _CreateJobSheetState extends State<_CreateJobSheet> {
                     onChanged: (v) =>
                         setState(() => _selectedMethod = v ?? _selectedMethod),
                   ),
-                  const SizedBox(height: 10),
+                  SizedBox(height: 10),
                   _DropdownField<String>(
                     label: 'Target Device',
                     value: _selectedDevice,
@@ -1083,14 +1083,14 @@ class _CreateJobSheetState extends State<_CreateJobSheet> {
                       });
                     },
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
                   _sectionLabel('Recurrence'),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   _RecurrenceSelector(
                     selected: _recurrenceType,
                     onChanged: (t) => setState(() => _recurrenceType = t),
                   ),
-                  const SizedBox(height: 10),
+                  SizedBox(height: 10),
                   if (_recurrenceType != RecurrenceType.once &&
                       _recurrenceType != RecurrenceType.custom) ...[
                     Row(
@@ -1102,12 +1102,12 @@ class _CreateJobSheetState extends State<_CreateJobSheet> {
                             color: AppTheme.textSecondary,
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        SizedBox(width: 12),
                         _IntervalStepper(
                           value: _interval,
                           onChanged: (v) => setState(() => _interval = v),
                         ),
-                        const SizedBox(width: 8),
+                        SizedBox(width: 8),
                         Text(
                           _recurrenceType.name,
                           style: GoogleFonts.ibmPlexSans(
@@ -1117,7 +1117,7 @@ class _CreateJobSheetState extends State<_CreateJobSheet> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
+                    SizedBox(height: 10),
                   ],
                   if (_recurrenceType == RecurrenceType.weekly) ...[
                     _DaySelector(
@@ -1128,7 +1128,7 @@ class _CreateJobSheetState extends State<_CreateJobSheet> {
                           ..addAll(days),
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    SizedBox(height: 10),
                   ],
                   if (_recurrenceType != RecurrenceType.minutely)
                     InkWell(
@@ -1151,12 +1151,12 @@ class _CreateJobSheetState extends State<_CreateJobSheet> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.access_time_rounded,
                               size: 16,
                               color: AppTheme.textMuted,
                             ),
-                            const SizedBox(width: 10),
+                            SizedBox(width: 10),
                             Text(
                               'Scheduled at ${_scheduledTime.format(context)}',
                               style: GoogleFonts.ibmPlexSans(
@@ -1164,8 +1164,8 @@ class _CreateJobSheetState extends State<_CreateJobSheet> {
                                 color: AppTheme.textPrimary,
                               ),
                             ),
-                            const Spacer(),
-                            const Icon(
+                            Spacer(),
+                            Icon(
                               Icons.chevron_right_rounded,
                               size: 16,
                               color: AppTheme.textMuted,
@@ -1174,9 +1174,9 @@ class _CreateJobSheetState extends State<_CreateJobSheet> {
                         ),
                       ),
                     ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
                   _sectionLabel('Cron Preview'),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -1186,12 +1186,12 @@ class _CreateJobSheetState extends State<_CreateJobSheet> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.code_rounded,
                           size: 14,
                           color: AppTheme.primary,
                         ),
-                        const SizedBox(width: 8),
+                        SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             _cronPreview,
@@ -1204,7 +1204,7 @@ class _CreateJobSheetState extends State<_CreateJobSheet> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
@@ -1320,7 +1320,7 @@ class _RecurrenceSelector extends StatelessWidget {
   final void Function(RecurrenceType) onChanged;
   const _RecurrenceSelector({required this.selected, required this.onChanged});
 
-  static const _types = [
+  static final _types = [
     (RecurrenceType.once, 'Once'),
     (RecurrenceType.minutely, 'Minutely'),
     (RecurrenceType.hourly, 'Hourly'),
@@ -1431,7 +1431,7 @@ class _DaySelector extends StatelessWidget {
   final void Function(List<int>) onChanged;
   const _DaySelector({required this.selected, required this.onChanged});
 
-  static const _days = [
+  static final _days = [
     (1, 'M'),
     (2, 'T'),
     (3, 'W'),

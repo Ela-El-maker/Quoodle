@@ -29,7 +29,7 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
     super.initState();
     _fadeController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: Duration(milliseconds: 600),
     );
     _fadeAnimation = CurvedAnimation(
       parent: _fadeController,
@@ -91,7 +91,7 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
                       _buildLogoSection(),
-                      const SizedBox(height: 32),
+                      SizedBox(height: 32),
                       _buildFormCard(
                         authState: authState,
                         isOtpStep: isOtpStep,
@@ -120,13 +120,13 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: AppTheme.border, width: 1),
           ),
-          child: const Icon(
+          child: Icon(
             Icons.shield_rounded,
             color: AppTheme.primary,
             size: 28,
           ),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         Text(
           'Quoodle',
           style: GoogleFonts.ibmPlexSans(
@@ -136,7 +136,7 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
             letterSpacing: -0.3,
           ),
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: 4),
         Text(
           'Passwordless Operator Access',
           style: GoogleFonts.ibmPlexSans(
@@ -175,7 +175,7 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
                 color: AppTheme.textPrimary,
               ),
             ),
-            const SizedBox(height: 4),
+            SizedBox(height: 4),
             Text(
               isOtpStep
                   ? 'Enter the one-time code sent to ${authState.pendingEmail ?? _emailController.text.trim()}.'
@@ -185,7 +185,7 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
                 color: AppTheme.textMuted,
               ),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: 24),
             if (!isOtpStep) ...<Widget>[
               _buildField(
                 controller: _emailController,
@@ -200,7 +200,7 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               SizedBox(
                 height: 48,
                 child: ElevatedButton(
@@ -216,7 +216,7 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
                     elevation: 0,
                   ),
                   child: isLoading
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(
@@ -233,15 +233,15 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
                         ),
                 ),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               _buildOrDivider(),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               SizedBox(
                 height: 48,
                 child: OutlinedButton(
                   onPressed: isLoading ? null : _handleGoogleSignIn,
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: AppTheme.border),
+                    side: BorderSide(color: AppTheme.border),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -267,7 +267,7 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
                           ),
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(width: 10),
                       Text(
                         'Continue with Google',
                         style: GoogleFonts.ibmPlexSans(
@@ -294,7 +294,7 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               SizedBox(
                 height: 48,
                 child: ElevatedButton(
@@ -310,7 +310,7 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
                     elevation: 0,
                   ),
                   child: isLoading
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(
@@ -327,7 +327,7 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
                         ),
                 ),
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: 8),
               TextButton(
                 onPressed: isLoading
                     ? null
@@ -367,13 +367,13 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
               ),
             ],
             if (errorMessage != null && errorMessage.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               _buildErrorBanner(errorMessage),
             ],
             if (isOtpStep &&
                 authState.resendAfterSeconds != null &&
                 authState.resendAfterSeconds! > 0) ...<Widget>[
-              const SizedBox(height: 10),
+              SizedBox(height: 10),
               Text(
                 'Resend available in ~${authState.resendAfterSeconds}s',
                 textAlign: TextAlign.center,
@@ -412,15 +412,15 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
         fillColor: AppTheme.surfaceVariant,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppTheme.border),
+          borderSide: BorderSide(color: AppTheme.border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppTheme.border),
+          borderSide: BorderSide(color: AppTheme.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppTheme.primary, width: 1),
+          borderSide: BorderSide(color: AppTheme.primary, width: 1),
         ),
       ),
       validator: validator,
@@ -440,9 +440,8 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
       ),
       child: Row(
         children: <Widget>[
-          const Icon(Icons.error_outline_rounded,
-              size: 16, color: AppTheme.error),
-          const SizedBox(width: 8),
+          Icon(Icons.error_outline_rounded, size: 16, color: AppTheme.error),
+          SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
@@ -460,7 +459,7 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
   Widget _buildOrDivider() {
     return Row(
       children: <Widget>[
-        const Expanded(
+        Expanded(
           child: Divider(color: AppTheme.border, thickness: 1),
         ),
         Padding(
@@ -473,7 +472,7 @@ class _AuthenticationScreenState extends ConsumerState<AuthenticationScreen>
             ),
           ),
         ),
-        const Expanded(
+        Expanded(
           child: Divider(color: AppTheme.border, thickness: 1),
         ),
       ],

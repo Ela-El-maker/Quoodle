@@ -27,7 +27,7 @@ class _LoadingSkeletonWidgetState extends State<LoadingSkeletonWidget>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
+      duration: Duration(milliseconds: 1400),
     )..repeat();
     _animation = Tween<double>(
       begin: -1.0,
@@ -54,7 +54,7 @@ class _LoadingSkeletonWidgetState extends State<LoadingSkeletonWidget>
             gradient: LinearGradient(
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
-              colors: const [
+              colors: [
                 AppTheme.surfaceVariant,
                 AppTheme.surfaceElevated,
                 AppTheme.surfaceVariant,
@@ -90,12 +90,12 @@ class SkeletonCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const LoadingSkeletonWidget(
+              LoadingSkeletonWidget(
                 width: 32,
                 height: 32,
                 borderRadius: 8,
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -104,7 +104,7 @@ class SkeletonCard extends StatelessWidget {
                     height: 14,
                     borderRadius: 4,
                   ),
-                  const SizedBox(height: 6),
+                  SizedBox(height: 6),
                   LoadingSkeletonWidget(
                     width: 100,
                     height: 12,
@@ -112,11 +112,11 @@ class SkeletonCard extends StatelessWidget {
                   ),
                 ],
               ),
-              const Spacer(),
+              Spacer(),
               LoadingSkeletonWidget(width: 60, height: 22, borderRadius: 6),
             ],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           Row(
             children: List.generate(
               3,

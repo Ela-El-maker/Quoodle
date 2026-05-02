@@ -67,7 +67,7 @@ class DeviceAuditTabWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (_auditMaps.isEmpty) {
-      return const EmptyStateWidget(
+      return EmptyStateWidget(
         icon: Icons.history_rounded,
         title: 'No audit records',
         subtitle: 'All device activity will be logged here for compliance.',
@@ -129,7 +129,7 @@ class _AuditRow extends StatelessWidget {
             ),
             child: Icon(_actionIcon, size: 14, color: _resultColor),
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -144,7 +144,7 @@ class _AuditRow extends StatelessWidget {
                         color: AppTheme.textPrimary,
                       ),
                     ),
-                    const Spacer(),
+                    Spacer(),
                     Text(
                       '#${entry['seq']}',
                       style: GoogleFonts.ibmPlexMono(
@@ -154,7 +154,7 @@ class _AuditRow extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: 2),
                 Text(
                   entry['detail'] as String,
                   style: GoogleFonts.ibmPlexSans(
@@ -162,7 +162,7 @@ class _AuditRow extends StatelessWidget {
                     color: AppTheme.textSecondary,
                   ),
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: 4),
                 Row(
                   children: [
                     Text(
@@ -172,7 +172,7 @@ class _AuditRow extends StatelessWidget {
                         color: AppTheme.textMuted,
                       ),
                     ),
-                    const Spacer(),
+                    Spacer(),
                     Text(
                       entry['timestamp'] as String,
                       style: GoogleFonts.ibmPlexMono(

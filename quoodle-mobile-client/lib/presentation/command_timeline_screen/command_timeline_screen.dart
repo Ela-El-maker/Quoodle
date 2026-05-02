@@ -166,8 +166,8 @@ class _CommandTimelineScreenState extends ConsumerState<CommandTimelineScreen> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.storage_rounded, size: 14, color: AppTheme.primary),
-          const SizedBox(width: 8),
+          Icon(Icons.storage_rounded, size: 14, color: AppTheme.primary),
+          SizedBox(width: 8),
           Expanded(
             child: Text(
               'Restored from local storage - available offline',
@@ -195,7 +195,7 @@ class _CommandTimelineScreenState extends ConsumerState<CommandTimelineScreen> {
       surfaceTintColor: Colors.transparent,
       shadowColor: AppTheme.border,
       leading: IconButton(
-        icon: const Icon(
+        icon: Icon(
           Icons.arrow_back_ios_new_rounded,
           size: 18,
           color: AppTheme.textPrimary,
@@ -265,13 +265,13 @@ class _CommandTimelineScreenState extends ConsumerState<CommandTimelineScreen> {
                     width: 1,
                   ),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.sync_rounded,
                   color: AppTheme.primary,
                   size: 22,
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -284,7 +284,7 @@ class _CommandTimelineScreenState extends ConsumerState<CommandTimelineScreen> {
                         color: AppTheme.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    SizedBox(height: 2),
                     Text(
                       '$deviceName  ·  $initiator',
                       style: GoogleFonts.ibmPlexSans(
@@ -297,7 +297,7 @@ class _CommandTimelineScreenState extends ConsumerState<CommandTimelineScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(12),
@@ -318,7 +318,7 @@ class _CommandTimelineScreenState extends ConsumerState<CommandTimelineScreen> {
                     letterSpacing: 0.8,
                   ),
                 ),
-                const SizedBox(height: 6),
+                SizedBox(height: 6),
                 Text(
                   params,
                   style: GoogleFonts.ibmPlexMono(
@@ -329,7 +329,7 @@ class _CommandTimelineScreenState extends ConsumerState<CommandTimelineScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -345,7 +345,7 @@ class _CommandTimelineScreenState extends ConsumerState<CommandTimelineScreen> {
                 color: AppTheme.primary,
               ),
               if (isSensitive)
-                const _HeaderTag(
+                _HeaderTag(
                   icon: Icons.security_rounded,
                   label: 'Sensitive',
                   color: AppTheme.warning,
@@ -367,7 +367,7 @@ class _CommandTimelineScreenState extends ConsumerState<CommandTimelineScreen> {
       ),
       child: Row(
         children: [
-          const SizedBox(
+          SizedBox(
             width: 14,
             height: 14,
             child: CircularProgressIndicator(
@@ -375,7 +375,7 @@ class _CommandTimelineScreenState extends ConsumerState<CommandTimelineScreen> {
               color: AppTheme.warning,
             ),
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           Text(
             'Polling for updates...  Last refresh: ${secondsSinceUpdate}s ago',
             style: GoogleFonts.ibmPlexSans(
@@ -431,7 +431,7 @@ class _HeaderTag extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 11, color: color),
-          const SizedBox(width: 5),
+          SizedBox(width: 5),
           Text(
             label,
             style: GoogleFonts.ibmPlexMono(

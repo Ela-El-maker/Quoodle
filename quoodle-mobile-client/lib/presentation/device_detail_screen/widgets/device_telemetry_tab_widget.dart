@@ -20,15 +20,15 @@ enum _SyncState { syncing, fresh, stale, veryStale }
 class _DeviceTelemetryTabWidgetState
     extends ConsumerState<DeviceTelemetryTabWidget>
     with SingleTickerProviderStateMixin {
-  static const _pollInterval = Duration(seconds: 3);
-  static const _historyWindow = Duration(minutes: 15);
+  static final _pollInterval = Duration(seconds: 3);
+  static final _historyWindow = Duration(minutes: 15);
 
   Timer? _pollTimer;
   Timer? _secondTimer;
   int _secondsSinceUpdate = 0;
   bool _isSyncing = false;
   bool _backgroundRefreshActive = true;
-  DateTime _lastUpdatedAt = DateTime.now().subtract(const Duration(minutes: 1));
+  DateTime _lastUpdatedAt = DateTime.now().subtract(Duration(minutes: 1));
 
   double _cpu = 0;
   double _ram = 0;
@@ -40,32 +40,32 @@ class _DeviceTelemetryTabWidgetState
   int _activeProcesses = 0;
 
   final List<FlSpot> _cpuHistory = [
-    const FlSpot(0, 48),
-    const FlSpot(1, 52),
-    const FlSpot(2, 55),
-    const FlSpot(3, 58),
-    const FlSpot(4, 63),
-    const FlSpot(5, 61),
-    const FlSpot(6, 59),
-    const FlSpot(7, 64),
-    const FlSpot(8, 68),
-    const FlSpot(9, 62),
-    const FlSpot(10, 61),
-    const FlSpot(11, 61),
+    FlSpot(0, 48),
+    FlSpot(1, 52),
+    FlSpot(2, 55),
+    FlSpot(3, 58),
+    FlSpot(4, 63),
+    FlSpot(5, 61),
+    FlSpot(6, 59),
+    FlSpot(7, 64),
+    FlSpot(8, 68),
+    FlSpot(9, 62),
+    FlSpot(10, 61),
+    FlSpot(11, 61),
   ];
   final List<FlSpot> _ramHistory = [
-    const FlSpot(0, 68),
-    const FlSpot(1, 70),
-    const FlSpot(2, 71),
-    const FlSpot(3, 72),
-    const FlSpot(4, 74),
-    const FlSpot(5, 73),
-    const FlSpot(6, 75),
-    const FlSpot(7, 74),
-    const FlSpot(8, 76),
-    const FlSpot(9, 74),
-    const FlSpot(10, 73),
-    const FlSpot(11, 74),
+    FlSpot(0, 68),
+    FlSpot(1, 70),
+    FlSpot(2, 71),
+    FlSpot(3, 72),
+    FlSpot(4, 74),
+    FlSpot(5, 73),
+    FlSpot(6, 75),
+    FlSpot(7, 74),
+    FlSpot(8, 76),
+    FlSpot(9, 74),
+    FlSpot(10, 73),
+    FlSpot(11, 74),
   ];
 
   late AnimationController _pulseController;
@@ -76,7 +76,7 @@ class _DeviceTelemetryTabWidgetState
     super.initState();
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: Duration(milliseconds: 1200),
     )..repeat(reverse: true);
     _pulseAnim = Tween<double>(begin: 0.4, end: 1.0).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
@@ -97,7 +97,7 @@ class _DeviceTelemetryTabWidgetState
     _secondTimer?.cancel();
     _pollTimer?.cancel();
 
-    _secondTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    _secondTimer = Timer.periodic(Duration(seconds: 1), (timer) {
       if (!mounted) {
         timer.cancel();
         return;
@@ -366,7 +366,7 @@ class _DeviceTelemetryTabWidgetState
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
       children: [
         _buildSyncStatusBar(),
-        const SizedBox(height: 14),
+        SizedBox(height: 14),
         // Primary metric cards
         Row(
           children: [
@@ -379,7 +379,7 @@ class _DeviceTelemetryTabWidgetState
                 color: _metricColor(_cpu, 70, 90),
               ),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
             Expanded(
               child: _MetricCard(
                 label: 'RAM',
@@ -389,7 +389,7 @@ class _DeviceTelemetryTabWidgetState
                 color: _metricColor(_ram, 80, 95),
               ),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
             Expanded(
               child: _MetricCard(
                 label: 'Disk',
@@ -401,7 +401,7 @@ class _DeviceTelemetryTabWidgetState
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        SizedBox(height: 10),
         // Secondary metric cards
         Row(
           children: [
@@ -414,7 +414,7 @@ class _DeviceTelemetryTabWidgetState
                 color: _metricColor(_temp, 70, 85),
               ),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
             Expanded(
               child: _MetricCardInt(
                 label: 'Processes',
@@ -423,7 +423,7 @@ class _DeviceTelemetryTabWidgetState
                 color: AppTheme.primary,
               ),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
             Expanded(
               child: _MetricCardInt(
                 label: 'Open Ports',
@@ -434,7 +434,7 @@ class _DeviceTelemetryTabWidgetState
             ),
           ],
         ),
-        const SizedBox(height: 14),
+        SizedBox(height: 14),
         // Network metrics
         Container(
           padding: const EdgeInsets.all(14),
@@ -445,24 +445,24 @@ class _DeviceTelemetryTabWidgetState
           ),
           child: Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.network_check_rounded,
                 size: 18,
                 color: AppTheme.primary,
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: 10),
               Text(
                 'Network',
                 style: Theme.of(
                   context,
                 ).textTheme.titleSmall?.copyWith(color: AppTheme.textSecondary),
               ),
-              const Spacer(),
+              Spacer(),
               _NetworkStat(
                 label: '↑ TX',
                 value: '${_netTx.toStringAsFixed(1)} MB/s',
               ),
-              const SizedBox(width: 16),
+              SizedBox(width: 16),
               _NetworkStat(
                 label: '↓ RX',
                 value: '${_netRx.toStringAsFixed(1)} MB/s',
@@ -470,10 +470,10 @@ class _DeviceTelemetryTabWidgetState
             ],
           ),
         ),
-        const SizedBox(height: 14),
+        SizedBox(height: 14),
         // Background refresh status panel
         _buildRefreshStatusPanel(),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         // Historical chart
         Container(
           padding: const EdgeInsets.all(16),
@@ -491,7 +491,7 @@ class _DeviceTelemetryTabWidgetState
                     'Resource History (15m)',
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
-                  const Spacer(),
+                  Spacer(),
                   if (_isSyncing)
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -513,7 +513,7 @@ class _DeviceTelemetryTabWidgetState
                               color: AppTheme.primary,
                             ),
                           ),
-                          const SizedBox(width: 5),
+                          SizedBox(width: 5),
                           Text(
                             'LIVE',
                             style: GoogleFonts.ibmPlexMono(
@@ -527,7 +527,7 @@ class _DeviceTelemetryTabWidgetState
                     ),
                 ],
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               SizedBox(
                 height: 140,
                 child: LineChart(
@@ -559,13 +559,13 @@ class _DeviceTelemetryTabWidgetState
                           ),
                         ),
                       ),
-                      bottomTitles: const AxisTitles(
+                      bottomTitles: AxisTitles(
                         sideTitles: SideTitles(showTitles: false),
                       ),
-                      rightTitles: const AxisTitles(
+                      rightTitles: AxisTitles(
                         sideTitles: SideTitles(showTitles: false),
                       ),
-                      topTitles: const AxisTitles(
+                      topTitles: AxisTitles(
                         sideTitles: SideTitles(showTitles: false),
                       ),
                     ),
@@ -576,11 +576,11 @@ class _DeviceTelemetryTabWidgetState
                   ),
                 ),
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: 10),
               Row(
                 children: [
                   _ChartLegend(color: AppTheme.warning, label: 'CPU'),
-                  const SizedBox(width: 16),
+                  SizedBox(width: 16),
                   _ChartLegend(color: AppTheme.primary, label: 'RAM'),
                 ],
               ),
@@ -653,7 +653,7 @@ class _DeviceTelemetryTabWidgetState
             )
           else
             Icon(icon, size: 14, color: barColor),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
@@ -681,7 +681,7 @@ class _DeviceTelemetryTabWidgetState
             ),
           // Real-time badge
           if (state == _SyncState.fresh || state == _SyncState.syncing) ...[
-            const SizedBox(width: 6),
+            SizedBox(width: 6),
             AnimatedBuilder(
               animation: _pulseAnim,
               builder: (_, __) => Container(
@@ -712,12 +712,12 @@ class _DeviceTelemetryTabWidgetState
         children: [
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.refresh_rounded,
                 size: 15,
                 color: AppTheme.textSecondary,
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Text(
                 'Background Refresh',
                 style: GoogleFonts.ibmPlexSans(
@@ -726,7 +726,7 @@ class _DeviceTelemetryTabWidgetState
                   color: AppTheme.textPrimary,
                 ),
               ),
-              const Spacer(),
+              Spacer(),
               GestureDetector(
                 onTap: () {
                   setState(() {
@@ -737,7 +737,7 @@ class _DeviceTelemetryTabWidgetState
                   }
                 },
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
+                  duration: Duration(milliseconds: 200),
                   width: 38,
                   height: 20,
                   decoration: BoxDecoration(
@@ -747,7 +747,7 @@ class _DeviceTelemetryTabWidgetState
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: AnimatedAlign(
-                    duration: const Duration(milliseconds: 200),
+                    duration: Duration(milliseconds: 200),
                     alignment: _backgroundRefreshActive
                         ? Alignment.centerRight
                         : Alignment.centerLeft,
@@ -755,7 +755,7 @@ class _DeviceTelemetryTabWidgetState
                       margin: const EdgeInsets.all(2),
                       width: 16,
                       height: 16,
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
                       ),
@@ -765,7 +765,7 @@ class _DeviceTelemetryTabWidgetState
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Row(
             children: [
               _RefreshStatusItem(
@@ -774,7 +774,7 @@ class _DeviceTelemetryTabWidgetState
                 icon: Icons.timer_rounded,
                 color: AppTheme.primary,
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: 12),
               _RefreshStatusItem(
                 label: 'Last sync',
                 value: _formatTimestamp(_lastUpdatedAt),
@@ -783,7 +783,7 @@ class _DeviceTelemetryTabWidgetState
                     ? AppTheme.error
                     : AppTheme.textSecondary,
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: 12),
               _RefreshStatusItem(
                 label: 'Status',
                 value: _backgroundRefreshActive ? 'Active' : 'Paused',
@@ -808,7 +808,7 @@ class _DeviceTelemetryTabWidgetState
       curveSmoothness: 0.3,
       color: color,
       barWidth: 2,
-      dotData: const FlDotData(show: false),
+      dotData: FlDotData(show: false),
       belowBarData: BarAreaData(
         show: true,
         gradient: LinearGradient(
@@ -847,14 +847,14 @@ class _MetricCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, size: 16, color: color),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           Text(
             '${value.toStringAsFixed(1)}$unit',
             style: GoogleFonts.ibmPlexMono(
               fontSize: 18,
               fontWeight: FontWeight.w700,
               color: color,
-              fontFeatures: const [FontFeature.tabularFigures()],
+              fontFeatures: [FontFeature.tabularFigures()],
             ),
           ),
           Text(
@@ -896,14 +896,14 @@ class _MetricCardInt extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, size: 16, color: color),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           Text(
             '$value',
             style: GoogleFonts.ibmPlexMono(
               fontSize: 18,
               fontWeight: FontWeight.w700,
               color: color,
-              fontFeatures: const [FontFeature.tabularFigures()],
+              fontFeatures: [FontFeature.tabularFigures()],
             ),
           ),
           Text(
@@ -959,7 +959,7 @@ class _ChartLegend extends StatelessWidget {
     return Row(
       children: [
         Container(width: 10, height: 2, color: color),
-        const SizedBox(width: 6),
+        SizedBox(width: 6),
         Text(
           label,
           style: GoogleFonts.ibmPlexSans(
@@ -999,7 +999,7 @@ class _RefreshStatusItem extends StatelessWidget {
             Row(
               children: [
                 Icon(icon, size: 11, color: color),
-                const SizedBox(width: 4),
+                SizedBox(width: 4),
                 Text(
                   label,
                   style: GoogleFonts.ibmPlexSans(
@@ -1009,7 +1009,7 @@ class _RefreshStatusItem extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 3),
+            SizedBox(height: 3),
             Text(
               value,
               style: GoogleFonts.ibmPlexMono(

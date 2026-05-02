@@ -58,23 +58,23 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
         title: 'Alerts',
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_rounded, size: 20),
+            icon: Icon(Icons.notifications_rounded, size: 20),
             onPressed: () =>
                 AppNavigator.push(context, AppRoute.notificationCenter),
             tooltip: 'Notification Center',
           ),
           IconButton(
-            icon: const Icon(Icons.schedule_rounded, size: 20),
+            icon: Icon(Icons.schedule_rounded, size: 20),
             onPressed: () => AppNavigator.push(context, AppRoute.scheduler),
             tooltip: 'Scheduler',
           ),
           IconButton(
-            icon: const Icon(Icons.history_rounded, size: 20),
+            icon: Icon(Icons.history_rounded, size: 20),
             onPressed: () => AppNavigator.push(context, AppRoute.auditLog),
             tooltip: 'Audit Log',
           ),
           IconButton(
-            icon: const Icon(Icons.bar_chart_rounded, size: 20),
+            icon: Icon(Icons.bar_chart_rounded, size: 20),
             onPressed: () => AppNavigator.push(context, AppRoute.analytics),
             tooltip: 'Analytics',
           ),
@@ -128,7 +128,7 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
             child: state.isLoading
                 ? _buildSkeleton()
                 : filtered.isEmpty
-                    ? const EmptyStateWidget(
+                    ? EmptyStateWidget(
                         icon: Icons.check_circle_outline_rounded,
                         title: 'Fleet is quiet',
                         subtitle:
@@ -193,7 +193,7 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
                       ),
                     ),
                     if (count > 0) ...[
-                      const SizedBox(width: 6),
+                      SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 5,
@@ -263,7 +263,7 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
               final ready = snap.connectionState == ConnectionState.done;
               return AnimatedOpacity(
                 opacity: ready ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 300),
+                duration: Duration(milliseconds: 300),
                 child: AlertCardWidget(
                   alert: _alertToMap(alerts[i]),
                   onAcknowledge: alerts[i].acknowledged
@@ -290,7 +290,7 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
   Widget _buildTabletGrid(List<AlertItem> alerts) {
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
@@ -330,7 +330,7 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
       itemCount: 5,
-      itemBuilder: (_, __) => const SkeletonCard(),
+      itemBuilder: (_, __) => SkeletonCard(),
     );
   }
 }

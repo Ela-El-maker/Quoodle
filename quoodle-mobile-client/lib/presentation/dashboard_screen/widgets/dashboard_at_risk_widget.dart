@@ -14,7 +14,7 @@ class DashboardAtRiskWidget extends ConsumerWidget {
     final summary = ref.watch(
       dashboardControllerProvider.select((state) => state.summary),
     );
-    final atRisk = (summary?.atRiskDevices ?? const [])
+    final atRisk = (summary?.atRiskDevices ?? [])
         .map(
           (device) => _AtRiskDevice(
             id: device.id,
@@ -44,7 +44,7 @@ class DashboardAtRiskWidget extends ConsumerWidget {
               onPressed: () => AppNavigator.push(context, AppRoute.devices),
               style: TextButton.styleFrom(
                 padding: EdgeInsets.zero,
-                minimumSize: const Size(0, 0),
+                minimumSize: Size(0, 0),
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               child: Text(
@@ -57,7 +57,7 @@ class DashboardAtRiskWidget extends ConsumerWidget {
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         ...atRisk.map(
           (d) => _AtRiskCard(
             device: d,
@@ -73,7 +73,7 @@ class _AtRiskDevice {
   final String id, name, reason;
   final DeviceStatus status;
   final int riskScore;
-  const _AtRiskDevice({
+  _AtRiskDevice({
     required this.id,
     required this.name,
     required this.status,
@@ -124,11 +124,11 @@ class _AtRiskCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8),
                       StatusBadgeWidget.device(device.status),
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: 4),
                   Text(
                     device.reason,
                     style: GoogleFonts.ibmPlexSans(
@@ -139,7 +139,7 @@ class _AtRiskCard extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [

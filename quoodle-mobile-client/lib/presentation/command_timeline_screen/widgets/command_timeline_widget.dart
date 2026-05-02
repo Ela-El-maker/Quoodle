@@ -27,7 +27,7 @@ class _CommandTimelineWidgetState extends State<CommandTimelineWidget>
     super.initState();
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: Duration(milliseconds: 1200),
     )..repeat(reverse: true);
     _pulseAnimation = Tween<double>(begin: 0.4, end: 1.0).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
@@ -63,7 +63,7 @@ class _CommandTimelineWidgetState extends State<CommandTimelineWidget>
               letterSpacing: 0.8,
             ),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           ...List.generate(stages.length, (i) {
             final stage = stages[i];
             final isLast = i == stages.length - 1;
@@ -187,7 +187,7 @@ class _TimelineStage {
   final String? timestamp;
   final bool isDone, isActive, isPending;
 
-  const _TimelineStage({
+  _TimelineStage({
     required this.status,
     required this.label,
     required this.description,
@@ -284,7 +284,7 @@ class _TimelineStageRow extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(width: 10),
+        SizedBox(width: 10),
         // Right: content
         Expanded(
           child: Padding(
@@ -292,7 +292,7 @@ class _TimelineStageRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 6),
+                SizedBox(height: 6),
                 Row(
                   children: [
                     Text(
@@ -307,19 +307,19 @@ class _TimelineStageRow extends StatelessWidget {
                             : AppTheme.textPrimary,
                       ),
                     ),
-                    const Spacer(),
+                    Spacer(),
                     if (stage.timestamp != null)
                       Text(
                         stage.timestamp!,
                         style: GoogleFonts.ibmPlexMono(
                           fontSize: 10,
                           color: _stageColor,
-                          fontFeatures: const [FontFeature.tabularFigures()],
+                          fontFeatures: [FontFeature.tabularFigures()],
                         ),
                       ),
                   ],
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: 2),
                 Text(
                   stage.description,
                   style: GoogleFonts.ibmPlexSans(
@@ -329,7 +329,7 @@ class _TimelineStageRow extends StatelessWidget {
                         : AppTheme.textSecondary,
                   ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
               ],
             ),
           ),

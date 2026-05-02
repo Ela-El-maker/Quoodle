@@ -68,7 +68,7 @@ class DeviceCardWidget extends StatelessWidget {
                     color: AppTheme.textSecondary,
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -95,7 +95,7 @@ class DeviceCardWidget extends StatelessWidget {
                 StatusBadgeWidget.device(_status),
               ],
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Row(
               children: [
                 _MetricChip(
@@ -103,13 +103,13 @@ class DeviceCardWidget extends StatelessWidget {
                   value: '${device['riskScore']}',
                   color: _riskColor,
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 _MetricChip(
                   label: 'Compliance',
                   value: _complianceLabel(device['compliance'] as String),
                   color: _complianceColor(device['compliance'] as String),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 _MetricChip(
                   label: 'Policy',
                   value: (device['policySync'] as bool) ? 'Synced' : 'Drift',
@@ -119,7 +119,7 @@ class DeviceCardWidget extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Row(
               children: [
                 Icon(
@@ -127,7 +127,7 @@ class DeviceCardWidget extends StatelessWidget {
                   size: 12,
                   color: AppTheme.textMuted,
                 ),
-                const SizedBox(width: 4),
+                SizedBox(width: 4),
                 Text(
                   'Seen ${device['lastSeen']}',
                   style: GoogleFonts.ibmPlexSans(
@@ -135,7 +135,7 @@ class DeviceCardWidget extends StatelessWidget {
                     color: AppTheme.textMuted,
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     device['os'] as String,

@@ -36,7 +36,7 @@ class EmptyStateWidget extends StatelessWidget {
               ),
               child: Icon(icon, size: 28, color: AppTheme.textMuted),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             Text(
               title,
               style: GoogleFonts.ibmPlexSans(
@@ -46,7 +46,7 @@ class EmptyStateWidget extends StatelessWidget {
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text(
               subtitle,
               style: GoogleFonts.ibmPlexSans(
@@ -57,10 +57,10 @@ class EmptyStateWidget extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             if (actionLabel != null && onAction != null) ...[
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
               FilledButton.icon(
                 onPressed: onAction,
-                icon: const Icon(Icons.add_rounded, size: 18),
+                icon: Icon(Icons.add_rounded, size: 18),
                 label: Text(actionLabel!),
                 style: FilledButton.styleFrom(
                   backgroundColor: AppTheme.primary,

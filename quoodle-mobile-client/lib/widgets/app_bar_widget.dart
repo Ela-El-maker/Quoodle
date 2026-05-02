@@ -38,7 +38,7 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
       leadingWidth: showBack ? 48 : (leading != null ? 56 : 20),
       leading: showBack
           ? IconButton(
-              icon: const Icon(
+              icon: Icon(
                 Icons.arrow_back_ios_new_rounded,
                 size: 18,
                 color: AppTheme.textPrimary,
@@ -69,7 +69,7 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
           child: Container(
             decoration: BoxDecoration(
               color: AppTheme.glassSurface,
-              border: const Border(
+              border: Border(
                 bottom: BorderSide(color: AppTheme.border, width: 1),
               ),
             ),

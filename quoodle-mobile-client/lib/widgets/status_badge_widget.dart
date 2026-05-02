@@ -101,7 +101,7 @@ class StatusBadgeWidget extends StatelessWidget {
               height: 5,
               decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
-            const SizedBox(width: 5),
+            SizedBox(width: 5),
           ],
           Text(
             label,

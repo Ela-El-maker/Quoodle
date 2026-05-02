@@ -59,8 +59,8 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
     if (device == null) {
       return Scaffold(
         backgroundColor: AppTheme.background,
-        appBar: AppBar(title: const Text('Device Detail')),
-        body: const Center(child: Text('Device not found')),
+        appBar: AppBar(title: Text('Device Detail')),
+        body: Center(child: Text('Device not found')),
       );
     }
 
@@ -85,7 +85,7 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
               'deviceName': device.name,
             },
           ),
-          icon: const Icon(Icons.terminal_rounded, size: 18),
+          icon: Icon(Icons.terminal_rounded, size: 18),
           label: Text(
             'Send Command',
             style: GoogleFonts.ibmPlexSans(
@@ -146,7 +146,7 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
           child: Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: AppTheme.glassSurface,
               border: Border(
                 bottom: BorderSide(color: AppTheme.border, width: 1),
@@ -159,7 +159,7 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
                 child: Row(
                   children: [
                     IconButton(
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.arrow_back_ios_new_rounded,
                         size: 18,
                         color: AppTheme.textPrimary,
@@ -178,7 +178,7 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.more_vert_rounded,
                         size: 20,
                         color: AppTheme.textSecondary,
@@ -206,7 +206,7 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
 
     return Container(
       padding: EdgeInsets.fromLTRB(16, topInset + 12, 16, 16),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppTheme.surface,
         border: Border(bottom: BorderSide(color: AppTheme.border, width: 1)),
       ),
@@ -229,7 +229,7 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
                   color: AppTheme.textSecondary,
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -237,7 +237,7 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
                     Row(
                       children: [
                         StatusBadgeWidget.device(_deviceStatus(device.status)),
-                        const SizedBox(width: 8),
+                        SizedBox(width: 8),
                         Text(
                           'Last seen ${device.lastSeen}',
                           style: GoogleFonts.ibmPlexSans(
@@ -247,7 +247,7 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: 4),
                     Text(
                       device.hostname,
                       style: GoogleFonts.ibmPlexSans(
@@ -267,7 +267,7 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
                       fontSize: 26,
                       fontWeight: FontWeight.w700,
                       color: riskColor,
-                      fontFeatures: const [FontFeature.tabularFigures()],
+                      fontFeatures: [FontFeature.tabularFigures()],
                     ),
                   ),
                   Text(
@@ -283,7 +283,7 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           Row(
             children: [
               _HeaderChip(
@@ -295,14 +295,14 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
                     ? AppTheme.secondary
                     : AppTheme.error,
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               _HeaderChip(
                 icon: Icons.sync_rounded,
                 label: device.policySync ? 'Policy Synced' : 'Policy Drift',
                 color:
                     device.policySync ? AppTheme.secondary : AppTheme.warning,
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               _HeaderChip(
                 icon: Icons.router_rounded,
                 label: device.ipAddress,
@@ -322,7 +322,7 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
         controller: _tabController,
         isScrollable: true,
         tabAlignment: TabAlignment.start,
-        tabs: const [
+        tabs: [
           Tab(text: 'Overview'),
           Tab(text: 'Telemetry'),
           Tab(text: 'Commands'),
@@ -362,7 +362,7 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
     showModalBottomSheet(
       context: context,
       backgroundColor: AppTheme.surfaceVariant,
-      shape: const RoundedRectangleBorder(
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (_) => Padding(
@@ -378,12 +378,12 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             Text(
               'Device Actions',
               style: Theme.of(context).textTheme.titleMedium,
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             _ActionTile(
               icon: Icons.terminal_rounded,
               label: 'Send Command',
@@ -496,7 +496,7 @@ class _HeaderChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 11, color: color),
-          const SizedBox(width: 5),
+          SizedBox(width: 5),
           Text(
             label,
             style: GoogleFonts.ibmPlexSans(
@@ -541,15 +541,15 @@ class _ActionTile extends StatelessWidget {
               ),
               child: Icon(icon, size: 18, color: color),
             ),
-            const SizedBox(width: 14),
+            SizedBox(width: 14),
             Text(
               label,
               style: Theme.of(
                 context,
               ).textTheme.bodyLarge?.copyWith(color: AppTheme.textPrimary),
             ),
-            const Spacer(),
-            const Icon(
+            Spacer(),
+            Icon(
               Icons.chevron_right_rounded,
               size: 18,
               color: AppTheme.textMuted,

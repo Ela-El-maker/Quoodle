@@ -59,7 +59,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             color: AppTheme.primaryDim,
             borderRadius: BorderRadius.circular(10),
           ),
-          child: const Icon(
+          child: Icon(
             Icons.shield_rounded,
             color: AppTheme.primary,
             size: 18,
@@ -67,7 +67,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.search_rounded,
               color: AppTheme.textSecondary,
               size: 22,
@@ -78,7 +78,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             icon: Stack(
               clipBehavior: Clip.none,
               children: [
-                const Icon(
+                Icon(
                   Icons.notifications_outlined,
                   color: AppTheme.textSecondary,
                   size: 22,
@@ -103,7 +103,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             onPressed: () => AppNavigator.push(context, AppRoute.alerts),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
         ],
       ),
       body: isTablet
@@ -140,11 +140,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            sliver: const SliverToBoxAdapter(child: DashboardKpiGridWidget()),
+            sliver: SliverToBoxAdapter(child: DashboardKpiGridWidget()),
           ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            sliver: const SliverToBoxAdapter(
+            sliver: SliverToBoxAdapter(
               child: DashboardFleetChartWidget(),
             ),
           ),
@@ -152,8 +152,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             sliver: SliverToBoxAdapter(
               child: DeferredLoader(
-                delay: const Duration(milliseconds: 600),
-                builder: () => const DashboardAtRiskWidget(),
+                delay: Duration(milliseconds: 600),
+                builder: () => DashboardAtRiskWidget(),
               ),
             ),
           ),
@@ -161,8 +161,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
             sliver: SliverToBoxAdapter(
               child: DeferredLoader(
-                delay: const Duration(milliseconds: 800),
-                builder: () => const DashboardActivityFeedWidget(),
+                delay: Duration(milliseconds: 800),
+                builder: () => DashboardActivityFeedWidget(),
               ),
             ),
           ),
@@ -199,13 +199,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(20, 16, 12, 0),
-                  sliver: const SliverToBoxAdapter(
+                  sliver: SliverToBoxAdapter(
                     child: DashboardFleetChartWidget(),
                   ),
                 ),
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(20, 16, 12, 100),
-                  sliver: const SliverToBoxAdapter(
+                  sliver: SliverToBoxAdapter(
                     child: DashboardActivityFeedWidget(),
                   ),
                 ),
@@ -218,7 +218,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(12, 12, 20, 100),
             child: Column(
-              children: const [
+              children: [
                 DashboardKpiGridWidget(),
                 SizedBox(height: 16),
                 DashboardAtRiskWidget(),
@@ -257,7 +257,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   color: AppTheme.textPrimary,
                 ),
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: 4),
               Text(
                 'Last updated: $lastUpdated  ·  $needsAttention items need attention',
                 style: GoogleFonts.ibmPlexSans(
@@ -281,12 +281,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               Container(
                 width: 6,
                 height: 6,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: AppTheme.error,
                   shape: BoxShape.circle,
                 ),
               ),
-              const SizedBox(width: 6),
+              SizedBox(width: 6),
               Text(
                 '$criticalAlerts ALERTS',
                 style: GoogleFonts.ibmPlexSans(
@@ -307,10 +307,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
       child: Column(
         children: [
-          const SkeletonCard(),
-          const SkeletonCard(),
-          const SkeletonCard(),
-          const SkeletonCard(),
+          SkeletonCard(),
+          SkeletonCard(),
+          SkeletonCard(),
+          SkeletonCard(),
         ],
       ),
     );

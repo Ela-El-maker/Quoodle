@@ -32,7 +32,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen>
     super.initState();
     _listAnimController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: Duration(milliseconds: 600),
     );
     _listAnimController.forward();
     Future<void>.microtask(() {
@@ -95,7 +95,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen>
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => AppNavigator.push(context, AppRoute.qrScanner),
-        icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
+        icon: Icon(Icons.qr_code_scanner_rounded, size: 18),
         label: Text(
           'Pair Device',
           style: GoogleFonts.ibmPlexSans(
@@ -161,7 +161,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen>
             ),
             child: Row(
               children: [
-                const Padding(
+                Padding(
                   padding: EdgeInsets.symmetric(horizontal: 12),
                   child: Icon(
                     Icons.search_rounded,
@@ -191,7 +191,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen>
                 ),
                 if (state.searchQuery.isNotEmpty)
                   IconButton(
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.close_rounded,
                       size: 16,
                       color: AppTheme.textMuted,
@@ -204,7 +204,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen>
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           SizedBox(
             height: 34,
             child: ListView.builder(
@@ -248,7 +248,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen>
               },
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
         ],
       ),
     );
@@ -271,10 +271,10 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen>
               final ready = snap.connectionState == ConnectionState.done;
               return AnimatedOpacity(
                 opacity: ready ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 350),
+                duration: Duration(milliseconds: 350),
                 child: AnimatedSlide(
-                  offset: ready ? Offset.zero : const Offset(0, 0.05),
-                  duration: const Duration(milliseconds: 350),
+                  offset: ready ? Offset.zero : Offset(0, 0.05),
+                  duration: Duration(milliseconds: 350),
                   curve: Curves.easeOutCubic,
                   child: DeviceCardWidget(
                     device: _toDeviceMap(devices[i]),
@@ -301,7 +301,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen>
       backgroundColor: AppTheme.surfaceVariant,
       child: GridView.builder(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
@@ -324,7 +324,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen>
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
       itemCount: 6,
-      itemBuilder: (_, __) => const SkeletonCard(),
+      itemBuilder: (_, __) => SkeletonCard(),
     );
   }
 

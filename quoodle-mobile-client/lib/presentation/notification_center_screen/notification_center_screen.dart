@@ -48,7 +48,7 @@ class _NotificationCenterScreenState
           _buildFilterRow(state),
           Expanded(
             child: state.filteredNotifications.isEmpty
-                ? const EmptyStateWidget(
+                ? EmptyStateWidget(
                     icon: Icons.notifications_none_rounded,
                     title: 'No Notifications',
                     subtitle: 'Notifications will appear here',
@@ -57,7 +57,7 @@ class _NotificationCenterScreenState
                     color: AppTheme.primary,
                     backgroundColor: AppTheme.surfaceVariant,
                     onRefresh: () async =>
-                        await Future.delayed(const Duration(milliseconds: 500)),
+                        await Future.delayed(Duration(milliseconds: 500)),
                     child: ListView.builder(
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
                       itemCount: state.filteredNotifications.length,
@@ -100,7 +100,7 @@ class _NotificationCenterScreenState
             ),
           ),
         IconButton(
-          icon: const Icon(Icons.delete_sweep_rounded, size: 20),
+          icon: Icon(Icons.delete_sweep_rounded, size: 20),
           onPressed: _confirmClearAll,
           tooltip: 'Clear all',
         ),
@@ -124,7 +124,7 @@ class _NotificationCenterScreenState
             color: AppTheme.primary,
             onTap: controller.toggleUnreadOnly,
           ),
-          const SizedBox(width: 6),
+          SizedBox(width: 6),
           // Severity filters
           _FilterChip(
             label: 'Critical',
@@ -134,7 +134,7 @@ class _NotificationCenterScreenState
             onTap: () => controller
                 .toggleSeverityFilter(NotificationSeverityLevel.critical),
           ),
-          const SizedBox(width: 6),
+          SizedBox(width: 6),
           _FilterChip(
             label: 'High',
             isSelected: state.severityFilter == NotificationSeverityLevel.high,
@@ -142,7 +142,7 @@ class _NotificationCenterScreenState
             onTap: () =>
                 controller.toggleSeverityFilter(NotificationSeverityLevel.high),
           ),
-          const SizedBox(width: 6),
+          SizedBox(width: 6),
           _FilterChip(
             label: 'Warning',
             isSelected:
@@ -151,7 +151,7 @@ class _NotificationCenterScreenState
             onTap: () => controller
                 .toggleSeverityFilter(NotificationSeverityLevel.warning),
           ),
-          const SizedBox(width: 6),
+          SizedBox(width: 6),
           _FilterChip(
             label: 'Info',
             isSelected: state.severityFilter == NotificationSeverityLevel.info,
@@ -159,7 +159,7 @@ class _NotificationCenterScreenState
             onTap: () =>
                 controller.toggleSeverityFilter(NotificationSeverityLevel.info),
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           // Category filters
           _FilterChip(
             label: 'Commands',
@@ -170,7 +170,7 @@ class _NotificationCenterScreenState
             onTap: () => controller
                 .toggleCategoryFilter(NotificationCategoryType.command),
           ),
-          const SizedBox(width: 6),
+          SizedBox(width: 6),
           _FilterChip(
             label: 'Devices',
             isSelected: state.categoryFilter == NotificationCategoryType.device,
@@ -179,7 +179,7 @@ class _NotificationCenterScreenState
             onTap: () => controller
                 .toggleCategoryFilter(NotificationCategoryType.device),
           ),
-          const SizedBox(width: 6),
+          SizedBox(width: 6),
           _FilterChip(
             label: 'Alerts',
             isSelected: state.categoryFilter == NotificationCategoryType.alert,
@@ -261,7 +261,7 @@ class _FilterChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
+        duration: Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: isSelected ? color.withAlpha(40) : AppTheme.glassLight,
@@ -280,7 +280,7 @@ class _FilterChip extends StatelessWidget {
                 size: 11,
                 color: isSelected ? color : AppTheme.textMuted,
               ),
-              const SizedBox(width: 4),
+              SizedBox(width: 4),
             ],
             Text(
               label,
@@ -360,7 +360,7 @@ class _NotificationTile extends StatelessWidget {
           color: AppTheme.errorMuted,
           borderRadius: BorderRadius.circular(14.0),
         ),
-        child: const Icon(
+        child: Icon(
           Icons.delete_rounded,
           color: AppTheme.error,
           size: 20,
@@ -397,7 +397,7 @@ class _NotificationTile extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: 12),
               // Icon
               Padding(
                 padding: const EdgeInsets.only(top: 14),
@@ -411,7 +411,7 @@ class _NotificationTile extends StatelessWidget {
                   child: Icon(_categoryIcon, size: 16, color: _severityColor),
                 ),
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: 10),
               // Content
               Expanded(
                 child: Padding(
@@ -434,7 +434,7 @@ class _NotificationTile extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          SizedBox(width: 8),
                           if (!notification.isRead)
                             Container(
                               width: 7,
@@ -446,7 +446,7 @@ class _NotificationTile extends StatelessWidget {
                             ),
                         ],
                       ),
-                      const SizedBox(height: 3),
+                      SizedBox(height: 3),
                       Text(
                         notification.body,
                         style: GoogleFonts.ibmPlexSans(
@@ -456,7 +456,7 @@ class _NotificationTile extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 6),
+                      SizedBox(height: 6),
                       Row(
                         children: [
                           Text(
@@ -466,7 +466,7 @@ class _NotificationTile extends StatelessWidget {
                               color: AppTheme.textMuted,
                             ),
                           ),
-                          const Spacer(),
+                          Spacer(),
                           if (notification.deepLinkRoute != null)
                             Row(
                               mainAxisSize: MainAxisSize.min,
@@ -479,8 +479,8 @@ class _NotificationTile extends StatelessWidget {
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
-                                const SizedBox(width: 2),
-                                const Icon(
+                                SizedBox(width: 2),
+                                Icon(
                                   Icons.arrow_forward_rounded,
                                   size: 11,
                                   color: AppTheme.primary,

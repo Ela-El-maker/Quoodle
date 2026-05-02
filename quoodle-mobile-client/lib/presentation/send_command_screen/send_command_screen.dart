@@ -18,7 +18,7 @@ class CommandMethod {
   final bool sensitive;
   final String policyNote;
 
-  const CommandMethod({
+  CommandMethod({
     required this.id,
     required this.label,
     required this.description,
@@ -29,7 +29,7 @@ class CommandMethod {
   });
 }
 
-const List<CommandMethod> kCommandMethods = [
+final List<CommandMethod> kCommandMethods = [
   CommandMethod(
     id: 'screenshot_capture',
     label: 'Screenshot',
@@ -338,7 +338,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
         surfaceTintColor: Colors.transparent,
         shadowColor: AppTheme.border,
         leading: IconButton(
-          icon: const Icon(
+          icon: Icon(
             Icons.arrow_back_ios_new_rounded,
             size: 18,
             color: AppTheme.textPrimary,
@@ -378,12 +378,12 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.security_rounded,
                     size: 12,
                     color: AppTheme.warning,
                   ),
-                  const SizedBox(width: 4),
+                  SizedBox(width: 4),
                   Text(
                     'SENSITIVE',
                     style: GoogleFonts.ibmPlexMono(
@@ -441,20 +441,20 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
             letterSpacing: 0.8,
           ),
         ),
-        const SizedBox(height: 10),
+        SizedBox(height: 10),
         SizedBox(
           height: 96,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: kCommandMethods.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            separatorBuilder: (_, __) => SizedBox(width: 8),
             itemBuilder: (_, i) {
               final method = kCommandMethods[i];
               final selected = method.id == _selectedMethod.id;
               return GestureDetector(
                 onTap: () => _selectMethod(method),
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
+                  duration: Duration(milliseconds: 180),
                   width: 82,
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
@@ -477,7 +477,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
                         size: 20,
                         color: selected ? method.color : AppTheme.textMuted,
                       ),
-                      const SizedBox(height: 6),
+                      SizedBox(height: 6),
                       Text(
                         method.label,
                         textAlign: TextAlign.center,
@@ -493,11 +493,11 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
                         ),
                       ),
                       if (method.sensitive) ...[
-                        const SizedBox(height: 4),
+                        SizedBox(height: 4),
                         Container(
                           width: 5,
                           height: 5,
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             color: AppTheme.warning,
                             shape: BoxShape.circle,
                           ),
@@ -510,7 +510,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
             },
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -533,7 +533,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
                   color: _selectedMethod.color,
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -602,7 +602,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
       title: 'CAPTURE OPTIONS',
       children: [
         _FormLabel('Display'),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         Row(
           children: [0, 1, 2].map((d) {
             final sel = _screenshotDisplay == d;
@@ -610,7 +610,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
               child: GestureDetector(
                 onTap: () => setState(() => _screenshotDisplay = d),
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
+                  duration: Duration(milliseconds: 150),
                   margin: EdgeInsets.only(right: d < 2 ? 8 : 0),
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
@@ -636,9 +636,9 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
             );
           }).toList(),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         _FormLabel('Quality'),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         Row(
           children: ['low', 'medium', 'high'].map((q) {
             final sel = _screenshotQuality == q;
@@ -646,7 +646,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
               child: GestureDetector(
                 onTap: () => setState(() => _screenshotQuality = q),
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
+                  duration: Duration(milliseconds: 150),
                   margin: EdgeInsets.only(right: q != 'high' ? 8 : 0),
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
@@ -682,7 +682,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
       title: 'FILTER OPTIONS',
       children: [
         _FormLabel('Sort By'),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         Row(
           children: ['cpu', 'memory', 'pid', 'name'].map((s) {
             final sel = _processSortBy == s;
@@ -690,7 +690,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
               child: GestureDetector(
                 onTap: () => setState(() => _processSortBy = s),
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
+                  duration: Duration(milliseconds: 150),
                   margin: EdgeInsets.only(right: s != 'name' ? 6 : 0),
                   padding: const EdgeInsets.symmetric(vertical: 9),
                   decoration: BoxDecoration(
@@ -716,11 +716,11 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
             );
           }).toList(),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         Row(
           children: [
             _FormLabel('Result Limit'),
-            const Spacer(),
+            Spacer(),
             Text(
               '${_processLimit.toInt()} processes',
               style: GoogleFonts.ibmPlexMono(
@@ -791,23 +791,23 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
       title: 'BROWSE OPTIONS',
       children: [
         _FormLabel('Root Path'),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         _StyledTextField(
           controller: _fsPathController,
           hint: '/path/to/directory',
           prefix: Icons.folder_outlined,
           monospace: true,
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         _QuickPathRow(
           paths: ['/', '/home', '/etc', '/var', '/tmp', 'C:\\Users'],
           onSelect: (p) => setState(() => _fsPathController.text = p),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         Row(
           children: [
             _FormLabel('Depth'),
-            const Spacer(),
+            Spacer(),
             Text(
               '${_fsDepth.toInt()} level${_fsDepth.toInt() != 1 ? 's' : ''}',
               style: GoogleFonts.ibmPlexMono(
@@ -834,7 +834,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
             onChanged: (v) => setState(() => _fsDepth = v),
           ),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         _FormToggleRow(
           label: 'Include Hidden Files',
           subtitle: 'Show files and folders starting with .',
@@ -866,7 +866,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
             color: AppTheme.textSecondary,
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -881,7 +881,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
                 }
               }),
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
+                duration: Duration(milliseconds: 150),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 8,
@@ -899,7 +899,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (sel)
-                      const Padding(
+                      Padding(
                         padding: EdgeInsets.only(right: 6),
                         child: Icon(
                           Icons.check_rounded,
@@ -938,7 +938,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
           onChanged: (v) => setState(() => _netIncludeConnections = v),
           accentColor: AppTheme.secondary,
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
         _FormToggleRow(
           label: 'DNS Configuration',
           subtitle: 'Include DNS servers and search domains',
@@ -978,7 +978,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
                 }
               }),
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
+                duration: Duration(milliseconds: 150),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 8,
@@ -996,7 +996,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (sel)
-                      const Padding(
+                      Padding(
                         padding: EdgeInsets.only(right: 6),
                         child: Icon(
                           Icons.check_rounded,
@@ -1035,13 +1035,13 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
       title: 'LOCK OPTIONS',
       children: [
         _FormLabel('Lock Reason'),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         ...reasons.entries.map((e) {
           final sel = _lockReason == e.key;
           return GestureDetector(
             onTap: () => setState(() => _lockReason = e.key),
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
+              duration: Duration(milliseconds: 150),
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
@@ -1061,7 +1061,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
                     size: 16,
                     color: sel ? AppTheme.warning : AppTheme.textMuted,
                   ),
-                  const SizedBox(width: 10),
+                  SizedBox(width: 10),
                   Text(
                     e.value,
                     style: GoogleFonts.ibmPlexSans(
@@ -1086,7 +1086,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
       title: 'SYNC OPTIONS',
       children: [
         _FormLabel('Target Version'),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         Row(
           children: ['latest', 'v1.0.4', 'v1.0.3'].map((v) {
             final sel = _policyVersion == v;
@@ -1094,7 +1094,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
               child: GestureDetector(
                 onTap: () => setState(() => _policyVersion = v),
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
+                  duration: Duration(milliseconds: 150),
                   margin: EdgeInsets.only(right: v != 'v1.0.3' ? 8 : 0),
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
@@ -1120,7 +1120,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
             );
           }).toList(),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         _FormToggleRow(
           label: 'Force Sync',
           subtitle: 'Override local policy cache and force re-apply',
@@ -1137,14 +1137,14 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
       title: 'FILE OPTIONS',
       children: [
         _FormLabel('Remote File Path'),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         _StyledTextField(
           controller: _uploadPathController,
           hint: '/path/to/file.ext',
           prefix: Icons.insert_drive_file_outlined,
           monospace: true,
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         _FormToggleRow(
           label: 'Compress Before Upload',
           subtitle: 'Reduces transfer size using gzip compression',
@@ -1162,16 +1162,16 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
       title: 'FILE DETAILS',
       children: [
         _FormLabel('Destination Path'),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         _StyledTextField(
           controller: _createPathController,
           hint: '/path/to/newfile.txt',
           prefix: Icons.note_add_outlined,
           monospace: true,
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         _FormLabel('File Content'),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
             color: AppTheme.surface,
@@ -1198,7 +1198,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         _FormToggleRow(
           label: 'Overwrite if Exists',
           subtitle: 'Replace existing file at destination path',
@@ -1218,7 +1218,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
         Row(
           children: [
             _FormLabel('Delay Before Reboot'),
-            const Spacer(),
+            Spacer(),
             Text(
               '${_rebootDelay.toInt()}s',
               style: GoogleFonts.ibmPlexMono(
@@ -1264,7 +1264,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         _FormToggleRow(
           label: 'Force Reboot',
           subtitle: 'Skip graceful shutdown — may cause data loss',
@@ -1283,12 +1283,12 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
             ),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.warning_rounded,
                   size: 16,
                   color: AppTheme.error,
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Force reboot may cause unsaved data loss on the target device.',
@@ -1317,8 +1317,8 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.security_rounded, size: 18, color: AppTheme.warning),
-          const SizedBox(width: 10),
+          Icon(Icons.security_rounded, size: 18, color: AppTheme.warning),
+          SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1342,13 +1342,13 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
               ],
             ),
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           GestureDetector(
             onTap: () => ref
                 .read(sendCommandControllerProvider.notifier)
                 .toggleSensitiveOverride(),
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
+              duration: Duration(milliseconds: 200),
               width: 38,
               height: 20,
               decoration: BoxDecoration(
@@ -1356,7 +1356,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: AnimatedAlign(
-                duration: const Duration(milliseconds: 200),
+                duration: Duration(milliseconds: 200),
                 alignment: _sensitiveOverride
                     ? Alignment.centerRight
                     : Alignment.centerLeft,
@@ -1364,7 +1364,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
                   margin: const EdgeInsets.all(2),
                   width: 16,
                   height: 16,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     color: Colors.white,
                     shape: BoxShape.circle,
                   ),
@@ -1398,7 +1398,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
                   letterSpacing: 0.8,
                 ),
               ),
-              const Spacer(),
+              Spacer(),
               Icon(
                 _showPolicyPanel
                     ? Icons.expand_less_rounded
@@ -1410,7 +1410,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
           ),
         ),
         if (_showPolicyPanel) ...[
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -1455,7 +1455,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
                                 ? AppTheme.secondary
                                 : AppTheme.warning,
                           ),
-                          const SizedBox(width: 5),
+                          SizedBox(width: 5),
                           Text(
                             isAllowed ? 'ALLOW' : 'REQUIRES APPROVAL',
                             style: GoogleFonts.ibmPlexMono(
@@ -1469,7 +1469,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
                         ],
                       ),
                     ),
-                    const Spacer(),
+                    Spacer(),
                     Text(
                       'Policy v1.0.4',
                       style: GoogleFonts.ibmPlexMono(
@@ -1479,7 +1479,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                SizedBox(height: 10),
                 Text(
                   _selectedMethod.policyNote,
                   style: GoogleFonts.ibmPlexSans(
@@ -1488,9 +1488,9 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
                     height: 1.5,
                   ),
                 ),
-                const SizedBox(height: 10),
-                const Divider(color: AppTheme.borderLight, height: 1),
-                const SizedBox(height: 10),
+                SizedBox(height: 10),
+                Divider(color: AppTheme.borderLight, height: 1),
+                SizedBox(height: 10),
                 _PolicyRow(label: 'Command', value: _selectedMethod.id),
                 _PolicyRow(label: 'Initiator', value: 'L. Nakamura (operator)'),
                 _PolicyRow(label: 'Target', value: _currentTargetDeviceName),
@@ -1533,7 +1533,7 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
   Widget _buildSubmitBar() {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppTheme.surface,
         border: Border(top: BorderSide(color: AppTheme.borderLight)),
       ),
@@ -1586,7 +1586,7 @@ class _FormCard extends StatelessWidget {
             letterSpacing: 0.8,
           ),
         ),
-        const SizedBox(height: 10),
+        SizedBox(height: 10),
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -1626,14 +1626,14 @@ class _FormToggleRow extends StatelessWidget {
   final String subtitle;
   final bool value;
   final ValueChanged<bool> onChanged;
-  final Color accentColor;
+  final Color? accentColor;
 
   const _FormToggleRow({
     required this.label,
     required this.subtitle,
     required this.value,
     required this.onChanged,
-    this.accentColor = AppTheme.primary,
+    this.accentColor,
   });
 
   @override
@@ -1663,25 +1663,26 @@ class _FormToggleRow extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(width: 12),
+        SizedBox(width: 12),
         GestureDetector(
           onTap: () => onChanged(!value),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
+            duration: Duration(milliseconds: 200),
             width: 40,
             height: 22,
             decoration: BoxDecoration(
-              color: value ? accentColor : AppTheme.border,
+              color:
+                  value ? (accentColor ?? AppTheme.primary) : AppTheme.border,
               borderRadius: BorderRadius.circular(11),
             ),
             child: AnimatedAlign(
-              duration: const Duration(milliseconds: 200),
+              duration: Duration(milliseconds: 200),
               alignment: value ? Alignment.centerRight : Alignment.centerLeft,
               child: Container(
                 margin: const EdgeInsets.all(2),
                 width: 18,
                 height: 18,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: Colors.white,
                   shape: BoxShape.circle,
                 ),
@@ -1810,7 +1811,7 @@ class _PolicyRow extends StatelessWidget {
               color: AppTheme.textMuted,
             ),
           ),
-          const Spacer(),
+          Spacer(),
           Text(
             value,
             style: GoogleFonts.ibmPlexMono(

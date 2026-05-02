@@ -42,8 +42,7 @@ class _FakeApiClient implements ApiClient {
 }
 
 void main() {
-  test('SendCommandController handles selection and policy state',
-      () async {
+  test('SendCommandController handles selection and policy state', () async {
     final container = ProviderContainer();
     final sub = container.listen(
       sendCommandControllerProvider,
@@ -83,17 +82,18 @@ void main() {
     addTearDown(sub.close);
     addTearDown(container.dispose);
 
-    final result =
-        await container.read(sendCommandControllerProvider.notifier).dispatchCommand(
-              deviceId: 'dev-007',
-              deviceName: 'WKS-FINANCE-07',
-              methodId: 'reboot',
-              params: const <String, dynamic>{
-                'delay_seconds': 45,
-                'force': true,
-              },
-              sensitive: true,
-            );
+    final result = await container
+        .read(sendCommandControllerProvider.notifier)
+        .dispatchCommand(
+          deviceId: 'dev-007',
+          deviceName: 'WKS-FINANCE-07',
+          methodId: 'reboot',
+          params: const <String, dynamic>{
+            'delay_seconds': 45,
+            'force': true,
+          },
+          sensitive: true,
+        );
 
     expect(result.success, isTrue);
     expect(result.timelineArguments?['method'], 'reboot_device');
@@ -126,18 +126,19 @@ void main() {
     addTearDown(sub.close);
     addTearDown(container.dispose);
 
-    final result =
-        await container.read(sendCommandControllerProvider.notifier).dispatchCommand(
-              deviceId: 'dev-007',
-              deviceName: 'WKS-FINANCE-07',
-              methodId: 'filesystem',
-              params: const <String, dynamic>{
-                'path': '/etc',
-                'depth': 2,
-                'include_hidden': false,
-              },
-              sensitive: true,
-            );
+    final result = await container
+        .read(sendCommandControllerProvider.notifier)
+        .dispatchCommand(
+          deviceId: 'dev-007',
+          deviceName: 'WKS-FINANCE-07',
+          methodId: 'filesystem',
+          params: const <String, dynamic>{
+            'path': '/etc',
+            'depth': 2,
+            'include_hidden': false,
+          },
+          sensitive: true,
+        );
 
     expect(result.success, isTrue);
     expect(result.timelineArguments?['method'], 'list_files');

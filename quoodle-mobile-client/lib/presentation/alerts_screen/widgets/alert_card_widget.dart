@@ -75,12 +75,12 @@ class AlertCardWidget extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
+            Icon(
               Icons.check_circle_rounded,
               color: AppTheme.secondary,
               size: 24,
             ),
-            const SizedBox(height: 4),
+            SizedBox(height: 4),
             Text(
               'Acknowledge',
               style: GoogleFonts.ibmPlexSans(
@@ -127,9 +127,9 @@ class AlertCardWidget extends StatelessWidget {
                       color: isAcked ? AppTheme.textMuted : _severityColor,
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  SizedBox(width: 10),
                   StatusBadgeWidget.alert(_severity),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       alert['deviceName'] as String,
@@ -151,7 +151,7 @@ class AlertCardWidget extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               // Message
               Text(
                 alert['message'] as String,
@@ -163,19 +163,19 @@ class AlertCardWidget extends StatelessWidget {
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               // Action row
               Row(
                 children: [
                   if (isAcked)
                     Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.check_circle_rounded,
                           size: 14,
                           color: AppTheme.statusOnline,
                         ),
-                        const SizedBox(width: 4),
+                        SizedBox(width: 4),
                         Text(
                           'Acknowledged',
                           style: GoogleFonts.ibmPlexSans(
@@ -212,7 +212,7 @@ class AlertCardWidget extends StatelessWidget {
                         ),
                       ),
                     ),
-                  const Spacer(),
+                  Spacer(),
                   InkWell(
                     onTap: onViewDevice,
                     borderRadius: BorderRadius.circular(7),
@@ -229,12 +229,12 @@ class AlertCardWidget extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.devices_rounded,
                             size: 11,
                             color: AppTheme.textMuted,
                           ),
-                          const SizedBox(width: 5),
+                          SizedBox(width: 5),
                           Text(
                             'View Device',
                             style: GoogleFonts.ibmPlexSans(

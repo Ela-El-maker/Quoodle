@@ -57,7 +57,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
             onChanged: (v) =>
                 ref.read(analyticsControllerProvider.notifier).setTimeRange(v),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
         ],
       ),
       body: isTablet
@@ -137,7 +137,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         labelColor: AppTheme.primary,
         unselectedLabelColor: AppTheme.textMuted,
         padding: const EdgeInsets.all(4),
-        tabs: const [
+        tabs: [
           Tab(text: 'Commands'),
           Tab(text: 'Health'),
           Tab(text: 'Compliance'),
@@ -235,7 +235,7 @@ class _SectionCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                 ],
                 Expanded(
                   child: Column(
@@ -263,7 +263,7 @@ class _SectionCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           child,
         ],
       ),
@@ -305,7 +305,7 @@ class _KpiTile extends StatelessWidget {
               color: color,
             ),
           ),
-          const SizedBox(height: 2),
+          SizedBox(height: 2),
           Text(
             label,
             style: GoogleFonts.ibmPlexSans(
@@ -316,7 +316,7 @@ class _KpiTile extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
           if (delta != null) ...[
-            const SizedBox(height: 4),
+            SizedBox(height: 4),
             Row(
               children: [
                 Icon(
@@ -326,7 +326,7 @@ class _KpiTile extends StatelessWidget {
                   size: 10,
                   color: deltaPositive ? AppTheme.secondary : AppTheme.error,
                 ),
-                const SizedBox(width: 2),
+                SizedBox(width: 2),
                 Text(
                   delta!,
                   style: GoogleFonts.ibmPlexSans(
@@ -350,7 +350,7 @@ class _CommandSuccessTab extends StatelessWidget {
   final String timeRange;
   const _CommandSuccessTab({required this.timeRange});
 
-  List<FlSpot> get _successRateSpots => const [
+  List<FlSpot> get _successRateSpots => [
         FlSpot(0, 88),
         FlSpot(1, 91),
         FlSpot(2, 87),
@@ -360,7 +360,7 @@ class _CommandSuccessTab extends StatelessWidget {
         FlSpot(6, 93),
       ];
 
-  List<FlSpot> get _failureRateSpots => const [
+  List<FlSpot> get _failureRateSpots => [
         FlSpot(0, 12),
         FlSpot(1, 9),
         FlSpot(2, 13),
@@ -370,7 +370,7 @@ class _CommandSuccessTab extends StatelessWidget {
         FlSpot(6, 7),
       ];
 
-  static const _commandTypes = [
+  static final _commandTypes = [
     {'name': 'screenshot', 'success': 98, 'total': 142},
     {'name': 'get_process_list', 'success': 95, 'total': 218},
     {'name': 'collect_filesystem', 'success': 89, 'total': 176},
@@ -396,7 +396,7 @@ class _CommandSuccessTab extends StatelessWidget {
                 color: AppTheme.secondary,
               ),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
             Expanded(
               child: _KpiTile(
                 label: 'Total Commands',
@@ -405,7 +405,7 @@ class _CommandSuccessTab extends StatelessWidget {
                 color: AppTheme.primary,
               ),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
             Expanded(
               child: _KpiTile(
                 label: 'Avg Latency',
@@ -416,7 +416,7 @@ class _CommandSuccessTab extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         // Success rate trend
         _SectionCard(
           title: 'Success Rate Trend',
@@ -467,10 +467,10 @@ class _CommandSuccessTab extends StatelessWidget {
                         },
                       ),
                     ),
-                    topTitles: const AxisTitles(
+                    topTitles: AxisTitles(
                       sideTitles: SideTitles(showTitles: false),
                     ),
-                    rightTitles: const AxisTitles(
+                    rightTitles: AxisTitles(
                       sideTitles: SideTitles(showTitles: false),
                     ),
                   ),
@@ -483,7 +483,7 @@ class _CommandSuccessTab extends StatelessWidget {
                       isCurved: true,
                       color: AppTheme.secondary,
                       barWidth: 2,
-                      dotData: const FlDotData(show: false),
+                      dotData: FlDotData(show: false),
                       belowBarData: BarAreaData(
                         show: true,
                         color: AppTheme.secondary.withAlpha(26),
@@ -494,7 +494,7 @@ class _CommandSuccessTab extends StatelessWidget {
                       isCurved: true,
                       color: AppTheme.error,
                       barWidth: 2,
-                      dotData: const FlDotData(show: false),
+                      dotData: FlDotData(show: false),
                       belowBarData: BarAreaData(
                         show: true,
                         color: AppTheme.error.withAlpha(15),
@@ -547,7 +547,7 @@ class _CommandSuccessTab extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
+                      SizedBox(height: 4),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(4),
                         child: LinearProgressIndicator(
@@ -590,7 +590,7 @@ class _DeviceHealthTab extends StatelessWidget {
                 color: AppTheme.secondary,
               ),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
             Expanded(
               child: _KpiTile(
                 label: 'Degraded',
@@ -599,7 +599,7 @@ class _DeviceHealthTab extends StatelessWidget {
                 color: AppTheme.warning,
               ),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
             Expanded(
               child: _KpiTile(
                 label: 'Offline',
@@ -611,7 +611,7 @@ class _DeviceHealthTab extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         // Fleet status donut
         _SectionCard(
           title: 'Fleet Status Distribution',
@@ -686,19 +686,19 @@ class _DeviceHealthTab extends StatelessWidget {
                         label: 'Online',
                         value: '38',
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8),
                       _LegendItem(
                         color: AppTheme.warning,
                         label: 'Degraded',
                         value: '5',
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8),
                       _LegendItem(
                         color: AppTheme.error,
                         label: 'Offline',
                         value: '3',
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8),
                       _LegendItem(
                         color: AppTheme.textMuted,
                         label: 'Quarantine',
@@ -762,10 +762,10 @@ class _DeviceHealthTab extends StatelessWidget {
                         },
                       ),
                     ),
-                    topTitles: const AxisTitles(
+                    topTitles: AxisTitles(
                       sideTitles: SideTitles(showTitles: false),
                     ),
-                    rightTitles: const AxisTitles(
+                    rightTitles: AxisTitles(
                       sideTitles: SideTitles(showTitles: false),
                     ),
                   ),
@@ -860,7 +860,7 @@ class _DeviceHealthTab extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
+                      SizedBox(height: 4),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(4),
                         child: LinearProgressIndicator(
@@ -904,7 +904,7 @@ class _LegendItem extends StatelessWidget {
             borderRadius: BorderRadius.circular(3),
           ),
         ),
-        const SizedBox(width: 6),
+        SizedBox(width: 6),
         Text(
           label,
           style: GoogleFonts.ibmPlexSans(
@@ -912,7 +912,7 @@ class _LegendItem extends StatelessWidget {
             color: AppTheme.textSecondary,
           ),
         ),
-        const SizedBox(width: 4),
+        SizedBox(width: 4),
         Text(
           value,
           style: GoogleFonts.ibmPlexSans(
@@ -947,7 +947,7 @@ class _ComplianceTab extends StatelessWidget {
                 color: AppTheme.secondary,
               ),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
             Expanded(
               child: _KpiTile(
                 label: 'Policy Drifts',
@@ -956,7 +956,7 @@ class _ComplianceTab extends StatelessWidget {
                 color: AppTheme.warning,
               ),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
             Expanded(
               child: _KpiTile(
                 label: 'Violations',
@@ -967,7 +967,7 @@ class _ComplianceTab extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         // Compliance score gauge
         _SectionCard(
           title: 'Overall Compliance Score',
@@ -982,7 +982,7 @@ class _ComplianceTab extends StatelessWidget {
         _SectionCard(
           title: 'Compliance by Policy Category',
           subtitle: 'Current pass rate per policy type',
-          accentColor: const Color(0xFFAB7FF8),
+          accentColor: Color(0xFFAB7FF8),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
             child: Column(
@@ -1025,7 +1025,7 @@ class _ComplianceTab extends StatelessWidget {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          SizedBox(width: 8),
                           Text(
                             '$fail% fail',
                             style: GoogleFonts.ibmPlexSans(
@@ -1035,7 +1035,7 @@ class _ComplianceTab extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
+                      SizedBox(height: 4),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(4),
                         child: Stack(
@@ -1116,10 +1116,10 @@ class _ComplianceTab extends StatelessWidget {
                         },
                       ),
                     ),
-                    topTitles: const AxisTitles(
+                    topTitles: AxisTitles(
                       sideTitles: SideTitles(showTitles: false),
                     ),
-                    rightTitles: const AxisTitles(
+                    rightTitles: AxisTitles(
                       sideTitles: SideTitles(showTitles: false),
                     ),
                   ),
@@ -1128,7 +1128,7 @@ class _ComplianceTab extends StatelessWidget {
                   maxY: 15,
                   lineBarsData: [
                     LineChartBarData(
-                      spots: const [
+                      spots: [
                         FlSpot(0, 11),
                         FlSpot(1, 8),
                         FlSpot(2, 13),
@@ -1140,7 +1140,7 @@ class _ComplianceTab extends StatelessWidget {
                       isCurved: true,
                       color: AppTheme.warning,
                       barWidth: 2,
-                      dotData: const FlDotData(show: false),
+                      dotData: FlDotData(show: false),
                       belowBarData: BarAreaData(
                         show: true,
                         color: AppTheme.warning.withAlpha(26),
@@ -1174,13 +1174,13 @@ class _ComplianceGauge extends StatelessWidget {
         alignment: Alignment.center,
         children: [
           CustomPaint(
-            size: const Size(160, 160),
+            size: Size(160, 160),
             painter: _GaugePainter(score: score, color: color),
           ),
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
               Text(
                 '$score%',
                 style: GoogleFonts.ibmPlexSans(
@@ -1207,7 +1207,7 @@ class _ComplianceGauge extends StatelessWidget {
 class _GaugePainter extends CustomPainter {
   final int score;
   final Color color;
-  const _GaugePainter({required this.score, required this.color});
+  _GaugePainter({required this.score, required this.color});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1255,7 +1255,7 @@ class _OperatorActivityTab extends StatelessWidget {
   final String timeRange;
   const _OperatorActivityTab({required this.timeRange});
 
-  static const _operators = [
+  static final _operators = [
     {
       'name': 'operator@quoodle.io',
       'role': 'Operator',
@@ -1300,7 +1300,7 @@ class _OperatorActivityTab extends StatelessWidget {
                 color: AppTheme.primary,
               ),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
             Expanded(
               child: _KpiTile(
                 label: 'Total Actions',
@@ -1309,7 +1309,7 @@ class _OperatorActivityTab extends StatelessWidget {
                 color: AppTheme.secondary,
               ),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
             Expanded(
               child: _KpiTile(
                 label: 'Denied Actions',
@@ -1320,7 +1320,7 @@ class _OperatorActivityTab extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         // Activity by operator bar chart
         _SectionCard(
           title: 'Commands by Operator',
@@ -1375,10 +1375,10 @@ class _OperatorActivityTab extends StatelessWidget {
                         },
                       ),
                     ),
-                    topTitles: const AxisTitles(
+                    topTitles: AxisTitles(
                       sideTitles: SideTitles(showTitles: false),
                     ),
-                    rightTitles: const AxisTitles(
+                    rightTitles: AxisTitles(
                       sideTitles: SideTitles(showTitles: false),
                     ),
                   ),
@@ -1386,7 +1386,7 @@ class _OperatorActivityTab extends StatelessWidget {
                   barGroups: [312, 87, 12, 591].asMap().entries.map((e) {
                     final colors = [
                       AppTheme.primary,
-                      const Color(0xFFAB7FF8),
+                      Color(0xFFAB7FF8),
                       AppTheme.warning,
                       AppTheme.secondary,
                     ];
@@ -1418,7 +1418,7 @@ class _OperatorActivityTab extends StatelessWidget {
         _SectionCard(
           title: 'Operator Leaderboard',
           subtitle: 'Activity ranking with success rates',
-          accentColor: const Color(0xFFAB7FF8),
+          accentColor: Color(0xFFAB7FF8),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
             child: Column(
@@ -1432,9 +1432,9 @@ class _OperatorActivityTab extends StatelessWidget {
                         ? AppTheme.warning
                         : AppTheme.error;
                 final rankColors = [
-                  const Color(0xFFFFD700),
-                  const Color(0xFFC0C0C0),
-                  const Color(0xFFCD7F32),
+                  Color(0xFFFFD700),
+                  Color(0xFFC0C0C0),
+                  Color(0xFFCD7F32),
                   AppTheme.textMuted,
                 ];
                 return Container(
@@ -1468,7 +1468,7 @@ class _OperatorActivityTab extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(width: 10),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1485,7 +1485,7 @@ class _OperatorActivityTab extends StatelessWidget {
                             Row(
                               children: [
                                 _RoleBadge(role: op['role'] as String),
-                                const SizedBox(width: 6),
+                                SizedBox(width: 6),
                                 Text(
                                   'Last: ${op['lastActive']}',
                                   style: GoogleFonts.ibmPlexSans(
@@ -1555,7 +1555,7 @@ class _RoleBadge extends StatelessWidget {
   Color get _color {
     switch (role) {
       case 'Admin':
-        return const Color(0xFFAB7FF8);
+        return Color(0xFFAB7FF8);
       case 'Operator':
         return AppTheme.primary;
       case 'Viewer':
@@ -1588,7 +1588,7 @@ class _RoleBadge extends StatelessWidget {
 }
 
 class _ActivityHeatmap extends StatelessWidget {
-  final List<int> _hourlyData = const [
+  final List<int> _hourlyData = [
     2,
     1,
     0,
@@ -1645,7 +1645,7 @@ class _ActivityHeatmap extends StatelessWidget {
             );
           }),
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: 6),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: ['00', '06', '12', '18', '23']

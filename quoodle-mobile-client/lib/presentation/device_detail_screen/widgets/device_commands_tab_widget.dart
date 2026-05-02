@@ -21,8 +21,8 @@ class DeviceCommandsTabWidget extends ConsumerStatefulWidget {
 
 class _DeviceCommandsTabWidgetState
     extends ConsumerState<DeviceCommandsTabWidget> {
-  static const _refreshInterval = Duration(seconds: 5);
-  static const _sensitiveMethods = <String>{
+  static final _refreshInterval = Duration(seconds: 5);
+  static final _sensitiveMethods = <String>{
     'screenshot_capture',
     'screenshot',
     'filesystem',
@@ -33,7 +33,7 @@ class _DeviceCommandsTabWidgetState
     'reboot_device',
   };
 
-  static const _methodResultTypes = <String, String>{
+  static final _methodResultTypes = <String, String>{
     'screenshot_capture': 'screenshot',
     'screenshot': 'screenshot',
     'process_list': 'process_list',
@@ -217,7 +217,7 @@ class _DeviceCommandsTabWidgetState
     final deviceName = device?.name ?? '';
 
     if (_isLoading && _commandMaps.isEmpty) {
-      return const Center(
+      return Center(
         child: SizedBox(
           width: 24,
           height: 24,
@@ -237,7 +237,7 @@ class _DeviceCommandsTabWidgetState
           subtitle: _errorMessage!,
         );
       }
-      return const EmptyStateWidget(
+      return EmptyStateWidget(
         icon: Icons.terminal_rounded,
         title: 'No commands yet',
         subtitle:
@@ -288,7 +288,7 @@ class _DeviceCommandsTabWidgetState
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppTheme.surface,
         border: Border(bottom: BorderSide(color: AppTheme.borderLight)),
       ),
@@ -301,18 +301,18 @@ class _DeviceCommandsTabWidgetState
                 children: [
                   _SummaryChip(
                       label: '$total Total', color: AppTheme.textMuted),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   _SummaryChip(
                     label: '$completed OK',
                     color: AppTheme.secondary,
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   if (executing > 0) ...[
                     _SummaryChip(
                       label: '$executing Running',
                       color: AppTheme.warning,
                     ),
-                    const SizedBox(width: 8),
+                    SizedBox(width: 8),
                   ],
                   if (failed > 0)
                     _SummaryChip(
@@ -323,7 +323,7 @@ class _DeviceCommandsTabWidgetState
               ),
             ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           GestureDetector(
             onTap: () => AppNavigator.push(
               context,
@@ -343,12 +343,12 @@ class _DeviceCommandsTabWidgetState
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.add_rounded,
                     size: 14,
                     color: AppTheme.primary,
                   ),
-                  const SizedBox(width: 4),
+                  SizedBox(width: 4),
                   Text(
                     'New',
                     style: GoogleFonts.ibmPlexSans(
@@ -581,7 +581,7 @@ class _CommandHistoryCard extends StatelessWidget {
               ),
               child: Icon(_methodIcon, size: 17, color: _methodColor),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -601,15 +601,15 @@ class _CommandHistoryCard extends StatelessWidget {
                         ),
                       ),
                       if (_asBool(command['sensitive'])) ...[
-                        const SizedBox(width: 6),
-                        const Icon(
+                        SizedBox(width: 6),
+                        Icon(
                           Icons.security_rounded,
                           size: 11,
                           color: AppTheme.warning,
                         ),
                       ],
                       if (hasResult) ...[
-                        const SizedBox(width: 6),
+                        SizedBox(width: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 5,
@@ -631,7 +631,7 @@ class _CommandHistoryCard extends StatelessWidget {
                       ],
                     ],
                   ),
-                  const SizedBox(height: 3),
+                  SizedBox(height: 3),
                   Text.rich(
                     TextSpan(
                       children: [
@@ -662,7 +662,7 @@ class _CommandHistoryCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 StatusBadgeWidget.command(_status),
-                const SizedBox(height: 4),
+                SizedBox(height: 4),
                 Text(
                   _displayTime(),
                   style: GoogleFonts.ibmPlexMono(
@@ -670,8 +670,8 @@ class _CommandHistoryCard extends StatelessWidget {
                     color: AppTheme.textMuted,
                   ),
                 ),
-                const SizedBox(height: 2),
-                const Icon(
+                SizedBox(height: 2),
+                Icon(
                   Icons.chevron_right_rounded,
                   size: 14,
                   color: AppTheme.textMuted,

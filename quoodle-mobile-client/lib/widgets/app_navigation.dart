@@ -16,7 +16,7 @@ class AppNavigation extends StatelessWidget {
     required this.onTap,
   });
 
-  static const List<_NavItem> _items = [
+  static final List<_NavItem> _items = [
     _NavItem(Icons.dashboard_rounded, Icons.dashboard_outlined, 'Fleet'),
     _NavItem(Icons.devices_rounded, Icons.devices_outlined, 'Devices'),
     _NavItem(Icons.terminal_rounded, Icons.terminal_outlined, 'Commands'),
@@ -46,7 +46,7 @@ class _NavItem {
   final IconData activeIcon;
   final IconData inactiveIcon;
   final String label;
-  const _NavItem(this.activeIcon, this.inactiveIcon, this.label);
+  _NavItem(this.activeIcon, this.inactiveIcon, this.label);
 }
 
 class _LiquidGlassBar extends StatefulWidget {
@@ -70,7 +70,7 @@ class _LiquidGlassBarState extends State<_LiquidGlassBar>
     _prevIndex = widget.currentIndex;
     _pillController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 300),
+      duration: Duration(milliseconds: 300),
     );
     _pillAnimation = CurvedAnimation(
       parent: _pillController,
@@ -95,7 +95,7 @@ class _LiquidGlassBarState extends State<_LiquidGlassBar>
 
   @override
   Widget build(BuildContext context) {
-    const items = AppNavigation._items;
+    final items = AppNavigation._items;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: ClipRRect(
@@ -153,7 +153,7 @@ class _LiquidGlassBarState extends State<_LiquidGlassBar>
                                   clipBehavior: Clip.none,
                                   children: [
                                     AnimatedSwitcher(
-                                      duration: const Duration(
+                                      duration: Duration(
                                         milliseconds: 200,
                                       ),
                                       child: Icon(
@@ -171,11 +171,11 @@ class _LiquidGlassBarState extends State<_LiquidGlassBar>
                                       Positioned(
                                         top: -4,
                                         right: -6,
-                                        child: const _UnreadBadge(),
+                                        child: _UnreadBadge(),
                                       ),
                                   ],
                                 ),
-                                const SizedBox(height: 2),
+                                SizedBox(height: 2),
                                 Text(
                                   items[i].label,
                                   style: GoogleFonts.ibmPlexSans(
@@ -214,7 +214,7 @@ class _UnreadBadge extends ConsumerWidget {
     final count = ref.watch(unreadNotificationCountProvider);
     if (count == 0) return const SizedBox.shrink();
     return Container(
-      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+      constraints: BoxConstraints(minWidth: 16, minHeight: 16),
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
       decoration: BoxDecoration(
         color: AppTheme.critical,
@@ -241,18 +241,18 @@ class _TabletNavRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const items = AppNavigation._items;
+    final items = AppNavigation._items;
     return Container(
       width: 72,
       decoration: BoxDecoration(
         color: AppTheme.surface,
-        border: const Border(
+        border: Border(
           right: BorderSide(color: AppTheme.border, width: 1),
         ),
       ),
       child: Column(
         children: [
-          const SizedBox(height: 20),
+          SizedBox(height: 20),
           Container(
             width: 36,
             height: 36,
@@ -260,13 +260,13 @@ class _TabletNavRail extends StatelessWidget {
               color: AppTheme.primaryDim,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.shield_rounded,
               color: AppTheme.primary,
               size: 20,
             ),
           ),
-          const SizedBox(height: 32),
+          SizedBox(height: 32),
           ...List.generate(items.length, (i) {
             final isActive = i == currentIndex;
             final showBadge = i == 3;
@@ -297,7 +297,7 @@ class _TabletNavRail extends StatelessWidget {
                       Positioned(
                         top: -4,
                         right: -6,
-                        child: const _UnreadBadge(),
+                        child: _UnreadBadge(),
                       ),
                   ],
                 ),

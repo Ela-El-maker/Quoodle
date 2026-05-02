@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:secure_device_control/app/router/app_navigator.dart';
+import 'package:secure_device_control/app/theme/theme_mode_controller.dart';
 import 'package:secure_device_control/features/commands/data/services/offline_command_queue.dart';
 import 'package:secure_device_control/features/commands/presentation/providers/offline_command_queue_providers.dart';
 import 'package:secure_device_control/features/settings/domain/entities/session_entry.dart';
@@ -62,7 +63,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   Widget _buildHeader() {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppTheme.surface,
         border: Border(bottom: BorderSide(color: AppTheme.border, width: 1)),
       ),
@@ -82,14 +83,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     borderRadius: BorderRadius.circular(8.0),
                     border: Border.all(color: AppTheme.border, width: 1),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.arrow_back_ios_new_rounded,
                     size: 16,
                     color: AppTheme.textSecondary,
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -139,15 +140,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           fontWeight: FontWeight.w400,
         ),
         tabs: [
-          const Tab(text: 'Account'),
-          const Tab(text: 'Notifications'),
+          Tab(text: 'Account'),
+          Tab(text: 'Notifications'),
           Tab(
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Queue'),
+                Text('Queue'),
                 if (_queue.pendingCount > 0 || _queue.failedCount > 0) ...[
-                  const SizedBox(width: 6),
+                  SizedBox(width: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 5,
@@ -182,18 +183,66 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   // ── Account Tab ─────────────────────────────────────────────────────────────
 
   Widget _buildAccountTab() {
+    final themeMode = ref.watch(themeModeControllerProvider);
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         _buildProfileCard(),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         _buildRoleCard(),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         _buildSessionsCard(),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
+        _buildAppearanceCard(themeMode),
+        SizedBox(height: 16),
         _buildDangerZone(),
-        const SizedBox(height: 80),
+        SizedBox(height: 80),
       ],
+    );
+  }
+
+  Widget _buildAppearanceCard(ThemeMode selectedMode) {
+    final controller = ref.read(themeModeControllerProvider.notifier);
+
+    return _GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionLabel(label: 'APPEARANCE'),
+          SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _ThemeModeOption(
+                  label: 'Light',
+                  icon: Icons.light_mode_rounded,
+                  selected: selectedMode == ThemeMode.light,
+                  onTap: () => controller.setThemeMode(ThemeMode.light),
+                ),
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: _ThemeModeOption(
+                  label: 'Dark',
+                  icon: Icons.dark_mode_rounded,
+                  selected: selectedMode == ThemeMode.dark,
+                  onTap: () => controller.setThemeMode(ThemeMode.dark),
+                ),
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: _ThemeModeOption(
+                  label: 'System',
+                  icon: Icons.brightness_auto_rounded,
+                  selected: selectedMode == ThemeMode.system,
+                  onTap: () => controller.setThemeMode(ThemeMode.system),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -203,14 +252,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _SectionLabel(label: 'ACCOUNT INFO'),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           Row(
             children: [
               Container(
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
+                  gradient: LinearGradient(
                     colors: [AppTheme.primary, Color(0xFF0099CC)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -228,7 +277,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   ),
                 ),
               ),
-              const SizedBox(width: 14),
+              SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -241,7 +290,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                         color: AppTheme.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    SizedBox(height: 2),
                     Text(
                       'operator@quoodle.io',
                       style: GoogleFonts.ibmPlexMono(
@@ -249,7 +298,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                         color: AppTheme.textSecondary,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
@@ -274,15 +323,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          const Divider(color: AppTheme.borderLight, height: 1),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
+          Divider(color: AppTheme.borderLight, height: 1),
+          SizedBox(height: 16),
           _InfoRow(label: 'User ID', value: 'usr_8f3a2c91d4e7'),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           _InfoRow(label: 'Organization', value: 'Quoodle Fleet Ops'),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           _InfoRow(label: 'Member Since', value: 'Jan 15, 2024'),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           _InfoRow(label: 'Last Login', value: '2 minutes ago'),
         ],
       ),
@@ -295,7 +344,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _SectionLabel(label: 'ROLE & PERMISSIONS'),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           Row(
             children: [
               Container(
@@ -305,13 +354,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   color: AppTheme.warningMuted,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.shield_rounded,
                   color: AppTheme.warning,
                   size: 20,
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -336,7 +385,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -363,8 +412,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         children: [
           Row(
             children: [
-              const _SectionLabel(label: 'ACTIVE SESSIONS'),
-              const Spacer(),
+              _SectionLabel(label: 'ACTIVE SESSIONS'),
+              Spacer(),
               GestureDetector(
                 onTap: _revokeAllOtherSessions,
                 child: Text(
@@ -378,7 +427,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           ..._settingsState.sessions.map(
             (s) => _SessionTile(
               session: s,
@@ -397,7 +446,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _SectionLabel(label: 'SESSION', color: AppTheme.error),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           _ActionButton(
             icon: Icons.logout_rounded,
             label: 'Sign Out',
@@ -421,7 +470,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _SectionLabel(label: 'CRITICAL ALERTS'),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               _NotifToggle(
                 icon: Icons.crisis_alert_rounded,
                 iconColor: AppTheme.error,
@@ -465,13 +514,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         _GlassCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _SectionLabel(label: 'OPERATIONAL'),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               _NotifToggle(
                 icon: Icons.add_circle_outline_rounded,
                 iconColor: AppTheme.secondary,
@@ -505,13 +554,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         _GlassCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _SectionLabel(label: 'REPORTS'),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               _NotifToggle(
                 icon: Icons.summarize_rounded,
                 iconColor: AppTheme.secondary,
@@ -525,7 +574,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             ],
           ),
         ),
-        const SizedBox(height: 80),
+        SizedBox(height: 80),
       ],
     );
   }
@@ -574,7 +623,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           Row(
             children: [
               _ConnectivityDot(isOnline: _queue.isOnline),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Text(
                 _queue.isOnline
                     ? (_queue.isSyncing
@@ -588,7 +637,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                       _queue.isOnline ? AppTheme.secondary : AppTheme.warning,
                 ),
               ),
-              const Spacer(),
+              Spacer(),
               if (_queue.commands.any(
                 (c) => c.status == QueuedCommandStatus.success,
               ))
@@ -605,7 +654,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
             ],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           Row(
             children: [
               _QueueStat(
@@ -613,15 +662,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 value: pending,
                 color: AppTheme.primary,
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: 12),
               _QueueStat(label: 'Failed', value: failed, color: AppTheme.error),
-              const SizedBox(width: 12),
+              SizedBox(width: 12),
               _QueueStat(
                 label: 'Sent',
                 value: success,
                 color: AppTheme.secondary,
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: 12),
               _QueueStat(
                 label: 'Total',
                 value: _queue.commands.length,
@@ -646,13 +695,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               color: AppTheme.primaryDim,
               borderRadius: BorderRadius.circular(16),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.check_circle_outline_rounded,
               color: AppTheme.primary,
               size: 28,
             ),
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
           Text(
             'Queue is empty',
             style: GoogleFonts.ibmPlexSans(
@@ -661,7 +710,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               color: AppTheme.textPrimary,
             ),
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           Text(
             'Commands sent while offline will appear here',
             style: GoogleFonts.ibmPlexSans(
@@ -796,6 +845,57 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
+class _ThemeModeOption extends StatelessWidget {
+  const _ThemeModeOption({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? AppTheme.primaryDim : AppTheme.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? AppTheme.primary : AppTheme.border,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: selected ? AppTheme.primary : AppTheme.textSecondary,
+            ),
+            SizedBox(width: 6),
+            Text(
+              label,
+              style: GoogleFonts.ibmPlexSans(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: selected ? AppTheme.primary : AppTheme.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _InfoRow extends StatelessWidget {
   final String label;
   final String value;
@@ -854,7 +954,7 @@ class _PermChip extends StatelessWidget {
             size: 11,
             color: granted ? AppTheme.secondary : AppTheme.textMuted,
           ),
-          const SizedBox(width: 4),
+          SizedBox(width: 4),
           Text(
             label,
             style: GoogleFonts.ibmPlexSans(
@@ -914,7 +1014,7 @@ class _SessionTile extends StatelessWidget {
               color: session.isCurrent ? AppTheme.primary : AppTheme.textMuted,
             ),
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -954,7 +1054,7 @@ class _SessionTile extends StatelessWidget {
                       ),
                   ],
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: 2),
                 Text(
                   '${session.location} · ${session.ip}',
                   style: GoogleFonts.ibmPlexMono(
@@ -973,7 +1073,7 @@ class _SessionTile extends StatelessWidget {
             ),
           ),
           if (onRevoke != null) ...[
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             GestureDetector(
               onTap: onRevoke,
               child: Container(
@@ -1030,7 +1130,7 @@ class _ActionButton extends StatelessWidget {
         child: Row(
           children: [
             Icon(icon, color: color, size: 20),
-            const SizedBox(width: 12),
+            SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1092,7 +1192,7 @@ class _NotifToggle extends StatelessWidget {
             ),
             child: Icon(icon, size: 16, color: iconColor),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1160,7 +1260,7 @@ class _QueueStatusPill extends StatelessWidget {
             size: 12,
             color: hasFailed ? AppTheme.error : AppTheme.primary,
           ),
-          const SizedBox(width: 4),
+          SizedBox(width: 4),
           Text(
             hasFailed
                 ? '${queue.failedCount} failed'
@@ -1195,7 +1295,7 @@ class _ConnectivityDotState extends State<_ConnectivityDot>
     super.initState();
     _ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: Duration(milliseconds: 1200),
     )..repeat(reverse: true);
     _pulse = Tween<double>(
       begin: 0.4,
@@ -1364,7 +1464,7 @@ class _CommandQueueTile extends StatelessWidget {
                       )
                     : Icon(_statusIcon, size: 16, color: _statusColor),
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1413,7 +1513,7 @@ class _CommandQueueTile extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Row(
             children: [
               Icon(
@@ -1421,7 +1521,7 @@ class _CommandQueueTile extends StatelessWidget {
                 size: 11,
                 color: AppTheme.textMuted,
               ),
-              const SizedBox(width: 4),
+              SizedBox(width: 4),
               Text(
                 'Queued ${_formatTime(command.queuedAt)}',
                 style: GoogleFonts.ibmPlexSans(
@@ -1430,9 +1530,9 @@ class _CommandQueueTile extends StatelessWidget {
                 ),
               ),
               if (command.retryCount > 0) ...[
-                const SizedBox(width: 10),
+                SizedBox(width: 10),
                 Icon(Icons.refresh_rounded, size: 11, color: AppTheme.warning),
-                const SizedBox(width: 4),
+                SizedBox(width: 4),
                 Text(
                   '${command.retryCount} retries',
                   style: GoogleFonts.ibmPlexSans(
@@ -1444,7 +1544,7 @@ class _CommandQueueTile extends StatelessWidget {
             ],
           ),
           if (command.errorMessage != null) ...[
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
@@ -1463,7 +1563,7 @@ class _CommandQueueTile extends StatelessWidget {
           ],
           if (command.status == QueuedCommandStatus.failed ||
               command.status == QueuedCommandStatus.pending) ...[
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             Row(
               children: [
                 if (command.status == QueuedCommandStatus.failed &&
@@ -1483,12 +1583,12 @@ class _CommandQueueTile extends StatelessWidget {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.refresh_rounded,
                               size: 13,
                               color: AppTheme.primary,
                             ),
-                            const SizedBox(width: 5),
+                            SizedBox(width: 5),
                             Text(
                               'Retry',
                               style: GoogleFonts.ibmPlexSans(
@@ -1504,7 +1604,7 @@ class _CommandQueueTile extends StatelessWidget {
                   ),
                 if (command.status == QueuedCommandStatus.failed &&
                     command.retryCount < 3)
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                 Expanded(
                   child: GestureDetector(
                     onTap: onRemove,
@@ -1518,12 +1618,12 @@ class _CommandQueueTile extends StatelessWidget {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.delete_outline_rounded,
                             size: 13,
                             color: AppTheme.error,
                           ),
-                          const SizedBox(width: 5),
+                          SizedBox(width: 5),
                           Text(
                             'Remove',
                             style: GoogleFonts.ibmPlexSans(

@@ -6,7 +6,7 @@ import 'package:secure_device_control/presentation/authentication_screen/authent
 void main() {
   testWidgets('Authentication screen renders sign-in heading', (tester) async {
     await tester.pumpWidget(
-      const ProviderScope(
+      ProviderScope(
         child: MaterialApp(
           home: AuthenticationScreen(),
         ),
