@@ -46,6 +46,9 @@ class Settings(BaseModel):
     webhook_outbox_max_delay_seconds: int = int(os.getenv("WEBHOOK_OUTBOX_MAX_DELAY_SECONDS", "60"))
     webhook_outbox_worker_interval_seconds: float = float(os.getenv("WEBHOOK_OUTBOX_WORKER_INTERVAL_SECONDS", "1"))
 
+    # Durable policy cache (survives gateway restarts)
+    policy_state_path: str = os.getenv("POLICY_STATE_PATH", "./data/policy_state.json")
+
     # Test-only fault injection
     webhook_fault_mode: str = os.getenv("WEBHOOK_FAULT_MODE", "")
     enable_test_endpoints: bool = os.getenv("ENABLE_TEST_ENDPOINTS", "false").lower() in ("1", "true", "yes")

@@ -1,3 +1,5 @@
+import json
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from app.config import settings
@@ -10,6 +12,7 @@ class PolicyResolver:
     """
 
     def __init__(self) -> None:
+        self._state_path = Path(settings.policy_state_path)
         self._current: Dict[str, Any] = {
             "policy_version": settings.policy_version,
             "policy_hash": settings.policy_hash,
@@ -19,9 +22,48 @@ class PolicyResolver:
             "app_lock": None,
         }
         self._device_app_lock: Dict[str, Dict[str, Any]] = {}
+        self._load_state()
 
     def current(self) -> Dict[str, Any]:
         return dict(self._current)
+
+    def _persist_state(self) -> None:
+        payload = {
+            "current": self._current,
+            "device_app_lock": self._device_app_lock,
+        }
+        try:
+            self._state_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self._state_path.with_suffix(self._state_path.suffix + ".tmp")
+            tmp.write_text(json.dumps(payload, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
+            tmp.replace(self._state_path)
+        except Exception:
+            # Best-effort durability; never break runtime policy flow because of disk IO.
+            return
+
+    def _load_state(self) -> None:
+        try:
+            if not self._state_path.exists():
+                return
+            raw = json.loads(self._state_path.read_text(encoding="utf-8"))
+            if not isinstance(raw, dict):
+                return
+            current = raw.get("current")
+            if isinstance(current, dict):
+                self._current = {
+                    **self._current,
+                    **current,
+                }
+            scoped = raw.get("device_app_lock")
+            if isinstance(scoped, dict):
+                loaded: Dict[str, Dict[str, Any]] = {}
+                for device_id, bundle in scoped.items():
+                    if isinstance(device_id, str) and isinstance(bundle, dict):
+                        loaded[device_id] = bundle
+                self._device_app_lock = loaded
+        except Exception:
+            # Ignore corrupt cache and continue with defaults.
+            return
 
     def update(
         self,
@@ -48,6 +90,7 @@ class PolicyResolver:
             "signature": signature,
             "app_lock": current_app_lock,
         }
+        self._persist_state()
         return self.current()
 
     def build_message(self, device_id: Optional[str], session_id: Optional[str]) -> Dict[str, Any]:

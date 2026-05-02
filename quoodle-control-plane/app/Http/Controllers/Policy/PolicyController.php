@@ -150,6 +150,7 @@ class PolicyController extends Controller
             'mode' => ['required', 'in:blocklist'],
             'fail_mode' => ['required', 'in:open'],
             'event_dedupe_sec' => ['nullable', 'integer', 'min:1', 'max:3600'],
+            'kill_running_on_apply' => ['nullable', 'boolean'],
             'rules' => ['nullable', 'array'],
             'rules.*.rule_id' => ['required', 'string', 'max:64'],
             'rules.*.match_type' => ['required', 'in:basename,full_path'],
@@ -186,6 +187,7 @@ class PolicyController extends Controller
             'mode' => 'blocklist',
             'fail_mode' => 'open',
             'event_dedupe_sec' => (int) ($validated['event_dedupe_sec'] ?? 30),
+            'kill_running_on_apply' => (bool) ($validated['kill_running_on_apply'] ?? true),
             'updated_at' => now()->toIso8601String(),
             'rules' => $normalizedRules,
         ]);
@@ -236,6 +238,7 @@ class PolicyController extends Controller
             'mode' => 'blocklist',
             'fail_mode' => 'open',
             'event_dedupe_sec' => 30,
+            'kill_running_on_apply' => true,
             'updated_at' => now()->toIso8601String(),
             'rules' => [],
         ]);
@@ -301,6 +304,7 @@ class PolicyController extends Controller
             'policy_version' => (string) config('policy.version'),
             'policy_hash' => (string) config('policy.master_hash'),
             'event_dedupe_sec' => max(1, min(3600, (int) ($raw['event_dedupe_sec'] ?? 30))),
+            'kill_running_on_apply' => (bool) ($raw['kill_running_on_apply'] ?? true),
             'updated_at' => (string) ($raw['updated_at'] ?? now()->toIso8601String()),
             'rules' => [],
         ];
