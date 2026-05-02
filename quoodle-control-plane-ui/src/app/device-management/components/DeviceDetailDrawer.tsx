@@ -5,6 +5,7 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatLocalTime } from '@/lib/dateTime';
 import { resolveCommandMethod } from '@/lib/commandMethodResolver';
+import { randomUuid } from '@/lib/uuid';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import {
@@ -315,7 +316,7 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          client_message_id: `drawer-${currentDevice.id}-${dispatchMethod}-${crypto.randomUUID()}`,
+          client_message_id: `drawer-${currentDevice.id}-${dispatchMethod}-${randomUuid()}`,
           device_id: currentDevice.id,
           method: dispatchMethod,
           params: effectiveParams,

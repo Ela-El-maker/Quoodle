@@ -28,6 +28,7 @@ import {
 } from '@/lib/commandResults';
 import { resolveCommandMethod } from '@/lib/commandMethodResolver';
 import { formatLocalDateTime } from '@/lib/dateTime';
+import { randomUuid } from '@/lib/uuid';
 
 type CommandState = 'queued' | 'dispatched' | 'ack_received' | 'executing' | 'completed' | 'failed' | 'expired' | 'rejected';
 
@@ -255,7 +256,7 @@ export default function CommandHistoryContent() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          client_message_id: `history-replay-${command.deviceId}-${command.method}-${crypto.randomUUID()}`,
+          client_message_id: `history-replay-${command.deviceId}-${command.method}-${randomUuid()}`,
           device_id: command.deviceId,
           method: resolveCommandMethod(command.method),
           params: command.params ?? {},

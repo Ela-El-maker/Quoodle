@@ -32,6 +32,7 @@ import {
   type DeviceStatus,
   type ListDeviceApi,
 } from '../lib/deviceManagementData';
+import { randomUuid } from '@/lib/uuid';
 
 type SortKey = keyof Device;
 
@@ -260,7 +261,7 @@ export default function DeviceManagementContent() {
   const dispatchCommandToDevice = useCallback(
     async (deviceId: string, method: string, params: Record<string, unknown> = {}, sensitive = false) => {
       const payload = {
-        client_message_id: `dm-${deviceId}-${method}-${crypto.randomUUID()}`,
+        client_message_id: `dm-${deviceId}-${method}-${randomUuid()}`,
         device_id: deviceId,
         method,
         params,

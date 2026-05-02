@@ -27,6 +27,7 @@ import {
 } from '@/lib/commandResults';
 import { formatLocalTime } from '@/lib/dateTime';
 import { resolveCommandMethod } from '@/lib/commandMethodResolver';
+import { randomUuid } from '@/lib/uuid';
 
 type CommandState = 'queued' | 'dispatched' | 'ack_received' | 'executing' | 'completed' | 'failed' | 'expired' | 'rejected';
 
@@ -275,7 +276,7 @@ export default function CommandDispatchContent() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          client_message_id: `command-dispatch-retry-${command.deviceId}-${command.method}-${crypto.randomUUID()}`,
+          client_message_id: `command-dispatch-retry-${command.deviceId}-${command.method}-${randomUuid()}`,
           device_id: command.deviceId,
           method: resolveCommandMethod(command.method),
           params: command.params ?? {},

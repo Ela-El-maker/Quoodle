@@ -973,9 +973,45 @@ function buildActiveWindow(row: NormalizedCommandResult): ResultViewModel {
   const model = buildBaseModel(row, 'get_active_window', methodTitleMap.get_active_window);
   const data = extractStructuredData(row);
   const payload = normalizeActiveWindowPayload(data);
-  const available = payload.available === true;
 
-  const payloadBlock = objectEntries(payload, { hideNull: true });
+  const helperWindow = (() => {
+    const screenshot = isObject(payload.screenshot) ? payload.screenshot : {};
+    const screenshotCaptureEnvelope = isObject(screenshot.capture) ? screenshot.capture : {};
+    const screenshotCapture = isObject(screenshotCaptureEnvelope.capture) ? screenshotCaptureEnvelope.capture : {};
+    const activeWindow = isObject(screenshotCapture.active_window) ? screenshotCapture.active_window : null;
+    return activeWindow;
+  })();
+
+  const payloadEffective = (() => {
+    if (payload.available === true) return payload;
+    if (!helperWindow || helperWindow.available !== true) return payload;
+    return {
+      ...payload,
+      ...helperWindow,
+      status: 'ok',
+      available: true,
+      source: 'screenshot_helper',
+    };
+  })();
+
+  const available = payloadEffective.available === true;
+  const artifactUrl =
+    (typeof row.artifactUrl === 'string' && row.artifactUrl.trim() !== '' ? row.artifactUrl : null) ??
+    (typeof row.result?.artifact_url === 'string' && row.result.artifact_url.trim() !== '' ? row.result.artifact_url : null);
+  const artifactChecksum =
+    (typeof row.artifactChecksum === 'string' && row.artifactChecksum.trim() !== '' ? row.artifactChecksum : null) ??
+    (typeof row.result?.artifact_checksum === 'string' && row.result.artifact_checksum.trim() !== ''
+      ? row.result.artifact_checksum
+      : null);
+  const screenshotFormatRaw = (() => {
+    const screenshot = isObject(payload.screenshot) ? payload.screenshot : {};
+    const screenshotCaptureEnvelope = isObject(screenshot.capture) ? screenshot.capture : {};
+    return typeof screenshotCaptureEnvelope.format === 'string' ? screenshotCaptureEnvelope.format : 'png';
+  })();
+  const screenshotFormat = screenshotFormatRaw.toLowerCase();
+  const captureContentType = screenshotFormat === 'jpeg' || screenshotFormat === 'jpg' ? 'image/jpeg' : 'image/png';
+
+  const payloadBlock = objectEntries(payloadEffective, { hideNull: true });
   model.hero = [
     {
       label: 'State',
@@ -984,13 +1020,18 @@ function buildActiveWindow(row: NormalizedCommandResult): ResultViewModel {
     },
     {
       label: 'Window',
-      value: toDisplayValue(payload.title ?? payload.status ?? 'Unknown'),
+      value: toDisplayValue(payloadEffective.title ?? payloadEffective.status ?? 'Unknown'),
       tone: available ? 'success' : 'warning',
     },
     {
       label: 'Process',
-      value: toDisplayValue(payload.process_name ?? payload.pid ?? 'Unknown'),
+      value: toDisplayValue(payloadEffective.process_name ?? payloadEffective.pid ?? 'Unknown'),
       tone: 'info',
+    },
+    {
+      label: 'Screenshot',
+      value: artifactUrl ? 'Captured' : 'Unavailable',
+      tone: artifactUrl ? 'success' : 'warning',
     },
   ];
 
@@ -1000,6 +1041,13 @@ function buildActiveWindow(row: NormalizedCommandResult): ResultViewModel {
       severity: 'warning',
       reason: 'window_unavailable',
       message: 'No interactive foreground window was available at collection time.',
+    });
+  }
+  if (!artifactUrl) {
+    model.diagnostics.push({
+      severity: 'warning',
+      reason: 'artifact_missing',
+      message: 'Screenshot artifact URL was not returned for active window capture.',
     });
   }
 
@@ -1017,6 +1065,17 @@ function buildActiveWindow(row: NormalizedCommandResult): ResultViewModel {
       keyValues: payloadBlock.keyValues,
       collapsedByDefault: !available,
       emptySummary: payloadBlock.keyValues.length === 0 ? 'No window details were returned' : null,
+    },
+    {
+      id: 'artifact',
+      title: 'Screenshot Artifact',
+      widget: 'artifact',
+      artifact: {
+        url: artifactUrl,
+        checksum: artifactChecksum,
+        contentType: captureContentType,
+      },
+      emptySummary: artifactUrl ? null : 'Artifact not available for this command result.',
     },
     {
       id: 'diagnostics',

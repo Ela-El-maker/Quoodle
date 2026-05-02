@@ -187,6 +187,9 @@ class AuditEventFeedService
                 'outcome' => $outcome,
                 'source' => 'commands',
                 'device_id' => (string) $command->device_id,
+                'severity' => null,
+                'command_state' => $state,
+                'command_method' => (string) $command->method,
             ];
         });
     }
@@ -240,6 +243,9 @@ class AuditEventFeedService
                 'outcome' => $acknowledged ? 'success' : (in_array($severity, ['critical', 'high'], true) ? 'failure' : 'pending'),
                 'source' => 'alerts',
                 'device_id' => $alert->device_id,
+                'severity' => $severity,
+                'acknowledged' => $acknowledged,
+                'alert_id' => (string) $alert->alert_id,
             ];
         });
     }
@@ -291,6 +297,7 @@ class AuditEventFeedService
                 'outcome' => $outcome,
                 'source' => 'audit_trail',
                 'device_id' => $entry->device_id,
+                'severity' => null,
             ];
         });
     }
@@ -514,4 +521,3 @@ class AuditEventFeedService
         return 'Operator';
     }
 }
-

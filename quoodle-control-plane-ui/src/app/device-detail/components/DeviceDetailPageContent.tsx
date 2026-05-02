@@ -10,6 +10,7 @@ import DeviceHealthCopilotPanel from './DeviceHealthCopilotPanel';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatLocalDateTime, formatLocalTime } from '@/lib/dateTime';
 import { resolveCommandMethod } from '@/lib/commandMethodResolver';
+import { randomUuid } from '@/lib/uuid';
 import {
   mapCommandListRow,
   mergeCommandDetail,
@@ -1210,7 +1211,7 @@ export default function DeviceDetailPageContent() {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          client_message_id: crypto.randomUUID(),
+          client_message_id: randomUuid(),
           device_id: device.id,
           method: dispatchMethod,
           params: effectiveParams,

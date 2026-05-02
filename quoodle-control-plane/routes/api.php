@@ -20,6 +20,7 @@ use App\Http\Controllers\Audit\AuditTrailController;
 use App\Http\Controllers\Telemetry\TelemetryController;
 use App\Http\Controllers\Telemetry\TelemetryQueryController;
 use App\Http\Controllers\Updates\UpdateController;
+use App\Http\Controllers\Notifications\NotificationsController;
 use App\Http\Controllers\Schedules\ScheduleController;
 use App\Http\Controllers\Schedules\ScheduleRunsController;
 use App\Http\Controllers\Settings\AlertRuleController;
@@ -134,6 +135,12 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
 
         // Session update (push notifications)
         Route::post('/session/push-token', [SessionController::class, 'updatePushToken']);
+
+        // Notifications (in-app inbox)
+        Route::get('/notifications', [NotificationsController::class, 'index']);
+        Route::post('/notifications/read-all', [NotificationsController::class, 'markAllRead']);
+        Route::post('/notifications/{notificationId}/read', [NotificationsController::class, 'markRead']);
+        Route::delete('/notifications/{notificationId}', [NotificationsController::class, 'dismiss']);
 
         // Pairing (viewer can pair their own device)
         Route::post('/pair/init', [PairingController::class, 'init']);

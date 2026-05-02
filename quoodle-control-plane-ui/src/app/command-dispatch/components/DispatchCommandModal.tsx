@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { X, Terminal, Shield, AlertTriangle, Loader2, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { resolveCommandMethod } from '@/lib/commandMethodResolver';
+import { randomUuid } from '@/lib/uuid';
 import {
   defaultParamsForCommand,
   requiredParamsHintForCommand,
@@ -271,7 +272,7 @@ export default function DispatchCommandModal({ onClose }: DispatchCommandModalPr
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          client_message_id: `dispatch-modal-${data.deviceId}-${resolvedMethod}-${crypto.randomUUID()}`,
+          client_message_id: `dispatch-modal-${data.deviceId}-${resolvedMethod}-${randomUuid()}`,
           device_id: data.deviceId,
           method: resolvedMethod,
           params: parsedParams,

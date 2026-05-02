@@ -10,6 +10,7 @@ import TelemetryDiskChart from './TelemetryDiskChart';
 import TelemetryNetworkChart from './TelemetryNetworkChart';
 import TelemetryRiskChart from './TelemetryRiskChart';
 import { toast } from 'sonner';
+import { randomUuid } from '@/lib/uuid';
 import {
   telemetryBooleanStatus,
   telemetryMaskedFields,
@@ -643,7 +644,7 @@ export default function TelemetryContent() {
 
       const payloads = [
         {
-          client_message_id: crypto.randomUUID(),
+          client_message_id: randomUuid(),
           device_id: selectedDevice,
           method: 'network_info',
           params: {
@@ -654,7 +655,7 @@ export default function TelemetryContent() {
           },
         },
         {
-          client_message_id: crypto.randomUUID(),
+          client_message_id: randomUuid(),
           device_id: selectedDevice,
           method: 'list_connections',
           params: {

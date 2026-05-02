@@ -25,6 +25,7 @@ import {
 import { mapCommandListRow, type CommandListRowApi } from '@/lib/commandResults';
 import { formatLocalTime } from '@/lib/dateTime';
 import { resolveCommandMethod } from '@/lib/commandMethodResolver';
+import { randomUuid } from '@/lib/uuid';
 import {
   defaultParamsForCommand,
   requiredParamsHintForCommand,
@@ -467,7 +468,7 @@ function OperatorDispatchModal({
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          client_message_id: `operator-console-${device.id}-${resolvedMethod}-${crypto.randomUUID()}`,
+          client_message_id: `operator-console-${device.id}-${resolvedMethod}-${randomUuid()}`,
           device_id: device.id,
           method: resolvedMethod,
           params: parsedParams,

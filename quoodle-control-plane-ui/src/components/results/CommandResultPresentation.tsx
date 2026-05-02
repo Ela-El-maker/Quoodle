@@ -17,6 +17,7 @@ import {
 import { toast } from 'sonner';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { formatLocalDateTime } from '@/lib/dateTime';
+import { randomUuid } from '@/lib/uuid';
 import {
   type CommandDetailApi,
   mergeCommandDetail,
@@ -401,7 +402,7 @@ function FileExplorerSection({
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          client_message_id: crypto.randomUUID(),
+          client_message_id: randomUuid(),
           device_id: baseRow.deviceId,
           method: 'list_files',
           params: {
