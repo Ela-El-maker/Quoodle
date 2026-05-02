@@ -12,6 +12,65 @@
 
 namespace detail
 {
+    inline bool starts_with(const std::string &value, const std::string &prefix)
+    {
+        return value.rfind(prefix, 0) == 0;
+    }
+
+    inline std::string trim_copy(const std::string &value)
+    {
+        std::size_t start = 0;
+        while (start < value.size() && std::isspace(static_cast<unsigned char>(value[start])))
+        {
+            ++start;
+        }
+
+        std::size_t end = value.size();
+        while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])))
+        {
+            --end;
+        }
+
+        return value.substr(start, end - start);
+    }
+
+    inline std::string derive_http_base_from_agent_endpoint(const std::string &endpoint)
+    {
+        auto value = trim_copy(endpoint);
+        if (value.empty())
+        {
+            return "http://localhost:8000";
+        }
+
+        if (starts_with(value, "wss://"))
+        {
+            value.replace(0, 6, "https://");
+        }
+        else if (starts_with(value, "ws://"))
+        {
+            value.replace(0, 5, "http://");
+        }
+
+        while (!value.empty() && value.back() == '/')
+        {
+            value.pop_back();
+        }
+
+        const std::string agent_suffix = "/agent";
+        if (value.size() >= agent_suffix.size() &&
+            value.compare(value.size() - agent_suffix.size(), agent_suffix.size(), agent_suffix) == 0)
+        {
+            value.erase(value.size() - agent_suffix.size());
+        }
+
+        while (!value.empty() && value.back() == '/')
+        {
+            value.pop_back();
+        }
+
+        return value.empty() ? "http://localhost:8000" : value;
+    }
+
     inline bool ParseBool(const std::string &raw, bool default_value)
     {
         if (raw.empty())
@@ -103,10 +162,14 @@ struct ConfigManager
         AgentConfig cfg;
 
         // Core settings
-        cfg.endpoint = detail::ReadEnvOrFile(
+        const std::string endpoint = detail::ReadEnvOrFile(
             "AGENT_ENDPOINT",
             "AGENT_ENDPOINT_FILE",
             "C:/ProgramData/Quoodle/agent_endpoint");
+        if (!detail::trim_copy(endpoint).empty())
+        {
+            cfg.endpoint = endpoint;
+        }
         // Persistent device identity logic
         cfg.device_id = detail::GetOrCreateIdentity(
             "AGENT_DEVICE_ID",
@@ -204,6 +267,16 @@ struct ConfigManager
         cfg.kernel_sample_attestation_pct = std::min<std::uint32_t>(100, cfg.kernel_sample_attestation_pct);
         cfg.kernel_sample_update_pct = std::min<std::uint32_t>(100, cfg.kernel_sample_update_pct);
         cfg.kernel_sample_runtime_pct = std::min<std::uint32_t>(100, cfg.kernel_sample_runtime_pct);
+
+        const std::string derived_base = detail::derive_http_base_from_agent_endpoint(cfg.endpoint);
+        if (detail::trim_copy(cfg.telemetry_fallback_url).empty())
+        {
+            cfg.telemetry_fallback_url = derived_base;
+        }
+        if (detail::trim_copy(cfg.artifact_api_base_url).empty())
+        {
+            cfg.artifact_api_base_url = derived_base;
+        }
 
         return cfg;
     }

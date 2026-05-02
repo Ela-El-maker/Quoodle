@@ -88,7 +88,7 @@ TelemetryHttpResponse TelemetryHttpClient::post_json(
 
     HINTERNET h_session = WinHttpOpen(
         L"QuoodleAgent/1.0",
-        WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+        WINHTTP_ACCESS_TYPE_NO_PROXY,
         WINHTTP_NO_PROXY_NAME,
         WINHTTP_NO_PROXY_BYPASS,
         0);
@@ -210,4 +210,3 @@ TelemetryHttpResponse TelemetryHttpClient::post_json(
     return out;
 #endif
 }
-

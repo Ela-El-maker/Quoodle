@@ -46,10 +46,10 @@ struct AgentConfig
     bool telemetry_http_fallback{true};
 
     /// Gateway base URL for telemetry HTTP fallback.
-    std::string telemetry_fallback_url{"http://localhost:8000"};
+    std::string telemetry_fallback_url;
 
     /// Gateway base URL used for artifact upload APIs.
-    std::string artifact_api_base_url{"http://localhost:8000"};
+    std::string artifact_api_base_url;
 
     /// Telemetry queue SQLite path used for offline buffering/replay.
     std::string telemetry_queue_db_path{"C:/ProgramData/Quoodle/telemetry_queue.db"};

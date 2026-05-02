@@ -165,7 +165,7 @@ ArtifactUploadResult upload_multipart_winhttp(
 
   HINTERNET session = WinHttpOpen(
       L"QuoodleAgent/1.0",
-      WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+      WINHTTP_ACCESS_TYPE_NO_PROXY,
       WINHTTP_NO_PROXY_NAME,
       WINHTTP_NO_PROXY_BYPASS,
       0);
@@ -332,7 +332,7 @@ ArtifactDownloadResult download_to_file_winhttp(
 
   HINTERNET session = WinHttpOpen(
       L"QuoodleAgent/1.0",
-      WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+      WINHTTP_ACCESS_TYPE_NO_PROXY,
       WINHTTP_NO_PROXY_NAME,
       WINHTTP_NO_PROXY_BYPASS,
       0);

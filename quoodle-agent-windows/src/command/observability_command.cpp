@@ -1,6 +1,7 @@
 #include "observability_command.hpp"
 
 #include "artifact_client.hpp"
+#include "screenshot_command.hpp"
 #include "../kernel/ioctl_client.hpp"
 
 #include <nlohmann/json.hpp>
@@ -3311,6 +3312,111 @@ namespace command
     else if (canonical == "get_active_window")
     {
       collected = collect_active_window(data, reason, notes);
+      if (collected)
+      {
+        // Keep get_active_window useful in service/session-0 contexts by attaching
+        // a user-session screenshot artifact whenever capture/upload succeeds.
+        const auto shot = ExecuteScreenshotCommand(
+            config,
+            state,
+            command_message_id,
+            R"({"format":"png","resolution":"1080p"})");
+
+        nlohmann::json shot_info = {
+            {"attempted", true},
+            {"status", shot.success ? "captured" : "capture_failed"},
+            {"error_code", nullptr},
+            {"reason", nullptr},
+            {"notes", nullptr},
+        };
+        if (!shot.success)
+        {
+          shot_info["error_code"] = shot.error_code;
+        }
+        if (!shot.reason.empty())
+        {
+          shot_info["reason"] = shot.reason;
+        }
+        if (!shot.notes.empty())
+        {
+          shot_info["notes"] = shot.notes;
+        }
+
+        if (!shot.data_json.empty())
+        {
+          try
+          {
+            shot_info["capture"] = nlohmann::json::parse(shot.data_json);
+          }
+          catch (const std::exception &)
+          {
+            shot_info["capture_raw"] = shot.data_json;
+          }
+        }
+
+        if (!shot.meta_json.empty())
+        {
+          try
+          {
+            shot_info["meta"] = nlohmann::json::parse(shot.meta_json);
+          }
+          catch (const std::exception &)
+          {
+            shot_info["meta_raw"] = shot.meta_json;
+          }
+        }
+
+        if (!data.is_object())
+        {
+          data = nlohmann::json::object();
+        }
+        data["screenshot"] = shot_info;
+
+        // When service/session context cannot see a foreground window, prefer
+        // active-window metadata captured by the interactive screenshot helper.
+        if (data.value("available", false) == false && shot_info.contains("capture"))
+        {
+          const auto &capture_payload = shot_info["capture"];
+          if (capture_payload.is_object())
+          {
+            const auto capture_root = capture_payload.contains("capture") ? capture_payload["capture"] : nlohmann::json::object();
+            if (capture_root.is_object() && capture_root.contains("active_window"))
+            {
+              const auto &helper_window = capture_root["active_window"];
+              if (helper_window.is_object() && helper_window.value("available", false) == true)
+              {
+                for (auto it = helper_window.begin(); it != helper_window.end(); ++it)
+                {
+                  data[it.key()] = it.value();
+                }
+                data["snapshot_type"] = "get_active_window";
+                data["schema_version"] = "v1";
+                data["kernel_mode"] = true;
+              }
+            }
+          }
+        }
+
+        if (shot.success)
+        {
+          artifact_url = shot.artifact_url;
+          artifact_checksum = shot.artifact_checksum;
+          if (data.value("available", false) == true)
+          {
+            notes = "active_window_and_screenshot_collected";
+          }
+          else if (notes.empty() || notes == "no_foreground_window")
+          {
+            notes = notes.empty()
+                        ? "active_window_and_screenshot_collected"
+                        : notes + ";screenshot_captured";
+          }
+        }
+        else if (notes.empty())
+        {
+          notes = "active_window_collected;screenshot_capture_failed";
+        }
+      }
     }
     else if (canonical == "list_files")
     {

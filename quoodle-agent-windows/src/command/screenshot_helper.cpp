@@ -135,6 +135,107 @@ std::wstring utf8_to_wide(const std::string &input)
   return out;
 }
 
+std::string wide_to_utf8(const std::wstring &input)
+{
+  if (input.empty())
+  {
+    return {};
+  }
+  const int size = WideCharToMultiByte(CP_UTF8, 0, input.c_str(), -1, nullptr, 0, nullptr, nullptr);
+  if (size <= 1)
+  {
+    return {};
+  }
+  std::string out(static_cast<std::size_t>(size - 1), '\0');
+  WideCharToMultiByte(CP_UTF8, 0, input.c_str(), -1, out.data(), size, nullptr, nullptr);
+  return out;
+}
+
+std::string file_name_from_path(const std::string &path)
+{
+  if (path.empty())
+  {
+    return {};
+  }
+  std::error_code ec;
+  const auto value = std::filesystem::path(path).filename().string();
+  if (!ec)
+  {
+    return value;
+  }
+  return path;
+}
+
+std::string query_process_path(DWORD pid)
+{
+  HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+  if (process == nullptr)
+  {
+    return {};
+  }
+
+  std::wstring path(MAX_PATH, L'\0');
+  DWORD size = static_cast<DWORD>(path.size());
+  if (!QueryFullProcessImageNameW(process, 0, path.data(), &size))
+  {
+    CloseHandle(process);
+    return {};
+  }
+  CloseHandle(process);
+  path.resize(size);
+  return wide_to_utf8(path);
+}
+
+void collect_active_window_metadata(nlohmann::json &out)
+{
+  out = nlohmann::json::object();
+  HWND hwnd = GetForegroundWindow();
+  if (hwnd == nullptr)
+  {
+    out["available"] = false;
+    out["status"] = "no_foreground_window";
+    return;
+  }
+
+  wchar_t title_buffer[512] = {};
+  wchar_t class_buffer[256] = {};
+  GetWindowTextW(hwnd, title_buffer, static_cast<int>(sizeof(title_buffer) / sizeof(title_buffer[0])));
+  GetClassNameW(hwnd, class_buffer, static_cast<int>(sizeof(class_buffer) / sizeof(class_buffer[0])));
+
+  DWORD pid = 0;
+  const DWORD tid = GetWindowThreadProcessId(hwnd, &pid);
+  DWORD process_session = 0;
+  ProcessIdToSessionId(pid, &process_session);
+
+  RECT rect{};
+  if (!GetWindowRect(hwnd, &rect))
+  {
+    rect = RECT{0, 0, 0, 0};
+  }
+
+  const std::string process_path = query_process_path(pid);
+  const std::string process_name = file_name_from_path(process_path);
+
+  char hwnd_hex[32] = {};
+  std::snprintf(hwnd_hex, sizeof(hwnd_hex), "0x%p", hwnd);
+
+  out = {
+      {"available", true},
+      {"status", "ok"},
+      {"hwnd", std::string(hwnd_hex)},
+      {"title", wide_to_utf8(title_buffer)},
+      {"class_name", wide_to_utf8(class_buffer)},
+      {"pid", pid},
+      {"tid", tid},
+      {"process_name", process_name},
+      {"process_path", process_path},
+      {"process_session_id", process_session},
+      {"visible", IsWindowVisible(hwnd) == TRUE},
+      {"minimized", IsIconic(hwnd) == TRUE},
+      {"bounds", {{"left", rect.left}, {"top", rect.top}, {"right", rect.right}, {"bottom", rect.bottom}, {"width", rect.right - rect.left}, {"height", rect.bottom - rect.top}}},
+  };
+}
+
 void enable_dpi_awareness_for_capture()
 {
   // Prevent DPI virtualization from shrinking the virtual-screen metrics,
@@ -409,6 +510,9 @@ int run_helper(const HelperArgs &args)
     checksum = sha256_hex(file_bytes);
   }
 
+  nlohmann::json active_window = nlohmann::json::object();
+  collect_active_window_metadata(active_window);
+
   write_meta_file(args.meta_path, {
                                      {"status", "ok"},
                                      {"format", args.format},
@@ -417,6 +521,7 @@ int run_helper(const HelperArgs &args)
                                      {"height", height},
                                      {"size_bytes", size_bytes},
                                      {"sha256", checksum},
+                                     {"active_window", active_window},
                                      {"output_path", args.output_path},
                                  });
   return 0;
