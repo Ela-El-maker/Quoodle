@@ -53,6 +53,8 @@ ci_secrets.env
 # Local dev artifacts
 *.log
 .env
+.env.do-mini
+.env.production
 .devdbrc
 .venv/
 __pycache__/
@@ -71,6 +73,8 @@ quoodle-agent-windows/build/
 quoodle-agent-windows/build_e2e_*/
 quoodle-agent-windows/ui-companion/bin/
 quoodle-agent-windows/ui-companion/obj/
+quoodle-agent-windows/ui-companion/tests/**/bin/
+quoodle-agent-windows/ui-companion/tests/**/obj/
 kernel-service/build/
 logs/
 assets/photo_*.jpg
@@ -79,6 +83,8 @@ assets/photo_*.jpg
 docs/**
 !docs/
 !docs/install.md
+!docs/deployment.md
+!docs/deployment-do-mini.md
 
 # Local tool/runtime scratch
 .dotnet_cli_home/
