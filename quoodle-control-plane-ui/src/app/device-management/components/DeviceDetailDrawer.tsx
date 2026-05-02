@@ -378,7 +378,7 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
       <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
 
       {/* Drawer */}
-      <div className="fixed inset-y-0 right-0 w-full max-w-lg bg-zinc-950 border-l border-border z-50 flex flex-col slide-in-right">
+      <div className="fixed inset-y-0 right-0 w-full max-w-lg bg-card border-l border-border z-50 flex flex-col slide-in-right">
         {/* Header */}
         <div className="flex items-start justify-between px-5 py-4 border-b border-border flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -669,7 +669,7 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
                 auditRows.map((entry) => (
                   <div key={entry.id} className="flex items-center gap-3 bg-muted/20 rounded-lg px-3 py-2.5">
                     <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${entry.ok ? 'bg-green-500' : 'bg-red-500'}`} />
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${entry.type === 'command' ? 'bg-blue-500/10 text-blue-400' : entry.type === 'policy' ? 'bg-violet-500/10 text-violet-400' : 'bg-zinc-500/10 text-zinc-400'}`}>{entry.type}</span>
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${entry.type === 'command' ? 'bg-blue-500/10 text-blue-400' : entry.type === 'policy' ? 'bg-violet-500/10 text-violet-400' : 'bg-muted/50 text-muted-foreground'}`}>{entry.type}</span>
                     <span className="text-[11px] flex-1">{entry.action}</span>
                     <span className="text-[11px] text-muted-foreground">{entry.actor}</span>
                     <span className="text-[11px] text-muted-foreground tabular-nums">{entry.time}</span>
@@ -714,5 +714,6 @@ export default function DeviceDetailDrawer({ device, onClose }: DeviceDetailDraw
     </>
   );
 }
+
 
 

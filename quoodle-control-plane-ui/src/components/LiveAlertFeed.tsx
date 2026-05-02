@@ -51,23 +51,14 @@ export default function LiveAlertFeed({
   error = null,
 }: LiveAlertFeedProps) {
   const usingExternalEvents = events !== undefined;
-  const [connected, setConnected] = useState(false);
+  const [connected] = useState(false);
   const [feedEvents, setFeedEvents] = useState<WsEvent[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
-  const [connecting, setConnecting] = useState(true);
+  const [connecting] = useState(true);
   const previousIdsRef = useRef<Set<string>>(new Set());
   const effectiveConnecting = usingExternalEvents ? false : connecting;
   const effectiveConnected = usingExternalEvents ? true : connected;
-
-  useEffect(() => {
-    if (usingExternalEvents) return;
-    setConnecting(false);
-    setConnected(false);
-    setFeedEvents([]);
-    setUnreadCount(0);
-    return () => {};
-  }, [usingExternalEvents]);
 
   useEffect(() => {
     if (!usingExternalEvents) return;

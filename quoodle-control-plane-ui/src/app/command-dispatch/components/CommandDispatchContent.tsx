@@ -161,7 +161,10 @@ export default function CommandDispatchContent() {
   const listAbortRef = useRef<AbortController | null>(null);
 
   const pageSize = 8;
-  const allowedStates = stateTabs.find((tab) => tab.key === activeTab)?.states ?? [];
+  const allowedStates = useMemo(
+    () => stateTabs.find((tab) => tab.key === activeTab)?.states ?? [],
+    [activeTab],
+  );
 
   const fetchCommands = useCallback(async (mode: 'initial' | 'refresh' | 'silent' = 'initial') => {
     if (mode === 'initial') setIsLoading(true);
@@ -238,7 +241,7 @@ export default function CommandDispatchContent() {
       ? searchFiltered
       : searchFiltered.filter((command) => command.originChannel === sourceFilter);
     return sortCommands(sourceFiltered, sortKey, sortDir);
-  }, [activeTab, allowedStates, commands, search, sourceFilter, sortKey, sortDir]);
+  }, [allowedStates, commands, search, sourceFilter, sortKey, sortDir]);
 
   const sources = useMemo(
     () => Array.from(new Set(commands.map((command) => command.originChannel))).sort(),

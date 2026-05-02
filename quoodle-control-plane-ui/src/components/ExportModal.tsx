@@ -84,7 +84,7 @@ export default function ExportModal({ title, fields, onClose, onExport }: Export
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-zinc-950 border border-border rounded-xl shadow-2xl w-full max-w-md fade-in">
+      <div className="relative bg-card border border-border rounded-xl shadow-2xl w-full max-w-md fade-in">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
@@ -236,3 +236,4 @@ export default function ExportModal({ title, fields, onClose, onExport }: Export
     </div>
   );
 }
+

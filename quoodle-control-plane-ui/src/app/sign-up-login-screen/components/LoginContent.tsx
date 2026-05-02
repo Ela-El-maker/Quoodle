@@ -177,7 +177,7 @@ export default function LoginContent() {
 
   return (
     <div className="min-h-screen bg-background flex">
-      <div className="hidden lg:flex lg:w-1/2 xl:w-[55%] 2xl:w-[60%] relative bg-zinc-950 flex-col justify-between p-10 overflow-hidden">
+      <div className="hidden lg:flex lg:w-1/2 xl:w-[55%] 2xl:w-[60%] relative bg-card flex-col justify-between p-10 overflow-hidden">
         <div
           className="absolute inset-0 opacity-10"
           style={{
@@ -312,3 +312,4 @@ export default function LoginContent() {
     </div>
   );
 }
+

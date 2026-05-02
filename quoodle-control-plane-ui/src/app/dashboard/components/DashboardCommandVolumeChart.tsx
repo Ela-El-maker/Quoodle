@@ -35,7 +35,7 @@ const CustomTooltip = ({
 }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-zinc-900 border border-border rounded-lg px-3 py-2 shadow-xl text-xs">
+    <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-xl text-xs">
       <p className="font-semibold text-foreground mb-1.5">{label}</p>
       {payload.map((entry) => (
         <div key={`tooltip-${entry.name}`} className="flex items-center gap-2 mb-0.5">
@@ -101,3 +101,4 @@ export default function DashboardCommandVolumeChart({
     </div>
   );
 }
+

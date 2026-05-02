@@ -7,7 +7,7 @@ type NetworkPoint = { time: string; tx: number; rx: number };
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-zinc-900 border border-border rounded-lg px-3 py-2 shadow-xl text-xs">
+    <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-xl text-xs">
       <p className="text-muted-foreground mb-1">{label}</p>
       {payload.map((entry) => (
         <div key={`net-tip-${entry.name}`} className="flex items-center gap-2 mb-0.5">
@@ -53,3 +53,4 @@ export default function TelemetryNetworkChart({ data, loading, error }: Props) {
     </div>
   );
 }
+

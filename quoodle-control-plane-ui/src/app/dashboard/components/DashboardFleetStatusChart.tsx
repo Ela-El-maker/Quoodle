@@ -18,7 +18,7 @@ const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
   if (!active || !payload?.length) return null;
   const item = payload[0];
   return (
-    <div className="bg-zinc-900 border border-border rounded-lg px-3 py-2 shadow-xl text-xs">
+    <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-xl text-xs">
       <div className="flex items-center gap-2">
         <span className="w-2 h-2 rounded-full" style={{ background: item.payload.color }} />
         <span className="text-muted-foreground">{item.name}:</span>
@@ -90,3 +90,4 @@ export default function DashboardFleetStatusChart({ data, loading, error }: Dash
     </div>
   );
 }
+

@@ -9,7 +9,7 @@ const typeConfig: Record<AuditEventType, { icon: React.ElementType; color: strin
   user_action:       { icon: User,       color: 'text-blue-400',   bg: 'bg-blue-500/10',   label: 'User Action' },
   command_execution: { icon: Terminal,   color: 'text-green-400',  bg: 'bg-green-500/10',  label: 'Command' },
   policy_change:     { icon: Shield,     color: 'text-amber-400',  bg: 'bg-amber-500/10',  label: 'Policy' },
-  system_event:      { icon: ScrollText, color: 'text-zinc-400',   bg: 'bg-zinc-500/10',   label: 'System' },
+  system_event:      { icon: ScrollText, color: 'text-muted-foreground',   bg: 'bg-muted/50',   label: 'System' },
 };
 
 const outcomeConfig = {
@@ -452,3 +452,4 @@ export default function AuditContent() {
     </div>
   );
 }
+

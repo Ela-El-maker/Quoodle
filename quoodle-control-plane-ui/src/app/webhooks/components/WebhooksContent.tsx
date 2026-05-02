@@ -1019,7 +1019,7 @@ function EndpointModal({
     <>
       <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-zinc-950 border border-border rounded-xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
+        <div className="bg-card border border-border rounded-xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between px-5 py-4 border-b border-border">
             <h3 className="font-semibold">{title}</h3>
             <button
@@ -1125,3 +1125,4 @@ function EndpointModal({
     </>
   );
 }
+

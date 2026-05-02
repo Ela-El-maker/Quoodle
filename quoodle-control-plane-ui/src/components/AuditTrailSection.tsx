@@ -22,7 +22,7 @@ const typeConfig: Record<AuditEventType, { icon: React.ElementType; color: strin
   user_action:       { icon: User,       color: 'text-blue-400',   bg: 'bg-blue-500/10',   label: 'User Action' },
   command_execution: { icon: Terminal,   color: 'text-green-400',  bg: 'bg-green-500/10',  label: 'Command' },
   policy_change:     { icon: Shield,     color: 'text-amber-400',  bg: 'bg-amber-500/10',  label: 'Policy' },
-  system_event:      { icon: ScrollText, color: 'text-zinc-400',   bg: 'bg-zinc-500/10',   label: 'System' },
+  system_event:      { icon: ScrollText, color: 'text-muted-foreground',   bg: 'bg-muted/50',   label: 'System' },
 };
 
 const outcomeConfig = {
@@ -171,7 +171,7 @@ export default function AuditTrailSection({
               )}
             </button>
             {showDatePicker && (
-              <div className="absolute right-0 top-full mt-1 z-20 bg-zinc-900 border border-border rounded-lg p-3 shadow-xl min-w-[220px]">
+              <div className="absolute right-0 top-full mt-1 z-20 bg-popover border border-border rounded-lg p-3 shadow-xl min-w-[220px]">
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Date Range</p>
                 <div className="space-y-2">
                   <div>
@@ -336,4 +336,5 @@ export default function AuditTrailSection({
     </div>
   );
 }
+
 

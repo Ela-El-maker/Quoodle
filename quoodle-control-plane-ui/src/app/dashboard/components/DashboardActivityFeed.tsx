@@ -13,7 +13,7 @@ const ICON_BY_TYPE = {
 const COLOR_BY_TYPE = {
   command: 'text-blue-400 bg-blue-500/10',
   alert: 'text-red-400 bg-red-500/10',
-  device: 'text-zinc-400 bg-zinc-500/10',
+  device: 'text-muted-foreground bg-muted/50',
   policy: 'text-amber-400 bg-amber-500/10',
   telemetry: 'text-cyan-400 bg-cyan-500/10',
 } as const;
@@ -81,3 +81,4 @@ export default function DashboardActivityFeed({ items, loading, error }: Dashboa
     </div>
   );
 }
+

@@ -3,6 +3,24 @@
 import React, { useState, useCallback, useMemo, memo } from 'react';
 import Image from 'next/image';
 
+type NativeImageProps = Omit<
+    React.ComponentProps<typeof Image>,
+    | 'src'
+    | 'alt'
+    | 'width'
+    | 'height'
+    | 'className'
+    | 'priority'
+    | 'quality'
+    | 'placeholder'
+    | 'blurDataURL'
+    | 'fill'
+    | 'sizes'
+    | 'onClick'
+    | 'loading'
+    | 'unoptimized'
+>;
+
 interface AppImageProps {
     src: string;
     alt: string;
@@ -19,8 +37,9 @@ interface AppImageProps {
     fallbackSrc?: string;
     loading?: 'lazy' | 'eager';
     unoptimized?: boolean;
-    [key: string]: any;
 }
+
+type AppImageAllProps = AppImageProps & NativeImageProps;
 
 const AppImage = memo(function AppImage({
     src,
@@ -39,7 +58,7 @@ const AppImage = memo(function AppImage({
     loading = 'lazy',
     unoptimized = false,
     ...props
-}: AppImageProps) {
+}: AppImageAllProps) {
     const [imageSrc, setImageSrc] = useState(src);
     const [isLoading, setIsLoading] = useState(true);
     const [hasError, setHasError] = useState(false);
@@ -67,37 +86,22 @@ const AppImage = memo(function AppImage({
         return classes.filter(Boolean).join(' ');
     }, [className, isLoading, onClick]);
 
-    const imageProps = useMemo(() => {
-        const baseProps: any = {
-            src: imageSrc,
-            alt,
-            className: imageClassName,
-            quality,
-            placeholder,
-            unoptimized: resolvedUnoptimized,
-            onError: handleError,
-            onLoad: handleLoad,
-            onClick,
-        };
-
-        if (priority) {
-            baseProps.priority = true;
-        } else {
-            baseProps.loading = loading;
-        }
-
-        if (blurDataURL && placeholder === 'blur') {
-            baseProps.blurDataURL = blurDataURL;
-        }
-
-        return baseProps;
-    }, [imageSrc, alt, imageClassName, quality, placeholder, blurDataURL, resolvedUnoptimized, priority, loading, handleError, handleLoad, onClick]);
-
     if (fill) {
         return (
             <div className="relative" style={{ width: '100%', height: '100%' }}>
                 <Image
-                    {...imageProps}
+                    src={imageSrc}
+                    alt={alt}
+                    className={imageClassName}
+                    quality={quality}
+                    placeholder={placeholder}
+                    blurDataURL={blurDataURL && placeholder === 'blur' ? blurDataURL : undefined}
+                    unoptimized={resolvedUnoptimized}
+                    onError={handleError}
+                    onLoad={handleLoad}
+                    onClick={onClick}
+                    priority={priority}
+                    loading={priority ? undefined : loading}
                     fill
                     sizes={sizes || '(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw'}
                     style={{ objectFit: 'cover' }}
@@ -109,7 +113,18 @@ const AppImage = memo(function AppImage({
 
     return (
         <Image
-            {...imageProps}
+            src={imageSrc}
+            alt={alt}
+            className={imageClassName}
+            quality={quality}
+            placeholder={placeholder}
+            blurDataURL={blurDataURL && placeholder === 'blur' ? blurDataURL : undefined}
+            unoptimized={resolvedUnoptimized}
+            onError={handleError}
+            onLoad={handleLoad}
+            onClick={onClick}
+            priority={priority}
+            loading={priority ? undefined : loading}
             width={width || 400}
             height={height || 300}
             sizes={sizes}

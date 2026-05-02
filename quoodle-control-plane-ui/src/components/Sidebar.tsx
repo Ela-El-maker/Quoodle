@@ -130,7 +130,7 @@ export default function Sidebar({
     <>
       {/* Desktop sidebar */}
       <aside
-        className={`hidden lg:flex flex-col bg-zinc-950 border-r border-border transition-all duration-300 ease-in-out flex-shrink-0 ${
+        className={`hidden lg:flex flex-col bg-card border-r border-border transition-all duration-300 ease-in-out flex-shrink-0 ${
           collapsed ? 'w-16' : 'w-60'
         }`}
       >
@@ -148,7 +148,7 @@ export default function Sidebar({
 
       {/* Mobile sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col w-60 bg-zinc-950 border-r border-border lg:hidden transition-transform duration-300 ease-in-out ${
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col w-60 bg-card border-r border-border lg:hidden transition-transform duration-300 ease-in-out ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

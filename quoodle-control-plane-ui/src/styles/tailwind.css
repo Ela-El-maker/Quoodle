@@ -29,6 +29,32 @@
 
 @layer base {
   :root {
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 217 91% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 215 22% 92%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 30% 95%;
+    --muted-foreground: 215 16% 40%;
+    --accent: 210 26% 93%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 72% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 24% 86%;
+    --input: 214 24% 86%;
+    --ring: 217 91% 50%;
+    --success: 142 71% 35%;
+    --warning: 38 92% 42%;
+    --danger: 0 72% 48%;
+    --info: 217 91% 50%;
+  }
+
+  [data-theme='dark'] {
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
     --card: 240 10% 6%;
@@ -64,6 +90,7 @@
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 14px;
     -webkit-font-smoothing: antialiased;
+    transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
   }
 
   .font-mono {

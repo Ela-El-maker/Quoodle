@@ -1,8 +1,9 @@
 'use client';
 import React, { useEffect, useState } from 'react';
-import { Menu, Search, Bell, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { Menu, Search, Bell, Wifi, WifiOff, RefreshCw, Sun, Moon, Laptop } from 'lucide-react';
 import Link from 'next/link';
 import { formatNowLocalTime } from '@/lib/dateTime';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface TopbarProps {
   onMobileMenuToggle: () => void;
@@ -12,6 +13,7 @@ interface TopbarProps {
 export default function Topbar({ onMobileMenuToggle, userRole = 'viewer' }: TopbarProps) {
   const [liveConnected] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(() => formatNowLocalTime());
+  const { theme, cycleTheme } = useTheme();
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -21,7 +23,7 @@ export default function Topbar({ onMobileMenuToggle, userRole = 'viewer' }: Topb
   }, []);
 
   return (
-    <header className="h-14 border-b border-border bg-zinc-950/80 backdrop-blur-sm flex items-center px-4 gap-3 flex-shrink-0 z-30">
+    <header className="h-14 border-b border-border bg-card/80 backdrop-blur-sm flex items-center px-4 gap-3 flex-shrink-0 z-30">
       {/* Mobile menu toggle */}
       <button
         onClick={onMobileMenuToggle}
@@ -66,6 +68,14 @@ export default function Topbar({ onMobileMenuToggle, userRole = 'viewer' }: Topb
       {/* Refresh */}
       <button className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Refresh">
         <RefreshCw size={14} />
+      </button>
+      <button
+        className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        aria-label={`Theme: ${theme}. Click to cycle`}
+        title={`Theme: ${theme} (click to cycle)`}
+        onClick={cycleTheme}
+      >
+        {theme === 'light' ? <Sun size={14} /> : theme === 'dark' ? <Moon size={14} /> : <Laptop size={14} />}
       </button>
 
       {userRole !== 'viewer' && (

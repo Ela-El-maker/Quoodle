@@ -310,7 +310,7 @@ export default function DevicePairingModal({ onClose, onPaired }: DevicePairingM
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-      <div className="bg-zinc-950 border border-border rounded-xl w-full max-w-md shadow-2xl fade-in">
+      <div className="bg-card border border-border rounded-xl w-full max-w-md shadow-2xl fade-in">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -613,3 +613,4 @@ export default function DevicePairingModal({ onClose, onPaired }: DevicePairingM
     </div>
   );
 }
+

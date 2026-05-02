@@ -81,7 +81,7 @@ export default function CommandDetailPanel({ command, onClose, onRetry }: Comman
   return (
     <>
       <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
-      <div className="fixed inset-y-0 right-0 w-full max-w-md bg-zinc-950 border-l border-border z-50 flex flex-col slide-in-right">
+      <div className="fixed inset-y-0 right-0 w-full max-w-md bg-card border-l border-border z-50 flex flex-col slide-in-right">
         <div className="flex items-start justify-between px-5 py-4 border-b border-border">
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -248,3 +248,4 @@ export default function CommandDetailPanel({ command, onClose, onRetry }: Comman
     </>
   );
 }
+

@@ -790,7 +790,7 @@ export default function CommandResultPresentation({ row, compact = false }: Comm
     return (
       <div className="bg-muted/20 border border-border rounded-lg p-3">
         <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-2">Output</p>
-        <pre className="text-xs font-mono bg-zinc-950 rounded-md p-3 overflow-x-auto text-green-400">
+        <pre className="text-xs font-mono bg-card rounded-md p-3 overflow-x-auto text-green-400">
           {toRawResultJson(row)}
         </pre>
       </div>
@@ -931,7 +931,7 @@ export default function CommandResultPresentation({ row, compact = false }: Comm
       );
     }
     return (
-      <pre className="text-xs font-mono bg-zinc-950 rounded-md p-3 overflow-x-auto text-green-400">
+      <pre className="text-xs font-mono bg-card rounded-md p-3 overflow-x-auto text-green-400">
         {section.logText || vm.subtitle}
       </pre>
     );
@@ -1025,7 +1025,7 @@ export default function CommandResultPresentation({ row, compact = false }: Comm
                 Open Drawer
               </button>
             </div>
-            <pre className="text-xs font-mono bg-zinc-950 rounded-md p-3 overflow-x-auto text-green-400 max-h-80">
+            <pre className="text-xs font-mono bg-card rounded-md p-3 overflow-x-auto text-green-400 max-h-80">
               {vm.rawJson}
             </pre>
           </div>
@@ -1076,7 +1076,7 @@ export default function CommandResultPresentation({ row, compact = false }: Comm
               <p className="flex items-center gap-1"><ChevronRight size={11} /> Request: {vm.shell.requestId || '-'}</p>
             </div>
             <div className="flex-1 overflow-auto p-4">
-              <pre className="text-xs font-mono bg-zinc-950 rounded-md p-4 overflow-x-auto text-green-400 min-h-full">
+              <pre className="text-xs font-mono bg-card rounded-md p-4 overflow-x-auto text-green-400 min-h-full">
                 {vm.rawJson}
               </pre>
             </div>
@@ -1086,3 +1086,4 @@ export default function CommandResultPresentation({ row, compact = false }: Comm
     </div>
   );
 }
+

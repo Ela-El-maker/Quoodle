@@ -7,7 +7,7 @@ type DiskPoint = { time: string; value: number };
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-zinc-900 border border-border rounded-lg px-3 py-2 shadow-xl text-xs">
+    <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-xl text-xs">
       <p className="text-muted-foreground mb-0.5">{label}</p>
       <p className="font-semibold tabular-nums">{payload[0].value}% Disk</p>
     </div>
@@ -52,3 +52,4 @@ export default function TelemetryDiskChart({ data, loading, error }: Props) {
     </div>
   );
 }
+

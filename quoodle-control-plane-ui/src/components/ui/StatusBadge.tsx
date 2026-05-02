@@ -12,10 +12,10 @@ interface StatusBadgeProps {
 
 const variantConfig: Record<Variant, { dot: string; text: string; bg: string; border: string }> = {
   online:       { dot: 'bg-green-400',  text: 'text-green-400',  bg: 'bg-green-500/10',  border: 'border-green-500/20' },
-  offline:      { dot: 'bg-zinc-400',   text: 'text-zinc-400',   bg: 'bg-zinc-500/10',   border: 'border-zinc-500/20' },
+  offline:      { dot: 'bg-muted-foreground',   text: 'text-muted-foreground',   bg: 'bg-muted/50',   border: 'border-border' },
   quarantined:  { dot: 'bg-red-400',    text: 'text-red-400',    bg: 'bg-red-500/10',    border: 'border-red-500/20' },
   degraded:     { dot: 'bg-amber-400',  text: 'text-amber-400',  bg: 'bg-amber-500/10',  border: 'border-amber-500/20' },
-  queued:       { dot: 'bg-zinc-400',   text: 'text-zinc-300',   bg: 'bg-zinc-500/10',   border: 'border-zinc-500/20' },
+  queued:       { dot: 'bg-muted-foreground',   text: 'text-muted-foreground',   bg: 'bg-muted/50',   border: 'border-border' },
   dispatched:   { dot: 'bg-blue-400',   text: 'text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/20' },
   ack_received: { dot: 'bg-blue-300',   text: 'text-blue-300',   bg: 'bg-blue-500/10',   border: 'border-blue-500/20' },
   executing:    { dot: 'bg-blue-400',   text: 'text-blue-400',   bg: 'bg-blue-500/15',   border: 'border-blue-500/30' },
@@ -33,7 +33,7 @@ const variantConfig: Record<Variant, { dot: string; text: string; bg: string; bo
   warning:      { dot: 'bg-amber-400',  text: 'text-amber-400',  bg: 'bg-amber-500/10',  border: 'border-amber-500/20' },
   info:         { dot: 'bg-blue-400',   text: 'text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/20' },
   healthy:      { dot: 'bg-green-400',  text: 'text-green-400',  bg: 'bg-green-500/10',  border: 'border-green-500/20' },
-  pending:      { dot: 'bg-zinc-400',   text: 'text-zinc-300',   bg: 'bg-zinc-500/10',   border: 'border-zinc-500/20' },
+  pending:      { dot: 'bg-muted-foreground',   text: 'text-muted-foreground',   bg: 'bg-muted/50',   border: 'border-border' },
 };
 
 const labelMap: Record<Variant, string> = {

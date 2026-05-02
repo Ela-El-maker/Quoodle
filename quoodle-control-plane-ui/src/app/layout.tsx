@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next';
 import '../styles/tailwind.css';
 import { Toaster } from 'sonner';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { ThemeProvider } from '@/contexts/ThemeContext';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -21,16 +22,18 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </ThemeProvider>
         <Toaster
           position="bottom-right"
           toastOptions={{
             style: {
-              background: 'hsl(240 10% 8%)',
-              border: '1px solid hsl(240 5% 16%)',
-              color: 'hsl(0 0% 98%)',
+              background: 'hsl(var(--card))',
+              border: '1px solid hsl(var(--border))',
+              color: 'hsl(var(--foreground))',
               fontFamily: 'IBM Plex Sans, sans-serif',
               fontSize: '13px',
             },

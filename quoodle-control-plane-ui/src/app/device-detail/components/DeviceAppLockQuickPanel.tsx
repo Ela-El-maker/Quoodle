@@ -24,6 +24,7 @@ interface AppLockBundle {
   policy_version: string;
   policy_hash: string;
   event_dedupe_sec: number;
+  kill_running_on_apply: boolean;
   updated_at: string;
   rules: AppLockRule[];
 }
@@ -67,6 +68,7 @@ const DEFAULT_BUNDLE: AppLockBundle = {
   policy_version: '',
   policy_hash: '',
   event_dedupe_sec: 30,
+  kill_running_on_apply: true,
   updated_at: '',
   rules: [],
 };
@@ -138,6 +140,7 @@ function coerceBundle(raw?: Partial<AppLockBundle>): AppLockBundle {
     policy_version: String(raw.policy_version ?? ''),
     policy_hash: String(raw.policy_hash ?? ''),
     event_dedupe_sec: Number.isFinite(Number(raw.event_dedupe_sec)) ? Number(raw.event_dedupe_sec) : 30,
+    kill_running_on_apply: raw.kill_running_on_apply === undefined ? true : Boolean(raw.kill_running_on_apply),
     updated_at: String(raw.updated_at ?? ''),
     rules,
   };
@@ -279,6 +282,7 @@ export default function DeviceAppLockQuickPanel({
     [bundle, customMatchType, customNormalizedValue],
   );
   const activeRules = useMemo(() => sortRules(bundle.rules), [bundle.rules]);
+  const enforcementArmed = bundle.enabled && bundle.rules.length > 0;
 
   const loadPolicy = useCallback(async () => {
     setLoadingPolicy(true);
@@ -309,6 +313,7 @@ export default function DeviceAppLockQuickPanel({
           mode: 'blocklist',
           fail_mode: 'open',
           event_dedupe_sec: nextBundle.event_dedupe_sec,
+          kill_running_on_apply: nextBundle.kill_running_on_apply,
           rules: nextBundle.rules.map((rule) => ({
             rule_id: rule.rule_id,
             match_type: rule.match_type,
@@ -493,6 +498,16 @@ export default function DeviceAppLockQuickPanel({
             Quick block/unblock for {hostname} using discovered processes plus pre-block rules.
           </p>
           <p className="text-[10px] text-blue-300 mt-1">Scope: this panel writes policy for this device only.</p>
+          <div className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1">
+            {enforcementArmed ? (
+              <ShieldCheck size={12} className="text-green-400" />
+            ) : (
+              <ShieldAlert size={12} className="text-amber-400" />
+            )}
+            <span className={`text-[10px] font-semibold ${enforcementArmed ? 'text-green-300' : 'text-amber-300'}`}>
+              {enforcementArmed ? 'Enforcement Armed' : 'Enforcement Off'}
+            </span>
+          </div>
         </div>
         <button
           onClick={() => void loadPolicy()}

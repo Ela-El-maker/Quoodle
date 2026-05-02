@@ -8,7 +8,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
   if (!active || !payload?.length) return null;
   const point = (payload as Array<{ payload?: RiskPoint }>)[0]?.payload;
   return (
-    <div className="bg-zinc-900 border border-border rounded-lg px-3 py-2 shadow-xl text-xs">
+    <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-xl text-xs">
       <p className="text-muted-foreground mb-0.5">{label}</p>
       <p className="font-semibold tabular-nums">Risk: {payload[0].value} / 100</p>
       {point?.event && <p className="text-[11px] text-blue-400 mt-0.5">Event: {point.event}</p>}
@@ -59,3 +59,4 @@ export default function TelemetryRiskChart({ data, loading, error }: Props) {
     </div>
   );
 }
+

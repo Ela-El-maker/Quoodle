@@ -72,7 +72,7 @@ export default function DashboardKPIGrid({ data, loading, error }: DashboardKPIG
               <p className="text-sm text-muted-foreground mt-1">
                 <span className="text-green-400 font-semibold">{kpiData.onlineDevices} online</span>
                 {' - '}
-                <span className="text-zinc-400">{kpiData.offlineDevices} offline</span>
+                <span className="text-muted-foreground">{kpiData.offlineDevices} offline</span>
                 {' - '}
                 <span className="text-red-400">{kpiData.quarantinedDevices} quarantined</span>
               </p>
@@ -173,3 +173,4 @@ export default function DashboardKPIGrid({ data, loading, error }: DashboardKPIG
     </div>
   );
 }
+

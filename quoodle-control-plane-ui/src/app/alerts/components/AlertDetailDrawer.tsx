@@ -60,7 +60,7 @@ export default function AlertDetailDrawer({ alert, onClose, onAcknowledge }: Ale
   return (
     <>
       <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
-      <div className="fixed inset-y-0 right-0 w-full max-w-md bg-zinc-950 border-l border-border z-50 flex flex-col slide-in-right">
+      <div className="fixed inset-y-0 right-0 w-full max-w-md bg-card border-l border-border z-50 flex flex-col slide-in-right">
         {/* Header */}
         <div className={`flex items-start justify-between px-5 py-4 border-b border-border ${severityBg}`}>
           <div className="flex items-start gap-3">

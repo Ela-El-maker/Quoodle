@@ -365,7 +365,7 @@ export default function AppLockManagerSection() {
               if (!saving) setConfirmClearOpen(false);
             }}
           />
-          <div className="relative w-full max-w-md rounded-xl border border-border bg-zinc-950 shadow-2xl">
+          <div className="relative w-full max-w-md rounded-xl border border-border bg-card shadow-2xl">
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <h3 className="text-sm font-semibold">Clear App Lock Policy</h3>
               <button
@@ -405,3 +405,4 @@ export default function AppLockManagerSection() {
     </div>
   );
 }
+

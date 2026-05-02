@@ -78,7 +78,7 @@ const statusIcon: Record<ComplianceStatus, React.ReactNode> = {
   compliant: <CheckCircle2 size={14} className="text-green-400" />,
   non_compliant: <XCircle size={14} className="text-red-400" />,
   drift: <AlertTriangle size={14} className="text-amber-400" />,
-  pending: <RefreshCw size={14} className="text-zinc-400" />,
+  pending: <RefreshCw size={14} className="text-muted-foreground" />,
 };
 
 const severityBg: Record<ComplianceSeverity, string> = {
@@ -260,7 +260,10 @@ export default function ComplianceContent() {
   }, []);
 
   useEffect(() => {
-    void loadCompliance('initial');
+    const timer = setTimeout(() => {
+      void loadCompliance('initial');
+    }, 0);
+    return () => clearTimeout(timer);
   }, [loadCompliance]);
 
   useEffect(() => {
@@ -469,3 +472,4 @@ export default function ComplianceContent() {
     </div>
   );
 }
+

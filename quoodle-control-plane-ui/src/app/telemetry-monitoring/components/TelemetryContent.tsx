@@ -844,7 +844,7 @@ export default function TelemetryContent() {
             Wi-Fi risk signals: {networkSnapshotSummary.wifiRiskSignals.join(', ')}
           </p>
         ) : null}
-        <div className="rounded-md border border-border bg-zinc-950/70 p-3">
+        <div className="rounded-md border border-border bg-card/70 p-3">
           <pre className="text-xs font-mono text-green-300 whitespace-pre-wrap">
             {networkSnapshotSummary.savedWifiProfilesReport}
           </pre>
@@ -985,3 +985,4 @@ export default function TelemetryContent() {
     </div>
   );
 }
+

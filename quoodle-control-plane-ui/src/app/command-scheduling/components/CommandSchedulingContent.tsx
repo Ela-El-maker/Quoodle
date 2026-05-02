@@ -753,16 +753,10 @@ function CreateScheduleModal({
   isSubmitting: boolean;
 }) {
   const [name, setName] = useState('');
-  const [command, setCommand] = useState(commandOptions[0] ?? '');
+  const [command, setCommand] = useState(() => commandOptions[0] ?? '');
   const [cronExpression, setCronExpression] = useState('0 * * * *');
   const [cronDescription, setCronDescription] = useState('Every hour');
   const [deviceIds, setDeviceIds] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (!command && commandOptions.length > 0) {
-      setCommand(commandOptions[0]);
-    }
-  }, [command, commandOptions]);
 
   const toggleDevice = (id: string) => {
     setDeviceIds((previous) => (previous.includes(id) ? previous.filter((entry) => entry !== id) : [...previous, id]));
@@ -787,7 +781,7 @@ function CreateScheduleModal({
     <>
       <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-zinc-950 border border-border rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="bg-card border border-border rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between px-5 py-4 border-b border-border">
             <h3 className="font-semibold">New Scheduled Job</h3>
             <button onClick={onClose} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"><X size={15} /></button>
@@ -799,7 +793,7 @@ function CreateScheduleModal({
             </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Command *</label>
-              <select value={command} onChange={(event) => setCommand(event.target.value)} className="w-full px-3 py-2 text-sm bg-muted/60 border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary/50">
+              <select value={command || commandOptions[0] || ''} onChange={(event) => setCommand(event.target.value)} className="w-full px-3 py-2 text-sm bg-muted/60 border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary/50">
                 {commandOptions.map((method) => <option key={method} value={method}>{method}</option>)}
               </select>
             </div>
@@ -837,3 +831,4 @@ function CreateScheduleModal({
     </>
   );
 }
+

@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
   Bell,
-  CheckCircle2,
   Edit2,
   Lock,
   Plus,
@@ -512,7 +511,7 @@ export default function SettingsContent() {
 
   const statusColor = (status: AccountStatus): string => {
     if (status === 'active') return 'text-green-400';
-    if (status === 'inactive') return 'text-zinc-400';
+    if (status === 'inactive') return 'text-muted-foreground';
     return 'text-amber-400';
   };
 
@@ -1112,10 +1111,6 @@ function PolicyEntryRow({
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(entry.policy_value ?? '');
 
-  useEffect(() => {
-    setValue(entry.policy_value ?? '');
-  }, [entry.policy_value]);
-
   return (
     <tr className="hover:bg-muted/10 transition-colors">
       <td className="px-4 py-2.5">
@@ -1149,7 +1144,12 @@ function PolicyEntryRow({
           <span className="text-[11px] text-muted-foreground">{entry.scope}</span>
           {entry.is_mutable ? (
             <button
-              onClick={() => setEditing((prev) => !prev)}
+              onClick={() => {
+                if (!editing) {
+                  setValue(entry.policy_value ?? '');
+                }
+                setEditing((prev) => !prev);
+              }}
               className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted"
             >
               <Edit2 size={12} />
@@ -1257,7 +1257,7 @@ function ComplianceThresholdRow({
                   ENABLED
                 </span>
               ) : (
-                <span className="text-[10px] text-zinc-400 bg-zinc-500/10 border border-zinc-500/20 px-1.5 py-0.5 rounded">
+                <span className="text-[10px] text-muted-foreground bg-muted/50 border border-border px-1.5 py-0.5 rounded">
                   DISABLED
                 </span>
               )}
@@ -1296,3 +1296,4 @@ function ComplianceThresholdRow({
     </div>
   );
 }
+
