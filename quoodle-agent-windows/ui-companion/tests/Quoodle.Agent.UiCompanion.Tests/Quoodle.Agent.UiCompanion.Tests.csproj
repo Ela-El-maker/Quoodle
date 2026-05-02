@@ -22,6 +22,7 @@
     <Compile Include="../../Models/DiagnosticsRows.cs" Link="Models/DiagnosticsRows.cs" />
     <Compile Include="../../Models/UiSettings.cs" Link="Models/UiSettings.cs" />
     <Compile Include="../../Models/ConfigurationModels.cs" Link="Models/ConfigurationModels.cs" />
+    <Compile Include="../../Models/RuntimeDefaults.cs" Link="Models/RuntimeDefaults.cs" />
     <Compile Include="../../Models/OnboardingFlowState.cs" Link="Models/OnboardingFlowState.cs" />
     <Compile Include="../../Models/AgentStateSnapshot.cs" Link="Models/AgentStateSnapshot.cs" />
     <Compile Include="../../Services/IAgentStateProvider.cs" Link="Services/IAgentStateProvider.cs" />

@@ -764,7 +764,7 @@ public sealed class MockAgentStateProvider : IAgentStateProvider
             ["pair_token"] = $"mock-pair-{ExpectedPairCode}",
             ["pair_session_id"] = $"sess-{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}",
             ["timestamp"] = DateTimeOffset.UtcNow.ToString("O"),
-            ["controller_url"] = "https://control.quoodle.local",
+            ["controller_url"] = "https://control.example.local",
             ["device_label"] = _snapshot.DeviceName
         };
 

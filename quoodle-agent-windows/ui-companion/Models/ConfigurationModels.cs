@@ -94,7 +94,7 @@ public sealed record AgentConfiguration(
             EnrolledState: isEnrolled ? "Enrolled" : "Not Enrolled");
 
         var transport = new TransportConfig(
-            Endpoint: "wss://gateway.quoodle.io/agent",
+            Endpoint: RuntimeDefaults.ResolveAgentEndpoint(),
             EndpointEnvTag: "AGENT_ENDPOINT",
             HeartbeatIntervalSeconds: 30,
             ConnectTimeoutMs: 10000,

@@ -93,12 +93,12 @@ public sealed class SettingsViewModelTests
         var baseSnapshot = provider.Snapshot;
         provider.SaveTransportConfig(baseSnapshot.Configuration.Transport with
         {
-            Endpoint = "wss://gateway.quoodle.io/agent-v2",
+            Endpoint = "wss://gateway.example.local/agent-v2",
             ConnectTimeoutMs = 14000
         });
 
         var afterTransport = provider.Snapshot;
-        Assert.Equal("wss://gateway.quoodle.io/agent-v2", afterTransport.Configuration.Transport.Endpoint);
+        Assert.Equal("wss://gateway.example.local/agent-v2", afterTransport.Configuration.Transport.Endpoint);
         Assert.Equal(14000, afterTransport.Configuration.Transport.ConnectTimeoutMs);
 
         provider.SaveSecurityConfig(afterTransport.Configuration.Security with

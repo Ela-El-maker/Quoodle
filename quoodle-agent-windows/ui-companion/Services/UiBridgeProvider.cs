@@ -19,6 +19,7 @@ public sealed class UiBridgeProvider : IAgentStateProvider
     private const string AgentJwtPath = @"C:\ProgramData\Quoodle\agent_jwt";
     private const string AgentEndpointPath = @"C:\ProgramData\Quoodle\agent_endpoint";
     private const string AgentPubkeyPath = @"C:\ProgramData\Quoodle\agent_pubkey";
+    private const string ControlPlaneBaseUrlPath = @"C:\ProgramData\Quoodle\control_plane_base_url";
     private const string UiBridgePipeName = "QuoodleAgentUiBridge";
     private const string UnpairedDeviceId = "pending-pairing";
     private const int PipeTimeoutMs = 1200;
@@ -1933,7 +1934,16 @@ public sealed class UiBridgeProvider : IAgentStateProvider
             "QUOODLE_CONTROL_PLANE_URL",
             "QUOODLE_API_BASE",
             "QUOODLE_CONTROL_PLANE",
-            "CONTROL_PLANE_URL");
+            "CONTROL_PLANE_URL",
+            "CONTROL_PLANE_APP_URL",
+            "NEXT_PUBLIC_CONTROL_PLANE_BASE_URL",
+            "NEXT_PUBLIC_CONTROL_PLANE_API_URL",
+            "CONTROL_PLANE_API_URL");
+
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            url = ReadRuntimeValue(ControlPlaneBaseUrlPath);
+        }
 
         if (string.IsNullOrWhiteSpace(url))
         {
@@ -1957,10 +1967,67 @@ public sealed class UiBridgeProvider : IAgentStateProvider
 
         if (string.IsNullOrWhiteSpace(url))
         {
+            var agentEndpoint = ReadFirstNonEmptyEnv("AGENT_ENDPOINT");
+            if (string.IsNullOrWhiteSpace(agentEndpoint))
+            {
+                agentEndpoint = ReadRuntimeValue(AgentEndpointPath);
+            }
+
+            if (string.IsNullOrWhiteSpace(agentEndpoint))
+            {
+                var dotEnv = ReadDotEnvValues();
+                agentEndpoint = ReadFirstNonEmptyValue(dotEnv, "AGENT_ENDPOINT");
+            }
+
+            if (!string.IsNullOrWhiteSpace(agentEndpoint))
+            {
+                url = DeriveControlPlaneUrlFromAgentEndpoint(agentEndpoint);
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(url))
+        {
             url = "http://localhost:8088";
         }
 
         return NormalizeControlPlaneBaseUrl(url);
+    }
+
+    private static string DeriveControlPlaneUrlFromAgentEndpoint(string endpoint)
+    {
+        if (string.IsNullOrWhiteSpace(endpoint))
+        {
+            return string.Empty;
+        }
+
+        var candidate = endpoint.Trim();
+        if (candidate.StartsWith("wss://", StringComparison.OrdinalIgnoreCase))
+        {
+            candidate = "https://" + candidate[6..];
+        }
+        else if (candidate.StartsWith("ws://", StringComparison.OrdinalIgnoreCase))
+        {
+            candidate = "http://" + candidate[5..];
+        }
+
+        if (!Uri.TryCreate(candidate, UriKind.Absolute, out var parsed))
+        {
+            return string.Empty;
+        }
+
+        var scheme = string.Equals(parsed.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+            ? Uri.UriSchemeHttps
+            : Uri.UriSchemeHttp;
+
+        var host = parsed.Host;
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            return string.Empty;
+        }
+
+        // Control plane HTTP is exposed on 8088 in current droplet compose.
+        var controlPlanePort = 8088;
+        return $"{scheme}://{host}:{controlPlanePort}";
     }
 
     private static string ResolvePairInitJwt()

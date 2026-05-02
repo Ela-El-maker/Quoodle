@@ -83,8 +83,6 @@ internal sealed record RollingTelemetrySample(
 
 public sealed class DashboardViewModel : ObservableObject, IDisposable
 {
-    private const string GatewayEndpoint = "wss://gateway.quoodle.io/agent";
-
     private readonly AgentStateStore _store;
     private readonly List<RollingTelemetrySample> _samples = new();
 
@@ -100,7 +98,7 @@ public sealed class DashboardViewModel : ObservableObject, IDisposable
     private string _osBuild = "0.0.0";
     private string _hwidHash = "sha256:pending";
     private string _policyHash = "sha256:pending";
-    private string _wssEndpoint = GatewayEndpoint;
+    private string _wssEndpoint = RuntimeDefaults.DefaultAgentEndpoint;
     private string _reconnectAttempts = "0";
 
     private DashboardMetricCardModel _wssUptimeCard = new("WSS Uptime (24H)", "--", string.Empty, "Success", "\uE701", ValueFontSize: 56);
@@ -364,13 +362,17 @@ public sealed class DashboardViewModel : ObservableObject, IDisposable
         OsBuild = Environment.OSVersion.Version.ToString();
         HwidHash = $"sha256:{ShortSha(snapshot.DeviceId + snapshot.DeviceName)}";
         PolicyHash = string.IsNullOrWhiteSpace(snapshot.PolicyHash) ? "sha256:pending" : snapshot.PolicyHash;
-        WssEndpoint = GatewayEndpoint;
+        var runtimeEndpoint = string.IsNullOrWhiteSpace(snapshot.Configuration.Transport.Endpoint)
+            ? RuntimeDefaults.ResolveAgentEndpoint()
+            : snapshot.Configuration.Transport.Endpoint;
+
+        WssEndpoint = runtimeEndpoint;
         ReconnectAttempts = snapshot.ReconnectAttempts.ToString();
 
         WssUptimeCard = new DashboardMetricCardModel(
             Title: "WSS UPTIME (24H)",
             Value: $"{uptimePercent:0.0}%",
-            Subtitle: $"{GatewayEndpoint} · {snapshot.ReconnectAttempts} reconnects",
+            Subtitle: $"{runtimeEndpoint} · {snapshot.ReconnectAttempts} reconnects",
             Tone: "Success",
             Glyph: "\uE701",
             DeltaText: $"\u2191 {ComputeTrendPercent(sample => sample.IsConnected ? 100 : 0):0.0}%",
