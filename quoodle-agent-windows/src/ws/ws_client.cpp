@@ -253,6 +253,15 @@ static std::filesystem::path runtime_controller_pubkey_path()
   return std::filesystem::path("C:/ProgramData/Quoodle/controller_pubkey.b64");
 }
 
+static std::filesystem::path app_lock_cache_path()
+{
+  if (const char *env = std::getenv("AGENT_APP_LOCK_CACHE_PATH"); env && *env)
+  {
+    return std::filesystem::path(env);
+  }
+  return std::filesystem::path("C:/ProgramData/Quoodle/app_lock_policy.blob");
+}
+
 static std::string read_trimmed_file(const std::filesystem::path &path)
 {
   std::ifstream in(path);
@@ -287,6 +296,70 @@ static bool write_trimmed_file(const std::filesystem::path &path, const std::str
       error_out = "write_failed";
       return false;
     }
+    return true;
+  }
+  catch (const std::exception &ex)
+  {
+    error_out = ex.what();
+    return false;
+  }
+}
+
+static bool write_text_file(const std::filesystem::path &path, const std::string &value, std::string &error_out)
+{
+  try
+  {
+    std::filesystem::create_directories(path.parent_path());
+    const auto tmp = path.string() + ".tmp";
+    {
+      std::ofstream out(tmp, std::ios::trunc | std::ios::binary);
+      if (!out)
+      {
+        error_out = "open_failed";
+        return false;
+      }
+      out.write(value.data(), static_cast<std::streamsize>(value.size()));
+      out.flush();
+      if (!out.good())
+      {
+        error_out = "write_failed";
+        return false;
+      }
+    }
+    if (std::filesystem::exists(path))
+    {
+      std::filesystem::remove(path);
+    }
+    std::filesystem::rename(tmp, path);
+    error_out.clear();
+    return true;
+  }
+  catch (const std::exception &ex)
+  {
+    error_out = ex.what();
+    return false;
+  }
+}
+
+static bool read_text_file(const std::filesystem::path &path, std::string &value_out, std::string &error_out)
+{
+  try
+  {
+    if (!std::filesystem::exists(path))
+    {
+      error_out = "not_found";
+      return false;
+    }
+    std::ifstream in(path, std::ios::binary);
+    if (!in)
+    {
+      error_out = "open_failed";
+      return false;
+    }
+    std::ostringstream buffer;
+    buffer << in.rdbuf();
+    value_out = buffer.str();
+    error_out.clear();
     return true;
   }
   catch (const std::exception &ex)
@@ -774,6 +847,40 @@ static std::vector<AppLockRuntimeRule> extract_runtime_block_rules(const nlohman
   return rules;
 }
 
+static bool app_lock_should_kill_running_on_apply(const nlohmann::json &app_lock)
+{
+  if (!app_lock.is_object())
+  {
+    return false;
+  }
+  if (!app_lock.value("enabled", false))
+  {
+    return false;
+  }
+
+  // Default ON for safety: when a block policy is enforced, terminate matching running apps.
+  if (!app_lock.contains("kill_running_on_apply"))
+  {
+    return true;
+  }
+
+  const auto &flag = app_lock["kill_running_on_apply"];
+  if (flag.is_boolean())
+  {
+    return flag.get<bool>();
+  }
+  if (flag.is_number_integer())
+  {
+    return flag.get<std::int64_t>() != 0;
+  }
+  if (flag.is_string())
+  {
+    const auto lowered = to_lower_copy(flag.get<std::string>());
+    return !(lowered == "0" || lowered == "false" || lowered == "off" || lowered == "no");
+  }
+  return true;
+}
+
 static std::string query_process_image_path_utf8(DWORD pid)
 {
   HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
@@ -1039,6 +1146,15 @@ WsClient::WsClient(const AgentConfig &config)
   {
     Logger::log(LogLevel::Warn, "telemetry queue unavailable; fallback buffering disabled");
   }
+  {
+    std::string cached_blob;
+    std::string read_error;
+    if (read_text_file(app_lock_cache_path(), cached_blob, read_error) && !cached_blob.empty())
+    {
+      last_good_app_lock_policy_blob_ = cached_blob;
+      Logger::log(LogLevel::Info, "loaded cached app_lock policy blob from disk");
+    }
+  }
 }
 
 WsClient::WsClient(std::string endpoint, std::string device_id)
@@ -1054,6 +1170,15 @@ WsClient::WsClient(std::string endpoint, std::string device_id)
   if (!telemetry_queue_.open())
   {
     Logger::log(LogLevel::Warn, "telemetry queue unavailable; fallback buffering disabled");
+  }
+  {
+    std::string cached_blob;
+    std::string read_error;
+    if (read_text_file(app_lock_cache_path(), cached_blob, read_error) && !cached_blob.empty())
+    {
+      last_good_app_lock_policy_blob_ = cached_blob;
+      Logger::log(LogLevel::Info, "loaded cached app_lock policy blob from disk");
+    }
   }
 }
 
@@ -1869,6 +1994,27 @@ bool WsClient::try_connect()
   set_auth_state("auth_pending", false);
   set_runtime_identity(config_.endpoint, config_.device_id);
 
+  if (!app_lock_cache_rehydrated_ && !last_good_app_lock_policy_blob_.empty())
+  {
+    app_lock_cache_rehydrated_ = true;
+    IoctlClient policy_client;
+    const std::string request_id = "startup-applock-rehydrate-" + std::to_string(static_cast<long long>(std::time(nullptr)));
+    auto apply_res = policy_client.applock_replace_policy(request_id, state_impl_, last_good_app_lock_policy_blob_);
+    if (apply_res.status == "ok")
+    {
+      Logger::log(LogLevel::Info, "rehydrated cached app_lock policy into kernel before WS auth");
+      auto status_res = policy_client.applock_get_status(request_id + "-status", state_impl_);
+      if (status_res.status == "ok" && !status_res.result.empty())
+      {
+        Logger::log(LogLevel::Info, "app_lock kernel status after startup rehydrate: " + status_res.result);
+      }
+    }
+    else
+    {
+      Logger::log(LogLevel::Warn, "startup app_lock rehydrate failed: " + apply_res.error_message);
+    }
+  }
+
   ix::WebSocket socket;
   socket.setUrl(config_.endpoint);
 
@@ -2075,6 +2221,8 @@ bool WsClient::try_connect()
                             auto clear_res = policy_client.applock_clear_policy(request_id, state_impl_);
                             if (clear_res.status == "ok") {
                                 last_good_app_lock_policy_blob_.clear();
+                                std::error_code ec;
+                                std::filesystem::remove(app_lock_cache_path(), ec);
                                 Logger::log(LogLevel::Info, "app_lock policy cleared via POLICY_UPDATE");
                                 auto status_res = policy_client.applock_get_status(request_id + "-status", state_impl_);
                                 if (status_res.status == "ok" && !status_res.result.empty()) {
@@ -2091,9 +2239,31 @@ bool WsClient::try_connect()
                             if (!build_app_lock_policy_blob(body["app_lock"], policy_hash, blob, build_error)) {
                                 Logger::log(LogLevel::Warn, "app_lock policy ignored: " + build_error);
                             } else {
+                                const bool kill_running_on_apply = app_lock_should_kill_running_on_apply(body["app_lock"]);
+#ifdef _WIN32
+                                if (kill_running_on_apply) {
+                                    std::size_t pre_kill_failures = 0;
+                                    const std::size_t pre_killed_now = enforce_runtime_kill_sweep(
+                                        body["app_lock"],
+                                        policy_client,
+                                        state_impl_,
+                                        request_id + "-pre",
+                                        pre_kill_failures);
+                                    if (pre_killed_now > 0 || pre_kill_failures > 0) {
+                                        Logger::log(
+                                            pre_kill_failures == 0 ? LogLevel::Info : LogLevel::Warn,
+                                            "app_lock pre-apply kill sweep completed (killed=" +
+                                                std::to_string(pre_killed_now) + ", failed=" + std::to_string(pre_kill_failures) + ")");
+                                    }
+                                }
+#endif
                                 auto apply_res = policy_client.applock_replace_policy(request_id, state_impl_, blob);
                                 if (apply_res.status == "ok") {
                                     last_good_app_lock_policy_blob_ = blob;
+                                    std::string cache_write_error;
+                                    if (!write_text_file(app_lock_cache_path(), blob, cache_write_error)) {
+                                        Logger::log(LogLevel::Warn, "app_lock cache write failed: " + cache_write_error);
+                                    }
                                     Logger::log(LogLevel::Info, "app_lock policy applied (kernel) successfully");
                                     auto status_res = policy_client.applock_get_status(request_id + "-status", state_impl_);
                                     if (status_res.status == "ok" && !status_res.result.empty()) {
@@ -2102,22 +2272,41 @@ bool WsClient::try_connect()
                                         Logger::log(LogLevel::Warn, "app_lock status readback after apply failed: " + status_res.error_message);
                                     }
 #ifdef _WIN32
-                                    std::size_t kill_failures = 0;
-                                    const std::size_t killed_now = enforce_runtime_kill_sweep(
-                                        body["app_lock"],
-                                        policy_client,
-                                        state_impl_,
-                                        request_id,
-                                        kill_failures);
-                                    if (killed_now > 0 || kill_failures > 0) {
-                                        Logger::log(
-                                            kill_failures == 0 ? LogLevel::Info : LogLevel::Warn,
-                                            "app_lock runtime kill sweep completed (killed=" +
-                                                std::to_string(killed_now) + ", failed=" + std::to_string(kill_failures) + ")");
+                                    if (kill_running_on_apply) {
+                                        std::size_t post_kill_failures = 0;
+                                        const std::size_t post_killed_now = enforce_runtime_kill_sweep(
+                                            body["app_lock"],
+                                            policy_client,
+                                            state_impl_,
+                                            request_id + "-post",
+                                            post_kill_failures);
+                                        if (post_killed_now > 0 || post_kill_failures > 0) {
+                                            Logger::log(
+                                                post_kill_failures == 0 ? LogLevel::Info : LogLevel::Warn,
+                                                "app_lock post-apply kill sweep completed (killed=" +
+                                                    std::to_string(post_killed_now) + ", failed=" + std::to_string(post_kill_failures) + ")");
+                                        }
                                     }
 #endif
                                 } else {
                                     Logger::log(LogLevel::Error, "app_lock apply failed: " + apply_res.error_message);
+#ifdef _WIN32
+                                    if (kill_running_on_apply) {
+                                        std::size_t fallback_kill_failures = 0;
+                                        const std::size_t fallback_killed_now = enforce_runtime_kill_sweep(
+                                            body["app_lock"],
+                                            policy_client,
+                                            state_impl_,
+                                            request_id + "-fallback",
+                                            fallback_kill_failures);
+                                        if (fallback_killed_now > 0 || fallback_kill_failures > 0) {
+                                            Logger::log(
+                                                fallback_kill_failures == 0 ? LogLevel::Warn : LogLevel::Error,
+                                                "app_lock fallback kill sweep completed despite apply failure (killed=" +
+                                                    std::to_string(fallback_killed_now) + ", failed=" + std::to_string(fallback_kill_failures) + ")");
+                                        }
+                                    }
+#endif
                                     if (!last_good_app_lock_policy_blob_.empty()) {
                                         auto rollback_res = policy_client.applock_replace_policy(
                                             request_id + "-rollback",
