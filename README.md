@@ -205,6 +205,7 @@ Use component READMEs below for exact commands and expected outputs.
 For production-ready, decoupled deployment (separate web/scheduler/worker roles, external DB/Redis, and preflight checks), use:
 
 - [Production Deployment Runbook](docs/deployment.md)
+- [DigitalOcean Mini Ubuntu Runbook](docs/deployment-do-mini.md)
 
 ## 10. Verification Strategy
 

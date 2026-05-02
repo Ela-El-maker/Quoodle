@@ -1,0 +1,109 @@
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-quoodle}
+      MYSQL_USER: ${DB_USERNAME:-quoodle}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h localhost -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - quoodle-prod-net
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - quoodle-prod-net
+
+  control-plane:
+    build:
+      context: ./quoodle-control-plane
+      dockerfile: Dockerfile
+    image: ${CONTROL_PLANE_IMAGE}:${CONTROL_PLANE_TAG:-local}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+  control-plane-scheduler:
+    depends_on:
+      control-plane:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+  control-plane-worker:
+    depends_on:
+      control-plane:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+  control-plane-ui:
+    build:
+      context: ./quoodle-control-plane-ui
+      dockerfile: Dockerfile
+    image: ${CONTROL_PLANE_UI_IMAGE}:${CONTROL_PLANE_UI_TAG:-local}
+
+  gateway:
+    build:
+      context: ./quoodle-gateway
+      dockerfile: Dockerfile
+    image: ${GATEWAY_IMAGE}:${GATEWAY_TAG:-local}
+    depends_on:
+      redis:
+        condition: service_healthy
+      control-plane:
+        condition: service_healthy
+    environment:
+      REDIS_URL: redis://redis:6379/0
+
+  ai-sidecar:
+    build:
+      context: ./quoodle-ai-sidecar
+      dockerfile: Dockerfile
+    image: ${AI_SIDECAR_IMAGE}:${AI_SIDECAR_TAG:-local}
+
+volumes:
+  mysql_data:
+  redis_data:

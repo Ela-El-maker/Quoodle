@@ -7,13 +7,13 @@ x-control-plane-env: &control_plane_env
   DEFAULT_USER_ROLE: ${DEFAULT_USER_ROLE:-operator}
 
   DB_CONNECTION: ${DB_CONNECTION:-mysql}
-  DB_HOST: ${DB_HOST:?Set DB_HOST}
+  DB_HOST: ${DB_HOST:-db}
   DB_PORT: ${DB_PORT:-3306}
   DB_DATABASE: ${DB_DATABASE:?Set DB_DATABASE}
   DB_USERNAME: ${DB_USERNAME:?Set DB_USERNAME}
   DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
 
-  REDIS_HOST: ${REDIS_HOST:?Set REDIS_HOST}
+  REDIS_HOST: ${REDIS_HOST:-redis}
   REDIS_PASSWORD: ${REDIS_PASSWORD:-null}
   REDIS_PORT: ${REDIS_PORT:-6379}
   REDIS_CLIENT: ${REDIS_CLIENT:-predis}
@@ -57,12 +57,50 @@ x-control-plane-env: &control_plane_env
   RUN_MIGRATIONS_ON_BOOT: ${RUN_MIGRATIONS_ON_BOOT:-false}
   SEED_LOCAL_ADMIN_ON_BOOT: ${SEED_LOCAL_ADMIN_ON_BOOT:-false}
   CACHE_CONFIG_ON_BOOT: ${CACHE_CONFIG_ON_BOOT:-true}
-  RUN_QUEUE_WORKER_IN_WEB: ${RUN_QUEUE_WORKER_IN_WEB:-false}
+  RUN_QUEUE_WORKER_IN_WEB: ${RUN_QUEUE_WORKER_IN_WEB:-true}
   WAIT_FOR_DB_SECONDS: ${WAIT_FOR_DB_SECONDS:-3}
 
 services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:?Set DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME:?Set DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent",
+        ]
+      interval: 10s
+      timeout: 20s
+      start_period: 30s
+      retries: 10
+    networks:
+      - quoodle-mini-net
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - quoodle-mini-net
+
   control-plane:
-    image: ${CONTROL_PLANE_IMAGE:?Set CONTROL_PLANE_IMAGE}:${CONTROL_PLANE_TAG:-latest}
+    build:
+      context: ./quoodle-control-plane
+      dockerfile: Dockerfile
     restart: unless-stopped
     ports:
       - "${CONTROL_PLANE_BIND_IP:-127.0.0.1}:${QUOODLE_CONTROL_PLANE_PORT:-8088}:80"
@@ -70,6 +108,11 @@ services:
       <<: *control_plane_env
     volumes:
       - control_plane_storage:/var/www/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/ >/dev/null || exit 1"]
       interval: 15s
@@ -77,10 +120,12 @@ services:
       retries: 6
       start_period: 20s
     networks:
-      - quoodle-prod-net
+      - quoodle-mini-net
 
   control-plane-scheduler:
-    image: ${CONTROL_PLANE_IMAGE:?Set CONTROL_PLANE_IMAGE}:${CONTROL_PLANE_TAG:-latest}
+    build:
+      context: ./quoodle-control-plane
+      dockerfile: Dockerfile
     restart: unless-stopped
     entrypoint: ["/bin/sh", "-c", "sleep 8 && php artisan schedule:work --no-interaction"]
     environment:
@@ -93,11 +138,14 @@ services:
       control-plane:
         condition: service_healthy
     networks:
-      - quoodle-prod-net
+      - quoodle-mini-net
 
   control-plane-worker:
-    image: ${CONTROL_PLANE_IMAGE:?Set CONTROL_PLANE_IMAGE}:${CONTROL_PLANE_TAG:-latest}
+    build:
+      context: ./quoodle-control-plane
+      dockerfile: Dockerfile
     restart: unless-stopped
+    profiles: ["worker"]
     entrypoint:
       [
         "/bin/sh",
@@ -114,10 +162,12 @@ services:
       control-plane:
         condition: service_healthy
     networks:
-      - quoodle-prod-net
+      - quoodle-mini-net
 
   control-plane-ui:
-    image: ${CONTROL_PLANE_UI_IMAGE:?Set CONTROL_PLANE_UI_IMAGE}:${CONTROL_PLANE_UI_TAG:-latest}
+    build:
+      context: ./quoodle-control-plane-ui
+      dockerfile: Dockerfile
     restart: unless-stopped
     ports:
       - "${CONTROL_PLANE_UI_BIND_IP:-0.0.0.0}:${QUOODLE_CONTROL_PLANE_UI_PORT:-3000}:3000"
@@ -145,10 +195,12 @@ services:
       retries: 6
       start_period: 20s
     networks:
-      - quoodle-prod-net
+      - quoodle-mini-net
 
   gateway:
-    image: ${GATEWAY_IMAGE:?Set GATEWAY_IMAGE}:${GATEWAY_TAG:-latest}
+    build:
+      context: ./quoodle-gateway
+      dockerfile: Dockerfile
     restart: unless-stopped
     ports:
       - "${GATEWAY_BIND_IP:-0.0.0.0}:${QUOODLE_GATEWAY_PORT:-8000}:8000"
@@ -159,7 +211,7 @@ services:
       POLICY_VERSION: ${POLICY_VERSION:?Set POLICY_VERSION}
       CONTROLLER_ID: ${CONTROLLER_ID:?Set CONTROLLER_ID}
 
-      REDIS_URL: ${REDIS_URL:?Set REDIS_URL}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       REDIS_KEY_PREFIX: ${REDIS_KEY_PREFIX:-quoodle:}
 
       LARAVEL_WEBHOOK_BASE: ${LARAVEL_WEBHOOK_BASE:?Set LARAVEL_WEBHOOK_BASE}
@@ -175,6 +227,13 @@ services:
       SIGN_LARAVEL_WEBHOOKS: ${SIGN_LARAVEL_WEBHOOKS:-true}
       FASTAPI_SERVICE_PRIVATE_KEY_B64: ${FASTAPI_SERVICE_PRIVATE_KEY_B64:?Set FASTAPI_SERVICE_PRIVATE_KEY_B64}
       ED25519_PRIVATE_KEY_B64: ${ED25519_PRIVATE_KEY_B64:?Set ED25519_PRIVATE_KEY_B64}
+    depends_on:
+      redis:
+        condition: service_healthy
+      control-plane:
+        condition: service_healthy
+    volumes:
+      - gateway_data:/app/data
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null || exit 1"]
       interval: 15s
@@ -182,10 +241,12 @@ services:
       retries: 6
       start_period: 20s
     networks:
-      - quoodle-prod-net
+      - quoodle-mini-net
 
   ai-sidecar:
-    image: ${AI_SIDECAR_IMAGE:?Set AI_SIDECAR_IMAGE}:${AI_SIDECAR_TAG:-latest}
+    build:
+      context: ./quoodle-ai-sidecar
+      dockerfile: Dockerfile
     restart: unless-stopped
     profiles: ["ai"]
     ports:
@@ -212,11 +273,14 @@ services:
       retries: 6
       start_period: 25s
     networks:
-      - quoodle-prod-net
+      - quoodle-mini-net
 
 networks:
-  quoodle-prod-net:
+  quoodle-mini-net:
     driver: bridge
 
 volumes:
+  db_data:
+  redis_data:
   control_plane_storage:
+  gateway_data:

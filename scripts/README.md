@@ -61,6 +61,22 @@ Validates production env completeness and guardrails before deployment.
 pwsh .\scripts\preflight_production.ps1 -EnvFile .env.production -ComposeFile docker-compose.prod.yml
 ```
 
+### `preflight_do_mini.sh`
+
+Linux preflight checks for the DigitalOcean mini deployment path.
+
+```bash
+./scripts/preflight_do_mini.sh .env.do-mini docker-compose.do-mini.yml
+```
+
+### `bootstrap_do_ubuntu.sh`
+
+Bootstraps an Ubuntu droplet with Docker Engine, Compose plugin, and firewall defaults.
+
+```bash
+sudo ./scripts/bootstrap_do_ubuntu.sh
+```
+
 ## 4. Common Environment Variables
 
 - `LARAVEL_BASE_URL`
