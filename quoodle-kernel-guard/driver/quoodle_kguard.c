@@ -5,7 +5,8 @@
 
 static LONG g_exec_counter = 0;
 
-static void FillResponseDefaults(QUOODLE_IOCTL_RESPONSE *resp) {
+static void FillResponseDefaults(QUOODLE_IOCTL_RESPONSE *resp)
+{
   RtlZeroMemory(resp, sizeof(*resp));
   resp->version = QUOODLE_IOCTL_VERSION;
   resp->timestamp_unix = (uint64_t)KeQueryInterruptTime() / 10000000ULL;
@@ -16,12 +17,14 @@ static void FillResponseDefaults(QUOODLE_IOCTL_RESPONSE *resp) {
   resp->signature_length = 0;
 }
 
-static void BuildExecId(char *buffer, size_t buffer_len) {
+static void BuildExecId(char *buffer, size_t buffer_len)
+{
   LONG id = InterlockedIncrement(&g_exec_counter);
   (void)RtlStringCchPrintfA(buffer, buffer_len, "kexec-%ld", id);
 }
 
-static void HandlePing(QUOODLE_IOCTL_REQUEST *req, QUOODLE_IOCTL_RESPONSE *resp) {
+static void HandlePing(QUOODLE_IOCTL_REQUEST *req, QUOODLE_IOCTL_RESPONSE *resp)
+{
   resp->status = 0;
   resp->error_code = 0;
   RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), "");
@@ -31,7 +34,8 @@ static void HandlePing(QUOODLE_IOCTL_REQUEST *req, QUOODLE_IOCTL_RESPONSE *resp)
   resp->result_length = (uint32_t)strlen(resp->result_json);
 }
 
-static NTSTATUS DispatchCreateClose(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
+static NTSTATUS DispatchCreateClose(PDEVICE_OBJECT DeviceObject, PIRP Irp)
+{
   UNREFERENCED_PARAMETER(DeviceObject);
   Irp->IoStatus.Status = STATUS_SUCCESS;
   Irp->IoStatus.Information = 0;
@@ -39,12 +43,14 @@ static NTSTATUS DispatchCreateClose(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
   return STATUS_SUCCESS;
 }
 
-static NTSTATUS DispatchDeviceControl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
+static NTSTATUS DispatchDeviceControl(PDEVICE_OBJECT DeviceObject, PIRP Irp)
+{
   UNREFERENCED_PARAMETER(DeviceObject);
   PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(Irp);
   ULONG code = stack->Parameters.DeviceIoControl.IoControlCode;
 
-  if (code != IOCTL_QUOODLE_EXECUTE) {
+  if (code != IOCTL_QUOODLE_EXECUTE)
+  {
     Irp->IoStatus.Status = STATUS_INVALID_DEVICE_REQUEST;
     Irp->IoStatus.Information = 0;
     IoCompleteRequest(Irp, IO_NO_INCREMENT);
@@ -52,7 +58,8 @@ static NTSTATUS DispatchDeviceControl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
   }
 
   if (stack->Parameters.DeviceIoControl.InputBufferLength < sizeof(QUOODLE_IOCTL_REQUEST) ||
-      stack->Parameters.DeviceIoControl.OutputBufferLength < sizeof(QUOODLE_IOCTL_RESPONSE)) {
+      stack->Parameters.DeviceIoControl.OutputBufferLength < sizeof(QUOODLE_IOCTL_RESPONSE))
+  {
     Irp->IoStatus.Status = STATUS_BUFFER_TOO_SMALL;
     Irp->IoStatus.Information = 0;
     IoCompleteRequest(Irp, IO_NO_INCREMENT);
@@ -63,18 +70,22 @@ static NTSTATUS DispatchDeviceControl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
   QUOODLE_IOCTL_RESPONSE *resp = (QUOODLE_IOCTL_RESPONSE *)Irp->AssociatedIrp.SystemBuffer;
   FillResponseDefaults(resp);
 
-  if (req->version != QUOODLE_IOCTL_VERSION) {
+  if (req->version != QUOODLE_IOCTL_VERSION)
+  {
     resp->error_code = 4003;
     RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), "invalid_version");
-  } else {
-    switch ((QUOODLE_OPCODE)req->opcode) {
-      case QOP_EXEC_PING:
-        HandlePing(req, resp);
-        break;
-      default:
-        resp->error_code = 4002;
-        RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), "invalid_opcode");
-        break;
+  }
+  else
+  {
+    switch ((QUOODLE_OPCODE)req->opcode)
+    {
+    case QOP_EXEC_PING:
+      HandlePing(req, resp);
+      break;
+    default:
+      resp->error_code = 4002;
+      RtlStringCchCopyA(resp->error_message, sizeof(resp->error_message), "invalid_opcode");
+      break;
     }
   }
 
@@ -84,15 +95,18 @@ static NTSTATUS DispatchDeviceControl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
   return STATUS_SUCCESS;
 }
 
-static void DriverUnload(PDRIVER_OBJECT DriverObject) {
+static void DriverUnload(PDRIVER_OBJECT DriverObject)
+{
   UNICODE_STRING symLink = RTL_CONSTANT_STRING(QUOODLE_DOS_DEVICE_NAME);
   IoDeleteSymbolicLink(&symLink);
-  if (DriverObject->DeviceObject) {
+  if (DriverObject->DeviceObject)
+  {
     IoDeleteDevice(DriverObject->DeviceObject);
   }
 }
 
-NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) {
+NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
+{
   UNREFERENCED_PARAMETER(RegistryPath);
 
   UNICODE_STRING deviceName = RTL_CONSTANT_STRING(QUOODLE_DEVICE_NAME);
@@ -107,12 +121,14 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) 
       0,
       FALSE,
       &deviceObject);
-  if (!NT_SUCCESS(status)) {
+  if (!NT_SUCCESS(status))
+  {
     return status;
   }
 
   status = IoCreateSymbolicLink(&symLink, &deviceName);
-  if (!NT_SUCCESS(status)) {
+  if (!NT_SUCCESS(status))
+  {
     IoDeleteDevice(deviceObject);
     return status;
   }
