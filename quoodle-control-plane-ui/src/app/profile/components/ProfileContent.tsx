@@ -3,10 +3,11 @@
 import React, { useMemo, useState } from 'react';
 import {
   User, Mail, Shield, Key, Clock, Plus, Trash2,
-  CheckCircle, Fingerprint, Smartphone, Monitor, Globe,
+  CheckCircle, Fingerprint, Smartphone, Monitor, Globe, Sun, Moon,
   LogOut, X
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { toast } from 'sonner';
 
 interface ApiKey {
@@ -41,6 +42,7 @@ type Tab = typeof tabs[number];
 
 export default function ProfileContent() {
   const { user } = useAuth();
+  const { theme, resolvedTheme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<Tab>('Profile');
   const [displayName, setDisplayName] = useState(user?.name ?? 'Ops Team');
   const [editingName, setEditingName] = useState(false);
@@ -160,6 +162,68 @@ export default function ProfileContent() {
               </div>
             </div>
           </div>
+
+          <div className="bg-card border border-border rounded-lg p-5 space-y-4">
+            <h2 className="text-sm font-semibold">Appearance</h2>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                  {resolvedTheme === 'dark' ? <Moon size={16} className="text-primary" /> : <Sun size={16} className="text-primary" />}
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Dark Mode</p>
+                  <p className="text-xs text-muted-foreground">Switch between light and dark UI themes.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+                  resolvedTheme === 'dark'
+                    ? 'bg-primary border-primary/60'
+                    : 'bg-muted border-border'
+                }`}
+                aria-label="Toggle dark mode"
+              >
+                <span
+                  className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                    resolvedTheme === 'dark' ? 'translate-x-6' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+            <div className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted/30 p-1">
+              <button
+                onClick={() => setTheme('light')}
+                className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
+                  theme === 'light'
+                    ? 'bg-card text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Light
+              </button>
+              <button
+                onClick={() => setTheme('dark')}
+                className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
+                  theme === 'dark'
+                    ? 'bg-card text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Dark
+              </button>
+              <button
+                onClick={() => setTheme('system')}
+                className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
+                  theme === 'system'
+                    ? 'bg-card text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                System
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -185,9 +249,15 @@ export default function ProfileContent() {
                     setTwoFAEnabled(!twoFAEnabled);
                     toast.success(twoFAEnabled ? '2FA disabled' : '2FA enabled');
                   }}
-                  className={`relative w-10 h-5 rounded-full transition-colors ${twoFAEnabled ? 'bg-green-500' : 'bg-muted'}`}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+                    twoFAEnabled ? 'bg-green-500 border-green-500/60' : 'bg-muted border-border'
+                  }`}
                 >
-                  <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${twoFAEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  <span
+                    className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                      twoFAEnabled ? 'translate-x-6' : 'translate-x-0'
+                    }`}
+                  />
                 </button>
               </div>
             </div>

@@ -1769,11 +1769,21 @@ export default function DeviceDetailPageContent() {
                       onClick={() => setExpandedHistoryId(expandedHistoryId === cmd.id ? null : cmd.id)}
                     >
                       {stateIcon(cmd.state)}
-                      <span className="font-mono text-[11px] text-primary font-semibold w-20">{cmd.id}</span>
-                      <span className="text-xs font-medium flex-1">{cmd.method}</span>
-                      <StatusBadge variant={cmd.state} size="sm" />
-                      <span className="text-[11px] text-muted-foreground tabular-nums">{cmd.queuedAt}</span>
-                      <span className="text-[11px] text-muted-foreground">{cmd.duration ?? '-'}</span>
+                      <span className="font-mono text-[11px] text-primary font-semibold w-36 min-w-0 truncate" title={cmd.id}>
+                        {cmd.id}
+                      </span>
+                      <span className="text-xs font-medium min-w-0 flex-1 truncate" title={cmd.method}>
+                        {cmd.method}
+                      </span>
+                      <div className="shrink-0">
+                        <StatusBadge variant={cmd.state} size="sm" />
+                      </div>
+                      <span className="hidden sm:inline text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
+                        {cmd.queuedAt}
+                      </span>
+                      <span className="hidden md:inline text-[11px] text-muted-foreground whitespace-nowrap">
+                        {cmd.duration ?? '-'}
+                      </span>
                       <button
                         onClick={async (e) => {
                           e.stopPropagation();
@@ -1784,7 +1794,7 @@ export default function DeviceDetailPageContent() {
                           await dispatchCommand(cmd.method, cmd.params ?? {}, `Replay ${cmd.method}`);
                         }}
                         disabled={Boolean(replayBlockReason)}
-                        className="flex items-center gap-1 px-2 py-0.5 text-[11px] bg-primary/10 border border-primary/20 text-primary rounded hover:bg-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="shrink-0 whitespace-nowrap flex items-center gap-1 px-2 py-0.5 text-[11px] bg-primary/10 border border-primary/20 text-primary rounded hover:bg-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <RotateCcw size={9} /> Replay
                       </button>

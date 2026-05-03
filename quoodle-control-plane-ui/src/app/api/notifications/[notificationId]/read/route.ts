@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { proxyAuthedRequest } from '../../../../devices/_shared';
+import { proxyAuthedRequest } from '../../../devices/_shared';
 
 interface Params {
   params: Promise<{ notificationId: string }>;
