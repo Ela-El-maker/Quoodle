@@ -20,7 +20,7 @@ class AppEnv {
   // flutter run --dart-define=QDO_CONTROL_PLANE_BASE_URL=https://api.example.com/api
   static const String _controlPlaneBaseUrlRaw = String.fromEnvironment(
     'QDO_CONTROL_PLANE_BASE_URL',
-    defaultValue: 'http://192.168.0.100:8088/api',
+    defaultValue: 'http://161.35.62.116:8088/api',
   );
 
   static String get controlPlaneBaseUrl =>
@@ -47,7 +47,7 @@ class AppEnv {
 
     final base = Uri.tryParse(controlPlaneBaseUrl);
     if (base == null || base.host.isEmpty) {
-      return 'http://192.168.0.100:3000/api/auth/google/callback';
+      return 'http://161.35.62.116:3000/api/auth/google/callback';
     }
 
     return Uri(
