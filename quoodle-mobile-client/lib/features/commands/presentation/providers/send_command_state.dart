@@ -8,7 +8,7 @@ class SendCommandState {
 
   factory SendCommandState.initial() {
     return const SendCommandState(
-      selectedMethodId: 'screenshot_capture',
+      selectedMethodId: 'process_list',
       sensitiveOverride: false,
       showPolicyPanel: true,
       submitting: false,

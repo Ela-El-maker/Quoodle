@@ -1,8 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:secure_device_control/features/commands/domain/services/control_plane_dispatch_payload.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+typedef OfflineCommandDispatcher = Future<Map<String, dynamic>> Function({
+  required String deviceId,
+  required String method,
+  required Map<String, dynamic> params,
+  required bool sensitive,
+});
 
 enum QueuedCommandStatus { pending, syncing, success, failed, retrying }
 
@@ -104,6 +112,7 @@ class OfflineCommandQueue extends ChangeNotifier {
   bool _initialized = false;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   Timer? _syncTimer;
+  OfflineCommandDispatcher? _dispatcher;
 
   List<QueuedCommand> get commands => List.unmodifiable(_commands);
   bool get isOnline => _isOnline;
@@ -135,6 +144,10 @@ class OfflineCommandQueue extends ChangeNotifier {
     final initial = await Connectivity().checkConnectivity();
     _isOnline = initial.any((r) => r != ConnectivityResult.none);
     notifyListeners();
+  }
+
+  void configureDispatcher(OfflineCommandDispatcher dispatcher) {
+    _dispatcher = dispatcher;
   }
 
   @override
@@ -234,12 +247,24 @@ class OfflineCommandQueue extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Simulate network dispatch — replace with real API call
-      await Future.delayed(Duration(milliseconds: 800 + (idx * 100)));
-      // Simulate ~85% success rate for demo
-      final shouldSucceed = (DateTime.now().millisecond % 10) < 8;
-      if (!shouldSucceed && _commands[idx].retryCount < 1) {
-        throw Exception('Network timeout — device unreachable');
+      final dispatcher = _dispatcher;
+      if (dispatcher == null) {
+        throw Exception('Queue dispatch is not configured.');
+      }
+      final normalized = normalizeCommandForControlPlane(
+        methodId: cmd.method,
+        params: cmd.params,
+      );
+      final response = await dispatcher(
+        deviceId: cmd.deviceId,
+        method: normalized.methodId,
+        params: normalized.params,
+        sensitive: false,
+      );
+      final status = _asString(response['status']);
+      if (status != 'accepted') {
+        final reason = _asString(response['reason']);
+        throw Exception(_messageForDispatchFailureReason(reason));
       }
 
       _commands[idx] = _commands[idx].copyWith(
@@ -293,5 +318,34 @@ class OfflineCommandQueue extends ChangeNotifier {
         jsonEncode(_commands.map((c) => c.toJson()).toList()),
       );
     } catch (_) {}
+  }
+
+  String _asString(Object? value) {
+    if (value is String) {
+      return value;
+    }
+    if (value == null) {
+      return '';
+    }
+    return value.toString();
+  }
+
+  String _messageForDispatchFailureReason(String reason) {
+    switch (reason) {
+      case 'device_not_found':
+        return 'Target device was not found.';
+      case 'unknown_command':
+        return 'Command type is not supported.';
+      case 'not_supported_runtime':
+        return 'Runtime does not support this command yet.';
+      case 'invalid_params':
+        return 'Command parameters are invalid.';
+      case 'compliance_failed':
+        return 'Device compliance checks failed. Command denied.';
+      case 'rate_limited':
+        return 'Too many requests. Please try again shortly.';
+      default:
+        return 'Command rejected by policy or backend validation.';
+    }
   }
 }
