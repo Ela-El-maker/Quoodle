@@ -40,3 +40,24 @@ final devicesControllerProvider =
 final deviceDetailProvider = Provider.family<DeviceEntity?, String>((ref, id) {
   return ref.read(getDeviceByIdProvider).call(id);
 });
+
+final deviceDetailAsyncProvider =
+    FutureProvider.family<DeviceEntity?, String>((ref, id) async {
+  final cached = ref.read(getDeviceByIdProvider).call(id);
+  if (cached != null) {
+    return cached;
+  }
+
+  final result = await ref.read(getDevicesProvider).call();
+  return result.when(
+    success: (devices) {
+      for (final device in devices) {
+        if (device.id == id) {
+          return device;
+        }
+      }
+      return null;
+    },
+    failure: (_) => null,
+  );
+});
