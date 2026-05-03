@@ -914,9 +914,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             ),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
-              AppNavigator.replaceStackWith(context, AppRoute.authentication);
+              await _performLogout();
             },
             child: Text(
               'Sign Out',
@@ -929,6 +929,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         ],
       ),
     );
+  }
+
+  Future<void> _performLogout() async {
+    await ref.read(authControllerProvider.notifier).logout();
+    if (!mounted) {
+      return;
+    }
+    AppNavigator.replaceStackWith(context, AppRoute.authentication);
   }
 }
 
