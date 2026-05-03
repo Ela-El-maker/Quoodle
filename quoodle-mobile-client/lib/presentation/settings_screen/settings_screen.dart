@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:secure_device_control/app/router/app_navigator.dart';
 import 'package:secure_device_control/app/theme/theme_mode_controller.dart';
+import 'package:secure_device_control/features/auth/presentation/providers/auth_providers.dart';
+import 'package:secure_device_control/features/auth/presentation/providers/auth_state.dart';
 import 'package:secure_device_control/features/commands/data/services/offline_command_queue.dart';
 import 'package:secure_device_control/features/commands/presentation/providers/offline_command_queue_providers.dart';
 import 'package:secure_device_control/features/settings/domain/entities/session_entry.dart';
@@ -39,26 +41,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   Widget build(BuildContext context) {
     ref.watch(offlineCommandQueueInitializationProvider);
     ref.watch(offlineCommandQueueProvider);
+    final authState = ref.watch(authControllerProvider);
 
-    return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: Column(
-        children: [
-          _buildHeader(),
-          _buildTabBar(),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildAccountTab(),
-                _buildNotificationsTab(),
-                _buildCommandQueueTab(),
-              ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          return;
+        }
+        _handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: AppTheme.background,
+        body: Column(
+          children: [
+            _buildHeader(),
+            _buildTabBar(),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildAccountTab(authState),
+                  _buildNotificationsTab(),
+                  _buildCommandQueueTab(),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
+  }
+
+  void _handleBack() {
+    AppNavigator.popOrGo(context, AppRoute.dashboard);
   }
 
   Widget _buildHeader() {
@@ -74,7 +90,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           child: Row(
             children: [
               GestureDetector(
-                onTap: () => Navigator.maybePop(context),
+                onTap: _handleBack,
                 child: Container(
                   width: 36,
                   height: 36,
@@ -182,19 +198,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   // ── Account Tab ─────────────────────────────────────────────────────────────
 
-  Widget _buildAccountTab() {
-    final themeMode = ref.watch(themeModeControllerProvider);
-
+  Widget _buildAccountTab(AuthSessionState authState) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _buildProfileCard(),
+        _buildProfileCard(authState),
         SizedBox(height: 16),
-        _buildRoleCard(),
+        _buildRoleCard(authState),
         SizedBox(height: 16),
         _buildSessionsCard(),
-        SizedBox(height: 16),
-        _buildAppearanceCard(themeMode),
         SizedBox(height: 16),
         _buildDangerZone(),
         SizedBox(height: 80),
@@ -202,51 +214,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     );
   }
 
-  Widget _buildAppearanceCard(ThemeMode selectedMode) {
-    final controller = ref.read(themeModeControllerProvider.notifier);
+  Widget _buildProfileCard(AuthSessionState authState) {
+    final themeMode = ref.watch(themeModeControllerProvider);
+    final themeController = ref.read(themeModeControllerProvider.notifier);
+    final user = authState.user;
+    final isProfileLoading = authState.status == AuthSessionStatus.unknown ||
+        authState.status == AuthSessionStatus.refreshing;
+    final initials = _initialsFromName(user?.displayName);
+    final displayName = user?.displayName.trim().isNotEmpty == true
+        ? user!.displayName
+        : 'Unknown user';
+    final email = user?.email.trim().isNotEmpty == true ? user!.email : '-';
+    final userId = user?.id.trim().isNotEmpty == true ? user!.id : '-';
+    final lastActive = _settingsState.sessions.isNotEmpty
+        ? _formatTimeAgo(_settingsState.sessions.first.lastActive)
+        : '-';
+    final isDarkMode = switch (themeMode) {
+      ThemeMode.dark => true,
+      ThemeMode.light => false,
+      ThemeMode.system =>
+        MediaQuery.platformBrightnessOf(context) == Brightness.dark,
+    };
 
-    return _GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SectionLabel(label: 'APPEARANCE'),
-          SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _ThemeModeOption(
-                  label: 'Light',
-                  icon: Icons.light_mode_rounded,
-                  selected: selectedMode == ThemeMode.light,
-                  onTap: () => controller.setThemeMode(ThemeMode.light),
-                ),
-              ),
-              SizedBox(width: 8),
-              Expanded(
-                child: _ThemeModeOption(
-                  label: 'Dark',
-                  icon: Icons.dark_mode_rounded,
-                  selected: selectedMode == ThemeMode.dark,
-                  onTap: () => controller.setThemeMode(ThemeMode.dark),
-                ),
-              ),
-              SizedBox(width: 8),
-              Expanded(
-                child: _ThemeModeOption(
-                  label: 'System',
-                  icon: Icons.brightness_auto_rounded,
-                  selected: selectedMode == ThemeMode.system,
-                  onTap: () => controller.setThemeMode(ThemeMode.system),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProfileCard() {
     return _GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -268,7 +257,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
                 child: Center(
                   child: Text(
-                    'OP',
+                    initials,
                     style: GoogleFonts.ibmPlexSans(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
@@ -283,7 +272,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Operator Admin',
+                      displayName,
                       style: GoogleFonts.ibmPlexSans(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -292,7 +281,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     ),
                     SizedBox(height: 2),
                     Text(
-                      'operator@quoodle.io',
+                      email,
                       style: GoogleFonts.ibmPlexMono(
                         fontSize: 12,
                         color: AppTheme.textSecondary,
@@ -309,7 +298,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        'ACTIVE',
+                        isProfileLoading
+                            ? 'LOADING'
+                            : (user == null ? 'EMPTY' : 'ACTIVE'),
                         style: GoogleFonts.ibmPlexMono(
                           fontSize: 9,
                           fontWeight: FontWeight.w700,
@@ -323,22 +314,75 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               ),
             ],
           ),
+          if (isProfileLoading) ...[
+            SizedBox(height: 12),
+            _InlineInfo(
+              icon: Icons.sync_rounded,
+              message: 'Loading profile data...',
+            ),
+          ],
           SizedBox(height: 16),
           Divider(color: AppTheme.borderLight, height: 1),
           SizedBox(height: 16),
-          _InfoRow(label: 'User ID', value: 'usr_8f3a2c91d4e7'),
+          _InfoRow(label: 'User ID', value: userId),
           SizedBox(height: 10),
           _InfoRow(label: 'Organization', value: 'Quoodle Fleet Ops'),
           SizedBox(height: 10),
-          _InfoRow(label: 'Member Since', value: 'Jan 15, 2024'),
+          _InfoRow(label: 'Member Since', value: '-'),
           SizedBox(height: 10),
-          _InfoRow(label: 'Last Login', value: '2 minutes ago'),
+          _InfoRow(label: 'Last Login', value: lastActive),
+          SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.borderLight, width: 1),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  isDarkMode
+                      ? Icons.dark_mode_rounded
+                      : Icons.light_mode_rounded,
+                  size: 16,
+                  color: AppTheme.primary,
+                ),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Dark Mode',
+                    style: GoogleFonts.ibmPlexSans(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
+                Switch.adaptive(
+                  value: isDarkMode,
+                  onChanged: (enabled) {
+                    themeController.setThemeMode(
+                      enabled ? ThemeMode.dark : ThemeMode.light,
+                    );
+                  },
+                  activeThumbColor: AppTheme.primary,
+                  activeTrackColor: AppTheme.primary.withAlpha(110),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildRoleCard() {
+  Widget _buildRoleCard(AuthSessionState authState) {
+    final user = authState.user;
+    final role = user?.role.trim().isNotEmpty == true ? user!.role : 'viewer';
+    final roleLabel = _titleCase(role.replaceAll('_', ' '));
+    final canRunSensitive = role.toLowerCase() == 'admin';
+
     return _GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -366,7 +410,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Fleet Operator',
+                      roleLabel,
                       style: GoogleFonts.ibmPlexSans(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
@@ -374,7 +418,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                       ),
                     ),
                     Text(
-                      'Level 2 — Elevated Access',
+                      user == null
+                          ? 'Role not available'
+                          : 'Account role from control plane',
                       style: GoogleFonts.ibmPlexSans(
                         fontSize: 12,
                         color: AppTheme.warning,
@@ -395,9 +441,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               _PermChip(label: 'View Telemetry', granted: true),
               _PermChip(label: 'Manage Alerts', granted: true),
               _PermChip(label: 'Enroll Devices', granted: true),
-              _PermChip(label: 'Admin Panel', granted: false),
+              _PermChip(label: 'Admin Panel', granted: canRunSensitive),
               _PermChip(label: 'Delete Devices', granted: false),
-              _PermChip(label: 'Sensitive Commands', granted: false),
+              _PermChip(label: 'Sensitive Commands', granted: canRunSensitive),
             ],
           ),
         ],
@@ -406,6 +452,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 
   Widget _buildSessionsCard() {
+    final sessions = _settingsState.sessions;
     return _GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -415,25 +462,38 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               _SectionLabel(label: 'ACTIVE SESSIONS'),
               Spacer(),
               GestureDetector(
-                onTap: _revokeAllOtherSessions,
+                onTap: sessions.isEmpty ? null : _revokeAllOtherSessions,
                 child: Text(
                   'Revoke All Others',
                   style: GoogleFonts.ibmPlexSans(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: AppTheme.error,
+                    color: sessions.isEmpty
+                        ? AppTheme.textDisabled
+                        : AppTheme.error,
                   ),
                 ),
               ),
             ],
           ),
           SizedBox(height: 16),
-          ..._settingsState.sessions.map(
-            (s) => _SessionTile(
-              session: s,
-              onRevoke: s.isCurrent ? null : () => _revokeSession(s.id),
+          if (_settingsState.isLoading)
+            _InlineInfo(
+              icon: Icons.sync_rounded,
+              message: 'Loading active sessions...',
+            )
+          else if (sessions.isEmpty)
+            _InlineInfo(
+              icon: Icons.info_outline_rounded,
+              message: 'No active sessions found.',
+            )
+          else
+            ...sessions.map(
+              (s) => _SessionTile(
+                session: s,
+                onRevoke: s.isCurrent ? null : () => _revokeSession(s.id),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -462,9 +522,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   // ── Notifications Tab ────────────────────────────────────────────────────────
 
   Widget _buildNotificationsTab() {
+    final settingsLoading = _settingsState.isLoading;
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (_settingsState.errorMessage != null) ...[
+          _InlineInfo(
+            icon: Icons.warning_amber_rounded,
+            message: _settingsState.errorMessage!,
+            color: AppTheme.warning,
+          ),
+          SizedBox(height: 12),
+        ],
+        if (settingsLoading) ...[
+          _InlineInfo(
+            icon: Icons.sync_rounded,
+            message: 'Loading notification preferences...',
+          ),
+          SizedBox(height: 12),
+        ],
         _GlassCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -477,9 +554,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 label: 'Critical Alerts',
                 subtitle: 'Device quarantine, policy breach, intrusion',
                 value: _settingsState.notifCriticalAlerts,
-                onChanged: (v) => ref
-                    .read(settingsControllerProvider.notifier)
-                    .setNotifCriticalAlerts(v),
+                onChanged: settingsLoading
+                    ? (_) {}
+                    : (v) => ref
+                        .read(settingsControllerProvider.notifier)
+                        .setNotifCriticalAlerts(v),
               ),
               _NotifToggle(
                 icon: Icons.wifi_off_rounded,
@@ -487,9 +566,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 label: 'Device Offline',
                 subtitle: 'Notify when a managed device goes offline',
                 value: _settingsState.notifDeviceOffline,
-                onChanged: (v) => ref
-                    .read(settingsControllerProvider.notifier)
-                    .setNotifDeviceOffline(v),
+                onChanged: settingsLoading
+                    ? (_) {}
+                    : (v) => ref
+                        .read(settingsControllerProvider.notifier)
+                        .setNotifDeviceOffline(v),
               ),
               _NotifToggle(
                 icon: Icons.error_outline_rounded,
@@ -497,9 +578,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 label: 'Command Failed',
                 subtitle: 'Alert when a dispatched command fails',
                 value: _settingsState.notifCommandFailed,
-                onChanged: (v) => ref
-                    .read(settingsControllerProvider.notifier)
-                    .setNotifCommandFailed(v),
+                onChanged: settingsLoading
+                    ? (_) {}
+                    : (v) => ref
+                        .read(settingsControllerProvider.notifier)
+                        .setNotifCommandFailed(v),
               ),
               _NotifToggle(
                 icon: Icons.policy_rounded,
@@ -507,9 +590,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 label: 'Policy Violation',
                 subtitle: 'Immediate alert on policy non-compliance',
                 value: _settingsState.notifPolicyViolation,
-                onChanged: (v) => ref
-                    .read(settingsControllerProvider.notifier)
-                    .setNotifPolicyViolation(v),
+                onChanged: settingsLoading
+                    ? (_) {}
+                    : (v) => ref
+                        .read(settingsControllerProvider.notifier)
+                        .setNotifPolicyViolation(v),
               ),
             ],
           ),
@@ -527,9 +612,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 label: 'New Device Enrolled',
                 subtitle: 'When a new device joins the fleet',
                 value: _settingsState.notifNewDevice,
-                onChanged: (v) => ref
-                    .read(settingsControllerProvider.notifier)
-                    .setNotifNewDevice(v),
+                onChanged: settingsLoading
+                    ? (_) {}
+                    : (v) => ref
+                        .read(settingsControllerProvider.notifier)
+                        .setNotifNewDevice(v),
               ),
               _NotifToggle(
                 icon: Icons.analytics_outlined,
@@ -537,9 +624,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 label: 'Telemetry Anomaly',
                 subtitle: 'Unusual CPU, memory, or network patterns',
                 value: _settingsState.notifTelemetryAnomaly,
-                onChanged: (v) => ref
-                    .read(settingsControllerProvider.notifier)
-                    .setNotifTelemetryAnomaly(v),
+                onChanged: settingsLoading
+                    ? (_) {}
+                    : (v) => ref
+                        .read(settingsControllerProvider.notifier)
+                        .setNotifTelemetryAnomaly(v),
               ),
               _NotifToggle(
                 icon: Icons.history_rounded,
@@ -547,9 +636,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 label: 'Audit Events',
                 subtitle: 'Log access and sensitive command execution',
                 value: _settingsState.notifAuditEvents,
-                onChanged: (v) => ref
-                    .read(settingsControllerProvider.notifier)
-                    .setNotifAuditEvents(v),
+                onChanged: settingsLoading
+                    ? (_) {}
+                    : (v) => ref
+                        .read(settingsControllerProvider.notifier)
+                        .setNotifAuditEvents(v),
               ),
             ],
           ),
@@ -567,9 +658,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 label: 'Weekly Fleet Report',
                 subtitle: 'Summary of fleet health and activity',
                 value: _settingsState.notifWeeklyReport,
-                onChanged: (v) => ref
-                    .read(settingsControllerProvider.notifier)
-                    .setNotifWeeklyReport(v),
+                onChanged: settingsLoading
+                    ? (_) {}
+                    : (v) => ref
+                        .read(settingsControllerProvider.notifier)
+                        .setNotifWeeklyReport(v),
               ),
             ],
           ),
@@ -726,6 +819,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   // ── Actions ──────────────────────────────────────────────────────────────────
 
+  String _initialsFromName(String? displayName) {
+    final normalized = (displayName ?? '').trim();
+    if (normalized.isEmpty) {
+      return 'OP';
+    }
+    final parts = normalized.split(RegExp(r'\s+'));
+    if (parts.length == 1) {
+      return parts.first
+          .substring(0, parts.first.length.clamp(1, 2))
+          .toUpperCase();
+    }
+    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+  }
+
+  String _titleCase(String value) {
+    if (value.isEmpty) {
+      return value;
+    }
+    return value
+        .split(' ')
+        .where((part) => part.isNotEmpty)
+        .map(
+          (part) => part[0].toUpperCase() + part.substring(1).toLowerCase(),
+        )
+        .join(' ');
+  }
+
+  String _formatTimeAgo(DateTime value) {
+    final diff = DateTime.now().difference(value);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inHours < 1) return '${diff.inMinutes} min ago';
+    if (diff.inDays < 1) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+
   void _revokeSession(String sessionId) {
     ref.read(settingsControllerProvider.notifier).revokeSession(sessionId);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -845,52 +973,42 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-class _ThemeModeOption extends StatelessWidget {
-  const _ThemeModeOption({
-    required this.label,
+class _InlineInfo extends StatelessWidget {
+  const _InlineInfo({
     required this.icon,
-    required this.selected,
-    required this.onTap,
+    required this.message,
+    this.color,
   });
 
-  final String label;
   final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
+  final String message;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-        decoration: BoxDecoration(
-          color: selected ? AppTheme.primaryDim : AppTheme.surface,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: selected ? AppTheme.primary : AppTheme.border,
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 14,
-              color: selected ? AppTheme.primary : AppTheme.textSecondary,
-            ),
-            SizedBox(width: 6),
-            Text(
-              label,
+    final tone = color ?? AppTheme.textMuted;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: tone.withAlpha(20),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: tone.withAlpha(70)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: tone),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
               style: GoogleFonts.ibmPlexSans(
                 fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: selected ? AppTheme.primary : AppTheme.textSecondary,
+                color: tone,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

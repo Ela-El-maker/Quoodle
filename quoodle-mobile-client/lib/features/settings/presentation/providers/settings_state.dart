@@ -2,6 +2,8 @@ import 'package:secure_device_control/features/settings/domain/entities/session_
 
 class SettingsState {
   const SettingsState({
+    required this.isLoading,
+    this.errorMessage,
     required this.notifCriticalAlerts,
     required this.notifDeviceOffline,
     required this.notifCommandFailed,
@@ -14,7 +16,8 @@ class SettingsState {
   });
 
   factory SettingsState.initial() {
-    return SettingsState(
+    return const SettingsState(
+      isLoading: true,
       notifCriticalAlerts: true,
       notifDeviceOffline: true,
       notifCommandFailed: true,
@@ -23,35 +26,12 @@ class SettingsState {
       notifTelemetryAnomaly: false,
       notifAuditEvents: false,
       notifWeeklyReport: true,
-      sessions: [
-        SessionEntry(
-          id: 'sess_001',
-          device: 'Chrome - macOS',
-          location: 'San Francisco, US',
-          ip: '192.168.1.42',
-          lastActive: DateTime.now().subtract(const Duration(minutes: 2)),
-          isCurrent: true,
-        ),
-        SessionEntry(
-          id: 'sess_002',
-          device: 'Firefox - Windows 11',
-          location: 'New York, US',
-          ip: '10.0.0.15',
-          lastActive: DateTime.now().subtract(const Duration(hours: 3)),
-          isCurrent: false,
-        ),
-        SessionEntry(
-          id: 'sess_003',
-          device: 'Safari - iPhone 15',
-          location: 'San Francisco, US',
-          ip: '172.16.0.8',
-          lastActive: DateTime.now().subtract(const Duration(days: 1)),
-          isCurrent: false,
-        ),
-      ],
+      sessions: <SessionEntry>[],
     );
   }
 
+  final bool isLoading;
+  final String? errorMessage;
   final bool notifCriticalAlerts;
   final bool notifDeviceOffline;
   final bool notifCommandFailed;
@@ -63,6 +43,9 @@ class SettingsState {
   final List<SessionEntry> sessions;
 
   SettingsState copyWith({
+    bool? isLoading,
+    String? errorMessage,
+    bool clearError = false,
     bool? notifCriticalAlerts,
     bool? notifDeviceOffline,
     bool? notifCommandFailed,
@@ -74,6 +57,8 @@ class SettingsState {
     List<SessionEntry>? sessions,
   }) {
     return SettingsState(
+      isLoading: isLoading ?? this.isLoading,
+      errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       notifCriticalAlerts: notifCriticalAlerts ?? this.notifCriticalAlerts,
       notifDeviceOffline: notifDeviceOffline ?? this.notifDeviceOffline,
       notifCommandFailed: notifCommandFailed ?? this.notifCommandFailed,
