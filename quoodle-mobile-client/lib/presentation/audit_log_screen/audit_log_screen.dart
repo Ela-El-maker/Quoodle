@@ -67,94 +67,107 @@ class AuditLogScreen extends ConsumerWidget {
     final auditState = ref.watch(auditLogControllerProvider);
     final logs = auditState.filteredLogs;
 
-    return Scaffold(
-      backgroundColor: AppTheme.background,
-      appBar: AppBar(
-        title: Text('Audit Log'),
-        actions: [
-          IconButton(
-            icon: Icon(
-              Icons.filter_list_rounded,
-              color: auditState.showFilters
-                  ? AppTheme.primary
-                  : AppTheme.textSecondary,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          return;
+        }
+        _handleBack(context);
+      },
+      child: Scaffold(
+        backgroundColor: AppTheme.background,
+        appBar: AppBar(
+          title: Text('Audit Log'),
+          actions: [
+            IconButton(
+              icon: Icon(
+                Icons.filter_list_rounded,
+                color: auditState.showFilters
+                    ? AppTheme.primary
+                    : AppTheme.textSecondary,
+              ),
+              onPressed: () =>
+                  ref.read(auditLogControllerProvider.notifier).toggleFilters(),
+              tooltip: 'Filters',
             ),
-            onPressed: () =>
-                ref.read(auditLogControllerProvider.notifier).toggleFilters(),
-            tooltip: 'Filters',
-          ),
-          IconButton(
-            icon: Icon(
-              Icons.download_rounded,
-              color: AppTheme.textSecondary,
+            IconButton(
+              icon: Icon(
+                Icons.download_rounded,
+                color: AppTheme.textSecondary,
+              ),
+              onPressed: () {},
+              tooltip: 'Export',
             ),
-            onPressed: () {},
-            tooltip: 'Export',
-          ),
-        ],
+          ],
+        ),
+        body: isTablet
+            ? Row(
+                children: [
+                  AppNavigation(
+                    currentIndex: 3,
+                    onTap: (i) => AppNavigator.navigateToTab(
+                      context,
+                      i,
+                      profileTabTarget: ProfileTabTarget.settings,
+                    ),
+                  ),
+                  Expanded(
+                    child: _buildBody(
+                      logs: logs,
+                      state: auditState,
+                      onSearchChanged: (v) => ref
+                          .read(auditLogControllerProvider.notifier)
+                          .setSearchQuery(v),
+                      onActionChanged: (v) => ref
+                          .read(auditLogControllerProvider.notifier)
+                          .setActionFilter(v),
+                      onRoleChanged: (v) => ref
+                          .read(auditLogControllerProvider.notifier)
+                          .setRoleFilter(v),
+                      onStatusChanged: (v) => ref
+                          .read(auditLogControllerProvider.notifier)
+                          .setStatusFilter(v),
+                    ),
+                  ),
+                ],
+              )
+            : Column(
+                children: [
+                  Expanded(
+                    child: _buildBody(
+                      logs: logs,
+                      state: auditState,
+                      onSearchChanged: (v) => ref
+                          .read(auditLogControllerProvider.notifier)
+                          .setSearchQuery(v),
+                      onActionChanged: (v) => ref
+                          .read(auditLogControllerProvider.notifier)
+                          .setActionFilter(v),
+                      onRoleChanged: (v) => ref
+                          .read(auditLogControllerProvider.notifier)
+                          .setRoleFilter(v),
+                      onStatusChanged: (v) => ref
+                          .read(auditLogControllerProvider.notifier)
+                          .setStatusFilter(v),
+                    ),
+                  ),
+                  AppNavigation(
+                    currentIndex: 3,
+                    onTap: (i) => AppNavigator.navigateToTab(
+                      context,
+                      i,
+                      profileTabTarget: ProfileTabTarget.settings,
+                    ),
+                  ),
+                ],
+              ),
       ),
-      body: isTablet
-          ? Row(
-              children: [
-                AppNavigation(
-                  currentIndex: 3,
-                  onTap: (i) => AppNavigator.navigateToTab(
-                    context,
-                    i,
-                    profileTabTarget: ProfileTabTarget.settings,
-                  ),
-                ),
-                Expanded(
-                  child: _buildBody(
-                    logs: logs,
-                    state: auditState,
-                    onSearchChanged: (v) => ref
-                        .read(auditLogControllerProvider.notifier)
-                        .setSearchQuery(v),
-                    onActionChanged: (v) => ref
-                        .read(auditLogControllerProvider.notifier)
-                        .setActionFilter(v),
-                    onRoleChanged: (v) => ref
-                        .read(auditLogControllerProvider.notifier)
-                        .setRoleFilter(v),
-                    onStatusChanged: (v) => ref
-                        .read(auditLogControllerProvider.notifier)
-                        .setStatusFilter(v),
-                  ),
-                ),
-              ],
-            )
-          : Column(
-              children: [
-                Expanded(
-                  child: _buildBody(
-                    logs: logs,
-                    state: auditState,
-                    onSearchChanged: (v) => ref
-                        .read(auditLogControllerProvider.notifier)
-                        .setSearchQuery(v),
-                    onActionChanged: (v) => ref
-                        .read(auditLogControllerProvider.notifier)
-                        .setActionFilter(v),
-                    onRoleChanged: (v) => ref
-                        .read(auditLogControllerProvider.notifier)
-                        .setRoleFilter(v),
-                    onStatusChanged: (v) => ref
-                        .read(auditLogControllerProvider.notifier)
-                        .setStatusFilter(v),
-                  ),
-                ),
-                AppNavigation(
-                  currentIndex: 3,
-                  onTap: (i) => AppNavigator.navigateToTab(
-                    context,
-                    i,
-                    profileTabTarget: ProfileTabTarget.settings,
-                  ),
-                ),
-              ],
-            ),
     );
+  }
+
+  void _handleBack(BuildContext context) {
+    AppNavigator.popOrGo(context, AppRoute.alerts);
   }
 
   Widget _buildBody({

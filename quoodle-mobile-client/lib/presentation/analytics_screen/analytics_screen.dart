@@ -38,56 +38,70 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     final analyticsState = ref.watch(analyticsControllerProvider);
     final isTablet = MediaQuery.of(context).size.width >= 600;
 
-    return Scaffold(
-      backgroundColor: AppTheme.background,
-      appBar: AppBar(
-        title: Text(
-          'Analytics',
-          style: GoogleFonts.ibmPlexSans(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: AppTheme.textPrimary,
-          ),
-        ),
-        backgroundColor: AppTheme.surfaceVariant,
-        actions: [
-          _TimeRangePicker(
-            selected: analyticsState.timeRange,
-            options: AnalyticsState.timeRanges,
-            onChanged: (v) =>
-                ref.read(analyticsControllerProvider.notifier).setTimeRange(v),
-          ),
-          SizedBox(width: 8),
-        ],
-      ),
-      body: isTablet
-          ? Row(
-              children: [
-                AppNavigation(
-                  currentIndex: _currentNavIndex,
-                  onTap: (i) => AppNavigator.navigateToTab(
-                    context,
-                    i,
-                    profileTabTarget: ProfileTabTarget.settings,
-                  ),
-                ),
-                Expanded(child: _buildBody(analyticsState)),
-              ],
-            )
-          : Column(
-              children: [
-                Expanded(child: _buildBody(analyticsState)),
-                AppNavigation(
-                  currentIndex: _currentNavIndex,
-                  onTap: (i) => AppNavigator.navigateToTab(
-                    context,
-                    i,
-                    profileTabTarget: ProfileTabTarget.settings,
-                  ),
-                ),
-              ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          return;
+        }
+        _handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: AppTheme.background,
+        appBar: AppBar(
+          title: Text(
+            'Analytics',
+            style: GoogleFonts.ibmPlexSans(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textPrimary,
             ),
+          ),
+          backgroundColor: AppTheme.surfaceVariant,
+          actions: [
+            _TimeRangePicker(
+              selected: analyticsState.timeRange,
+              options: AnalyticsState.timeRanges,
+              onChanged: (v) => ref
+                  .read(analyticsControllerProvider.notifier)
+                  .setTimeRange(v),
+            ),
+            SizedBox(width: 8),
+          ],
+        ),
+        body: isTablet
+            ? Row(
+                children: [
+                  AppNavigation(
+                    currentIndex: _currentNavIndex,
+                    onTap: (i) => AppNavigator.navigateToTab(
+                      context,
+                      i,
+                      profileTabTarget: ProfileTabTarget.settings,
+                    ),
+                  ),
+                  Expanded(child: _buildBody(analyticsState)),
+                ],
+              )
+            : Column(
+                children: [
+                  Expanded(child: _buildBody(analyticsState)),
+                  AppNavigation(
+                    currentIndex: _currentNavIndex,
+                    onTap: (i) => AppNavigator.navigateToTab(
+                      context,
+                      i,
+                      profileTabTarget: ProfileTabTarget.settings,
+                    ),
+                  ),
+                ],
+              ),
+      ),
     );
+  }
+
+  void _handleBack() {
+    AppNavigator.popOrGo(context, AppRoute.alerts);
   }
 
   Widget _buildBody(AnalyticsState analyticsState) {

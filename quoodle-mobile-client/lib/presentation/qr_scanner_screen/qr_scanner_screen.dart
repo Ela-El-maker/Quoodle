@@ -91,7 +91,10 @@ class _QrScannerScreenState extends State<QrScannerScreen>
         },
         onSuccess: () {
           Navigator.maybePop(context); // close dialog
-          _navigateToDeviceDetail(candidate.rawToken);
+          _navigateToDeviceDetail(
+            candidate.rawToken,
+            deviceId: candidate.deviceId,
+          );
         },
         onCancel: () => _resumeScanning(closeDialog: true),
       ),
@@ -217,28 +220,49 @@ class _QrScannerScreenState extends State<QrScannerScreen>
     });
   }
 
-  void _navigateToDeviceDetail(String token) {
+  void _navigateToDeviceDetail(String token, {String? deviceId}) {
     AppNavigator.pushAndPruneUntil(
       context,
       AppRoute.deviceDetail,
       predicate: (route) =>
           route.settings.name == AppNavigator.pathFor(AppRoute.devices),
-      arguments: {'pairedToken': token, 'fromPairing': true},
+      arguments: <String, dynamic>{
+        'pairedToken': token,
+        'fromPairing': true,
+        if (deviceId != null && deviceId.trim().isNotEmpty)
+          'deviceId': deviceId.trim(),
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          if (!_isManualEntry) _buildScannerView() else _buildManualEntryView(),
-          _buildTopBar(),
-          if (!_isManualEntry) _buildBottomControls(),
-        ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          return;
+        }
+        _handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: Stack(
+          children: [
+            if (!_isManualEntry)
+              _buildScannerView()
+            else
+              _buildManualEntryView(),
+            _buildTopBar(),
+            if (!_isManualEntry) _buildBottomControls(),
+          ],
+        ),
       ),
     );
+  }
+
+  void _handleBack() {
+    AppNavigator.popOrGo(context, AppRoute.devices);
   }
 
   Widget _buildScannerView() {
@@ -554,7 +578,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
           children: [
             _GlassButton(
               icon: Icons.arrow_back_ios_new_rounded,
-              onTap: () => Navigator.maybePop(context),
+              onTap: _handleBack,
             ),
             Spacer(),
             Text(

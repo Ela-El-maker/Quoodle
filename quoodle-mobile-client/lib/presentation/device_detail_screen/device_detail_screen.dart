@@ -51,16 +51,106 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
 
   @override
   Widget build(BuildContext context) {
-    final selectedDeviceId = _deviceId ?? 'dev-007';
-    final fallbackDevice = ref.watch(deviceDetailProvider('dev-007'));
-    final selectedDevice = ref.watch(deviceDetailProvider(selectedDeviceId));
-    final device = selectedDevice ?? fallbackDevice;
+    final selectedDeviceId = _deviceId;
+    if (selectedDeviceId == null || selectedDeviceId.trim().isEmpty) {
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) {
+            return;
+          }
+          _handleBack();
+        },
+        child: Scaffold(
+          backgroundColor: AppTheme.background,
+          appBar: AppBar(
+            title: Text('Device Detail'),
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_ios_new_rounded),
+              onPressed: _handleBack,
+            ),
+          ),
+          body: Center(
+            child: Text(
+              'Device ID is missing. Open device from the fleet list.',
+              style: GoogleFonts.ibmPlexSans(color: AppTheme.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
+
+    final deviceAsync = ref.watch(deviceDetailAsyncProvider(selectedDeviceId));
+
+    final device = deviceAsync.when(
+      data: (value) => value,
+      loading: () => null,
+      error: (_, __) => null,
+    );
+
+    if (deviceAsync.isLoading) {
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) {
+            return;
+          }
+          _handleBack();
+        },
+        child: Scaffold(
+          backgroundColor: AppTheme.background,
+          appBar: AppBar(
+            title: Text('Device Detail'),
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_ios_new_rounded),
+              onPressed: _handleBack,
+            ),
+          ),
+          body: Center(
+            child: CircularProgressIndicator(color: AppTheme.primary),
+          ),
+        ),
+      );
+    }
 
     if (device == null) {
-      return Scaffold(
-        backgroundColor: AppTheme.background,
-        appBar: AppBar(title: Text('Device Detail')),
-        body: Center(child: Text('Device not found')),
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) {
+            return;
+          }
+          _handleBack();
+        },
+        child: Scaffold(
+          backgroundColor: AppTheme.background,
+          appBar: AppBar(
+            title: Text('Device Detail'),
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_ios_new_rounded),
+              onPressed: _handleBack,
+            ),
+          ),
+          body: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Device not found for ID: $selectedDeviceId',
+                  style: GoogleFonts.ibmPlexSans(color: AppTheme.textSecondary),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: () => ref
+                      .invalidate(deviceDetailAsyncProvider(selectedDeviceId)),
+                  child: Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
@@ -126,6 +216,10 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen>
       final fromDeviceId = map['deviceId'];
       if (fromDeviceId is String && fromDeviceId.isNotEmpty) {
         return fromDeviceId;
+      }
+      final fromDeviceIdSnake = map['device_id'];
+      if (fromDeviceIdSnake is String && fromDeviceIdSnake.isNotEmpty) {
+        return fromDeviceIdSnake;
       }
       final fromId = map['id'];
       if (fromId is String && fromId.isNotEmpty) {

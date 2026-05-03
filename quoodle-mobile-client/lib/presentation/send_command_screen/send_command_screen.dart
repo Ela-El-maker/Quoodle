@@ -142,8 +142,8 @@ class SendCommandScreen extends ConsumerStatefulWidget {
 }
 
 class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
-  String _targetDeviceId = 'dev-007';
-  String _targetDeviceName = 'WKS-FINANCE-07';
+  String _targetDeviceId = '';
+  String _targetDeviceName = '';
   bool _targetResolved = false;
 
   SendCommandState get _flowState => ref.read(sendCommandControllerProvider);
@@ -246,6 +246,22 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
   }
 
   Future<void> _submitCommand() async {
+    if (_targetDeviceId.trim().isEmpty) {
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              'Missing target device. Open Send Command from a device detail page.',
+            ),
+            backgroundColor: AppTheme.error,
+          ),
+        );
+      return;
+    }
+
     final dispatchResult =
         await ref.read(sendCommandControllerProvider.notifier).dispatchCommand(
               deviceId: _targetDeviceId,
@@ -329,76 +345,99 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
     final resolvedDevice = ref.watch(deviceDetailProvider(_targetDeviceId));
     final targetDeviceName = resolvedDevice?.name ?? _targetDeviceName;
 
-    return Scaffold(
-      backgroundColor: AppTheme.background,
-      appBar: AppBar(
-        backgroundColor: AppTheme.surface,
-        elevation: 0,
-        scrolledUnderElevation: 1,
-        surfaceTintColor: Colors.transparent,
-        shadowColor: AppTheme.border,
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back_ios_new_rounded,
-            size: 18,
-            color: AppTheme.textPrimary,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          return;
+        }
+        _handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: AppTheme.background,
+        appBar: AppBar(
+          backgroundColor: AppTheme.surface,
+          elevation: 0,
+          scrolledUnderElevation: 1,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: AppTheme.border,
+          leading: IconButton(
+            icon: Icon(
+              Icons.arrow_back_ios_new_rounded,
+              size: 18,
+              color: AppTheme.textPrimary,
+            ),
+            onPressed: _handleBack,
           ),
-          onPressed: () => Navigator.maybePop(context),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Send Command',
-              style: GoogleFonts.ibmPlexSans(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.textPrimary,
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Send Command',
+                style: GoogleFonts.ibmPlexSans(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textPrimary,
+                ),
               ),
-            ),
-            Text(
-              targetDeviceName,
-              style: GoogleFonts.ibmPlexMono(
-                fontSize: 10,
-                color: AppTheme.textMuted,
+              Text(
+                targetDeviceName,
+                style: GoogleFonts.ibmPlexMono(
+                  fontSize: 10,
+                  color: AppTheme.textMuted,
+                ),
               ),
-            ),
-          ],
-        ),
-        actions: [
-          if (_selectedMethod.sensitive)
-            Container(
-              margin: const EdgeInsets.only(right: 16),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppTheme.warningMuted,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppTheme.warning.withAlpha(102)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.security_rounded,
-                    size: 12,
-                    color: AppTheme.warning,
-                  ),
-                  SizedBox(width: 4),
-                  Text(
-                    'SENSITIVE',
-                    style: GoogleFonts.ibmPlexMono(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
+            ],
+          ),
+          actions: [
+            if (_selectedMethod.sensitive)
+              Container(
+                margin: const EdgeInsets.only(right: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.warningMuted,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppTheme.warning.withAlpha(102)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.security_rounded,
+                      size: 12,
                       color: AppTheme.warning,
                     ),
-                  ),
-                ],
+                    SizedBox(width: 4),
+                    Text(
+                      'SENSITIVE',
+                      style: GoogleFonts.ibmPlexMono(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.warning,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
+        body: _buildCommandForm(),
+        bottomNavigationBar: _buildSubmitBar(),
       ),
-      body: _buildCommandForm(),
-      bottomNavigationBar: _buildSubmitBar(),
+    );
+  }
+
+  void _handleBack() {
+    final hasDeviceId = _targetDeviceId.trim().isNotEmpty;
+    AppNavigator.popOrGo(
+      context,
+      hasDeviceId ? AppRoute.deviceDetail : AppRoute.devices,
+      arguments: hasDeviceId
+          ? <String, dynamic>{
+              'deviceId': _targetDeviceId,
+              'deviceName': _targetDeviceName,
+            }
+          : null,
     );
   }
 
@@ -1526,7 +1565,13 @@ class _SendCommandScreenState extends ConsumerState<SendCommandScreen> {
 
   String get _currentTargetDeviceName {
     final resolved = ref.read(deviceDetailProvider(_targetDeviceId));
-    return resolved?.name ?? _targetDeviceName;
+    if (resolved?.name.trim().isNotEmpty == true) {
+      return resolved!.name;
+    }
+    if (_targetDeviceName.trim().isNotEmpty) {
+      return _targetDeviceName;
+    }
+    return 'Unknown Device';
   }
 
   // ── Submit Bar ───────────────────────────────────────────────────────────────

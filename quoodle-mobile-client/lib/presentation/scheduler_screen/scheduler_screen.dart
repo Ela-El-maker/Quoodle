@@ -64,44 +64,57 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen>
         )
         .toList();
 
-    return Scaffold(
-      backgroundColor: AppTheme.background,
-      extendBodyBehindAppBar: true,
-      appBar: _buildAppBar(),
-      body: Column(
-        children: [
-          SizedBox(height: MediaQuery.of(context).padding.top + 56),
-          _buildStatsRow(jobs),
-          _buildTabBar(),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildJobList(
-                  activeJobs,
-                  'active',
-                  isInitializing: schedulerInit.isLoading,
-                ),
-                _buildJobList(
-                  pausedJobs,
-                  'paused',
-                  isInitializing: schedulerInit.isLoading,
-                ),
-                _buildHistoryList(
-                  historyJobs,
-                  isInitializing: schedulerInit.isLoading,
-                ),
-              ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          return;
+        }
+        _handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: AppTheme.background,
+        extendBodyBehindAppBar: true,
+        appBar: _buildAppBar(),
+        body: Column(
+          children: [
+            SizedBox(height: MediaQuery.of(context).padding.top + 56),
+            _buildStatsRow(jobs),
+            _buildTabBar(),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildJobList(
+                    activeJobs,
+                    'active',
+                    isInitializing: schedulerInit.isLoading,
+                  ),
+                  _buildJobList(
+                    pausedJobs,
+                    'paused',
+                    isInitializing: schedulerInit.isLoading,
+                  ),
+                  _buildHistoryList(
+                    historyJobs,
+                    isInitializing: schedulerInit.isLoading,
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
-      floatingActionButton: _buildFab(),
-      bottomNavigationBar: AppNavigation(
-        currentIndex: _currentNavIndex,
-        onTap: _onNavTap,
+          ],
+        ),
+        floatingActionButton: _buildFab(),
+        bottomNavigationBar: AppNavigation(
+          currentIndex: _currentNavIndex,
+          onTap: _onNavTap,
+        ),
       ),
     );
+  }
+
+  void _handleBack() {
+    AppNavigator.popOrGo(context, AppRoute.alerts);
   }
 
   PreferredSizeWidget _buildAppBar() {

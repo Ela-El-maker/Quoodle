@@ -38,48 +38,61 @@ class _NotificationCenterScreenState
     final state = ref.watch(notificationCenterControllerProvider);
     final controller = ref.read(notificationCenterControllerProvider.notifier);
 
-    return Scaffold(
-      backgroundColor: AppTheme.background,
-      extendBodyBehindAppBar: true,
-      appBar: _buildAppBar(state.unreadCount),
-      body: Column(
-        children: [
-          SizedBox(height: MediaQuery.of(context).padding.top + 56),
-          _buildFilterRow(state),
-          Expanded(
-            child: state.filteredNotifications.isEmpty
-                ? EmptyStateWidget(
-                    icon: Icons.notifications_none_rounded,
-                    title: 'No Notifications',
-                    subtitle: 'Notifications will appear here',
-                  )
-                : RefreshIndicator(
-                    color: AppTheme.primary,
-                    backgroundColor: AppTheme.surfaceVariant,
-                    onRefresh: () async =>
-                        await Future.delayed(Duration(milliseconds: 500)),
-                    child: ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
-                      itemCount: state.filteredNotifications.length,
-                      itemBuilder: (ctx, i) => _NotificationTile(
-                        notification: state.filteredNotifications[i],
-                        onTap: () => controller.openNotification(
-                            state.filteredNotifications[i].id),
-                        onDismiss: () => controller.deleteNotification(
-                            state.filteredNotifications[i].id),
-                        onMarkRead: () => controller
-                            .markAsRead(state.filteredNotifications[i].id),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          return;
+        }
+        _handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: AppTheme.background,
+        extendBodyBehindAppBar: true,
+        appBar: _buildAppBar(state.unreadCount),
+        body: Column(
+          children: [
+            SizedBox(height: MediaQuery.of(context).padding.top + 56),
+            _buildFilterRow(state),
+            Expanded(
+              child: state.filteredNotifications.isEmpty
+                  ? EmptyStateWidget(
+                      icon: Icons.notifications_none_rounded,
+                      title: 'No Notifications',
+                      subtitle: 'Notifications will appear here',
+                    )
+                  : RefreshIndicator(
+                      color: AppTheme.primary,
+                      backgroundColor: AppTheme.surfaceVariant,
+                      onRefresh: () async =>
+                          await Future.delayed(Duration(milliseconds: 500)),
+                      child: ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
+                        itemCount: state.filteredNotifications.length,
+                        itemBuilder: (ctx, i) => _NotificationTile(
+                          notification: state.filteredNotifications[i],
+                          onTap: () => controller.openNotification(
+                              state.filteredNotifications[i].id),
+                          onDismiss: () => controller.deleteNotification(
+                              state.filteredNotifications[i].id),
+                          onMarkRead: () => controller
+                              .markAsRead(state.filteredNotifications[i].id),
+                        ),
                       ),
                     ),
-                  ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: AppNavigation(
-        currentIndex: _currentNavIndex,
-        onTap: _onNavTap,
+            ),
+          ],
+        ),
+        bottomNavigationBar: AppNavigation(
+          currentIndex: _currentNavIndex,
+          onTap: _onNavTap,
+        ),
       ),
     );
+  }
+
+  void _handleBack() {
+    AppNavigator.popOrGo(context, AppRoute.alerts);
   }
 
   PreferredSizeWidget _buildAppBar(int unread) {
