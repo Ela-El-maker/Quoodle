@@ -53,6 +53,15 @@ Telemetry-path focused checks.
 ./scripts/test_telemetry_worker.sh
 ```
 
+### `test_mobile_command_flow.ps1`
+
+Live mobile-path command smoke test against control-plane API.
+It dispatches with `X-Quoodle-Client-Channel: mobile_app`, polls command state, and fails if not `completed`.
+
+```powershell
+pwsh .\scripts\test_mobile_command_flow.ps1 -Jwt "<token>" -DeviceId "<device-id>" -BaseUrl "http://161.35.62.116:8088"
+```
+
 ### `preflight_production.ps1`
 
 Validates production env completeness and guardrails before deployment.
