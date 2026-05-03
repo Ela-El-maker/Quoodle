@@ -5,11 +5,15 @@ namespace App\Services\Auth;
 use App\Models\AuthToken;
 use App\Models\User;
 use App\Services\JWT\JWTSigner;
+use App\Services\Mobile\MobileDeviceTracker;
 use Illuminate\Support\Str;
 
 class AuthSessionService
 {
-    public function __construct(private readonly JWTSigner $jwtSigner)
+    public function __construct(
+        private readonly JWTSigner $jwtSigner,
+        private readonly MobileDeviceTracker $mobileTracker,
+    )
     {
     }
 
@@ -39,6 +43,13 @@ class AuthSessionService
             'refresh_token_hash' => hash('sha256', $refreshToken),
             'expires_at' => now()->addSeconds((int) config('jwt.refresh_ttl', 3600)),
         ]);
+
+        if (is_string($deviceFingerprint) && trim($deviceFingerprint) !== '') {
+            $this->mobileTracker->touch($user, [
+                'device_fingerprint' => trim($deviceFingerprint),
+                'push_token' => $pushToken,
+            ]);
+        }
 
         return [
             'jwt' => $this->jwtSigner->issueForUser($user, $sessionId),

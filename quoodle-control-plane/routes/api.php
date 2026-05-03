@@ -24,6 +24,7 @@ use App\Http\Controllers\Notifications\NotificationsController;
 use App\Http\Controllers\Schedules\ScheduleController;
 use App\Http\Controllers\Schedules\ScheduleRunsController;
 use App\Http\Controllers\Settings\AlertRuleController;
+use App\Http\Controllers\Settings\ComplianceControlController;
 use App\Http\Controllers\Settings\ComplianceThresholdController;
 use App\Http\Controllers\Settings\PolicyEntryController;
 use App\Http\Controllers\Settings\RolePermissionController;
@@ -240,6 +241,12 @@ Route::middleware(['api', 'jwt.auth'])->group(function (): void {
         // Policy editor
         Route::get('/policy-entries', [PolicyEntryController::class, 'index'])->middleware('permission:manage_settings');
         Route::patch('/policy-entries/{id}', [PolicyEntryController::class, 'update'])->middleware('permission:manage_settings');
+
+        // Compliance thresholds
+        Route::get('/compliance-controls', [ComplianceControlController::class, 'index'])->middleware('permission:view_compliance');
+        Route::post('/compliance-controls', [ComplianceControlController::class, 'store'])->middleware('permission:manage_compliance');
+        Route::patch('/compliance-controls/{id}', [ComplianceControlController::class, 'update'])->middleware('permission:manage_compliance');
+        Route::delete('/compliance-controls/{id}', [ComplianceControlController::class, 'destroy'])->middleware('permission:manage_compliance');
 
         // Compliance thresholds
         Route::get('/compliance-thresholds', [ComplianceThresholdController::class, 'index'])->middleware('permission:view_compliance');

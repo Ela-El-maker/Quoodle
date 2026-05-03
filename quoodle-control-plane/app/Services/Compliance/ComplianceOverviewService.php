@@ -6,17 +6,20 @@ use App\Models\Alert;
 use App\Models\Command;
 use App\Models\Device;
 use App\Models\DeviceTelemetryLatest;
+use App\Models\SettingComplianceControl;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 
 class ComplianceOverviewService
 {
-    private const FIXED_CHECKS = [
+    private const DEFAULT_CONTROL_DEFINITIONS = [
         [
             'id' => 'CC-001',
+            'evaluator' => 'attestation_boot',
             'category' => 'Attestation',
             'control' => 'TPM-ATTEST-01',
             'description' => 'All devices must pass TPM attestation on boot',
@@ -25,6 +28,7 @@ class ComplianceOverviewService
         ],
         [
             'id' => 'CC-002',
+            'evaluator' => 'policy_hash_sync',
             'category' => 'Policy Sync',
             'control' => 'POL-SYNC-01',
             'description' => 'Device policy hash must match fleet policy-2026-04',
@@ -33,6 +37,7 @@ class ComplianceOverviewService
         ],
         [
             'id' => 'CC-003',
+            'evaluator' => 'kernel_guard_active',
             'category' => 'Kernel Guard',
             'control' => 'KG-DRIVER-01',
             'description' => 'Kernel Guard driver must be active on all managed devices',
@@ -41,6 +46,7 @@ class ComplianceOverviewService
         ],
         [
             'id' => 'CC-004',
+            'evaluator' => 'agent_version_minimum',
             'category' => 'Agent Version',
             'control' => 'AGENT-VER-01',
             'description' => 'All agents must run version 0.0.1 or higher',
@@ -49,6 +55,7 @@ class ComplianceOverviewService
         ],
         [
             'id' => 'CC-005',
+            'evaluator' => 'disk_encryption_enabled',
             'category' => 'Encryption',
             'control' => 'ENC-DISK-01',
             'description' => 'Full disk encryption must be enabled on all endpoints',
@@ -57,6 +64,7 @@ class ComplianceOverviewService
         ],
         [
             'id' => 'CC-006',
+            'evaluator' => 'command_auth_integrity',
             'category' => 'Command Auth',
             'control' => 'CMD-AUTH-01',
             'description' => 'All commands must be Ed25519 signed and 2FA verified',
@@ -65,6 +73,7 @@ class ComplianceOverviewService
         ],
         [
             'id' => 'CC-007',
+            'evaluator' => 'heartbeat_freshness',
             'category' => 'Heartbeat',
             'control' => 'HB-INTERVAL-01',
             'description' => 'Device heartbeat interval must not exceed 60 seconds',
@@ -73,6 +82,7 @@ class ComplianceOverviewService
         ],
         [
             'id' => 'CC-008',
+            'evaluator' => 'quarantine_enforcement',
             'category' => 'Quarantine',
             'control' => 'QUAR-POLICY-01',
             'description' => 'Quarantined devices must block all non-remediation commands',
@@ -108,6 +118,8 @@ class ComplianceOverviewService
     {
         /** @var User|null $user */
         $user = $request->user();
+        $controlDefinitions = $this->controlDefinitions();
+
         if (! $user) {
             return [
                 'last_scan_at' => now('UTC')->toIso8601String(),
@@ -115,11 +127,11 @@ class ComplianceOverviewService
                     'compliant' => 0,
                     'drift' => 0,
                     'non_compliant' => 0,
-                    'pending' => count(self::FIXED_CHECKS),
-                    'total' => count(self::FIXED_CHECKS),
+                    'pending' => $controlDefinitions->count(),
+                    'total' => $controlDefinitions->count(),
                     'score' => 0,
                 ],
-                'checks' => collect(self::FIXED_CHECKS)->map(fn (array $check): array => [
+                'checks' => $controlDefinitions->map(fn (array $check): array => [
                     'id' => $check['id'],
                     'category' => $check['category'],
                     'control' => $check['control'],
@@ -327,7 +339,7 @@ class ComplianceOverviewService
             ->unique()
             ->values();
 
-        $checks = collect(self::FIXED_CHECKS)->map(function (array $definition) use (
+        $checks = $controlDefinitions->map(function (array $definition) use (
             $lastChecked,
             $deviceIds,
             $attestationAlertDevices,
@@ -349,37 +361,46 @@ class ComplianceOverviewService
             $affected = collect();
             $hasSignal = false;
             $status = 'pending';
+            $evaluator = strtolower(trim((string) ($definition['evaluator'] ?? $definition['id'] ?? '')));
 
-            switch ($definition['id']) {
-                case 'CC-001':
+            switch ($evaluator) {
+                case 'attestation_boot':
+                case 'cc-001':
                     $hasSignal = $deviceIds->isNotEmpty();
                     $affected = $attestationAlertDevices->isNotEmpty() ? $attestationAlertDevices : $nonCompliantDevices;
                     break;
-                case 'CC-002':
+                case 'policy_hash_sync':
+                case 'cc-002':
                     $hasSignal = $policySignalCount > 0;
                     $affected = $policyMismatchDevices;
                     break;
-                case 'CC-003':
+                case 'kernel_guard_active':
+                case 'cc-003':
                     $hasSignal = $kernelSignalCount > 0 || $kernelOffDevices->isNotEmpty();
                     $affected = $kernelOffDevices;
                     break;
-                case 'CC-004':
+                case 'agent_version_minimum':
+                case 'cc-004':
                     $hasSignal = $agentSignalCount > 0;
                     $affected = $oldAgentDevices;
                     break;
-                case 'CC-005':
+                case 'disk_encryption_enabled':
+                case 'cc-005':
                     $hasSignal = $encryptionSignalCount > 0 || $encryptionOffDevices->isNotEmpty();
                     $affected = $encryptionOffDevices;
                     break;
-                case 'CC-006':
+                case 'command_auth_integrity':
+                case 'cc-006':
                     $hasSignal = $authSignalCommands->isNotEmpty();
                     $affected = $unsignedCommandDevices;
                     break;
-                case 'CC-007':
+                case 'heartbeat_freshness':
+                case 'cc-007':
                     $hasSignal = $heartbeatSignalCount > 0;
                     $affected = $heartbeatDriftDevices;
                     break;
-                case 'CC-008':
+                case 'quarantine_enforcement':
+                case 'cc-008':
                     $hasSignal = true;
                     $affected = $quarantineViolations;
                     break;
@@ -449,5 +470,50 @@ class ComplianceOverviewService
 
         return null;
     }
-}
 
+    /**
+     * @return Collection<int, array{
+     *   id: string,
+     *   evaluator: string,
+     *   category: string,
+     *   control: string,
+     *   description: string,
+     *   severity: string,
+     *   failure_status: string
+     * }>
+     */
+    private function controlDefinitions(): Collection
+    {
+        if (Schema::hasTable('setting_compliance_controls')) {
+            $controls = SettingComplianceControl::query()
+                ->where('enabled', true)
+                ->orderBy('sort_order')
+                ->orderBy('check_id')
+                ->get([
+                    'check_id',
+                    'evaluator',
+                    'category',
+                    'control',
+                    'description',
+                    'severity',
+                    'failure_status',
+                ]);
+
+            if ($controls->isNotEmpty()) {
+                return $controls->map(static function (SettingComplianceControl $control): array {
+                    return [
+                        'id' => (string) $control->check_id,
+                        'evaluator' => (string) $control->evaluator,
+                        'category' => (string) $control->category,
+                        'control' => (string) $control->control,
+                        'description' => (string) $control->description,
+                        'severity' => (string) $control->severity,
+                        'failure_status' => (string) $control->failure_status,
+                    ];
+                })->values();
+            }
+        }
+
+        return collect(self::DEFAULT_CONTROL_DEFINITIONS)->values();
+    }
+}
