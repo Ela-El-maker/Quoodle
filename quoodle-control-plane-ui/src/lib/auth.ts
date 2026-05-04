@@ -37,6 +37,7 @@ export function roleHomePath(role: UserRole): string {
 export const OPERATOR_ALLOWED_PREFIXES: readonly string[] = [
   '/operator-console',
   '/device-management',
+  '/mobile-devices',
   '/device-detail',
   '/command-dispatch',
   '/command-results',
@@ -54,6 +55,7 @@ export const OPERATOR_ALLOWED_PREFIXES: readonly string[] = [
 export const VIEWER_ALLOWED_PREFIXES: readonly string[] = [
   '/viewer-console',
   '/device-management',
+  '/mobile-devices',
   '/device-detail',
   '/notifications',
   '/compliance',

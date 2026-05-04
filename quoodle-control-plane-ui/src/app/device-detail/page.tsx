@@ -5,7 +5,7 @@ import DeviceDetailPageContent from './components/DeviceDetailPageContent';
 
 export default function DeviceDetailPage() {
   return (
-    <AppLayout>
+    <AppLayout currentPath="/device-detail">
       <Suspense fallback={<div className="p-8 text-center text-muted-foreground text-sm">Loading device…</div>}>
         <DeviceDetailPageContent />
       </Suspense>

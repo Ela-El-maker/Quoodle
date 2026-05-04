@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Monitor, ShieldCheck, ChevronRight, Search, CheckCircle2, Info, Lock, Link2 } from 'lucide-react';
@@ -415,3 +415,5 @@ export default function ViewerDashboard() {
     </div>
   );
 }
+
+

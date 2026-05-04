@@ -301,8 +301,8 @@ export default function DispatchCommandModal({ onClose }: DispatchCommandModalPr
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-      <div className="bg-card border border-border rounded-xl w-full max-w-lg shadow-2xl fade-in">
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-start sm:items-center justify-center p-4 sm:p-6 overflow-y-auto">
+      <div className="bg-card border border-border rounded-xl w-full max-w-lg shadow-2xl fade-in max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3rem)] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -324,7 +324,7 @@ export default function DispatchCommandModal({ onClose }: DispatchCommandModalPr
             <p className="text-xs text-muted-foreground mt-1">{commandId ?? 'Command'} - Dispatching to gateway...</p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit(onSubmit)} className="p-5 space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
             {loadError && (
               <div className="text-[11px] text-red-400 bg-red-500/5 border border-red-500/20 rounded-md px-3 py-2">
                 Failed to load data

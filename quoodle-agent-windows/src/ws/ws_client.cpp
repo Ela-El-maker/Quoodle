@@ -773,6 +773,32 @@ static std::string wide_to_utf8(const std::wstring &value)
 
 static std::string normalize_windows_path_for_match(std::string value)
 {
+  value = trim_copy(value);
+  if (value.size() >= 2)
+  {
+    const char first = value.front();
+    const char last = value.back();
+    if ((first == '"' && last == '"') || (first == '\'' && last == '\''))
+    {
+      value = trim_copy(value.substr(1, value.size() - 2));
+    }
+  }
+
+  // Some Windows APIs emit prefixed paths (\\?\ or \??\); strip them for stable matching.
+  const auto lower = to_lower_copy(value);
+  if (lower.rfind("\\\\?\\unc\\", 0) == 0 && value.size() > 8)
+  {
+    value = "\\\\" + value.substr(8);
+  }
+  else if (lower.rfind("\\\\?\\", 0) == 0 && value.size() > 4)
+  {
+    value = value.substr(4);
+  }
+  else if (lower.rfind("\\??\\", 0) == 0 && value.size() > 4)
+  {
+    value = value.substr(4);
+  }
+
   std::replace(value.begin(), value.end(), '/', '\\');
   return to_lower_copy(std::move(value));
 }
@@ -789,6 +815,30 @@ static std::string basename_from_path(const std::string &path)
     return {};
   }
   return path.substr(pos + 1);
+}
+
+static std::string normalize_basename_for_match(std::string value, bool allow_implicit_exe)
+{
+  std::string candidate = basename_from_path(normalize_windows_path_for_match(std::move(value)));
+  candidate = trim_copy(candidate);
+  if (candidate.empty())
+  {
+    return {};
+  }
+  if (allow_implicit_exe && candidate.find('.') == std::string::npos)
+  {
+    candidate += ".exe";
+  }
+  return candidate;
+}
+
+static std::string basename_without_exe_suffix(std::string value)
+{
+  if (value.size() > 4 && value.rfind(".exe") == value.size() - 4)
+  {
+    return value.substr(0, value.size() - 4);
+  }
+  return value;
 }
 
 struct AppLockRuntimeRule
@@ -828,15 +878,26 @@ static std::vector<AppLockRuntimeRule> extract_runtime_block_rules(const nlohman
       continue;
     }
 
-    const std::string value = sanitize_app_lock_scalar(rule.value("value", std::string()));
-    if (value.empty())
+    const std::string raw_value = sanitize_app_lock_scalar(rule.value("value", std::string()));
+    if (raw_value.empty())
     {
       continue;
     }
 
     AppLockRuntimeRule normalized{};
     normalized.match_type = match_type;
-    normalized.value = normalize_windows_path_for_match(value);
+    if (match_type == "basename")
+    {
+      normalized.value = normalize_basename_for_match(raw_value, true);
+    }
+    else
+    {
+      normalized.value = normalize_windows_path_for_match(raw_value);
+    }
+    if (normalized.value.empty())
+    {
+      continue;
+    }
     rules.push_back(std::move(normalized));
     if (rules.size() >= 256)
     {
@@ -909,7 +970,18 @@ static bool process_matches_runtime_rule(
 {
   if (rule.match_type == "basename")
   {
-    return rule.value == exe_name_lower || (!path_basename_lower.empty() && rule.value == path_basename_lower);
+    if (rule.value == exe_name_lower || (!path_basename_lower.empty() && rule.value == path_basename_lower))
+    {
+      return true;
+    }
+
+    const std::string rule_without_exe = basename_without_exe_suffix(rule.value);
+    if (rule_without_exe.empty())
+    {
+      return false;
+    }
+    return rule_without_exe == basename_without_exe_suffix(exe_name_lower) ||
+           (!path_basename_lower.empty() && rule_without_exe == basename_without_exe_suffix(path_basename_lower));
   }
 
   if (rule.match_type == "full_path")
@@ -956,10 +1028,10 @@ static std::size_t enforce_runtime_kill_sweep(
         continue;
       }
 
-      const std::string exe_name_lower = to_lower_copy(wide_to_utf8(entry.szExeFile));
+      const std::string exe_name_lower = normalize_basename_for_match(wide_to_utf8(entry.szExeFile), true);
       const std::string process_path = query_process_image_path_utf8(pid);
       const std::string process_path_normalized = normalize_windows_path_for_match(process_path);
-      const std::string path_basename_lower = to_lower_copy(basename_from_path(process_path_normalized));
+      const std::string path_basename_lower = normalize_basename_for_match(process_path_normalized, true);
 
       for (const auto &rule : rules)
       {
@@ -1070,7 +1142,19 @@ static bool build_app_lock_policy_blob(const nlohmann::json &app_lock,
         continue;
       }
 
-      const std::string value = sanitize_app_lock_scalar(rule.value("value", std::string()));
+      std::string value = sanitize_app_lock_scalar(rule.value("value", std::string()));
+      if (value.empty())
+      {
+        continue;
+      }
+      if (match_type == "basename")
+      {
+        value = normalize_basename_for_match(value, true);
+      }
+      else
+      {
+        value = normalize_windows_path_for_match(value);
+      }
       if (value.empty())
       {
         continue;
@@ -2033,6 +2117,30 @@ bool WsClient::try_connect()
   auto last_heartbeat_tick = std::chrono::steady_clock::now();
   auto last_telemetry_tick = std::chrono::steady_clock::now();
   auto last_replay_tick = std::chrono::steady_clock::now();
+#ifdef _WIN32
+  std::mutex runtime_applock_mutex;
+  nlohmann::json runtime_applock_policy = nlohmann::json::object();
+  bool runtime_applock_fallback_active = false;
+  auto last_runtime_applock_tick = std::chrono::steady_clock::now();
+  auto set_runtime_applock_fallback = [&](bool enabled, const nlohmann::json &policy, const std::string &reason) {
+    bool previous = false;
+    {
+      std::lock_guard<std::mutex> guard(runtime_applock_mutex);
+      previous = runtime_applock_fallback_active;
+      runtime_applock_fallback_active = enabled;
+      runtime_applock_policy = enabled ? policy : nlohmann::json::object();
+    }
+
+    if (enabled && !previous)
+    {
+      Logger::log(LogLevel::Warn, "app_lock runtime fallback enabled: " + reason);
+    }
+    else if (!enabled && previous)
+    {
+      Logger::log(LogLevel::Info, "app_lock runtime fallback disabled: " + reason);
+    }
+  };
+#endif
 
   // Reset per-connection state
   heartbeat_sent_ = false;
@@ -2230,14 +2338,23 @@ bool WsClient::try_connect()
                                 } else if (status_res.status != "ok") {
                                     Logger::log(LogLevel::Warn, "app_lock status readback after clear failed: " + status_res.error_message);
                                 }
+#ifdef _WIN32
+                                set_runtime_applock_fallback(false, nlohmann::json::object(), "policy cleared");
+#endif
                             } else {
                                 Logger::log(LogLevel::Error, "app_lock clear failed: " + clear_res.error_message);
+#ifdef _WIN32
+                                set_runtime_applock_fallback(false, nlohmann::json::object(), "policy clear failed");
+#endif
                             }
                         } else {
                             std::string blob;
                             std::string build_error;
                             if (!build_app_lock_policy_blob(body["app_lock"], policy_hash, blob, build_error)) {
                                 Logger::log(LogLevel::Warn, "app_lock policy ignored: " + build_error);
+#ifdef _WIN32
+                                set_runtime_applock_fallback(false, nlohmann::json::object(), "policy payload invalid");
+#endif
                             } else {
                                 const bool kill_running_on_apply = app_lock_should_kill_running_on_apply(body["app_lock"]);
 #ifdef _WIN32
@@ -2272,6 +2389,9 @@ bool WsClient::try_connect()
                                         Logger::log(LogLevel::Warn, "app_lock status readback after apply failed: " + status_res.error_message);
                                     }
 #ifdef _WIN32
+                                    set_runtime_applock_fallback(false, nlohmann::json::object(), "kernel policy apply succeeded");
+#endif
+#ifdef _WIN32
                                     if (kill_running_on_apply) {
                                         std::size_t post_kill_failures = 0;
                                         const std::size_t post_killed_now = enforce_runtime_kill_sweep(
@@ -2290,6 +2410,13 @@ bool WsClient::try_connect()
 #endif
                                 } else {
                                     Logger::log(LogLevel::Error, "app_lock apply failed: " + apply_res.error_message);
+#ifdef _WIN32
+                                    if (!extract_runtime_block_rules(body["app_lock"]).empty()) {
+                                        set_runtime_applock_fallback(true, body["app_lock"], "kernel apply failed");
+                                    } else {
+                                        set_runtime_applock_fallback(false, nlohmann::json::object(), "no runtime block rules");
+                                    }
+#endif
 #ifdef _WIN32
                                     if (kill_running_on_apply) {
                                         std::size_t fallback_kill_failures = 0;
@@ -2818,6 +2945,43 @@ bool WsClient::try_connect()
           replay_queued_telemetry();
           last_replay_tick = now;
         }
+
+#ifdef _WIN32
+        if (now - last_runtime_applock_tick >= std::chrono::seconds(3))
+        {
+          nlohmann::json fallback_policy = nlohmann::json::object();
+          bool fallback_active = false;
+          {
+            std::lock_guard<std::mutex> guard(runtime_applock_mutex);
+            fallback_active = runtime_applock_fallback_active;
+            if (fallback_active)
+            {
+              fallback_policy = runtime_applock_policy;
+            }
+          }
+
+          if (fallback_active)
+          {
+            IoctlClient policy_client;
+            std::size_t fallback_failures = 0;
+            const std::size_t fallback_killed_now = enforce_runtime_kill_sweep(
+                fallback_policy,
+                policy_client,
+                state_impl_,
+                "runtime-applock-" + std::to_string(static_cast<long long>(std::time(nullptr))),
+                fallback_failures);
+            if (fallback_killed_now > 0 || fallback_failures > 0)
+            {
+              Logger::log(
+                  fallback_failures == 0 ? LogLevel::Warn : LogLevel::Error,
+                  "app_lock runtime fallback sweep (killed=" + std::to_string(fallback_killed_now) +
+                      ", failed=" + std::to_string(fallback_failures) + ")");
+            }
+          }
+
+          last_runtime_applock_tick = now;
+        }
+#endif
 
         if (now - last_metrics_log_ >= std::chrono::seconds(60))
         {

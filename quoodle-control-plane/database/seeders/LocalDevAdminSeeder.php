@@ -9,8 +9,8 @@ class LocalDevAdminSeeder extends Seeder
 {
     public function run(): void
     {
-        $email = (string) env('DEV_ADMIN_EMAIL', 'admin@quoodle.com');
-        $displayName = (string) env('DEV_ADMIN_NAME', 'Quoodle Admin');
+        $email = (string) env('DEV_ADMIN_EMAIL', 'feloela444@gmail.com');
+        $displayName = (string) env('DEV_ADMIN_NAME', 'Feloela Admin');
 
         User::updateOrCreate(
             ['email' => $email],

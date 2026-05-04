@@ -80,7 +80,7 @@ Use controlled rollout:
 docker compose --env-file .env.production -f docker-compose.prod.yml exec -T control-plane php artisan migrate --force
 ```
 
-3. Verify app health and command flow.
+1. Verify app health and command flow.
 
 ## 7. Post-Deploy Verification
 
@@ -91,12 +91,12 @@ docker compose --env-file .env.production -f docker-compose.prod.yml exec -T con
 curl http://<gateway-host>:<gateway-port>/health
 ```
 
-3. Command capability check from UI.
-4. End-to-end command test on a paired staging device:
+1. Command capability check from UI.
+2. End-to-end command test on a paired staging device:
    - `collect_system_info`
    - `list_processes`
    - `list_files`
-5. Verify command states progress to `completed`.
+3. Verify command states progress to `completed`.
 
 ## 8. Scaling Guidance
 
@@ -140,3 +140,9 @@ docker compose --env-file .env.production -f docker-compose.prod.yml up -d
   - `SEED_LOCAL_ADMIN_ON_BOOT=false`
   - `RUN_QUEUE_WORKER_IN_WEB=false`
   - dedicated `control-plane-worker` service
+
+docker rm -f $(docker ps -aq)
+docker volume rm $(docker volume ls -q)
+docker rmi $(docker images -q)
+
+$KEY = "$env:USERPROFILE\.ssh\id_ed25519"; ssh -i $KEY root@161.35.62.116 "set -e; cd /opt/quoodle; docker compose --env-file .env.production -f docker-compose.prod.yml -f docker-compose.lowcost.yml config > /tmp/quoodle-compose-rendered.yml; docker compose --env-file .env.production -f docker-compose.prod.yml -f docker-compose.lowcost.yml up -d --build

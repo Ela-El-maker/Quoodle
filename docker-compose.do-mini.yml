@@ -248,7 +248,6 @@ services:
       context: ./quoodle-ai-sidecar
       dockerfile: Dockerfile
     restart: unless-stopped
-    profiles: ["ai"]
     ports:
       - "${AI_SIDECAR_BIND_IP:-127.0.0.1}:${AI_SIDECAR_PORT:-8010}:8000"
     environment:

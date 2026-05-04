@@ -125,7 +125,7 @@ export default function DashboardNeedsAttention({
               <div className="flex items-center gap-2 flex-shrink-0">
                 <span className="text-[10px] text-muted-foreground tabular-nums">{device.since}</span>
                 <Link
-                  href={`/device-management?id=${device.id}`}
+                  href={`/device-detail?device=${encodeURIComponent(device.id)}`}
                   className="opacity-0 group-hover:opacity-100 text-[11px] text-primary transition-opacity"
                 >
                   <ChevronRight size={13} />

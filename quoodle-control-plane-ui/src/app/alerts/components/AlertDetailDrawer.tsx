@@ -114,7 +114,7 @@ export default function AlertDetailDrawer({ alert, onClose, onAcknowledge }: Ale
           <div className="space-y-1.5">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Investigate</p>
             <Link
-              href={`/device-management?id=${alert.deviceId}`}
+              href={`/device-detail?device=${encodeURIComponent(alert.deviceId)}`}
               className="flex items-center justify-between px-3 py-2.5 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors group"
             >
               <span className="text-xs font-medium">View Device Detail — {alert.hostname}</span>

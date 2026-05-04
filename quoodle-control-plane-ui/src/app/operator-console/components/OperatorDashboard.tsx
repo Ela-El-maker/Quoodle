@@ -497,8 +497,8 @@ function OperatorDispatchModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-      <div className="bg-card border border-border rounded-xl w-full max-w-md shadow-2xl fade-in">
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-start sm:items-center justify-center p-4 sm:p-6 overflow-y-auto">
+      <div className="bg-card border border-border rounded-xl w-full max-w-md shadow-2xl fade-in max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3rem)] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -520,7 +520,7 @@ function OperatorDispatchModal({
             <p className="text-xs text-muted-foreground mt-1">Dispatching to gateway...</p>
           </div>
         ) : step === 'compose' ? (
-          <div className="p-5 space-y-4">
+          <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
             <div>
               <label className="block text-xs font-medium mb-1.5">Target Device <span className="text-red-400">*</span></label>
               <p className="text-[11px] text-muted-foreground mb-2">Only your authorized devices are shown.</p>
@@ -642,7 +642,7 @@ function OperatorDispatchModal({
             </div>
           </div>
         ) : (
-          <div className="p-5 space-y-4">
+          <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
             <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 flex items-start gap-2.5">
               <AlertTriangle size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
               <div>

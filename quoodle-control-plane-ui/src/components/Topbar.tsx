@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 import React, { useEffect, useState } from 'react';
 import { Menu, Search, Bell, Wifi, WifiOff, RefreshCw, Sun, Moon, Laptop } from 'lucide-react';
 import Link from 'next/link';
@@ -36,7 +36,7 @@ export default function Topbar({ onMobileMenuToggle, userRole = 'viewer' }: Topb
       {/* Search */}
       <div className="flex-1 max-w-sm hidden md:flex items-center gap-2 bg-muted/60 border border-border rounded-md px-3 py-1.5 text-sm text-muted-foreground">
         <Search size={13} />
-        <span className="text-xs">Search devices, commands… (⌘K)</span>
+        <span className="text-xs">Search devices, commands... (Ctrl+K)</span>
       </div>
 
       <div className="flex-1" />
@@ -91,3 +91,5 @@ export default function Topbar({ onMobileMenuToggle, userRole = 'viewer' }: Topb
     </header>
   );
 }
+
+
